@@ -7,6 +7,8 @@ const path = require('path');
 // Importar rutas principales
 const tiemposRoutes = require('./routes/tiempos/tiemposRoutes');
 const healthRoutes = require('./routes/healthRoutes');
+// ✅ Importar rutas QR
+const qrRoutes = require('./services/qr/routes/qrRoutes');
 
 const app = express();
 
@@ -22,6 +24,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Rutas
 app.use('/api/tiempos', tiemposRoutes);
+app.use('/api/qr', qrRoutes);  // ✅ NUEVA RUTA QR
 app.use('/health', healthRoutes);
 
 // Ruta raíz
@@ -32,7 +35,8 @@ app.get('/', (req, res) => {
     status: 'online',
     endpoints: {
       health: '/health',
-      tiempos: '/api/tiempos'
+      tiempos: '/api/tiempos',
+      qr: '/api/qr'  // ✅ Agregar QR a la lista de endpoints
     }
   });
 });
