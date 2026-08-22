@@ -1,21 +1,58 @@
-import { Button, Typography, Stack } from '@mui/material';
+import { useState } from 'react';
+import { Box, CssBaseline, Toolbar } from '@mui/material';
+
+import Sidebar from './components/sidebar';
+import Pedidos from './pages/pedidos';
+import ScannerQr from './pages/scanner-qr';
+import Dashboard from './pages/dashboard';
+
+const drawerWidth = 240;
 
 function App() {
+  const [currentPage, setCurrentPage] = useState('pedidos');
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'pedidos':
+        return <Pedidos />;
+
+      case 'scanner-qr':
+        return <ScannerQr />;
+
+      case 'dashboard':
+        return <Dashboard />;
+
+      default:
+        return <Pedidos />;
+    }
+  };
+
   return (
-    <Stack spacing={2} sx={{ padding: 4 }}>
-      <Typography variant="h3">
-        CoffeeFaster
-      </Typography>
+    <Box sx={{ display: 'flex' }}>
+      <CssBaseline />
 
-      <Typography>
-        Frontend Desktop
-      </Typography>
+      <Sidebar
+        currentPage={currentPage}
+        onNavigate={setCurrentPage}
+      />
 
-      <Button variant="contained">
-        Probar MUI
-      </Button>
-    </Stack>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          width: `calc(100% - ${drawerWidth}px)`,
+          p: 4,
+        }}
+      >
+        <Toolbar />
+
+        {renderPage()}
+      </Box>
+    </Box>
   );
 }
 
 export default App;
+
+// Componente raíz de la aplicación.
+// Define la estructura general y la navegación principal.
