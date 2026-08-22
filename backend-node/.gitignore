@@ -1,0 +1,13 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno
+.env
+
+# Logs y volcados de memoria (esto ignorará tus archivos .heapsnapshot)
+*.log
+*.heapsnapshot
+
+# Archivos del sistema operativo (basura autogenerada por Windows o Mac)
+.DS_Store
+Thumbs.db
