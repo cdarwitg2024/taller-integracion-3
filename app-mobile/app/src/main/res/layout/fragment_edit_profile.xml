@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="@color/bg_app">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:gravity="center_horizontal">
+
+        <!-- Botón Volver arriba a la izquierda -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnVolver"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:text="Volver"
+                android:textColor="@color/white_pure"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                app:backgroundTint="#C42B2B"
+                app:cornerRadius="14dp" />
+        </LinearLayout>
+
+
+        <!-- Avatar + Botón Cambiar Foto -->
+        <ImageView
+            android:id="@+id/imgProfile"
+            android:layout_width="70dp"
+            android:layout_height="70dp"
+            android:scaleType="centerCrop"
+            android:src="@drawable/ic_profile_user" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnChangePhoto"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="24dp"
+            android:text="Cambiar Foto de Perfil"
+            android:textColor="@color/mocha_dark"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            app:backgroundTint="#70DB93"
+            app:cornerRadius="12dp" />
+
+        <!-- Campo editable: Nombre de Usuario -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Nombre de Usuario"
+            android:textColor="@color/mocha_dark"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/etEditUsername"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_rounded_field"
+            android:hint="Juanito Perez"
+            android:inputType="textPersonName"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:textColor="@color/mocha_dark"
+            android:textSize="14sp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Campo editable: RUT -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="RUT"
+            android:textColor="@color/mocha_dark"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/etEditRut"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_rounded_field"
+            android:hint="12345678-9"
+            android:inputType="text"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:textColor="@color/mocha_dark"
+            android:textSize="14sp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Campo editable: Correo Electrónico -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Correo Electronico"
+            android:textColor="@color/mocha_dark"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/etEditEmail"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_rounded_field"
+            android:hint="correodeejemplo@gmail.com"
+            android:inputType="textEmailAddress"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:textColor="@color/mocha_dark"
+            android:textSize="14sp"
+            android:layout_marginBottom="32dp" />
+
+        <!-- Botón Guardar Cambios -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSaveProfile"
+            android:layout_width="240dp"
+            android:layout_height="50dp"
+            android:text="Guardar Cambios"
+            android:textColor="@color/white_pure"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            app:backgroundTint="#70DB93"
+            app:cornerRadius="16dp" />
+
+
+        <!-- Botón Cancelar -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCancelEdit"
+            android:layout_width="210dp"
+            android:layout_height="44dp"
+            android:layout_marginTop="10dp"
+            android:text="Cancelar"
+            android:textColor="@color/white_pure"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            app:backgroundTint="#C42B2B"
+            app:cornerRadius="16dp" />
+
+        <ImageView
+            android:id="@+id/btnSettingsEditIcon"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="16dp"
+            android:src="@android:drawable/ic_menu_preferences"
+            app:tint="@color/mocha_dark" />
+
+    </LinearLayout>
+</ScrollView>

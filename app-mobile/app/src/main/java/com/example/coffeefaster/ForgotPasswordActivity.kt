@@ -14,12 +14,14 @@ class ForgotPasswordActivity : AppCompatActivity() {
         binding = ActivityForgotPasswordBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.btnBack.setOnClickListener {
+        // Botón Enviar enlace
+        binding.btnResetPassword.setOnClickListener {
+            Toast.makeText(this, "Enlace de recuperación enviado", Toast.LENGTH_SHORT).show()
             finish()
         }
 
-        binding.btnResetPassword.setOnClickListener {
-            Toast.makeText(this, "Enlace enviado al correo", Toast.LENGTH_SHORT).show()
+        // Click en "log in" para volver atrás
+        binding.tvBackToLogin.setOnClickListener {
             finish()
         }
     }

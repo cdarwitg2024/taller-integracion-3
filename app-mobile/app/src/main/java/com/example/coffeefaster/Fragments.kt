@@ -9,11 +9,63 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import android.text.Editable
+import android.text.TextWatcher
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 
-class HomeFragment : Fragment(android.R.layout.simple_list_item_1) {
+class HomeFragment : Fragment(R.layout.fragment_home) {
+
+    private val mockData = listOf(
+        ItemModel(1, "Cafetería Edificio 7 - Facultad de Ingenieria", "Especialidad en café de grano y repostería", "10 - 15 min", true, ItemType.CAFETERIA),
+        ItemModel(2, "Cafetería Edificio 1 - Facultad de Artes", "Para llevar rápido", "5 - 8 min", true, ItemType.CAFETERIA),
+        ItemModel(3, "Cafeteria Edificio 4 - x", "Comidas Completas y rapidas", "4 - 7 min", false, ItemType.CAFETERIA),
+        ItemModel(4, "Cafeteria Edificio 12 - Facultad Pedagogía", "Sandwiches artesanales y bebidas frías", "3 - 5 min", true, ItemType.CAFETERIA),
+        ItemModel(5, "Carrito Comida #1", "Meriendas sanas", "2 - 4 min", true, ItemType.CAFETERIA),
+        ItemModel(6, "Carrito Comida #2", "Desayunos Ricos", "2 - 4 min", false, ItemType.CAFETERIA),
+        ItemModel(7, "Cappuccino Vainilla", "Bebida caliente 350ml", "5 min", true, ItemType.PRODUCTO),
+        ItemModel(8, "Muffin de Arándanos", "Recién horneado", "3 min", true, ItemType.PRODUCTO),
+        ItemModel(9, "Sandwich Ave Mayo", "Pan baguette integral", "10 min", false, ItemType.PRODUCTO)
+    )
+
+    private lateinit var adapter: ItemAdapter
+    private var currentType = ItemType.CAFETERIA
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        view.findViewById<TextView>(android.R.id.text1).text = "Pantalla de Inicio"
+
+        val recyclerView = view.findViewById<RecyclerView>(R.id.recyclerView)
+        val tabLayout = view.findViewById<com.google.android.material.tabs.TabLayout>(R.id.tabLayout)
+        val etSearch = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etSearch)
+
+        adapter = ItemAdapter(filterData("", currentType))
+        recyclerView.layoutManager = LinearLayoutManager(context)
+        recyclerView.adapter = adapter
+
+        // Filtrar por Pestaña
+        tabLayout.addOnTabSelectedListener(object : com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab?) {
+                currentType = if (tab?.position == 0) ItemType.CAFETERIA else ItemType.PRODUCTO
+                adapter.updateList(filterData(etSearch.text.toString(), currentType))
+            }
+            override fun onTabUnselected(tab: com.google.android.material.tabs.TabLayout.Tab?) {}
+            override fun onTabReselected(tab: com.google.android.material.tabs.TabLayout.Tab?) {}
+        })
+
+        // Búsqueda en tiempo real
+        etSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                adapter.updateList(filterData(s.toString(), currentType))
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+    }
+
+    private fun filterData(query: String, type: ItemType): List<ItemModel> {
+        return mockData.filter { item ->
+            item.tipo == type && item.nombre.contains(query, ignoreCase = true)
+        }
     }
 }
 
@@ -21,68 +73,5 @@ class OrdersFragment : Fragment(android.R.layout.simple_list_item_1) {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         view.findViewById<TextView>(android.R.id.text1).text = "Pantalla Mis Pedidos"
-    }
-}
-
-class ProfileFragment : Fragment() {
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        // Contenedor principal
-        val context = requireContext()
-        val layout = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(64, 64, 64, 64)
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        }
-
-        // Icono / Emoji de perfil
-        val tvIcon = TextView(context).apply {
-            text = "👤"
-            textSize = 60f
-                    gravity = Gravity.CENTER
-        }
-
-        // Título o nombre
-        val tvTitle = TextView(context).apply {
-            text = "Mi Perfil"
-            textSize = 22f
-                    typeface = android.graphics.Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            setPadding(0, 16, 0, 48)
-        }
-
-        // Botón de Cerrar Sesión
-        val btnLogout = com.google.android.material.button.MaterialButton(context).apply {
-            text = "Cerrar sesión"
-            textSize = 15f
-                    cornerRadius = (12 * resources.displayMetrics.density).toInt()
-            setBackgroundColor(android.graphics.Color.parseColor("#4A3B32")) // color mocha_dark
-            setTextColor(android.graphics.Color.WHITE)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-
-            setOnClickListener {
-                // Redirigir al Login y limpiar la pila de pantallas
-                val intent = Intent(requireActivity(), MainActivity::class.java)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                startActivity(intent)
-            }
-        }
-
-        // Agregar las vistas al contenedor
-        layout.addView(tvIcon)
-        layout.addView(tvTitle)
-        layout.addView(btnLogout)
-
-        return layout
     }
 }
