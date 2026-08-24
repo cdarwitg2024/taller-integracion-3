@@ -1,23 +1,14 @@
-// Datos mock para pruebas de QR
-// En producción, esto vendría de Supabase
-
 class QRModel {
-  // Almacenamiento en memoria para pruebas
   static tokens = new Map();
 
-  /**
-   * Guarda un token QR en memoria
-   * @param {string} token - Token UUID generado
-   * @param {Object} data - Datos del pedido asociado
-   */
   static guardarToken(token, data) {
     const registro = {
       token,
       pedido_id: data.pedido_id || null,
       cafeteria_id: data.cafeteria_id || null,
-      estado: 'activo', // activo, usado, expirado
+      estado: 'activo',
       created_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + 15 * 60000).toISOString(), // 15 min
+      expires_at: new Date(Date.now() + 15 * 60000).toISOString(),
       metadata: data.metadata || {}
     };
     
@@ -25,16 +16,10 @@ class QRModel {
     return registro;
   }
 
-  /**
-   * Obtiene un token por su valor
-   */
   static obtenerToken(token) {
     return this.tokens.get(token) || null;
   }
 
-  /**
-   * Actualiza el estado de un token
-   */
   static actualizarEstado(token, estado) {
     const registro = this.tokens.get(token);
     if (registro) {
@@ -48,9 +33,6 @@ class QRModel {
     return null;
   }
 
-  /**
-   * Verifica si un token es válido
-   */
   static validarToken(token) {
     const registro = this.tokens.get(token);
     if (!registro) {
@@ -74,9 +56,6 @@ class QRModel {
     return { valido: true, registro };
   }
 
-  /**
-   * Limpia tokens expirados (para mantenimiento)
-   */
   static limpiarExpirados() {
     const ahora = new Date();
     let contador = 0;
@@ -92,7 +71,6 @@ class QRModel {
     return contador;
   }
 
-  // Para pruebas, limpiar todos los tokens
   static limpiarTodos() {
     this.tokens.clear();
   }

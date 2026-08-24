@@ -1,16 +1,10 @@
 const QRService = require('../services/qrService');
-const QRModel = require('../models/qrModel');
 
 class QRController {
-  /**
-   * Genera un nuevo token QR
-   * POST /api/qr/generar
-   */
   static async generarToken(req, res) {
     try {
       const datosPedido = req.body;
 
-      // Validar datos mínimos
       if (!datosPedido || !datosPedido.pedido_id) {
         return res.status(400).json({
           success: false,
@@ -34,10 +28,46 @@ class QRController {
     }
   }
 
-  /**
-   * Valida un token QR
-   * GET /api/qr/validar/:token
-   */
+  static async generarImagenQR(req, res) {
+    try {
+      const { token } = req.params;
+      const { formato = 'base64' } = req.query;
+
+      if (!token) {
+        return res.status(400).json({
+          success: false,
+          error: 'Se requiere token para generar la imagen QR'
+        });
+      }
+
+      if (formato === 'png') {
+        const buffer = await QRService.generarImagenQRBuffer(token);
+        
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Content-Disposition', `inline; filename="qr_${token.substring(0, 8)}.png"`);
+        return res.send(buffer);
+      }
+
+      const qrImage = await QRService.generarImagenQR(token);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          token: token,
+          formato: 'base64',
+          imagen: qrImage
+        },
+        mensaje: 'Imagen QR generada exitosamente'
+      });
+    } catch (error) {
+      console.error('Error en generarImagenQR:', error.message);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
   static async validarToken(req, res) {
     try {
       const { token } = req.params;
@@ -72,10 +102,6 @@ class QRController {
     }
   }
 
-  /**
-   * Marca un token como usado (retiro de pedido)
-   * POST /api/qr/usar/:token
-   */
   static async usarToken(req, res) {
     try {
       const { token } = req.params;
@@ -96,10 +122,6 @@ class QRController {
     }
   }
 
-  /**
-   * Obtiene información de un token
-   * GET /api/qr/info/:token
-   */
   static async obtenerInfo(req, res) {
     try {
       const { token } = req.params;
@@ -126,10 +148,6 @@ class QRController {
     }
   }
 
-  /**
-   * Genera un QR visual (mock para pruebas)
-   * POST /api/qr/generar-imagen/:token
-   */
   static async generarQRVisual(req, res) {
     try {
       const { token } = req.params;
@@ -158,10 +176,6 @@ class QRController {
     }
   }
 
-  /**
-   * Limpia tokens expirados (mantenimiento)
-   * POST /api/qr/limpiar
-   */
   static async limpiarExpirados(req, res) {
     try {
       const resultado = QRService.limpiarTokensExpirados();

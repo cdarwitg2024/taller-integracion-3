@@ -1,22 +1,15 @@
 const { v4: uuidv4 } = require('uuid');
+const QRCode = require('qrcode');
 const QRModel = require('../models/qrModel');
 
 class QRService {
-  /**
-   * Genera un nuevo token QR único
-   * @param {Object} datosPedido - Datos del pedido
-   * @returns {Object} Token generado
-   */
   static generarToken(datosPedido) {
-    // Validar datos mínimos
     if (!datosPedido || !datosPedido.pedido_id) {
       throw new Error('Se requiere pedido_id para generar token QR');
     }
 
-    // Generar UUID v4 único
     const token = uuidv4();
     
-    // Datos adicionales que puede tener el pedido
     const datos = {
       pedido_id: datosPedido.pedido_id,
       cafeteria_id: datosPedido.cafeteria_id || null,
@@ -28,7 +21,6 @@ class QRService {
       }
     };
 
-    // Guardar token en modelo
     const registro = QRModel.guardarToken(token, datos);
     
     return {
@@ -39,7 +31,6 @@ class QRService {
         created_at: registro.created_at,
         expires_at: registro.expires_at
       },
-      // Información para generar QR visual
       qr_metadata: {
         tipo: 'RETIRO_PEDIDO',
         version: '1.0',
@@ -49,9 +40,84 @@ class QRService {
   }
 
   /**
+
+   * @param {string} token - Token a codificar en el QR
+   * @param {Object} options - Opciones de generación
+   * @returns {Promise<string>} - Imagen QR en formato Base64
+   */
+  static async generarImagenQR(token, options = {}) {
+    // Verificar que el token existe (opcional, para pruebas podemos saltar esta validación)
+    const registro = QRModel.obtenerToken(token);
+    if (!registro) {
+      // Para pruebas, permitimos tokens simulados
+      console.warn(`⚠️ Token ${token} no encontrado en base de datos, generando QR de prueba`);
+    }
+
+    // Datos que se codificarán en el QR
+    const qrData = {
+      token: token,
+      tipo: 'RETIRO_PEDIDO',
+      timestamp: new Date().toISOString()
+    };
+
+    // Configuración por defecto para el QR
+    const defaultOptions = {
+      errorCorrectionLevel: 'H', // Alta corrección de errores
+      type: 'image/png',
+      quality: 0.92,
+      margin: 2,
+      width: 300,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    };
+
+    const config = { ...defaultOptions, ...options };
+
+    try {
+      // Generar QR en formato Base64
+      const qrImage = await QRCode.toDataURL(JSON.stringify(qrData), config);
+      return qrImage;
+    } catch (error) {
+      console.error('Error generando QR:', error);
+      throw new Error(`Error al generar imagen QR: ${error.message}`);
+    }
+  }
+
+  /**
+   * ✅ NUEVO: Genera imagen QR como Buffer (para servir como PNG)
+   */
+  static async generarImagenQRBuffer(token, options = {}) {
+    const qrData = {
+      token: token,
+      tipo: 'RETIRO_PEDIDO',
+      timestamp: new Date().toISOString()
+    };
+
+    const defaultOptions = {
+      errorCorrectionLevel: 'H',
+      margin: 2,
+      width: 300,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    };
+
+    const config = { ...defaultOptions, ...options };
+
+    try {
+      const buffer = await QRCode.toBuffer(JSON.stringify(qrData), config);
+      return buffer;
+    } catch (error) {
+      console.error('Error generando QR buffer:', error);
+      throw new Error(`Error al generar imagen QR: ${error.message}`);
+    }
+  }
+
+  /**
    * Valida un token QR
-   * @param {string} token - Token a validar
-   * @returns {Object} Resultado de validación
    */
   static validarToken(token) {
     if (!token) {
@@ -61,7 +127,6 @@ class QRService {
       };
     }
 
-    // Verificar formato UUID
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(token)) {
       return {
@@ -74,7 +139,7 @@ class QRService {
   }
 
   /**
-   * Marca un token como usado (cuando se retira el pedido)
+   * Marca un token como usado
    */
   static usarToken(token) {
     const validacion = this.validarToken(token);
@@ -111,16 +176,13 @@ class QRService {
   }
 
   /**
-   * Simula la generación de un QR para un pedido
-   * (Mock para pruebas sin necesidad de librería QR)
+   * Genera un QR mock para pruebas (legacy)
    */
   static generarQRMock(token) {
-    // En producción, aquí se usaría una librería como qrcode
     return {
       token: token,
       qr_image: `data:image/png;base64,${Buffer.from(token).toString('base64')}`,
       formato: 'mock_base64',
-      // Esto es solo para pruebas, en producción se usaría qrcode
       mensaje: 'QR simulado para pruebas'
     };
   }
