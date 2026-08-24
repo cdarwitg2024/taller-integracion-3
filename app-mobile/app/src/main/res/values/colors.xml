@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <color name="bg_app">#FAF7F5</color>
+
+    <color name="mocha_dark">#4A3B32</color>
+    <color name="mocha_medium">#78665B</color>
+
+    <color name="cream_accent">#C8B2A1</color>
+    <color name="cream_soft">#F2ECE7</color>
+
+    <color name="white_pure">#FFFFFF</color>
+    <color name="border_color">#EFEAE6</color>
+
+    <color name="green_ready">#2E7D32</color>
+    <color name="green_bg">#E8F5E9</color>
+
+    <color name="orange_prep">#E65100</color>
+    <color name="orange_bg">#FFF3E0</color>
+
+</resources>
