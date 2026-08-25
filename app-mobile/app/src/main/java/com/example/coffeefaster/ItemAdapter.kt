@@ -6,8 +6,10 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
-class ItemAdapter(private var items: List<ItemModel>) :
-    RecyclerView.Adapter<ItemAdapter.ItemViewHolder>() {
+class ItemAdapter(
+    private var items: List<ItemModel>,
+    private val onCafeteriaClick: ((ItemModel) -> Unit)? = null
+) : RecyclerView.Adapter<ItemAdapter.ItemViewHolder>() {
 
     class ItemViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val tvNombre: TextView = view.findViewById(R.id.tvItemNombre)
@@ -34,6 +36,24 @@ class ItemAdapter(private var items: List<ItemModel>) :
         } else {
             holder.tvEstado.text = "Agotado / Cerrado"
             holder.tvEstado.setTextColor(holder.itemView.context.getColor(android.R.color.holo_red_dark))
+        }
+
+        // Al tocar una cafetería disponible, navegar a su menú de productos
+        if (item.tipo == ItemType.CAFETERIA) {
+            holder.itemView.isClickable = item.disponible
+            holder.itemView.setOnClickListener {
+                if (item.disponible) {
+                    onCafeteriaClick?.invoke(item)
+                } else {
+                    android.widget.Toast.makeText(
+                        holder.itemView.context,
+                        "Esta cafetería está cerrada por ahora",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        } else {
+            holder.itemView.setOnClickListener(null)
         }
     }
 

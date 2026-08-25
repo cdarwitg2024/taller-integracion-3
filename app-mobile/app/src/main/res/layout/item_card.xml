@@ -8,7 +8,9 @@
     android:layout_marginVertical="8dp"
     app:cardBackgroundColor="@color/white_pure"
     app:cardCornerRadius="12dp"
-    app:cardElevation="2dp">
+    app:cardElevation="2dp"
+    app:rippleColor="@color/cream_accent"
+    android:foreground="?android:attr/selectableItemBackground">
 
     <LinearLayout
         android:layout_width="match_parent"

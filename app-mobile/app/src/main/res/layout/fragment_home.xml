@@ -24,27 +24,6 @@
             android:inputType="text" />
     </com.google.android.material.textfield.TextInputLayout>
 
-    <!-- Pestañas de modo -->
-    <com.google.android.material.tabs.TabLayout
-        android:id="@+id/tabLayout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/bg_app"
-        app:tabIndicatorColor="@color/mocha_dark"
-        app:tabSelectedTextColor="@color/mocha_dark"
-        app:tabTextColor="@color/mocha_medium">
-
-        <com.google.android.material.tabs.TabItem
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Cafeterías" />
-
-        <com.google.android.material.tabs.TabItem
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Productos" />
-    </com.google.android.material.tabs.TabLayout>
-
     <!-- Lista de elementos -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"

@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">CoffeeFaster</string>
+
+    <string name="menu_subtitulo">Selecciona tus productos</string>
+    <string name="menu_resumen_vacio">Aún no has seleccionado productos</string>
+    <string name="menu_producto_imagen_desc">Imagen del producto</string>
+    <string name="menu_disminuir_desc">Disminuir cantidad</string>
+    <string name="menu_aumentar_desc">Aumentar cantidad</string>
+    <string name="menu_volver_desc">Volver a cafeterías</string>
 </resources>
