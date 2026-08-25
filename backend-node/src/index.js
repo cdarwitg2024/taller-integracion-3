@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const authRoutes = require('./routes/auth.routes');
 const pedidosRoutes = require('./routes/pedidos.routes');
+const cafeteriasRoutes = require('./routes/cafeterias.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,6 +21,7 @@ app.get('/health', (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/pedidos', pedidosRoutes);
+app.use('/cafeterias', cafeteriasRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Error no manejado:', err);
