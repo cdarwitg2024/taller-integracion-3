@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="16dp"
+    android:layout_marginVertical="8dp"
+    app:cardBackgroundColor="@color/white_pure"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="2dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:gravity="center_vertical">
+
+        <!-- Imagen del producto -->
+        <ImageView
+            android:id="@+id/ivProductoImagen"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:background="@color/cream_soft"
+            android:padding="2dp"
+            android:scaleType="centerCrop"
+            android:contentDescription="@string/menu_producto_imagen_desc" />
+
+        <!-- Información del producto -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvProductoNombre"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/mocha_dark"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:maxLines="2"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/tvProductoPrecio"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@color/mocha_medium"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvProductoDisponibilidad"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <!-- Selector de cantidad -->
+        <LinearLayout
+            android:id="@+id/layoutCantidad"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@color/cream_soft"
+            android:paddingHorizontal="2dp">
+
+            <ImageButton
+                android:id="@+id/btnDisminuir"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@android:color/transparent"
+                android:src="@android:drawable/ic_media_previous"
+                app:tint="@color/mocha_dark"
+                android:contentDescription="@string/menu_disminuir_desc" />
+
+            <TextView
+                android:id="@+id/tvCantidad"
+                android:layout_width="24dp"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="0"
+                android:textColor="@color/mocha_dark"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/btnAumentar"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@android:color/transparent"
+                android:src="@android:drawable/ic_input_add"
+                app:tint="@color/mocha_dark"
+                android:contentDescription="@string/menu_aumentar_desc" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

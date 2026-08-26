@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <group android:checkableBehavior="single">
+        <item
+            android:id="@+id/nav_menus"
+            android:icon="@android:drawable/ic_menu_today"
+            android:title="Ver Menús" />
+
+        <item
+            android:id="@+id/nav_cafeterias"
+            android:icon="@android:drawable/ic_menu_mapmode"
+            android:title="Ver Cafeterías" />
+
+        <item
+            android:id="@+id/nav_profile"
+            android:icon="@android:drawable/ic_menu_myplaces"
+            android:title="Perfil" />
+
+        <item
+            android:id="@+id/nav_config"
+            android:icon="@android:drawable/ic_menu_preferences"
+            android:title="Configuración" />
+
+        <item
+            android:id="@+id/nav_orders"
+            android:icon="@android:drawable/ic_menu_agenda"
+            android:title="Ver Pedidos" />
+    </group>
+</menu>
