@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -8,411 +8,354 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  DialogActions,
   Grid,
   IconButton,
   Stack,
   Typography,
+  TextField,
+  Tabs,
+  Tab,
+  InputAdornment,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
 } from '@mui/material';
+
+import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import CheckIcon from '@mui/icons-material/Check';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import PrintIcon from '@mui/icons-material/Print';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
-const pedidosMock = [
-  {
-    id: '1264-D',
-    cliente: 'siuu',
-    hora: '08:22 AM',
-    ubicacion: 'Edificio 7',
-    productos: [
-      {
-        nombre: 'Café Americano',
-        cantidad: 1,
-        detalle: 'Sin azúcar',
-      },
-      {
-        nombre: 'Capuchino',
-        cantidad: 1,
-        detalle: 'Leche descremada',
-      },
-      {
-        nombre: 'Croissant',
-        cantidad: 2,
-        detalle: 'Sin modificaciones',
-      },
-    ],
-    estado: 'Pendiente',
-  },
-  {
-    id: '0777-W',
-    cliente: 'Tilin Vargas',
-    hora: '10:25 AM',
-    ubicacion: 'Edificio 7',
-    productos: [
-      {
-        nombre: 'Sándwich Ave Mayo',
-        cantidad: 1,
-        detalle: 'Sin ají',
-      },
-      {
-        nombre: 'Café Americano (Mediano)',
-        cantidad: 1,
-        detalle: 'Dos azúcares',
-      },
-      {
-        nombre: 'Empanada de Queso',
-        cantidad: 1,
-        detalle: 'Sin modificaciones',
-      },
-      {
-        nombre: 'Jugo Natural en Botella 500ml',
-        cantidad: 1,
-        detalle: 'Sin modificaciones',
-      },
-    ],
-    estado: 'En_preparacion',
-  },
-  {
-    id: '2026-B',
-    cliente: 'ola',
-    hora: '02:01 PM',
-    ubicacion: 'Edificio 7',
-    productos: [
-      {
-        nombre: 'Latte',
-        cantidad: 1,
-        detalle: 'Leche descremada',
-      },
-      {
-        nombre: 'Brownie',
-        cantidad: 1,
-        detalle: 'Sin modificaciones',
-      },
-      {
-        nombre: 'Café Americano',
-        cantidad: 2,
-        detalle: 'Sin azúcar',
-      },
-    ],
-    estado: 'Listo',
-  },
-];
+import pedidosService from '../services/pedidosService';
 
-// Define la apariencia y el texto de cada estado del pedido.
-const estilosEstado = {
-  Pendiente: {
-    label: 'Pendiente',
-    background: '#F2ECE7',
-    color: '#4A3B32',
-    boton: 'Preparar',
-  },
-  En_preparacion: {
-    label: 'En preparación',
-    background: '#FFF3E0',
-    color: '#E65100',
-    boton: 'Completar',
-  },
-  Listo: {
-    label: 'Listo',
-    background: '#E8F5E9',
-    color: '#2E7D32',
-    boton: 'Entregar',
-  },
-};
+function Pedidos() {
+  const [pedidos, setPedidos] = useState([]);
+  const [selectedPedido, setSelectedPedido] = useState(null);
+  const [tabIndex, setTabIndex] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
 
-function PedidoCard({ pedido, onOpenDetails }) {
-  const estado = estilosEstado[pedido.estado];
+  const fetchPedidos = async () => {
+    setLoading(true);
+    const data = await pedidosService.getAll();
+    setPedidos(data);
+    setLoading(false);
+  };
 
-  const totalProductos = pedido.productos.reduce(
-    (total, producto) => total + producto.cantidad,
-    0
-  );
+  useEffect(() => {
+    fetchPedidos();
+  }, []);
+
+  const handleCambiarEstado = async (id, nuevoEstado, e) => {
+    if (e) e.stopPropagation();
+    const updated = await pedidosService.updateEstado(id, nuevoEstado);
+    setPedidos(prev => prev.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p));
+    if (selectedPedido && selectedPedido.id === id) {
+      setSelectedPedido(prev => ({ ...prev, estado: nuevoEstado }));
+    }
+  };
+
+  const estadosFiltro = ['todos', 'pendiente', 'preparando', 'listo', 'entregado'];
+
+  const filteredPedidos = pedidos.filter(p => {
+    const coincideEstado = tabIndex === 0 || p.estado === estadosFiltro[tabIndex];
+    const coincideBusqueda =
+      p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.cliente.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.qr_token.toLowerCase().includes(searchQuery.toLowerCase());
+    return coincideEstado && coincideBusqueda;
+  });
+
+  const getChipForEstado = (estado) => {
+    switch (estado) {
+      case 'pendiente':
+        return <Chip label="Pendiente" color="error" fontWeight={700} />;
+      case 'preparando':
+        return <Chip label="En Preparación" color="warning" fontWeight={700} />;
+      case 'listo':
+        return <Chip label="Listo para Retiro" color="info" fontWeight={700} />;
+      case 'entregado':
+        return <Chip label="Entregado" color="success" fontWeight={700} />;
+      default:
+        return <Chip label={estado} />;
+    }
+  };
 
   return (
-    <Card
-      sx={{
-        height: '100%',
-        border: '1px solid',
-        borderColor: 'divider',
-        borderRadius: 3,
-        overflow: 'hidden',
-      }}
-    >
-      {/* Identificación del pedido y estado actual */}
-      <Box
-        sx={{
-          px: 2,
-          py: 1,
-          backgroundColor: 'primary.main',
-          color: 'primary.contrastText',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Typography fontWeight={600}>
-          #{pedido.id}
-        </Typography>
-
-        <Chip
-          label={estado.label}
-          size="small"
-          sx={{
-            backgroundColor: estado.background,
-            color: estado.color,
-            fontWeight: 600,
-          }}
-        />
-      </Box>
-
-      <CardContent>
-        {/* Cliente, hora y ubicación alineados */}
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="flex-start"
-          spacing={2}
-          mb={2}
-        >
-          <Box>
-            <Typography fontWeight={600}>
-              {pedido.cliente}
-            </Typography>
-
-            <Typography variant="body2" color="text.secondary">
-              {pedido.ubicacion}
-            </Typography>
-          </Box>
-
-          <Typography
-            variant="body2"
-            fontWeight={600}
-            color="text.secondary"
-            sx={{ textAlign: 'right' }}
-          >
-            {pedido.hora}
+    <Box sx={{ flexGrow: 1, pb: 4 }}>
+      {/* Header */}
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+        <Box>
+          <Typography variant="h4" fontWeight={700} color="primary.main">
+            Gestión de Pedidos
           </Typography>
-        </Stack>
-
-        {/* Clic en los productos abre el modal */}
-        <Box
-          onClick={() => onOpenDetails(pedido)}
-          sx={{
-            backgroundColor: 'background.default',
-            borderRadius: 2,
-            p: 2,
-            cursor: 'pointer',
-            transition: 'background-color 0.2s',
-            '&:hover': {
-              backgroundColor: 'action.hover',
-            },
-          }}
-        >
-          <Stack spacing={1}>
-            {pedido.productos.map((producto, index) => (
-              <Box
-                key={`${producto.nombre}-${index}`}
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: 2,
-                }}
-              >
-                <Typography variant="body2">
-                  {producto.cantidad}x {producto.nombre}
-                </Typography>
-              </Box>
-            ))}
-          </Stack>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            display="block"
-            textAlign="right"
-            mt={1}
-          >
-            {totalProductos}{' '}
-            {totalProductos === 1 ? 'item' : 'items'} en total
+          <Typography variant="body2" color="text.secondary">
+            Administra las comandas activas y actualiza sus estados para los alumnos.
           </Typography>
         </Box>
 
-        {/* Botón de acción (estático por ahora) */}
-        <Button
-          fullWidth
-          variant="contained"
-          sx={{ mt: 2 }}
-        >
-          {estado.boton}
+        <Button startIcon={<RefreshIcon />} variant="outlined" onClick={fetchPedidos}>
+          Refrescar
         </Button>
-      </CardContent>
-    </Card>
-  );
-}
+      </Stack>
 
-function PedidoDetalleModal({ pedido, onClose }) {
-  if (!pedido) {
-    return null;
-  }
+      {/* Barra de Búsqueda y Pestañas de Filtro */}
+      <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 3 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={7}>
+            <Tabs
+              value={tabIndex}
+              onChange={(e, val) => setTabIndex(val)}
+              variant="scrollable"
+              scrollButtons="auto"
+            >
+              <Tab label={`Todos (${pedidos.length})`} />
+              <Tab label={`Pendientes (${pedidos.filter(p => p.estado === 'pendiente').length})`} />
+              <Tab label={`En Prep. (${pedidos.filter(p => p.estado === 'preparando').length})`} />
+              <Tab label={`Listos (${pedidos.filter(p => p.estado === 'listo').length})`} />
+              <Tab label={`Entregados (${pedidos.filter(p => p.estado === 'entregado').length})`} />
+            </Tabs>
+          </Grid>
 
-  const estado = estilosEstado[pedido.estado];
-
-  return (
-    <Dialog
-      open={Boolean(pedido)}
-      onClose={onClose}
-      fullWidth
-      maxWidth="sm"
-    >
-      {/* Cabecera azul idéntica a la estructura inicial */}
-      <DialogTitle
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          backgroundColor: 'primary.main',
-          color: 'primary.contrastText',
-        }}
-      >
-        <Typography fontWeight={600}>
-          #{pedido.id}
-        </Typography>
-
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <Chip
-            label={estado.label}
-            size="small"
-            sx={{
-              backgroundColor: estado.background,
-              color: estado.color,
-              fontWeight: 600,
-            }}
-          />
-
-          <IconButton
-            onClick={onClose}
-            sx={{ color: 'inherit' }}
-            aria-label="Cerrar detalles"
-          >
-            <CloseIcon />
-          </IconButton>
-        </Stack>
-      </DialogTitle>
-
-      <DialogContent sx={{ pt: 3 }}>
-        {/* Información general del cliente y hora */}
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="flex-start"
-          mb={2}
-          mt={1}
-        >
-          <Box>
-            <Typography fontWeight={600}>
-              {pedido.cliente}
-            </Typography>
-
-            <Typography variant="body2" color="text.secondary">
-              {pedido.ubicacion}
-            </Typography>
-          </Box>
-
-          <Typography
-            variant="body2"
-            fontWeight={600}
-            sx={{ textAlign: 'right' }}
-          >
-            {pedido.hora}
-          </Typography>
-        </Stack>
-
-        {/* Desglose completo de productos con sus especificaciones */}
-        <Box
-          sx={{
-            backgroundColor: 'background.default',
-            borderRadius: 2,
-            p: 2,
-          }}
-        >
-          <Typography variant="subtitle1" fontWeight={600} mb={2}>
-            Detalle del pedido
-          </Typography>
-
-          <Stack spacing={2}>
-            {pedido.productos.map((producto, index) => (
-              <Box key={`${producto.nombre}-${index}`}>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <Typography variant="body2" fontWeight={600}>
-                    {producto.nombre}
-                  </Typography>
-
-                  <Typography variant="body2" fontWeight={600}>
-                    x{producto.cantidad}
-                  </Typography>
-                </Box>
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ fontSize: '0.85rem', mt: 0.2 }}
-                >
-                  Especificación: {producto.detalle}
-                </Typography>
-              </Box>
-            ))}
-          </Stack>
-        </Box>
-
-        {/* Botón de cierre */}
-        <Button
-          fullWidth
-          variant="contained"
-          onClick={onClose}
-          sx={{ mt: 3 }}
-        >
-          Cerrar
-        </Button>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export default function Pedidos() {
-  const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null);
-
-  return (
-    <Box>
-      {/* Encabezado principal de la pantalla KDS. */}
-      <Box mb={3}>
-        <Typography variant="h4" fontWeight={700}>
-          Panel de Cocina
-        </Typography>
-
-        <Typography variant="body2" color="text.secondary">
-          Pedidos recibidos en la cafetería
-        </Typography>
-      </Box>
-
-      {/* Grid responsivo */}
-      <Grid container spacing={3}>
-        {pedidosMock.map((pedido) => (
-          <Grid item xs={12} md={6} lg={4} key={pedido.id}>
-            <PedidoCard
-              pedido={pedido}
-              onOpenDetails={setPedidoSeleccionado}
+          <Grid item xs={12} md={5}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Buscar por ID, cliente o código QR..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
             />
           </Grid>
-        ))}
+        </Grid>
+      </Paper>
+
+      {/* Rejilla de Tarjetas de Pedidos */}
+      <Grid container spacing={3}>
+        {filteredPedidos.length === 0 ? (
+          <Grid item xs={12}>
+            <Box textAlign="center" py={6}>
+              <Typography variant="h6" color="text.secondary">
+                No hay pedidos que coincidan con el filtro seleccionado.
+              </Typography>
+            </Box>
+          </Grid>
+        ) : (
+          filteredPedidos.map((pedido) => (
+            <Grid item xs={12} sm={6} md={4} key={pedido.id}>
+              <Card
+                elevation={3}
+                sx={{
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s',
+                  '&:hover': { transform: 'translateY(-3px)', boxShadow: 6 },
+                  borderTop: `6px solid ${
+                    pedido.estado === 'pendiente'
+                      ? '#d32f2f'
+                      : pedido.estado === 'preparando'
+                      ? '#ed6c02'
+                      : pedido.estado === 'listo'
+                      ? '#0288d1'
+                      : '#2e7d32'
+                  }`,
+                }}
+                onClick={() => setSelectedPedido(pedido)}
+              >
+                <CardContent>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                    <Typography variant="h6" fontWeight={800}>
+                      #{pedido.id}
+                    </Typography>
+                    {getChipForEstado(pedido.estado)}
+                  </Stack>
+
+                  <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                    {pedido.cliente}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                    ⏰ {pedido.hora} - {pedido.ubicacion}
+                  </Typography>
+
+                  <Divider sx={{ my: 1.5 }} />
+
+                  <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                    PRODUCTOS ({pedido.productos?.length || 0}):
+                  </Typography>
+                  <List disablePadding sx={{ my: 1 }}>
+                    {pedido.productos?.slice(0, 2).map((item, idx) => (
+                      <ListItem key={idx} disableGutters sx={{ py: 0.2 }}>
+                        <ListItemText
+                          primary={`${item.cantidad}x ${item.nombre}`}
+                          primaryTypographyProps={{ variant: 'body2' }}
+                        />
+                      </ListItem>
+                    ))}
+                    {(pedido.productos?.length || 0) > 2 && (
+                      <Typography variant="caption" color="primary">
+                        +{(pedido.productos.length - 2)} más...
+                      </Typography>
+                    )}
+                  </List>
+
+                  <Divider sx={{ my: 1.5 }} />
+
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography variant="subtitle1" fontWeight={800} color="success.main">
+                      ${pedido.total?.toLocaleString('es-CL')}
+                    </Typography>
+
+                    {/* Botones de acción directa según estado */}
+                    {pedido.estado === 'pendiente' && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="warning"
+                        startIcon={<PlayArrowIcon />}
+                        onClick={(e) => handleCambiarEstado(pedido.id, 'preparando', e)}
+                      >
+                        Preparar
+                      </Button>
+                    )}
+                    {pedido.estado === 'preparando' && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="info"
+                        startIcon={<CheckIcon />}
+                        onClick={(e) => handleCambiarEstado(pedido.id, 'listo', e)}
+                      >
+                        Marcar Listo
+                      </Button>
+                    )}
+                    {pedido.estado === 'listo' && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        startIcon={<LocalShippingIcon />}
+                        onClick={(e) => handleCambiarEstado(pedido.id, 'entregado', e)}
+                      >
+                        Entregar
+                      </Button>
+                    )}
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))
+        )}
       </Grid>
 
-      {/* Modal con la estructura y estilo original */}
-      <PedidoDetalleModal
-        pedido={pedidoSeleccionado}
-        onClose={() => setPedidoSeleccionado(null)}
-      />
+      {/* Modal Detalle de Pedido */}
+      <Dialog
+        open={Boolean(selectedPedido)}
+        onClose={() => setSelectedPedido(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        {selectedPedido && (
+          <>
+            <DialogTitle sx={{ pb: 1 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="h5" fontWeight={800}>
+                  Detalle de Comanda #{selectedPedido.id}
+                </Typography>
+                <IconButton onClick={() => setSelectedPedido(null)}>
+                  <CloseIcon />
+                </IconButton>
+              </Stack>
+            </DialogTitle>
+
+            <DialogContent dividers>
+              <Stack spacing={1} sx={{ mb: 2 }}>
+                <Typography variant="body1"><strong>Cliente:</strong> {selectedPedido.cliente}</Typography>
+                <Typography variant="body2"><strong>Lugar de Entrega:</strong> {selectedPedido.ubicacion}</Typography>
+                <Typography variant="body2"><strong>Código QR:</strong> <code>{selectedPedido.qr_token}</code></Typography>
+                <Typography variant="body2"><strong>Estado Actual:</strong> {getChipForEstado(selectedPedido.estado)}</Typography>
+              </Stack>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                Ítems del Pedido:
+              </Typography>
+              <List disablePadding>
+                {selectedPedido.productos?.map((prod, idx) => (
+                  <ListItem key={idx} disableGutters>
+                    <ListItemText
+                      primary={`${prod.cantidad}x ${prod.nombre}`}
+                      secondary={prod.detalle}
+                    />
+                    <Typography fontWeight={700}>
+                      ${(prod.precio * prod.cantidad).toLocaleString('es-CL')}
+                    </Typography>
+                  </ListItem>
+                ))}
+              </List>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="h6" fontWeight={800}>Total a Pagar:</Typography>
+                <Typography variant="h5" fontWeight={800} color="success.main">
+                  ${selectedPedido.total?.toLocaleString('es-CL')}
+                </Typography>
+              </Stack>
+            </DialogContent>
+
+            <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
+              <Button startIcon={<PrintIcon />} variant="outlined">
+                Imprimir Comanda
+              </Button>
+
+              <Stack direction="row" spacing={1}>
+                {selectedPedido.estado === 'pendiente' && (
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={() => handleCambiarEstado(selectedPedido.id, 'preparando')}
+                  >
+                    Iniciar Preparación
+                  </Button>
+                )}
+                {selectedPedido.estado === 'preparando' && (
+                  <Button
+                    variant="contained"
+                    color="info"
+                    onClick={() => handleCambiarEstado(selectedPedido.id, 'listo')}
+                  >
+                    Marcar Como Listo
+                  </Button>
+                )}
+                {selectedPedido.estado === 'listo' && (
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={() => handleCambiarEstado(selectedPedido.id, 'entregado')}
+                  >
+                    Confirmar Entrega
+                  </Button>
+                )}
+              </Stack>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 }
+
+export default Pedidos;
