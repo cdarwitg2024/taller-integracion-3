@@ -14,5 +14,3 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </ThemeProvider>
   </React.StrictMode>
 );
-
-{/* Este es el punto donde React toma el elemento root del HTML y monta nuestra aplicación.*/}

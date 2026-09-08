@@ -28,7 +28,7 @@ function App() {
   };
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <CssBaseline />
 
       <Sidebar
@@ -42,6 +42,8 @@ function App() {
           flexGrow: 1,
           width: `calc(100% - ${drawerWidth}px)`,
           p: 4,
+          backgroundColor: '#f8fafc',
+          minHeight: '100vh',
         }}
       >
         <Toolbar />
@@ -53,6 +55,3 @@ function App() {
 }
 
 export default App;
-
-// Componente raíz de la aplicación.
-// Define la estructura general y la navegación principal.

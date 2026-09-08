@@ -1,4 +1,6 @@
-import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { supabase, isSupabaseConfigured } from './supabase';
+
+const TABLE = 'productos';
 
 const mockProductos = [
   { id: 1, nombre: 'Café Americano', categoria: 'Bebidas Calientes', precio: 1800, disponible: true },
@@ -11,20 +13,39 @@ const mockProductos = [
   { id: 8, nombre: 'Jugo Natural Naranja', categoria: 'Bebidas Frías', precio: 2200, disponible: true },
 ];
 
-export const productosService = {
+export const productos = {
   async getAll() {
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase
-          .from('PRODUCTOS')
-          .select('*, CATEGORIAS(nombre)');
+          .from(TABLE)
+          .select('*, cafeterias(*), categorias(*)')
+          .eq('activo', true)
+          .is('eliminado_en', null);
         if (!error && data && data.length > 0) return data;
-      } catch (err) {
-        console.warn('Fallback a productos mock:', err);
+      } catch (e) {
+        console.warn('Uso de mock para productos.getAll():', e);
       }
     }
     return mockProductos;
+  },
+
+  async getById(id) {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, cafeterias(*), categorias(*)')
+          .eq('id', id)
+          .single();
+        if (!error && data) return data;
+      } catch (e) {
+        console.warn('Uso de mock para productos.getById():', e);
+      }
+    }
+    return mockProductos.find(p => p.id === id) || null;
   }
 };
 
-export default productosService;
+export const productosService = productos;
+export default productos;

@@ -1,4 +1,6 @@
-import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { supabase, isSupabaseConfigured } from './supabase';
+
+const TABLE = 'pedidos';
 
 const initialMockPedidos = [
   {
@@ -73,41 +75,54 @@ const saveStoredPedidos = (pedidos) => {
   localStorage.setItem('coffeefaster_pedidos', JSON.stringify(pedidos));
 };
 
-export const pedidosService = {
+export const pedidos = {
   async getAll() {
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase
-          .from('PEDIDOS')
-          .select('*, USUARIOS(nombre, apellido), CAFETERIAS(nombre), DETALLES_PEDIDO(*, PRODUCTOS(nombre, precio))')
+          .from(TABLE)
+          .select('*, usuarios(*), cafeterias(*)')
           .order('creado_en', { ascending: false });
-
         if (!error && data && data.length > 0) return data;
-      } catch (err) {
-        console.warn('Fallback a datos mock por error en Supabase:', err);
+      } catch (e) {
+        console.warn('Uso de mock para getAll():', e);
       }
     }
     return getStoredPedidos();
   },
 
-  async getByQrToken(qrToken) {
-    if (!qrToken) return null;
-    const cleanToken = qrToken.trim();
-
+  async getById(id) {
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase
-          .from('PEDIDOS')
-          .select('*, USUARIOS(nombre, apellido), DETALLES_PEDIDO(*, PRODUCTOS(nombre, precio))')
-          .or(`qr_token.eq.${cleanToken},id.eq.${cleanToken}`)
+          .from(TABLE)
+          .select('*, usuarios(*), cafeterias(*), detalles_pedido(*, productos(*))')
+          .eq('id', id)
           .single();
-
         if (!error && data) return data;
-      } catch (err) {
-        console.warn('Fallback a datos mock:', err);
+      } catch (e) {
+        console.warn('Uso de mock para getById():', e);
       }
     }
+    const mockList = getStoredPedidos();
+    return mockList.find(p => p.id === id) || null;
+  },
 
+  async getByQrToken(qrToken) {
+    if (!qrToken) return null;
+    const cleanToken = qrToken.trim();
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, usuarios(*), cafeterias(*), detalles_pedido(*, productos(*))')
+          .or(`qr_token.eq.${cleanToken},id.eq.${cleanToken}`)
+          .single();
+        if (!error && data) return data;
+      } catch (e) {
+        console.warn('Uso de mock para getByQrToken():', e);
+      }
+    }
     const mockList = getStoredPedidos();
     return mockList.find(p => p.qr_token === cleanToken || p.id === cleanToken) || null;
   },
@@ -120,18 +135,16 @@ export const pedidosService = {
         if (nuevoEstado === 'entregado') updates.completado_en = new Date().toISOString();
 
         const { data, error } = await supabase
-          .from('PEDIDOS')
+          .from(TABLE)
           .update(updates)
           .eq('id', id)
           .select()
           .single();
-
         if (!error && data) return data;
-      } catch (err) {
-        console.warn('Fallback a mock:', err);
+      } catch (e) {
+        console.warn('Uso de mock para updateEstado():', e);
       }
     }
-
     const mockList = getStoredPedidos();
     const updated = mockList.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p);
     saveStoredPedidos(updated);
@@ -139,26 +152,22 @@ export const pedidosService = {
   },
 
   async getEstadisticas() {
-    const pedidos = await this.getAll();
-    const totalVentas = pedidos
+    const list = await this.getAll();
+    const totalVentas = list
       .filter(p => p.estado === 'entregado' || p.estado === 'listo' || p.estado === 'preparando')
       .reduce((sum, p) => sum + (p.total || 0), 0);
 
-    const pendientes = pedidos.filter(p => p.estado === 'pendiente').length;
-    const preparando = pedidos.filter(p => p.estado === 'preparando').length;
-    const listos = pedidos.filter(p => p.estado === 'listo').length;
-    const entregados = pedidos.filter(p => p.estado === 'entregado').length;
-
     return {
       totalVentas,
-      totalPedidos: pedidos.length,
-      pendientes,
-      preparando,
-      listos,
-      entregados,
+      totalPedidos: list.length,
+      pendientes: list.filter(p => p.estado === 'pendiente').length,
+      preparando: list.filter(p => p.estado === 'preparando').length,
+      listos: list.filter(p => p.estado === 'listo').length,
+      entregados: list.filter(p => p.estado === 'entregado').length,
       tiempoPromedioMin: 6.5,
     };
   }
 };
 
-export default pedidosService;
+export const pedidosService = pedidos;
+export default pedidos;

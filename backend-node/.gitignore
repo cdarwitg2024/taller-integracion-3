@@ -1,13 +1,7 @@
-# Dependencias
+# Reglas locales de backend-node
 node_modules/
-
-# Variables de entorno
 .env
-
-# Logs y volcados de memoria (esto ignorará tus archivos .heapsnapshot)
+.env.local
+! .env.example
 *.log
-*.heapsnapshot
-
-# Archivos del sistema operativo (basura autogenerada por Windows o Mac)
-.DS_Store
-Thumbs.db
+coverage/

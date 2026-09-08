@@ -1,0 +1,45 @@
+# ============================================
+# Gradle y Archivos de Compilación de Android
+# ============================================
+.gradle/
+**/build/
+build/
+.kotlin/
+**/.kotlin/
+.externalNativeBuild/
+.cxx/
+captures/
+output.json
+
+# ============================================
+# Archivos de Configuración Local y SDK
+# ============================================
+local.properties
+
+# ============================================
+# Paquetes Compilados y Ejecutables
+# ============================================
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# ============================================
+# IDEs (Android Studio e IntelliJ)
+# ============================================
+.idea/
+*.iml
+**/*.iml
+.navigation/
+cmake-build-*/
+.DS_Store
+Thumbs.db
+
+# ============================================
+# Claves de Firma y Credenciales
+# ============================================
+*.jks
+*.keystore
+*.p12
+*.pepk
