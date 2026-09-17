@@ -14,4 +14,19 @@ body,
 body {
   background-color: #FAF7F5;
   font-family: 'Plus Jakarta Sans', sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  overflow: hidden;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+#root {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
