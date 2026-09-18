@@ -65,7 +65,7 @@ Content-Type: application/json
   "token": "CF-1000"
 }
 
-### 9. GET /api/pedidos/:id/qr - Generación dinámica del QR de un pedido (FR-22)
+### 9. GET /api/pedidos/:id/qr - Generación dinámica del QR de un pedido
 # Reemplazar {{pedido_id}} con el ID obtenido en el paso 2.
 # Garantiza: código diferente por pedido, asociación con el pedido correcto,
 # no reutilización y payload con información suficiente para la validación.
