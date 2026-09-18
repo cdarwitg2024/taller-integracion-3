@@ -1,7 +1,66 @@
 @baseUrl = http://localhost:3000
 
-### GET /pedidos - Listar todos los pedidos
-GET {{baseUrl}}/pedidos
-
-### GET /health - Health check
+### 1. GET /health - Comprobar estado del servidor
 GET {{baseUrl}}/health
+
+### 2. POST /api/pedidos - Crear un pedido completo (Requerimientos SRS)
+POST {{baseUrl}}/api/pedidos
+Content-Type: application/json
+
+{
+  "usuario_id": "usr-estudiante-camilo",
+  "cafeteria_id": "cafe-campus-central-01",
+  "franja_retiro": "10:15 - 10:25",
+  "notas": "Por favor entregar en bolsa de papel",
+  "productos": [
+    {
+      "producto_id": "prod-cafe-americano",
+      "nombre": "Café Americano Grande",
+      "cantidad": 2,
+      "precio_unitario": 1800,
+      "notas": "Sin azúcar"
+    },
+    {
+      "producto_id": "prod-croissant-jq",
+      "nombre": "Croissant Jamón y Queso",
+      "cantidad": 1,
+      "precio_unitario": 2200,
+      "notas": "Calentado"
+    }
+  ]
+}
+
+### 3. GET /api/pedidos - Listar todos los pedidos (Panel de Administración)
+GET {{baseUrl}}/api/pedidos
+
+### 4. GET /api/pedidos/cafeteria/cafe-campus-central-01 - Comandas para KDS Cocina
+GET {{baseUrl}}/api/pedidos/cafeteria/cafe-campus-central-01
+
+### 5. GET /api/pedidos/usuario/usr-estudiante-camilo - Pedidos del estudiante (App Móvil)
+GET {{baseUrl}}/api/pedidos/usuario/usr-estudiante-camilo
+
+### 6. PATCH /api/pedidos/{{pedido_id}}/estado - Cambiar estado a 'En preparación' (KDS)
+# Reemplazar {{pedido_id}} con el ID obtenido en el paso 2
+PATCH {{baseUrl}}/api/pedidos/1/estado
+Content-Type: application/json
+
+{
+  "estado": "En preparación"
+}
+
+### 7. PATCH /api/pedidos/{{pedido_id}}/estado - Cambiar estado a 'Listo' (KDS)
+PATCH {{baseUrl}}/api/pedidos/1/estado
+Content-Type: application/json
+
+{
+  "estado": "Listo"
+}
+
+### 8. POST /api/pedidos/validar-qr - Escanear QR o ingresar Token de contingencia (KDS)
+# Reemplazar con el qr_token o token_contingencia obtenido en el paso 2
+POST {{baseUrl}}/api/pedidos/validar-qr
+Content-Type: application/json
+
+{
+  "token": "CF-1000"
+}
