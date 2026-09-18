@@ -5,7 +5,7 @@ import Sidebar from '../components/sidebar';
 const drawerWidth = 240;
 
 const pages = [
-  { id: 'pedidos', label: 'Pedidos' },
+  { id: 'pedidos', label: 'Comandas' },
   { id: 'scanner-qr', label: 'Escáner QR' },
   { id: 'dashboard', label: 'Dashboard' },
 ];
