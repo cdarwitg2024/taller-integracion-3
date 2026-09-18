@@ -7,6 +7,7 @@ const {
   getPedidosByCafeteria,
   getPedidosByUsuario,
   updateEstado,
+  obtenerQR,
   validarQR
 } = require('../controllers/pedidos.controller');
 
@@ -18,6 +19,9 @@ router.get('/', getPedidos);
 
 // Validar entrega física mediante código QR o Token de contingencia (KDS Cocina)
 router.post('/validar-qr', validarQR);
+
+// Generación dinámica del QR asociado a un pedido (FR-22)
+router.get('/:id/qr', obtenerQR);
 
 // Obtener comandas por cafetería ordenadas por franja de retiro (KDS Cocina)
 router.get('/cafeteria/:cafeteriaId', getPedidosByCafeteria);

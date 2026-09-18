@@ -116,6 +116,29 @@ async function updateEstado(req, res, next) {
 }
 
 /**
+ * GET /api/pedidos/:id/qr - Generación dinámica del QR de un pedido
+ */
+async function obtenerQR(req, res, next) {
+  try {
+    const { id } = req.params;
+    const resultado = await PedidosService.obtenerQR(id);
+    if (!resultado) {
+      return res.status(404).json({ error: `Pedido con ID "${id}" no encontrado.` });
+    }
+    return res.status(200).json({
+      success: true,
+      mensaje: 'Código QR generado exitosamente para el pedido (FR-22)',
+      data: resultado
+    });
+  } catch (error) {
+    if (error.codigo === 409) {
+      return res.status(409).json({ error: error.message });
+    }
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+/**
  * POST /api/pedidos/validar-qr - Validar QR o Token de contingencia desde el KDS
  */
 async function validarQR(req, res, next) {
@@ -143,5 +166,6 @@ module.exports = {
   getPedidosByCafeteria,
   getPedidosByUsuario,
   updateEstado,
+  obtenerQR,
   validarQR
 };

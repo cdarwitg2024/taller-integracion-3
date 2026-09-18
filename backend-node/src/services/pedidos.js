@@ -27,6 +27,42 @@ function generarTokenContingencia() {
   return token;
 }
 
+
+function construirPayloadQR(pedido) {
+  return {
+    pedido_id: pedido.id,
+    qr_token: pedido.qr_token,
+    cafeteria_id: pedido.cafeteria_id,
+    franja_retiro: pedido.franja_retiro,
+    tipo: 'RETIRO_COFFEEFAST',
+    created_at: pedido.creado_en || new Date().toISOString()
+  };
+}
+
+
+async function generarTokenQRUnico() {
+  let token = uuidv4();
+  while (await existeTokenQR(token)) {
+    token = uuidv4();
+  }
+  return token;
+}
+
+// Comprueba si un token QR ya está asociado a otro pedido (Supabase + memoria)
+async function existeTokenQR(token) {
+  try {
+    const { data, error } = await supabase
+      .from(TableName)
+      .select('id')
+      .eq('qr_token', token)
+      .maybeSingle();
+    if (!error && data) return true;
+  } catch (e) {
+    // fallback a memoria
+  }
+  return memoryPedidos.some(p => p.qr_token === token);
+}
+
 const PedidosService = {
   /**
    * Crear un pedido según las especificaciones del SRS:
@@ -65,24 +101,24 @@ const PedidosService = {
       };
     });
 
-    // 2. Generar identificadores únicos de retiro (SRS: QR y Token de contingencia)
+    // 2. Generar identificadores únicos de retiro (SRS: QR y Token de contingencia).
     const pedidoId = uuidv4();
-    const qrToken = uuidv4();
+    const qrToken = await generarTokenQRUnico();
     const tokenContingencia = generarTokenContingencia();
     const codigoLegible = `#CF-${Math.floor(1000 + Math.random() * 9000)}`;
     const fechaCreacion = new Date().toISOString();
 
-    // 3. Generar imagen QR dinámica en formato Base64 Data URI
+    // 3. Generar imagen QR dinámica en formato Base64 Data URI.
     let qrImage = null;
     try {
-      const qrPayload = JSON.stringify({
-        pedido_id: pedidoId,
+      const qrPayload = construirPayloadQR({
+        id: pedidoId,
         qr_token: qrToken,
         cafeteria_id,
         franja_retiro,
-        tipo: 'RETIRO_COFFEEFAST'
+        creado_en: fechaCreacion
       });
-      qrImage = await QRCode.toDataURL(qrPayload, {
+      qrImage = await QRCode.toDataURL(JSON.stringify(qrPayload), {
         errorCorrectionLevel: 'H',
         margin: 2,
         width: 320
@@ -186,6 +222,65 @@ const PedidosService = {
       // fallback
     }
     return memoryPedidos.find(p => p.id === id || p.codigo_legible === id) || null;
+  },
+  
+  async obtenerQR(id) {
+    const pedido = await this.getById(id);
+    if (!pedido) return null;
+
+    // No reutilización: un pedido ya entregado no puede volver a generar su QR
+    if (pedido.estado === 'Retirado' || pedido.estado === 'entregado') {
+      const error = new Error('El pedido ya fue entregado; el código QR no puede reutilizarse.');
+      error.codigo = 409;
+      throw error;
+    }
+
+    // Generar QR si no existe
+    let qrToken = pedido.qr_token;
+    if (!qrToken) {
+      qrToken = await generarTokenQRUnico();
+      const updates = { qr_token: qrToken };
+      try {
+        await supabase.from(TableName).update(updates).eq('id', pedido.id);
+      } catch (e) {
+        // fallback resiliente
+      }
+      const index = memoryPedidos.findIndex(p => p.id === pedido.id);
+      if (index !== -1) {
+        memoryPedidos[index] = { ...memoryPedidos[index], ...updates };
+      }
+      pedido.qr_token = qrToken;
+    }
+
+    const payload = construirPayloadQR(pedido);
+
+    let qrImage = null;
+    try {
+      qrImage = await QRCode.toDataURL(JSON.stringify(payload), {
+        errorCorrectionLevel: 'H',
+        margin: 2,
+        width: 320
+      });
+    } catch (qrErr) {
+      console.warn('⚠️ No se pudo generar la imagen QR en Base64:', qrErr.message);
+    }
+
+    return {
+      pedido_id: pedido.id,
+      codigo_legible: pedido.codigo_legible || null,
+      cafeteria_id: pedido.cafeteria_id,
+      franja_retiro: pedido.franja_retiro,
+      estado: pedido.estado,
+      qr_token: qrToken,
+      qr_image: qrImage,
+      payload: payload,
+      garantias: {
+        codigo_diferente: 'Token UUID v4 único por pedido (verificación de colisión)',
+        asociacion: `El payload referencia al pedido ${pedido.id}`,
+        no_reutilizacion: 'Token de un solo uso validado en /validar-qr y bloqueado tras la entrega',
+        informacion_validacion: ['pedido_id', 'qr_token', 'cafeteria_id', 'franja_retiro', 'tipo', 'created_at']
+      }
+    };
   },
 
   /**
