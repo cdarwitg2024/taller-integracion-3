@@ -21,6 +21,24 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 
 import EstadoChip from './EstadoChip';
 
+function formatoHM(fecha) {
+  const h24 = fecha.getHours();
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const ampm = h24 < 12 ? 'AM' : 'PM';
+  return `${String(h12).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')} ${ampm}`;
+}
+
+function getHoraRetiro(pedido) {
+  if (pedido.hora_retiro) return pedido.hora_retiro;
+  if (pedido.creado_en) {
+    const fecha = new Date(pedido.creado_en);
+    if (!Number.isNaN(fecha.getTime())) {
+      return formatoHM(new Date(fecha.getTime() + 15 * 60000));
+    }
+  }
+  return '—';
+}
+
 function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
   return (
     <Dialog
@@ -44,40 +62,28 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
           </DialogTitle>
 
           <DialogContent dividers>
-            <Stack spacing={1} sx={{ mb: 2 }}>
-              <Typography variant="body1"><strong>Cliente:</strong> {pedido.cliente}</Typography>
-              <Typography variant="body2"><strong>Lugar de Entrega:</strong> {pedido.ubicacion}</Typography>
-              <Typography variant="body2"><strong>Código QR:</strong> <code>{pedido.qr_token}</code></Typography>
-              <Typography variant="body2"><strong>Estado Actual:</strong> <EstadoChip estado={pedido.estado} /></Typography>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <EstadoChip estado={pedido.estado} />
+              <Typography fontWeight={800} sx={{ color: '#4A3B32' }}>
+                🕐 Hora de retiro: {getHoraRetiro(pedido)}
+              </Typography>
             </Stack>
 
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
-              Ítems del Pedido:
+              Ítems de Preparación:
             </Typography>
             <List disablePadding>
               {pedido.productos?.map((prod, idx) => (
                 <ListItem key={idx} disableGutters>
                   <ListItemText
                     primary={`${prod.cantidad}x ${prod.nombre}`}
-                    secondary={prod.detalle}
+                    secondary={prod.detalle && prod.detalle !== 'Sin modificaciones' ? prod.detalle : null}
                   />
-                  <Typography fontWeight={700}>
-                    ${(prod.precio * prod.cantidad).toLocaleString('es-CL')}
-                  </Typography>
                 </ListItem>
               ))}
             </List>
-
-            <Divider sx={{ my: 2 }} />
-
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Typography variant="h6" fontWeight={800}>Total a Pagar:</Typography>
-              <Typography variant="h5" fontWeight={800} color="success.main">
-                ${pedido.total?.toLocaleString('es-CL')}
-              </Typography>
-            </Stack>
           </DialogContent>
 
           <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>

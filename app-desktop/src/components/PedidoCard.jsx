@@ -11,6 +11,7 @@ import {
 import TimeAgo from './TimeAgo';
 
 const etiquetaPorEstado = {
+  pendiente: { fondo: '#F2ECE7', texto: '#4A3B32', label: 'PENDIENTE' },
   preparando: { fondo: '#FFF3E0', texto: '#E65100', label: 'EN PREPARACIÓN' },
   listo: { fondo: '#E8F5E9', texto: '#2E7D32', label: 'LISTO PARA RETIRO' },
 };
@@ -20,9 +21,28 @@ const botonPorEstado = {
   preparando: { label: 'MARCAR COMO LISTO', background: '#E65100' },
 };
 
+function formatoHM(fecha) {
+  const h24 = fecha.getHours();
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const ampm = h24 < 12 ? 'AM' : 'PM';
+  return `${String(h12).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')} ${ampm}`;
+}
+
+function getHoraRetiro(pedido) {
+  if (pedido.hora_retiro) return pedido.hora_retiro;
+  if (pedido.creado_en) {
+    const fecha = new Date(pedido.creado_en);
+    if (!Number.isNaN(fecha.getTime())) {
+      return formatoHM(new Date(fecha.getTime() + 15 * 60000));
+    }
+  }
+  return '—';
+}
+
 function PedidoCard({ pedido, onOpen, onChangeEstado }) {
   const etiqueta = etiquetaPorEstado[pedido.estado];
   const boton = botonPorEstado[pedido.estado];
+  const horaRetiro = getHoraRetiro(pedido);
 
   return (
     <Card
@@ -46,28 +66,32 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
           <TimeAgo pedido={pedido} sx={{ fontSize: '1.05rem' }} />
         </Stack>
 
-        <Typography variant="body2" color="text.secondary" fontWeight={600} noWrap>
-          {pedido.cliente} · {pedido.ubicacion}
-        </Typography>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1.5 }}>
+          {etiqueta && (
+            <Box
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                minHeight: 40,
+                px: 2,
+                borderRadius: 2,
+                backgroundColor: etiqueta.fondo,
+                color: etiqueta.texto,
+                fontWeight: 800,
+                letterSpacing: 0.5,
+              }}
+            >
+              {etiqueta.label}
+            </Box>
+          )}
 
-        {etiqueta && (
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              minHeight: 40,
-              px: 2,
-              mt: 1.5,
-              borderRadius: 2,
-              backgroundColor: etiqueta.fondo,
-              color: etiqueta.texto,
-              fontWeight: 800,
-              letterSpacing: 0.5,
-            }}
+          <Typography
+            fontWeight={800}
+            sx={{ color: '#4A3B32', whiteSpace: 'nowrap', fontSize: '1.05rem' }}
           >
-            {etiqueta.label}
-          </Box>
-        )}
+            🕐 {horaRetiro}
+          </Typography>
+        </Stack>
 
         <Divider sx={{ my: 1.5 }} />
 
