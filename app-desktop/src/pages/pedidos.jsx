@@ -10,7 +10,7 @@ import pedidosService from '../services/pedidosService';
 
 const COLUMNAS = [
   { estado: 'pendiente', titulo: 'Pendiente', backgroundColor: '#F2ECE7' },
-  { estado: 'preparando', titulo: 'En Preparación', backgroundColor: '#FBE9DB' },
+  { estado: 'preparando', titulo: 'En Preparación', backgroundColor: '#FFF3E0' },
   { estado: 'listo', titulo: 'Listos para Retiro', backgroundColor: '#E8F5E9' },
 ];
 
@@ -93,12 +93,12 @@ function Pedidos() {
                   <Box
                     sx={{
                       borderRadius: 3,
-                      border: '2px dashed #D8CCC4',
+                      border: '2px dashed #C8B2A1',
                       p: 3,
                       textAlign: 'center',
                     }}
                   >
-                    <Typography sx={{ color: '#B3A49B', fontWeight: 700 }}>
+                    <Typography sx={{ color: '#78665B', fontWeight: 700 }}>
                       Sin comandas
                     </Typography>
                   </Box>

@@ -20,13 +20,13 @@ function ConnectionBadge({ label = 'Conectado' }) {
           width: 12,
           height: 12,
           borderRadius: '50%',
-          backgroundColor: '#4ade80',
-          boxShadow: '0 0 0 0 rgba(74, 222, 128, 0.7)',
+          backgroundColor: '#2E7D32',
+          boxShadow: '0 0 0 0 rgba(46, 125, 50, 0.7)',
           animation: 'kds-pulse-dot 1.8s ease-out infinite',
           '@keyframes kds-pulse-dot': {
-            '0%': { boxShadow: '0 0 0 0 rgba(74, 222, 128, 0.7)' },
-            '70%': { boxShadow: '0 0 0 8px rgba(74, 222, 128, 0)' },
-            '100%': { boxShadow: '0 0 0 0 rgba(74, 222, 128, 0)' },
+            '0%': { boxShadow: '0 0 0 0 rgba(46, 125, 50, 0.7)' },
+            '70%': { boxShadow: '0 0 0 8px rgba(46, 125, 50, 0)' },
+            '100%': { boxShadow: '0 0 0 0 rgba(46, 125, 50, 0)' },
           },
         }}
       />
