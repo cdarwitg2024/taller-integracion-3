@@ -1,6 +1,15 @@
 import { Box, Typography } from '@mui/material';
 
-function ConnectionBadge({ label = 'Conectado' }) {
+const CONFIG = {
+  conectado: { color: '#2E7D32', label: 'Conectado', pulso: 'rgba(46, 125, 50, 0.7)' },
+  reconectando: { color: '#E65100', label: 'Reconectando…', pulso: 'rgba(230, 81, 0, 0.7)' },
+  indisponible: { color: '#78665B', label: 'Sin Realtime', pulso: 'rgba(120, 102, 91, 0.7)' },
+};
+
+function ConnectionBadge({ estado = 'conectado', label: labelProp }) {
+  const cfg = CONFIG[estado] || CONFIG.conectado;
+  const label = labelProp || cfg.label;
+
   return (
     <Box
       sx={{
@@ -20,13 +29,13 @@ function ConnectionBadge({ label = 'Conectado' }) {
           width: 12,
           height: 12,
           borderRadius: '50%',
-          backgroundColor: '#2E7D32',
-          boxShadow: '0 0 0 0 rgba(46, 125, 50, 0.7)',
+          backgroundColor: cfg.color,
+          boxShadow: `0 0 0 0 ${cfg.pulso}`,
           animation: 'kds-pulse-dot 1.8s ease-out infinite',
           '@keyframes kds-pulse-dot': {
-            '0%': { boxShadow: '0 0 0 0 rgba(46, 125, 50, 0.7)' },
-            '70%': { boxShadow: '0 0 0 8px rgba(46, 125, 50, 0)' },
-            '100%': { boxShadow: '0 0 0 0 rgba(46, 125, 50, 0)' },
+            '0%': { boxShadow: `0 0 0 0 ${cfg.pulso}` },
+            '70%': { boxShadow: `0 0 0 8px rgba(0, 0, 0, 0)` },
+            '100%': { boxShadow: `0 0 0 0 rgba(0, 0, 0, 0)` },
           },
         }}
       />

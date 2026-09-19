@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
 
 import KdsTopBar from '../components/KdsTopBar';
@@ -7,6 +7,10 @@ import PedidoCard from '../components/PedidoCard';
 import DetallePedidoDialog from '../components/DetallePedidoDialog';
 
 import pedidosService from '../services/pedidosService';
+import kdsRealtime, {
+  ESTADO_CONECTADO,
+  ESTADO_RECONECTANDO,
+} from '../services/kdsRealtime';
 
 const COLUMNAS = [
   { estado: 'pendiente', titulo: 'Pendiente', backgroundColor: '#F2ECE7' },
@@ -18,11 +22,31 @@ function Pedidos() {
   const [pedidos, setPedidos] = useState([]);
   const [selectedPedido, setSelectedPedido] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [conexion, setConexion] = useState(ESTADO_RECONECTANDO);
+
+  const pedidosRealtime = useRef(new Map());
+
+  const mergeConSnapshot = useCallback((snapshot) => {
+    setPedidos(prev => {
+      const idsSnap = new Set(snapshot.map(p => String(p.id)));
+      const extra = [];
+      pedidosRealtime.current.forEach((comanda, id) => {
+        if (!idsSnap.has(id) && !prev.some(p => String(p.id) === id)) extra.push(comanda);
+      });
+      return [...extra, ...snapshot];
+    });
+  }, []);
 
   const fetchPedidos = useCallback(async () => {
     const data = await pedidosService.getAll();
-    setPedidos(data);
+    mergeConSnapshot(data);
     setLoading(false);
+  }, [mergeConSnapshot]);
+
+  const agregarComandaRealTime = useCallback((comanda) => {
+    const id = String(comanda.id);
+    pedidosRealtime.current.set(id, comanda);
+    setPedidos(prev => (prev.some(p => String(p.id) === id) ? prev : [comanda, ...prev]));
   }, []);
 
   useEffect(() => {
@@ -30,11 +54,19 @@ function Pedidos() {
   }, [fetchPedidos]);
 
   useEffect(() => {
+    const suscripcion = kdsRealtime.suscribir({
+      onComanda: agregarComandaRealTime,
+      onEstadoCanal: setConexion,
+    });
+    return () => suscripcion.cerrar();
+  }, [agregarComandaRealTime]);
+
+  useEffect(() => {
     const poll = setInterval(() => {
-      pedidosService.getAll().then(setPedidos);
+      pedidosService.getAll().then(mergeConSnapshot);
     }, 10000);
     return () => clearInterval(poll);
-  }, []);
+  }, [mergeConSnapshot]);
 
   const handleCambiarEstado = async (id, nuevoEstado, e) => {
     if (e) e.stopPropagation();
@@ -60,7 +92,7 @@ function Pedidos() {
       }}
     >
       <Box sx={{ mb: 2, flexShrink: 0 }}>
-        <KdsTopBar />
+        <KdsTopBar conexion={conexion} />
       </Box>
 
       {loading ? (

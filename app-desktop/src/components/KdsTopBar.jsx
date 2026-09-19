@@ -3,7 +3,7 @@ import { Box, Typography } from '@mui/material';
 import Clock from './Clock';
 import ConnectionBadge from './ConnectionBadge';
 
-function KdsTopBar() {
+function KdsTopBar({ conexion = 'conectado' }) {
   return (
     <Box
       sx={{
@@ -33,7 +33,7 @@ function KdsTopBar() {
       </Typography>
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
-        <ConnectionBadge />
+        <ConnectionBadge estado={conexion} />
         <Clock />
       </Box>
     </Box>

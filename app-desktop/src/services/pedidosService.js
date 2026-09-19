@@ -228,6 +228,40 @@ const saveStoredPedidos = (pedidos) => {
   localStorage.setItem('coffeefaster_pedidos_v2', JSON.stringify(pedidos));
 };
 
+export function formatearHoraRetiro(valor) {
+  if (!valor) return undefined;
+  if (typeof valor === 'string' && /(AM|PM)$/.test(valor.trim())) return valor;
+  const fecha = new Date(valor);
+  if (Number.isNaN(fecha.getTime())) return undefined;
+  const h24 = fecha.getHours();
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const ampm = h24 < 12 ? 'AM' : 'PM';
+  return `${String(h12).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')} ${ampm}`;
+}
+
+export function normalizarPedido(fila) {
+  const detalles = Array.isArray(fila?.DETALLES_PEDIDO) ? fila.DETALLES_PEDIDO : [];
+  const productos = detalles.map(d => {
+    const p = d.PRODUCTOS;
+    const nombre = (Array.isArray(p) ? p[0]?.nombre : p?.nombre) || 'Producto';
+    return {
+      nombre,
+      cantidad: d.cantidad ?? 1,
+      detalle: d.modificaciones || 'Sin modificaciones',
+    };
+  });
+
+  return {
+    id: String(fila.id),
+    qr_token: fila.qr_token,
+    estado: fila.estado,
+    total: fila.total ?? 0,
+    creado_en: fila.creado_en,
+    hora_retiro: formatearHoraRetiro(fila.hora_retiro),
+    productos,
+  };
+}
+
 export const pedidosService = {
   async getAll() {
     if (isSupabaseConfigured) {
@@ -237,7 +271,7 @@ export const pedidosService = {
           .select('*, USUARIOS(nombre, apellido), CAFETERIAS(nombre), DETALLES_PEDIDO(*, PRODUCTOS(nombre, precio))')
           .order('creado_en', { ascending: false });
 
-        if (!error && data && data.length > 0) return data;
+        if (!error && data && data.length > 0) return data.map(normalizarPedido);
       } catch (err) {
         console.warn('Fallback a datos mock por error en Supabase:', err);
       }
