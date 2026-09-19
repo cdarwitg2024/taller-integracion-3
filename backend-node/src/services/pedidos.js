@@ -27,6 +27,29 @@ function generarTokenContingencia() {
   return token;
 }
 
+async function generarTokenContingenciaUnico() {
+  let token = generarTokenContingencia();
+  while (await existeTokenContingencia(token)) {
+    token = generarTokenContingencia();
+  }
+  return token;
+}
+
+// Comprueba si un Token de contingencia ya está asociado a otro pedido
+async function existeTokenContingencia(token) {
+  try {
+    const { data, error } = await supabase
+      .from(TableName)
+      .select('id')
+      .eq('token_contingencia', token)
+      .maybeSingle();
+    if (!error && data) return true;
+  } catch (e) {
+    // fallback a memoria
+  }
+  return memoryPedidos.some(p => p.token_contingencia === token);
+}
+
 
 function construirPayloadQR(pedido) {
   return {
@@ -64,10 +87,6 @@ async function existeTokenQR(token) {
 }
 
 const PedidosService = {
-  /**
-   * Crear un pedido según las especificaciones del SRS:
-   * - Productos, Cantidades, Total, Cafetería, Franja de Retiro, Estado, QR, Token
-   */
   async crearPedido({ usuario_id, cafeteria_id, franja_retiro, productos, notas }) {
     if (!cafeteria_id) throw new Error('cafeteria_id es obligatorio');
     if (!franja_retiro) throw new Error('franja_retiro es obligatoria');
@@ -102,9 +121,10 @@ const PedidosService = {
     });
 
     // 2. Generar identificadores únicos de retiro (SRS: QR y Token de contingencia).
+    //    FR-22: token QR único por pedido. FR-23: Token de contingencia alfanumérico único.
     const pedidoId = uuidv4();
     const qrToken = await generarTokenQRUnico();
-    const tokenContingencia = generarTokenContingencia();
+    const tokenContingencia = await generarTokenContingenciaUnico();
     const codigoLegible = `#CF-${Math.floor(1000 + Math.random() * 9000)}`;
     const fechaCreacion = new Date().toISOString();
 
@@ -283,10 +303,53 @@ const PedidosService = {
     };
   },
 
-  /**
-   * Obtener comandas por cafetería (para la pantalla KDS de la cocina)
-   * Ordenadas por hora/franja de retiro según FR-28
-   */
+  async obtenerTokenContingencia(id) {
+    const pedido = await this.getById(id);
+    if (!pedido) return null;
+
+    // No reutilización: un pedido ya entregado no puede volver a usar su token
+    if (pedido.estado === 'Retirado' || pedido.estado === 'entregado') {
+      const error = new Error('El pedido ya fue entregado; el Token de contingencia no puede reutilizarse.');
+      error.codigo = 409;
+      throw error;
+    }
+
+    // Asociación: si el pedido aún no tiene token (datos precargados), se le asigna
+    // un token único y se persiste en la misma fila del pedido.
+    let tokenContingencia = pedido.token_contingencia;
+    if (!tokenContingencia) {
+      tokenContingencia = await generarTokenContingenciaUnico();
+      const updates = { token_contingencia: tokenContingencia };
+      try {
+        await supabase.from(TableName).update(updates).eq('id', pedido.id);
+      } catch (e) {
+        // fallback resiliente
+      }
+      const index = memoryPedidos.findIndex(p => p.id === pedido.id);
+      if (index !== -1) {
+        memoryPedidos[index] = { ...memoryPedidos[index], ...updates };
+      }
+      pedido.token_contingencia = tokenContingencia;
+    }
+
+    return {
+      pedido_id: pedido.id,
+      codigo_legible: pedido.codigo_legible || null,
+      cafeteria_id: pedido.cafeteria_id,
+      estado: pedido.estado,
+      token_contingencia: tokenContingencia,
+      formato: 'CF-XXXXXX',
+      tipo: 'CONTINGENCIA',
+      garantias: {
+        token_unico: 'Token alfanumérico único por pedido (verificación de colisión)',
+        asociacion: `El token está asociado al pedido ${pedido.id}`,
+        guardado: 'Persistido en PEDIDOS.token_contingencia (Supabase + memoria)',
+        posterior_validacion: 'Validado en POST /api/pedidos/validar-qr',
+        un_solo_uso: 'Se marca como utilizado al marcar el pedido como Retirado'
+      }
+    };
+  },
+
   async getByCafeteria(cafeteriaId) {
     try {
       const { data, error } = await supabase
@@ -364,19 +427,22 @@ const PedidosService = {
   },
 
   /**
-   * Validar QR o Token de contingencia desde el KDS (FR-32, FR-33, BR-04, BR-05)
+   * Validar QR o Token de contingencia desde el KDS
+   * el Token de contingencia es de un solo uso; al validar la entrega queda
+   * marcado como utilizado (el pedido pasa a 'Retirado' y no puede reutilizarse).
    */
   async validarEntrega(tokenString) {
     if (!tokenString) throw new Error('Token o código QR no proporcionado');
     const tokenLimpio = tokenString.trim();
 
-    // Buscar por qr_token o por token_contingencia
+    // Buscar por qr_token o por token_contingencia (FR-23: validación del token)
     let pedido = memoryPedidos.find(p => 
       p.qr_token === tokenLimpio || 
       p.token_contingencia === tokenLimpio ||
       p.id === tokenLimpio ||
       p.codigo_legible === tokenLimpio
     );
+    let metodoValidacion = 'desconocido';
 
     if (!pedido) {
       try {
@@ -395,16 +461,25 @@ const PedidosService = {
       return { valido: false, razon: 'Código QR o Token no encontrado' };
     }
 
+    // Determina si se validó con el Token de contingencia
+    if (pedido.token_contingencia === tokenLimpio) {
+      metodoValidacion = 'contingencia';
+    } else if (pedido.qr_token === tokenLimpio) {
+      metodoValidacion = 'qr';
+    }
+
     if (pedido.estado === 'Retirado' || pedido.estado === 'entregado') {
       return { valido: false, razon: 'El pedido ya fue entregado previamente (token de un solo uso)', pedido };
     }
 
-    // Marcar como entregado/retirado
+    // Marcar como entregado/retirado. El token consumido no puede reutilizarse.
     const pedidoActualizado = await this.updateEstado(pedido.id, 'Retirado');
 
     return {
       valido: true,
       mensaje: 'Entrega validada exitosamente',
+      metodo_validacion: metodoValidacion,
+      token_utilizado: tokenLimpio,
       pedido: pedidoActualizado || { ...pedido, estado: 'Retirado' }
     };
   }

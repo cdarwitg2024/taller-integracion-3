@@ -139,6 +139,29 @@ async function obtenerQR(req, res, next) {
 }
 
 /**
+ * GET /api/pedidos/:id/token-contingencia - Token de contingencia de un pedido
+ */
+async function obtenerTokenContingencia(req, res, next) {
+  try {
+    const { id } = req.params;
+    const resultado = await PedidosService.obtenerTokenContingencia(id);
+    if (!resultado) {
+      return res.status(404).json({ error: `Pedido con ID "${id}" no encontrado.` });
+    }
+    return res.status(200).json({
+      success: true,
+      mensaje: 'Token de contingencia generado para el pedido (FR-23)',
+      data: resultado
+    });
+  } catch (error) {
+    if (error.codigo === 409) {
+      return res.status(409).json({ error: error.message });
+    }
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+/**
  * POST /api/pedidos/validar-qr - Validar QR o Token de contingencia desde el KDS
  */
 async function validarQR(req, res, next) {
@@ -167,5 +190,6 @@ module.exports = {
   getPedidosByUsuario,
   updateEstado,
   obtenerQR,
+  obtenerTokenContingencia,
   validarQR
 };
