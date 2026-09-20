@@ -12,17 +12,23 @@ import RecentOrdersTable from '../components/dashboard/RecentOrdersTable';
 function Dashboard() {
   const [stats, setStats] = useState(null);
   const [pedidos, setPedidos] = useState([]);
+  const [salesData, setSalesData] = useState([]);
+  const [topProducts, setTopProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [resStats, resPedidos] = await Promise.all([
+      const [resStats, resPedidos, resSales, resTop] = await Promise.all([
         pedidosService.getEstadisticas(),
         pedidosService.getAll(),
+        pedidosService.getVentasPorHora(),
+        pedidosService.getTopProductos(),
       ]);
       setStats(resStats);
       setPedidos(resPedidos);
+      setSalesData(resSales);
+      setTopProducts(resTop);
     } catch (err) {
       console.error('Error cargando datos del dashboard:', err);
     } finally {
@@ -45,7 +51,7 @@ function Dashboard() {
       {/* 3. Gráficos de Ventas y Distribución */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} lg={8}>
-          <SalesChart />
+          <SalesChart salesData={salesData} />
         </Grid>
         <Grid item xs={12} lg={4}>
           <OrdersDistributionChart stats={stats} />
@@ -55,7 +61,7 @@ function Dashboard() {
       {/* 4. Productos Populares y Tabla de Últimos Pedidos */}
       <Grid container spacing={3}>
         <Grid item xs={12} lg={5}>
-          <TopProductsChart />
+          <TopProductsChart data={topProducts} />
         </Grid>
         <Grid item xs={12} lg={7}>
           <RecentOrdersTable pedidos={pedidos} />

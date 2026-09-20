@@ -143,9 +143,14 @@ function RecentOrdersTable({ pedidos }) {
               </TableRow>
             ) : (
               displayPedidos.map((p) => {
+                const userObj = p.usuarios || p.USUARIOS;
                 const clienteNombre =
                   p.cliente ||
-                  (p.USUARIOS ? `${p.USUARIOS.nombre} ${p.USUARIOS.apellido || ''}` : 'Cliente General');
+                  (userObj ? `${userObj.nombre || ''} ${userObj.apellido || ''}`.trim() : 'Cliente General');
+                const cafeObj = p.cafeterias || p.CAFETERIAS;
+                const ubicacionNombre =
+                  p.ubicacion ||
+                  (cafeObj?.nombre ? cafeObj.nombre : 'Campus Central');
                 const horaFormat = p.hora || (p.creado_en ? new Date(p.creado_en).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--');
 
                 return (
@@ -159,13 +164,13 @@ function RecentOrdersTable({ pedidos }) {
                     }}
                   >
                     <TableCell sx={{ fontWeight: 700, color: '#4A3728', fontSize: '0.85rem' }}>
-                      #{p.id}
+                      #{p.codigo_retiro_diario || p.id}
                     </TableCell>
                     <TableCell sx={{ color: '#3B291D', fontSize: '0.85rem', fontWeight: 500 }}>
                       {clienteNombre}
                     </TableCell>
                     <TableCell sx={{ color: '#78665B', fontSize: '0.82rem' }}>
-                      {p.ubicacion || 'Campus Central'}
+                      {ubicacionNombre}
                     </TableCell>
                     <TableCell sx={{ color: '#78665B', fontSize: '0.82rem' }}>
                       {horaFormat}

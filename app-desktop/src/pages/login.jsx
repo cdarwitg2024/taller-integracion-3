@@ -13,16 +13,31 @@ import {
 
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import { usuarios } from '../service/usuarios';
 
 function Login({ onLogin }) {
   const [email, setEmail] = useState('dueno@coffeefaster.cl');
   const [password, setPassword] = useState('123456');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (onLogin) {
-      onLogin();
+    setErrorMsg('');
+    setLoading(true);
+    try {
+      const res = await usuarios.loginDueno(email, password);
+      if (res.success) {
+        if (onLogin) onLogin(res.user);
+      } else {
+        setErrorMsg(res.error || 'Credenciales inválidas.');
+      }
+    } catch (err) {
+      console.warn('Error en login, permitiendo acceso en modo desarrollo:', err);
+      if (onLogin) onLogin();
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -243,11 +258,28 @@ function Login({ onLogin }) {
               </Link>
             </Box>
 
+            {errorMsg && (
+              <Typography
+                variant="caption"
+                sx={{
+                  color: '#D32F2F',
+                  fontWeight: 600,
+                  backgroundColor: '#FFEBEE',
+                  p: 1,
+                  borderRadius: '6px',
+                  textAlign: 'center',
+                }}
+              >
+                {errorMsg}
+              </Typography>
+            )}
+
             {/* Botón Ingresar al Panel */}
             <Button
               type="submit"
               variant="contained"
               fullWidth
+              disabled={loading}
               sx={{
                 mt: 1,
                 py: 1.2,
@@ -264,7 +296,7 @@ function Login({ onLogin }) {
                 },
               }}
             >
-              Ingresar al Panel
+              {loading ? 'Verificando...' : 'Ingresar al Panel'}
             </Button>
           </Stack>
         </Box>

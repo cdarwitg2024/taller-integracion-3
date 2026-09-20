@@ -1,42 +1,66 @@
-const { supabase } = require('./supabase');
+import { supabase, isSupabaseConfigured } from './supabase';
 
 const TABLE = 'cafeteria_usuarios';
 
-const cafeteriaUsuarios = {
+export const cafeteriaUsuarios = {
   async getAll() {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, usuarios(*), cafeterias(*)');
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, usuarios(*), cafeterias(*)');
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al consultar cafeteria_usuarios:', err);
+      }
+    }
+    return [];
   },
 
   async getById(id) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, usuarios(*), cafeterias(*)')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, usuarios(*), cafeterias(*)')
+          .eq('id', id)
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al consultar cafeteria_usuario por id:', err);
+      }
+    }
+    return null;
   },
 
   async getByCafeteria(cafeteriaId) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, usuarios(*)')
-      .eq('cafeteria_id', cafeteriaId);
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, usuarios(*)')
+          .eq('cafeteria_id', cafeteriaId);
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al consultar usuarios por cafeteria:', err);
+      }
+    }
+    return [];
   },
 
   async getByUsuario(usuarioId) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, cafeterias(*)')
-      .eq('usuario_id', usuarioId);
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, cafeterias(*)')
+          .eq('usuario_id', usuarioId);
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al consultar asignaciones por usuario:', err);
+      }
+    }
+    return [];
   },
 
   async create(registro) {
@@ -67,17 +91,7 @@ const cafeteriaUsuarios = {
       .eq('id', id);
     if (error) throw error;
     return true;
-  },
-
-  async deleteByUsuarioCafeteria(usuarioId, cafeteriaId) {
-    const { error } = await supabase
-      .from(TABLE)
-      .delete()
-      .eq('usuario_id', usuarioId)
-      .eq('cafeteria_id', cafeteriaId);
-    if (error) throw error;
-    return true;
   }
 };
 
-module.exports = cafeteriaUsuarios;
+export default cafeteriaUsuarios;

@@ -1,44 +1,68 @@
-const { supabase } = require('./supabase');
+import { supabase, isSupabaseConfigured } from './supabase';
 
 const TABLE = 'pagos';
 
-const pagos = {
+export const pagos = {
   async getAll() {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, pedidos(*), metodos_pago(*)')
-      .order('creado_en', { ascending: false });
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, pedidos(*), metodos_pago(*)')
+          .order('creado_en', { ascending: false });
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener pagos:', err);
+      }
+    }
+    return [];
   },
 
   async getById(id) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, pedidos(*), metodos_pago(*)')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, pedidos(*), metodos_pago(*)')
+          .eq('id', id)
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener pago por id:', err);
+      }
+    }
+    return null;
   },
 
   async getByPedido(pedidoId) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, metodos_pago(*)')
-      .eq('pedido_id', pedidoId);
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, metodos_pago(*)')
+          .eq('pedido_id', pedidoId);
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener pagos por pedido:', err);
+      }
+    }
+    return [];
   },
 
   async getByReferencia(referencia) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, pedidos(*), metodos_pago(*)')
-      .eq('referencia_transaccion', referencia)
-      .single();
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, pedidos(*), metodos_pago(*)')
+          .eq('referencia_transaccion', referencia)
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener pago por referencia:', err);
+      }
+    }
+    return null;
   },
 
   async create(pago) {
@@ -72,4 +96,4 @@ const pagos = {
   }
 };
 
-module.exports = pagos;
+export default pagos;

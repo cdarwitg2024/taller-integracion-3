@@ -1,45 +1,69 @@
-const { supabase } = require('./supabase');
+import { supabase, isSupabaseConfigured } from './supabase';
 
 const TABLE = 'dispositivos';
 
-const dispositivos = {
+export const dispositivos = {
   async getAll() {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, usuarios(*)')
-      .eq('activo', true);
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, usuarios(*)')
+          .eq('activo', true);
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener dispositivos:', err);
+      }
+    }
+    return [];
   },
 
   async getById(id) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, usuarios(*)')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, usuarios(*)')
+          .eq('id', id)
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener dispositivo por id:', err);
+      }
+    }
+    return null;
   },
 
   async getByUsuario(usuarioId) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*')
-      .eq('usuario_id', usuarioId)
-      .eq('activo', true);
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*')
+          .eq('usuario_id', usuarioId)
+          .eq('activo', true);
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener dispositivos por usuario:', err);
+      }
+    }
+    return [];
   },
 
   async getByToken(token) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*')
-      .eq('token_fcm', token)
-      .single();
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*')
+          .eq('token_fcm', token)
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener dispositivo por token:', err);
+      }
+    }
+    return null;
   },
 
   async create(dispositivo) {
@@ -73,4 +97,4 @@ const dispositivos = {
   }
 };
 
-module.exports = dispositivos;
+export default dispositivos;

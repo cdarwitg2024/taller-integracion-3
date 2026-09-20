@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -16,27 +16,26 @@ import {
   Dialog,
   DialogContent,
   Stack,
+  LinearProgress,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
-const initialProductos = [
-  { id: 1, nombre: 'Café en grano', categoria: 'CAFÉ', stock: 18, minimo: 24, unidad: 'kg', catColor: '#8D6E63', catBg: '#EFEBE9' },
-  { id: 2, nombre: 'Leche entera', categoria: 'LÁCTEO', stock: 5, minimo: 12, unidad: 'L', catColor: '#5C6BC0', catBg: '#E8EAF6' },
-  { id: 3, nombre: 'Chocolate', categoria: 'INSUMOS', stock: 15, minimo: 8, unidad: 'kg', catColor: '#7E57C2', catBg: '#EDE7F6' },
-  { id: 4, nombre: 'Croissant', categoria: 'PANADERÍA', stock: 24, minimo: 10, unidad: 'un', catColor: '#8D6E63', catBg: '#EFEBE9' },
-  { id: 5, nombre: 'Medialuna', categoria: 'REPOSTERÍA', stock: 11, minimo: 15, unidad: 'un', catColor: '#D84315', catBg: '#FBE9E7' },
-  { id: 6, nombre: 'Té Chai', categoria: 'TÉ', stock: 22, minimo: 10, unidad: 'un', catColor: '#2E7D32', catBg: '#E8F5E9' },
-  { id: 7, nombre: 'Vaso 12 oz', categoria: 'DESECHABLES', stock: 150, minimo: 100, unidad: 'un', catColor: '#6A1B9A', catBg: '#F3E5F5' },
-  { id: 8, nombre: 'Azúcar', categoria: 'INSUMOS', stock: 20, minimo: 10, unidad: 'kg', catColor: '#7E57C2', catBg: '#EDE7F6' },
-];
+import { productos as productosService } from '../service/productos';
 
 function CatalogoProductos() {
-  const [productos, setProductos] = useState(initialProductos);
+  const [productos, setProductos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProducto, setSelectedProducto] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   // Formulario de edición
   const [editForm, setEditForm] = useState({
@@ -47,14 +46,31 @@ function CatalogoProductos() {
     unidad: '',
   });
 
+  const loadProductos = async () => {
+    setLoading(true);
+    try {
+      const data = await productosService.getAll();
+      setProductos(data);
+    } catch (err) {
+      console.error('Error al cargar productos desde la base de datos:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProductos();
+  }, []);
+
   const handleOpenEdit = (prod) => {
     setSelectedProducto(prod);
+    setFormError('');
     setEditForm({
       nombre: prod.nombre,
       categoria: prod.categoria,
       stock: prod.stock,
-      minimo: prod.minimo,
-      unidad: prod.unidad,
+      minimo: prod.minimo ?? prod.stock_minimo ?? 0,
+      unidad: prod.unidad || 'un',
     });
     setDialogOpen(true);
   };
@@ -62,48 +78,98 @@ function CatalogoProductos() {
   const handleCloseEdit = () => {
     setDialogOpen(false);
     setSelectedProducto(null);
+    setFormError('');
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!selectedProducto) return;
-    setProductos((prev) =>
-      prev.map((p) =>
-        p.id === selectedProducto.id
-          ? {
-              ...p,
-              nombre: editForm.nombre,
-              categoria: editForm.categoria,
-              stock: Number(editForm.stock),
-              minimo: Number(editForm.minimo),
-              unidad: editForm.unidad,
-            }
-          : p
-      )
-    );
-    handleCloseEdit();
+    setFormError('');
+
+    // Validación según NFR-04 y Diagrama de Secuencia (Dueño)
+    if (!editForm.nombre || !editForm.nombre.trim()) {
+      setFormError('Errores de validación: El nombre del producto es obligatorio.');
+      return;
+    }
+    if (Number(editForm.stock) < 0 || Number(editForm.minimo) < 0) {
+      setFormError('Errores de validación: El stock y stock mínimo deben ser valores positivos o cero.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        nombre: editForm.nombre.trim(),
+        categoria: editForm.categoria.trim(),
+        stock: Number(editForm.stock),
+        stock_minimo: Number(editForm.minimo),
+        minimo: Number(editForm.minimo),
+        unidad: editForm.unidad.trim() || 'un',
+      };
+
+      const updated = await productosService.update(selectedProducto.id, payload);
+      setProductos((prev) =>
+        prev.map((p) => (p.id === selectedProducto.id ? { ...p, ...updated } : p))
+      );
+      setSnackbar({ open: true, message: 'Producto guardado exitosamente.', severity: 'success' });
+      handleCloseEdit();
+    } catch (err) {
+      console.error('Error al guardar edición en la base de datos:', err);
+      setFormError('Error al guardar en el servidor. Intente nuevamente.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = (id) => {
-    setProductos((prev) => prev.filter((p) => p.id !== id));
+  const handleDelete = async (id) => {
+    try {
+      await productosService.delete(id);
+      setProductos((prev) => prev.filter((p) => p.id !== id));
+      setSnackbar({ open: true, message: 'Producto desactivado/eliminado correctamente.', severity: 'info' });
+    } catch (err) {
+      console.error('Error al eliminar producto:', err);
+      setSnackbar({ open: true, message: 'Error al eliminar el producto.', severity: 'error' });
+    }
   };
 
   const filtered = productos.filter((p) =>
-    p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.categoria.toLowerCase().includes(searchTerm.toLowerCase())
+    (p.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.categoria || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <Box sx={{ flexGrow: 1, pb: 4 }}>
-      {/* Título de la página */}
-      <Typography
-        variant="h5"
-        fontWeight={800}
-        sx={{ color: '#4A3728', mb: 3, letterSpacing: '-0.5px' }}
-      >
-        Catálogo de Productos
-      </Typography>
+      {/* Título de la página y acción de refrescar */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography
+          variant="h5"
+          fontWeight={800}
+          sx={{ color: '#4A3728', letterSpacing: '-0.5px' }}
+        >
+          Catálogo de Productos
+        </Typography>
 
-      {/* Tarjeta contenedora principal estilo imagen */}
+        <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={loadProductos}
+          disabled={loading}
+          sx={{
+            borderColor: '#C8B2A1',
+            color: '#4A3728',
+            borderRadius: '10px',
+            textTransform: 'none',
+            fontWeight: 600,
+            '&:hover': {
+              borderColor: '#4A3728',
+              backgroundColor: '#FAF7F4',
+            },
+          }}
+        >
+          {loading ? 'Cargando...' : 'Actualizar'}
+        </Button>
+      </Box>
+
+      {/* Tarjeta contenedora principal */}
       <Paper
         elevation={0}
         sx={{
@@ -170,6 +236,8 @@ function CatalogoProductos() {
           </Stack>
         </Box>
 
+        {loading && <LinearProgress sx={{ mb: 2, borderRadius: 2, bgcolor: '#FAF2EA', '& .MuiLinearProgress-bar': { bgcolor: '#C86237' } }} />}
+
         {/* Tabla de Productos */}
         <TableContainer sx={{ borderRadius: '8px', overflow: 'hidden' }}>
           <Table>
@@ -200,90 +268,101 @@ function CatalogoProductos() {
             </TableHead>
 
             <TableBody>
-              {filtered.map((prod) => {
-                const isBajo = prod.stock <= prod.minimo;
-                return (
-                  <TableRow
-                    key={prod.id}
-                    hover
-                    sx={{
-                      cursor: 'pointer',
-                      '&:last-child td, &:last-child th': { border: 0 },
-                      borderColor: '#F2ECE6',
-                    }}
-                    onClick={() => handleOpenEdit(prod)}
-                  >
-                    <TableCell sx={{ fontWeight: 600, color: '#3E2D22', fontSize: '0.85rem' }}>
-                      {prod.nombre}
-                    </TableCell>
+              {filtered.length === 0 && !loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4, color: '#8C7A6F' }}>
+                    {searchTerm
+                      ? `No se encontraron productos que coincidan con "${searchTerm}".`
+                      : 'No se encontraron productos registrados.'}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filtered.map((prod) => {
+                  const minVal = prod.minimo ?? prod.stock_minimo ?? 0;
+                  const isBajo = prod.stock <= minVal;
+                  return (
+                    <TableRow
+                      key={prod.id}
+                      hover
+                      sx={{
+                        cursor: 'pointer',
+                        '&:last-child td, &:last-child th': { border: 0 },
+                        borderColor: '#F2ECE6',
+                      }}
+                      onClick={() => handleOpenEdit(prod)}
+                    >
+                      <TableCell sx={{ fontWeight: 600, color: '#3E2D22', fontSize: '0.85rem' }}>
+                        {prod.nombre}
+                      </TableCell>
 
-                    <TableCell>
-                      <Chip
-                        label={prod.categoria}
-                        size="small"
-                        sx={{
-                          backgroundColor: prod.catBg,
-                          color: prod.catColor,
-                          fontWeight: 700,
-                          fontSize: '0.7rem',
-                          borderRadius: '6px',
-                        }}
-                      />
-                    </TableCell>
-
-                    <TableCell align="center" sx={{ fontWeight: 600, color: '#3E2D22', fontSize: '0.85rem' }}>
-                      {prod.stock}
-                    </TableCell>
-
-                    <TableCell align="center" sx={{ color: '#78665B', fontSize: '0.85rem' }}>
-                      {prod.minimo}
-                    </TableCell>
-
-                    <TableCell align="center" sx={{ color: '#78665B', fontSize: '0.85rem' }}>
-                      {prod.unidad}
-                    </TableCell>
-
-                    <TableCell align="center">
-                      <Chip
-                        label={isBajo ? 'STOCK BAJO' : 'NORMAL'}
-                        size="small"
-                        sx={{
-                          backgroundColor: isBajo ? '#FFEBEE' : '#E8F5E9',
-                          color: isBajo ? '#C62828' : '#2E7D32',
-                          fontWeight: 700,
-                          fontSize: '0.68rem',
-                          borderRadius: '6px',
-                        }}
-                      />
-                    </TableCell>
-
-                    <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                      <Stack direction="row" spacing={0.5} justifyContent="center">
-                        <IconButton
+                      <TableCell>
+                        <Chip
+                          label={prod.categoria || 'GENERAL'}
                           size="small"
-                          onClick={() => handleOpenEdit(prod)}
-                          sx={{ color: '#C86237' }}
-                        >
-                          <EditOutlinedIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
+                          sx={{
+                            backgroundColor: prod.catBg || '#EFEBE9',
+                            color: prod.catColor || '#8D6E63',
+                            fontWeight: 700,
+                            fontSize: '0.7rem',
+                            borderRadius: '6px',
+                          }}
+                        />
+                      </TableCell>
+
+                      <TableCell align="center" sx={{ fontWeight: 600, color: '#3E2D22', fontSize: '0.85rem' }}>
+                        {prod.stock}
+                      </TableCell>
+
+                      <TableCell align="center" sx={{ color: '#78665B', fontSize: '0.85rem' }}>
+                        {minVal}
+                      </TableCell>
+
+                      <TableCell align="center" sx={{ color: '#78665B', fontSize: '0.85rem' }}>
+                        {prod.unidad || 'un'}
+                      </TableCell>
+
+                      <TableCell align="center">
+                        <Chip
+                          label={isBajo ? 'STOCK BAJO' : 'NORMAL'}
                           size="small"
-                          onClick={() => handleDelete(prod.id)}
-                          sx={{ color: '#D32F2F' }}
-                        >
-                          <DeleteOutlineOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                          sx={{
+                            backgroundColor: isBajo ? '#FFEBEE' : '#E8F5E9',
+                            color: isBajo ? '#C62828' : '#2E7D32',
+                            fontWeight: 700,
+                            fontSize: '0.68rem',
+                            borderRadius: '6px',
+                          }}
+                        />
+                      </TableCell>
+
+                      <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                        <Stack direction="row" spacing={0.5} justifyContent="center">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleOpenEdit(prod)}
+                            sx={{ color: '#C86237' }}
+                          >
+                            <EditOutlinedIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDelete(prod.id)}
+                            sx={{ color: '#D32F2F' }}
+                          >
+                            <DeleteOutlineOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </TableContainer>
       </Paper>
 
-      {/* Modal / Dialog "Producto Seleccionado" tal como se ve en la foto 2 */}
+      {/* Modal / Dialog "Producto Seleccionado" */}
       <Dialog
         open={dialogOpen}
         onClose={handleCloseEdit}
@@ -414,10 +493,17 @@ function CatalogoProductos() {
               />
             </Box>
 
+            {formError && (
+              <Alert severity="error" sx={{ borderRadius: '10px', fontSize: '0.8rem' }}>
+                {formError}
+              </Alert>
+            )}
+
             <Stack direction="row" spacing={2} sx={{ pt: 1.5 }}>
               <Button
                 variant="outlined"
                 fullWidth
+                disabled={saving}
                 onClick={handleCloseEdit}
                 sx={{
                   borderRadius: '24px',
@@ -437,6 +523,7 @@ function CatalogoProductos() {
               <Button
                 variant="contained"
                 fullWidth
+                disabled={saving}
                 onClick={handleSaveEdit}
                 sx={{
                   borderRadius: '24px',
@@ -451,12 +538,29 @@ function CatalogoProductos() {
                   },
                 }}
               >
-                Guardar
+                {saving ? 'Guardando...' : 'Guardar'}
               </Button>
             </Stack>
           </Stack>
         </DialogContent>
       </Dialog>
+
+      {/* Notificaciones visuales de éxito / error (NFR-04 y Diagrama de Secuencia) */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3500}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%', borderRadius: '10px' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

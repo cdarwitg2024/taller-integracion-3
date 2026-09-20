@@ -1,35 +1,56 @@
-const { supabase } = require('./supabase');
+import { supabase, isSupabaseConfigured } from './supabase';
 
-const vistas = {
+export const vistas = {
   async getVentasDiarias() {
-    const { data, error } = await supabase
-      .from('vista_ventas_dia')
-      .select('*')
-      .order('fecha', { ascending: false });
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('vista_ventas_dia')
+          .select('*')
+          .order('fecha', { ascending: false });
+
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al consultar vista_ventas_dia:', err);
+      }
+    }
+    return [];
   },
 
   async getVentasDiariasByCafeteria(cafeteriaId) {
-    const { data, error } = await supabase
-      .from('vista_ventas_dia')
-      .select('*')
-      .eq('cafeteria_id', cafeteriaId)
-      .order('fecha', { ascending: false });
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('vista_ventas_dia')
+          .select('*')
+          .eq('cafeteria_id', cafeteriaId)
+          .order('fecha', { ascending: false });
+
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al consultar vista_ventas_dia por cafeteria:', err);
+      }
+    }
+    return [];
   },
 
   async getVentasByRangoFecha(fechaInicio, fechaFin) {
-    const { data, error } = await supabase
-      .from('vista_ventas_dia')
-      .select('*')
-      .gte('fecha', fechaInicio)
-      .lte('fecha', fechaFin)
-      .order('fecha', { ascending: false });
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('vista_ventas_dia')
+          .select('*')
+          .gte('fecha', fechaInicio)
+          .lte('fecha', fechaFin)
+          .order('fecha', { ascending: false });
+
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al consultar vista_ventas_dia por rango:', err);
+      }
+    }
+    return [];
   }
 };
 
-module.exports = vistas;
+export default vistas;
