@@ -1,9 +1,0 @@
-# Reglas locales de app-desktop
-node_modules/
-dist/
-.vite/
-.env
-.env.local
-.env.*.local
-! .env.example
-*.log
