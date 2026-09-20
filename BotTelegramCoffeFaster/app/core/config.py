@@ -3,10 +3,15 @@ from pathlib import Path
 from typing import List
 from dotenv import load_dotenv
 
-# Ruta raíz del proyecto
+# Rutas del proyecto y carga del .env centralizado de la raíz
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-ENV_PATH = BASE_DIR / ".env"
-load_dotenv(dotenv_path=ENV_PATH)
+ROOT_ENV = BASE_DIR.parent / ".env"
+LOCAL_ENV = BASE_DIR / ".env"
+
+if ROOT_ENV.exists():
+    load_dotenv(dotenv_path=ROOT_ENV)
+elif LOCAL_ENV.exists():
+    load_dotenv(dotenv_path=LOCAL_ENV)
 
 class Settings:
     # Telegram Bot

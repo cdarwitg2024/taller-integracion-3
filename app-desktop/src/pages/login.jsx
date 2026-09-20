@@ -16,8 +16,8 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { usuarios } from '../service/usuarios';
 
 function Login({ onLogin }) {
-  const [email, setEmail] = useState('dueno@coffeefaster.cl');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState(import.meta.env?.VITE_DEV_ADMIN_EMAIL || '');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -34,8 +34,8 @@ function Login({ onLogin }) {
         setErrorMsg(res.error || 'Credenciales inválidas.');
       }
     } catch (err) {
-      console.warn('Error en login, permitiendo acceso en modo desarrollo:', err);
-      if (onLogin) onLogin();
+      console.error('Error en login:', err);
+      setErrorMsg('Error de conexión con el servicio de autenticación.');
     } finally {
       setLoading(false);
     }

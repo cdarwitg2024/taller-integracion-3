@@ -70,9 +70,32 @@ export const telegramDuenoService = {
     if (!telegramChatId)
       throw new Error("El Chat ID de Telegram es obligatorio.");
 
+    let resolvedCafeteriaId = cafeteriaId;
+    if (!resolvedCafeteriaId && isSupabaseConfigured && usuarioId) {
+      try {
+        const { data: cu } = await supabase
+          .from("cafeteria_usuarios")
+          .select("cafeteria_id")
+          .eq("usuario_id", usuarioId)
+          .maybeSingle();
+        if (cu?.cafeteria_id) {
+          resolvedCafeteriaId = cu.cafeteria_id;
+        } else {
+          const { data: caf } = await supabase
+            .from("cafeterias")
+            .select("id")
+            .limit(1)
+            .maybeSingle();
+          if (caf?.id) resolvedCafeteriaId = caf.id;
+        }
+      } catch (err) {
+        console.warn("Error resolviendo cafetería desde DB:", err);
+      }
+    }
+
     const payload = {
       usuario_id: Number(usuarioId),
-      cafeteria_id: Number(cafeteriaId || 1),
+      cafeteria_id: Number(resolvedCafeteriaId || 1),
       telegram_chat_id: Number(telegramChatId),
       notificaciones_activas: Boolean(notificacionesActivas),
       actualizado_en: new Date().toISOString(),
@@ -160,34 +183,82 @@ export const telegramDuenoService = {
 
   /**
    * Envía una alerta simulada de prueba para que el dueño valide la recepción en su dispositivo.
+   * Obtiene la información estrictamente desde variables de entorno (.env) o desde la base de datos.
    * @param {object} params
    * @param {number|string} params.usuarioId
-   * @param {number|string} params.cafeteriaId
+   * @param {string} [params.usuarioNombre]
+   * @param {number|string} [params.cafeteriaId]
    * @param {number|string} params.telegramChatId
+   * @param {number|string} [params.productoId]
    * @param {string} [params.productoNombre]
    * @returns {Promise<{success: boolean, message: string}>}
    */
   async enviarAlertaPrueba({
     usuarioId,
-    usuarioNombre = "Carlos",
-    cafeteriaId = 1,
+    usuarioNombre,
+    cafeteriaId,
     telegramChatId,
     productoId,
     productoNombre,
   }) {
+    if (!telegramChatId) {
+      throw new Error("El Chat ID de Telegram es obligatorio para la prueba.");
+    }
+
+    // 1. Obtener usuario y cafetería desde la base de datos si no fueron provistos
+    let targetUsuarioNombre = usuarioNombre || "";
+    let targetCafeteriaId = cafeteriaId;
+
+    if (isSupabaseConfigured && usuarioId) {
+      try {
+        if (!targetUsuarioNombre) {
+          const { data: uData } = await supabase
+            .from("usuarios")
+            .select("nombre, apellido")
+            .eq("id", usuarioId)
+            .maybeSingle();
+          if (uData?.nombre) {
+            targetUsuarioNombre = `${uData.nombre} ${uData.apellido || ""}`.trim();
+          }
+        }
+
+        if (!targetCafeteriaId) {
+          const { data: cuData } = await supabase
+            .from("cafeteria_usuarios")
+            .select("cafeteria_id")
+            .eq("usuario_id", usuarioId)
+            .maybeSingle();
+          if (cuData?.cafeteria_id) {
+            targetCafeteriaId = cuData.cafeteria_id;
+          }
+        }
+      } catch (err) {
+        console.warn("Error resolviendo usuario/cafetería desde DB:", err);
+      }
+    }
+
+    // 2. Obtener producto real desde la base de datos
     let targetProdId = productoId;
     let targetProdNombre = productoNombre;
-    let stockActual = 5;
-    let stockMinimo = 12;
+    let stockActual = null;
+    let stockMinimo = null;
 
-    if (isSupabaseConfigured && (!targetProdId || !targetProdNombre)) {
+    if (isSupabaseConfigured) {
       try {
-        const { data } = await supabase
+        let query = supabase
           .from("productos")
-          .select("id, nombre, stock, stock_minimo")
-          .eq("cafeteria_id", cafeteriaId)
+          .select("id, nombre, stock, stock_minimo, cafeteria_id")
           .eq("activo", true)
-          .is("eliminado_en", null)
+          .is("eliminado_en", null);
+
+        if (targetCafeteriaId) {
+          query = query.eq("cafeteria_id", targetCafeteriaId);
+        }
+        if (targetProdId) {
+          query = query.eq("id", targetProdId);
+        }
+
+        const { data } = await query
           .order("stock", { ascending: true })
           .limit(1);
 
@@ -196,19 +267,22 @@ export const telegramDuenoService = {
           targetProdNombre = data[0].nombre;
           stockActual = data[0].stock;
           stockMinimo = data[0].stock_minimo;
+          if (!targetCafeteriaId) targetCafeteriaId = data[0].cafeteria_id;
         }
       } catch (e) {
-        console.warn("Error buscando producto para alerta de prueba:", e);
+        console.warn("Error consultando producto desde base de datos:", e);
       }
     }
 
-    targetProdId = targetProdId || 2;
-    targetProdNombre = targetProdNombre || "Leche entera";
+    // Valores seguros en caso de base de datos vacía
+    const finalStockActual = typeof stockActual === "number" ? stockActual : 5;
+    const finalStockMinimo = typeof stockMinimo === "number" ? stockMinimo : 10;
+    const finalProdNombre = targetProdNombre || "Producto de Prueba";
 
-    const mensajeAlerta = `[ALERTA DUEÑO] El producto '${targetProdNombre}' tiene stock crítico de ${stockActual} un. (mínimo ${stockMinimo} un.).`;
-
-    // Notificar al webhook local del bot de Telegram
+    // 3. Webhook URL obtenido de variables de entorno (.env)
+    const envWebhook = import.meta.env?.VITE_TELEGRAM_WEBHOOK_URL;
     const webhookUrls = [
+      ...(envWebhook ? [envWebhook] : []),
       "http://127.0.0.1:8000/webhook/stock-alerta",
       "http://localhost:8000/webhook/stock-alerta",
     ];
@@ -217,14 +291,14 @@ export const telegramDuenoService = {
       evento: "ALERTA_STOCK_BAJO",
       es_prueba: true,
       destinatario_chat_id: Number(telegramChatId),
-      dueno_nombre: usuarioNombre,
+      dueno_nombre: targetUsuarioNombre || "Dueño",
       producto: {
-        id: targetProdId,
-        nombre: targetProdNombre,
-        stock_actual: stockActual,
-        stock_anterior: stockActual + 5,
-        stock_minimo_configurado: stockMinimo,
-        cafeteria_id: Number(cafeteriaId || 1),
+        id: targetProdId || 0,
+        nombre: finalProdNombre,
+        stock_actual: finalStockActual,
+        stock_anterior: finalStockActual + 5,
+        stock_minimo_configurado: finalStockMinimo,
+        cafeteria_id: Number(targetCafeteriaId || 1),
       },
       umbral_disparo: 10,
       timestamp: new Date().toISOString(),
@@ -252,41 +326,44 @@ export const telegramDuenoService = {
       }
     }
 
-    // Fallback directo a la API de Telegram en caso de que el webhook local no responda
-    try {
-      const BOT_TOKEN = "8636968060:AAGA-vDhT0BBOaZuXhjxFSnuaZxiTAoqtgs";
-      const textoTelegram =
-        `<b>Mensaje de prueba</b>\n\n` +
-        `Este es un mensaje de prueba para verificar que las notificaciones de CoffeeFaster están funcionando correctamente.`;
+    // 4. Fallback directo a la API de Telegram SOLO si el token está definido en el archivo .env
+    const botToken =
+      import.meta.env?.VITE_TELEGRAM_BOT_TOKEN ||
+      import.meta.env?.VITE_BOT_TOKEN_KEY;
 
-      const tgRes = await fetch(
-        `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: Number(telegramChatId),
-            text: textoTelegram,
-            parse_mode: "HTML",
-          }),
-        },
-      );
+    if (botToken) {
+      try {
+        const textoTelegram =
+          `<b>Mensaje de prueba</b>\n\n` +
+          `Este es un mensaje de prueba para verificar que las notificaciones de CoffeeFaster están funcionando correctamente.`;
 
-      if (tgRes.ok) {
-        return {
-          success: true,
-          message:
-            "Mensaje de prueba enviado exitosamente a tu Telegram.",
-        };
+        const tgRes = await fetch(
+          `https://api.telegram.org/bot${botToken}/sendMessage`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: Number(telegramChatId),
+              text: textoTelegram,
+              parse_mode: "HTML",
+            }),
+          },
+        );
+
+        if (tgRes.ok) {
+          return {
+            success: true,
+            message: "Mensaje de prueba enviado exitosamente a tu Telegram.",
+          };
+        }
+      } catch (tgErr) {
+        console.error("Error en envío directo a Telegram:", tgErr);
       }
-    } catch (tgErr) {
-      console.error("Error en envío directo a Telegram:", tgErr);
     }
 
     return {
       success: true,
-      message:
-        "Mensaje de prueba enviado a tu cuenta de Telegram.",
+      message: "Mensaje de prueba enviado a tu cuenta de Telegram.",
     };
   },
 };

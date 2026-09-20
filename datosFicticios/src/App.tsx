@@ -42,8 +42,9 @@ export default function App() {
   const [ultimoPedidoInsertado, setUltimoPedidoInsertado] = useState<Pedido | null>(null);
   const [animatingId, setAnimatingId] = useState<string | number | null>(null);
 
-  // 6. Estado para desplegar u ocultar menú de visualización (por defecto oculto)
+  // 6. Estados para menús desplegables (por defecto ocultos para optimizar espacio)
   const [mostrarMenuVisualizacion, setMostrarMenuVisualizacion] = useState<boolean>(false);
+  const [mostrarFlujoPedidos, setMostrarFlujoPedidos] = useState<boolean>(false);
 
   // 7. Contadores de sesión
   const [sessionCompras, setSessionCompras] = useState<number>(0);
@@ -764,254 +765,319 @@ export default function App() {
             </div>
 
             {/* ======================================================== */}
-            {/* GRÁFICO IDÉNTICO AL PANEL DEL DUEÑO (Flujo de Pedidos por Estado) */}
+            {/* MENÚ DESPLEGABLE: FLUJO DE PEDIDOS POR ESTADO (GRÁFICO)   */}
             {/* ======================================================== */}
-            <div className="owner-flow-chart-card">
-              {/* Encabezado con título del dueño y apartado especial de Entregados */}
-              <div className="owner-flow-header">
-                <div className="owner-flow-title-group">
-                  <h4>Flujo de Pedidos por Estado</h4>
-                  <p>Etapas activas del ciclo de atención (demoras de 1 a 10s entre fases)</p>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                  <div className="live-indicator-pill">
-                    <span className="live-pulse-dot" />
-                    <span>
-                      {procesosCafeteria.length > 0
-                        ? `${procesosCafeteria.length} en preparación activa`
-                        : 'Sincronizado con PostgreSQL'}
+            <div className="collapsible-menu-wrapper">
+              <button
+                type="button"
+                className={`collapsible-menu-button ${mostrarFlujoPedidos ? 'is-open' : ''}`}
+                onClick={() => setMostrarFlujoPedidos(!mostrarFlujoPedidos)}
+              >
+                <div className="menu-btn-left">
+                  <span className="menu-icon">📊</span>
+                  <div className="menu-text-group">
+                    <span className="menu-main-label">Flujo de Pedidos por Estado</span>
+                    <span className="menu-sub-label">
+                      {mostrarFlujoPedidos
+                        ? 'Haz clic aquí para plegar y ocultar el gráfico'
+                        : 'Haz clic aquí para desplegar el gráfico de estados en tiempo real'}
                     </span>
                   </div>
-
-                  {/* Apartado Especial: Contador de Pedidos Entregados */}
-                  <div className="owner-delivered-badge">
-                    <div className="delivered-badge-circle">
-                      ✓
-                    </div>
-                    <div className="delivered-badge-text">
-                      <span className="delivered-badge-label">Entregados</span>
-                      <span className="delivered-badge-count">
-                        {estadisticas?.pedidos?.entregados ?? 0}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Gráfico de Barras: Exclusivo para pedidos activos (Pendiente, En Prep., Listo) */}
-              <div className="owner-chart-visual">
-                <div className="chart-grid-lines">
-                  <div className="chart-grid-line" />
-                  <div className="chart-grid-line" />
-                  <div className="chart-grid-line" />
-                  <div className="chart-grid-line" />
                 </div>
 
-                {(() => {
-                  const pendientes = Number(estadisticas?.pedidos?.pendientes ?? 0);
-                  const preparando = Number(estadisticas?.pedidos?.preparando ?? 0);
-                  const listos = Number(estadisticas?.pedidos?.listos ?? 0);
-                  const maxVal = Math.max(1, pendientes, preparando, listos);
+                <div className="menu-btn-right">
+                  <span
+                    className="badge-records-pill"
+                    style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}
+                  >
+                    ✓ {estadisticas?.pedidos?.entregados ?? 0} entregados
+                  </span>
+                  <span className="badge-records-pill">
+                    {(Number(estadisticas?.pedidos?.pendientes ?? 0) + Number(estadisticas?.pedidos?.preparando ?? 0))} en cocina
+                  </span>
+                  <span className={`menu-arrow ${mostrarFlujoPedidos ? 'arrow-up' : 'arrow-down'}`}>
+                    {mostrarFlujoPedidos ? '▲ Ocultar' : '▼ Desplegar'}
+                  </span>
+                </div>
+              </button>
 
-                  const activeBars = [
-                    {
-                      name: 'Pendiente',
-                      etapa: 'Pendientes',
-                      cantidad: pendientes,
-                      color: '#D9534F',
-                      badgeBg: '#FFEBEE',
-                      badgeColor: '#C62828',
-                    },
-                    {
-                      name: 'En Prep.',
-                      etapa: 'En Preparación',
-                      cantidad: preparando,
-                      color: '#F0AD4E',
-                      badgeBg: '#FFF3E0',
-                      badgeColor: '#E65100',
-                    },
-                    {
-                      name: 'Listo',
-                      etapa: 'Listos para Retiro',
-                      cantidad: listos,
-                      color: '#C86237',
-                      badgeBg: '#FBE9E7',
-                      badgeColor: '#BF360C',
-                    },
-                  ];
+              {/* Contenido desplegable: Tarjeta del Gráfico idéntico al panel del dueño */}
+              {mostrarFlujoPedidos && (
+                <div className="owner-flow-chart-card animated-dropdown">
+                  {/* Encabezado con título del dueño y apartado especial de Entregados */}
+                  <div className="owner-flow-header">
+                    <div className="owner-flow-title-group">
+                      <h4>Flujo de Pedidos por Estado</h4>
+                      <p>Etapas activas del ciclo de atención (demoras de 1 a 10s entre fases)</p>
+                    </div>
 
-                  return activeBars.map((bar) => {
-                    const barHeightPx = Math.max(6, Math.round((bar.cantidad / maxVal) * 140));
-                    return (
-                      <div key={bar.name} className="owner-bar-wrapper">
-                        <span className="owner-bar-val-top">{bar.cantidad}</span>
-                        <div
-                          className="owner-bar-pillar"
-                          style={{
-                            height: `${barHeightPx}px`,
-                            backgroundColor: bar.color,
-                          }}
-                        />
-                        <div className="owner-bar-xaxis-label">
-                          <span>{bar.name}</span>
-                          <span
-                            className="owner-bar-subtag"
-                            style={{
-                              backgroundColor: bar.badgeBg,
-                              color: bar.badgeColor,
-                            }}
-                          >
-                            {bar.cantidad} ped.
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                      <div className="live-indicator-pill">
+                        <span className="live-pulse-dot" />
+                        <span>
+                          {procesosCafeteria.length > 0
+                            ? `${procesosCafeteria.length} en preparación activa`
+                            : 'Sincronizado con PostgreSQL'}
+                        </span>
+                      </div>
+
+                      {/* Apartado Especial: Contador de Pedidos Entregados */}
+                      <div className="owner-delivered-badge">
+                        <div className="delivered-badge-circle">
+                          ✓
+                        </div>
+                        <div className="delivered-badge-text">
+                          <span className="delivered-badge-label">Entregados</span>
+                          <span className="delivered-badge-count">
+                            {estadisticas?.pedidos?.entregados ?? 0}
                           </span>
                         </div>
                       </div>
-                    );
-                  });
-                })()}
-              </div>
-
-              {/* Resumen operativo al pie */}
-              <div className="owner-chart-footer">
-                <div className="footer-chip-group">
-                  <span className="footer-chip-label">En cocina:</span>
-                  <span className="chip-orange">
-                    {(Number(estadisticas?.pedidos?.pendientes ?? 0) + Number(estadisticas?.pedidos?.preparando ?? 0))} activos
-                  </span>
-                </div>
-
-                <div className="footer-chip-group">
-                  <span className="footer-chip-label">Listos para retiro:</span>
-                  <span className="chip-teal">
-                    {Number(estadisticas?.pedidos?.listos ?? 0)} listos
-                  </span>
-                </div>
-
-                <div className="footer-chip-group">
-                  <span className="footer-chip-label">Total en BD:</span>
-                  <span className="chip-brown">
-                    {Number(estadisticas?.pedidos?.total_pedidos ?? 0)} pedidos
-                  </span>
-                </div>
-              </div>
-            </div>
-
-              {/* Cola de Pedidos en Proceso Activo (Transición en vivo 1 a 10s) */}
-              <div className="active-process-queue-section">
-                <div className="queue-section-header">
-                  <div className="queue-section-title">
-                    <span>🔥</span>
-                    <span>Pedidos en Curso en Barra & Cocina</span>
+                    </div>
                   </div>
-                  <span className="queue-section-badge">
-                    {procesosCafeteria.length} activo(s)
-                  </span>
-                </div>
 
-                {procesosCafeteria.length === 0 ? (
-                  <div className="queue-empty-box">
-                    <span>☕</span>
-                    <p>No hay pedidos en preparación activa en este instante.</p>
-                    <small style={{ color: '#94a3b8' }}>
-                      Pulsa <strong>"Insertar 1 Compra"</strong> o <strong>"Ráfaga x5"</strong> para ver cómo avanzan por las 4 fases con demoras aleatorias entre 1 y 10s.
-                    </small>
-                  </div>
-                ) : (
-                  <div className="active-orders-grid">
-                    {procesosCafeteria.map((proc) => {
-                      const stageIdx = getStageIndex(proc.estadoActual);
-                      return (
-                        <div
-                          key={proc.pedidoId}
-                          className={`active-order-tile in-${proc.estadoActual}`}
-                        >
-                          <div className="tile-top-row">
-                            <span className="tile-order-id">
-                              Pedido #{proc.pedidoId} • Retiro: {proc.codigoRetiro}
-                            </span>
-                            <span className="tile-customer-info">
-                              👤 {proc.cliente}
-                            </span>
-                            <span className="tile-price">
-                              ${Number(proc.total).toLocaleString('es-CL')}
-                            </span>
+                  {/* Gráfico de Barras: Contenedor con Área de Barras y Eje X totalmente desacoplados */}
+                  {(() => {
+                    const pendientes = Number(estadisticas?.pedidos?.pendientes ?? 0);
+                    const preparando = Number(estadisticas?.pedidos?.preparando ?? 0);
+                    const listos = Number(estadisticas?.pedidos?.listos ?? 0);
+                    const maxObserved = Math.max(pendientes, preparando, listos);
+                    const yMax = maxObserved <= 2 ? 2 : maxObserved <= 4 ? 4 : maxObserved <= 6 ? 6 : Math.ceil(maxObserved / 5) * 5;
+                    const yMid = Math.round(yMax / 2);
+                    const yTicks = [yMax, yMid, 0];
+
+                    const activeBars = [
+                      {
+                        name: 'Pendiente',
+                        etapa: 'Pendientes',
+                        cantidad: pendientes,
+                        color: '#D9534F',
+                        badgeBg: '#FFEBEE',
+                        badgeColor: '#C62828',
+                      },
+                      {
+                        name: 'En Prep.',
+                        etapa: 'En Preparación',
+                        cantidad: preparando,
+                        color: '#F0AD4E',
+                        badgeBg: '#FFF3E0',
+                        badgeColor: '#E65100',
+                      },
+                      {
+                        name: 'Listo',
+                        etapa: 'Listos para Retiro',
+                        cantidad: listos,
+                        color: '#C86237',
+                        badgeBg: '#FBE9E7',
+                        badgeColor: '#BF360C',
+                      },
+                    ];
+
+                    return (
+                      <div className="owner-chart-container">
+                        {/* 1. Área de gráfico (Eje Y + Líneas guía + Barras) */}
+                        <div className="owner-chart-plot-area">
+                          {/* Eje Y numérico y líneas guía punteadas */}
+                          <div className="chart-y-axis">
+                            {yTicks.map((tick, idx) => (
+                              <div key={idx} className="chart-y-tick-row">
+                                <span className="chart-y-label">{tick}</span>
+                                <div className={`chart-grid-line ${tick === 0 ? 'chart-baseline' : ''}`} />
+                              </div>
+                            ))}
                           </div>
 
-                          <div className="tile-items-text">
-                            📦 {proc.itemsResumen}
-                          </div>
-
-                          {/* Stepper visual interactivo de 4 pasos */}
-                          <div className="tile-stepper-bar">
-                            <div className={`tile-step-node ${stageIdx === 0 ? 'active in-pendiente' : stageIdx > 0 ? 'completed' : ''}`}>
-                              <span className="tile-step-bubble">
-                                {stageIdx > 0 ? '✓' : '1'}
-                              </span>
-                              <span className="tile-step-label">Pendiente</span>
-                            </div>
-
-                            <div className={`tile-connector-line ${stageIdx >= 1 ? 'filled' : ''}`} />
-
-                            <div className={`tile-step-node ${stageIdx === 1 ? 'active in-preparando' : stageIdx > 1 ? 'completed' : ''}`}>
-                              <span className="tile-step-bubble">
-                                {stageIdx > 1 ? '✓' : '2'}
-                              </span>
-                              <span className="tile-step-label">En Prep.</span>
-                            </div>
-
-                            <div className={`tile-connector-line ${stageIdx >= 2 ? 'filled' : ''}`} />
-
-                            <div className={`tile-step-node ${stageIdx === 2 ? 'active in-listo' : stageIdx > 2 ? 'completed' : ''}`}>
-                              <span className="tile-step-bubble">
-                                {stageIdx > 2 ? '✓' : '3'}
-                              </span>
-                              <span className="tile-step-label">Listo</span>
-                            </div>
-
-                            <div className={`tile-connector-line ${stageIdx >= 3 ? 'filled' : ''}`} />
-
-                            <div className={`tile-step-node ${stageIdx === 3 ? 'completed' : ''}`}>
-                              <span className="tile-step-bubble">
-                                {stageIdx === 3 ? '✓' : '4'}
-                              </span>
-                              <span className="tile-step-label">Entregado</span>
-                            </div>
-                          </div>
-
-                          {/* Banner de próxima transición con temporizador */}
-                          <div className="tile-next-transition-box">
-                            <div className="transition-info">
-                              <span>
-                                {proc.estadoActual === 'pendiente' && '⏳ Pedido en cola'}
-                                {proc.estadoActual === 'preparando' && '🍳 Cocinando / elaborando'}
-                                {proc.estadoActual === 'listo' && '🔔 Listo para entrega'}
-                              </span>
-                              <span>➔</span>
-                              <span>
-                                {proc.siguienteEstado
-                                  ? `Avanza a "${proc.siguienteEstado.toUpperCase()}" en:`
-                                  : 'Finalizando pedido...'}
-                              </span>
-                              <span className="transition-timer-badge">
-                                ~{proc.segundosRestantes}s
-                              </span>
-                            </div>
-
-                            <button
-                              type="button"
-                              className="btn-fast-forward"
-                              onClick={() => handleAvanzarPaso(proc.pedidoId)}
-                              title="Avanzar manualmente a la siguiente fase sin esperar la demora"
-                            >
-                              ⚡ Avanzar ahora
-                            </button>
+                          {/* Columnas con valor superior y barra vertical */}
+                          <div className="owner-bars-columns">
+                            {activeBars.map((bar) => {
+                              const barHeightPx = bar.cantidad > 0 ? Math.max(8, Math.round((bar.cantidad / yMax) * 135)) : 0;
+                              return (
+                                <div
+                                  key={bar.name}
+                                  className="owner-bar-col"
+                                  title={`${bar.cantidad} pedidos en ${bar.etapa}`}
+                                >
+                                  <span className="owner-bar-val-top">{bar.cantidad}</span>
+                                  <div
+                                    className="owner-bar-pillar"
+                                    style={{
+                                      height: `${barHeightPx}px`,
+                                      backgroundColor: bar.color,
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
-                      );
-                    })}
+
+                        {/* 2. Eje X Inferior (Totalmente desacoplado, sin posibilidad de solaparse con las barras) */}
+                        <div className="owner-chart-xaxis">
+                          <div className="owner-xaxis-spacer" />
+                          <div className="owner-xaxis-cols">
+                            {activeBars.map((bar) => (
+                              <div key={bar.name} className="owner-xaxis-col">
+                                <span className="owner-xaxis-name">{bar.name}</span>
+                                <span
+                                  className="owner-xaxis-badge"
+                                  style={{
+                                    backgroundColor: bar.badgeBg,
+                                    color: bar.badgeColor,
+                                  }}
+                                >
+                                  {bar.cantidad} ped.
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Resumen operativo al pie */}
+                  <div className="owner-chart-footer">
+                    <div className="footer-chip-group">
+                      <span className="footer-chip-label">En cocina:</span>
+                      <span className="chip-orange">
+                        {(Number(estadisticas?.pedidos?.pendientes ?? 0) + Number(estadisticas?.pedidos?.preparando ?? 0))} activos
+                      </span>
+                    </div>
+
+                    <div className="footer-chip-group">
+                      <span className="footer-chip-label">Listos para retiro:</span>
+                      <span className="chip-teal">
+                        {Number(estadisticas?.pedidos?.listos ?? 0)} listos
+                      </span>
+                    </div>
+
+                    <div className="footer-chip-group">
+                      <span className="footer-chip-label">Total en BD:</span>
+                      <span className="chip-brown">
+                        {Number(estadisticas?.pedidos?.total_pedidos ?? 0)} pedidos
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
+
+                  {/* Cola de Pedidos en Proceso Activo (Transición en vivo 1 a 10s) */}
+                  <div className="active-process-queue-section" style={{ marginTop: '1.25rem' }}>
+                    <div className="queue-section-header">
+                      <div className="queue-section-title">
+                        <span>🔥</span>
+                        <span>Pedidos en Curso en Barra & Cocina</span>
+                      </div>
+                      <span className="queue-section-badge">
+                        {procesosCafeteria.length} activo(s)
+                      </span>
+                    </div>
+
+                    {procesosCafeteria.length === 0 ? (
+                      <div className="queue-empty-box">
+                        <span>☕</span>
+                        <p>No hay pedidos en preparación activa en este instante.</p>
+                        <small style={{ color: '#94a3b8' }}>
+                          Pulsa <strong>"Insertar 1 Compra"</strong> o <strong>"Ráfaga x5"</strong> para ver cómo avanzan por las 4 fases con demoras aleatorias entre 1 y 10s.
+                        </small>
+                      </div>
+                    ) : (
+                      <div className="active-orders-grid">
+                        {procesosCafeteria.map((proc) => {
+                          const stageIdx = getStageIndex(proc.estadoActual);
+                          return (
+                            <div
+                              key={proc.pedidoId}
+                              className={`active-order-tile in-${proc.estadoActual}`}
+                            >
+                              <div className="tile-top-row">
+                                <span className="tile-order-id">
+                                  Pedido #{proc.pedidoId} • Retiro: {proc.codigoRetiro}
+                                </span>
+                                <span className="tile-customer-info">
+                                  👤 {proc.cliente}
+                                </span>
+                                <span className="tile-price">
+                                  ${Number(proc.total).toLocaleString('es-CL')}
+                                </span>
+                              </div>
+
+                              <div className="tile-items-text">
+                                📦 {proc.itemsResumen}
+                              </div>
+
+                              {/* Stepper visual interactivo de 4 pasos */}
+                              <div className="tile-stepper-bar">
+                                <div className={`tile-step-node ${stageIdx === 0 ? 'active in-pendiente' : stageIdx > 0 ? 'completed' : ''}`}>
+                                  <span className="tile-step-bubble">
+                                    {stageIdx > 0 ? '✓' : '1'}
+                                  </span>
+                                  <span className="tile-step-label">Pendiente</span>
+                                </div>
+
+                                <div className={`tile-connector-line ${stageIdx >= 1 ? 'filled' : ''}`} />
+
+                                <div className={`tile-step-node ${stageIdx === 1 ? 'active in-preparando' : stageIdx > 1 ? 'completed' : ''}`}>
+                                  <span className="tile-step-bubble">
+                                    {stageIdx > 1 ? '✓' : '2'}
+                                  </span>
+                                  <span className="tile-step-label">En Prep.</span>
+                                </div>
+
+                                <div className={`tile-connector-line ${stageIdx >= 2 ? 'filled' : ''}`} />
+
+                                <div className={`tile-step-node ${stageIdx === 2 ? 'active in-listo' : stageIdx > 2 ? 'completed' : ''}`}>
+                                  <span className="tile-step-bubble">
+                                    {stageIdx > 2 ? '✓' : '3'}
+                                  </span>
+                                  <span className="tile-step-label">Listo</span>
+                                </div>
+
+                                <div className={`tile-connector-line ${stageIdx >= 3 ? 'filled' : ''}`} />
+
+                                <div className={`tile-step-node ${stageIdx === 3 ? 'completed' : ''}`}>
+                                  <span className="tile-step-bubble">
+                                    {stageIdx === 3 ? '✓' : '4'}
+                                  </span>
+                                  <span className="tile-step-label">Entregado</span>
+                                </div>
+                              </div>
+
+                              {/* Banner de próxima transición con temporizador */}
+                              <div className="tile-next-transition-box">
+                                <div className="transition-info">
+                                  <span>
+                                    {proc.estadoActual === 'pendiente' && '⏳ Pedido en cola'}
+                                    {proc.estadoActual === 'preparando' && '🍳 Cocinando / elaborando'}
+                                    {proc.estadoActual === 'listo' && '🔔 Listo para entrega'}
+                                  </span>
+                                  <span>➔</span>
+                                  <span>
+                                    {proc.siguienteEstado
+                                      ? `Avanza a "${proc.siguienteEstado.toUpperCase()}" en:`
+                                      : 'Finalizando pedido...'}
+                                  </span>
+                                  <span className="transition-timer-badge">
+                                    ~{proc.segundosRestantes}s
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  className="btn-fast-forward"
+                                  onClick={() => handleAvanzarPaso(proc.pedidoId)}
+                                  title="Avanzar manualmente a la siguiente fase sin esperar la demora"
+                                >
+                                  ⚡ Avanzar ahora
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* ======================================================== */}
             {/* MENÚ DESPLEGABLE: VISUALIZACIÓN DE INSERCIÓN EN TIEMPO REAL */}

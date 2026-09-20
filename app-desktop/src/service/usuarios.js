@@ -125,15 +125,18 @@ export const usuarios = {
       }
     }
 
-    // Fallback de desarrollo exclusivo para dueño
-    if (email === 'dueno@coffeefaster.cl' && password === '123456') {
+    // Fallback de desarrollo configurable exclusivamente vía variables de entorno
+    const devEmail = import.meta.env?.VITE_DEV_ADMIN_EMAIL;
+    const devPass = import.meta.env?.VITE_DEV_ADMIN_PASSWORD;
+
+    if (devEmail && devPass && email === devEmail && password === devPass) {
       return {
         success: true,
         user: {
           id: 1,
-          nombre: 'Carlos',
+          nombre: 'Administrador',
           apellido: 'Dueño',
-          email: 'dueno@coffeefaster.cl',
+          email: devEmail,
           roles: { nombre: 'dueño' },
         },
       };
