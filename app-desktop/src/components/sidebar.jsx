@@ -1,57 +1,38 @@
-import { useEffect, useState } from 'react';
 import {
   Drawer,
   List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Toolbar,
   Typography,
   Box,
-  Badge,
+  Divider,
 } from '@mui/material';
 
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
-import DashboardIcon from '@mui/icons-material/Dashboard';
+import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlined';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 
-import pedidosService from '../services/pedidosService';
+const drawerWidth = 260;
 
-const drawerWidth = 240;
-
-function Sidebar({ currentPage, onNavigate }) {
-  const [pendientesCount, setPendientesCount] = useState(0);
-
-  useEffect(() => {
-    const updateCount = async () => {
-      const pedidos = await pedidosService.getAll();
-      const count = pedidos.filter(p => p.estado === 'pendiente' || p.estado === 'preparando').length;
-      setPendientesCount(count);
-    };
-    updateCount();
-    const interval = setInterval(updateCount, 4000);
-    return () => clearInterval(interval);
-  }, []);
-
+function Sidebar({ currentPage, onNavigate, onLogout }) {
+  // Ítems exclusivos para el Panel de Dueño
   const menuItems = [
-    {
-      id: 'pedidos',
-      label: 'Pedidos',
-      icon: (
-        <Badge badgeContent={pendientesCount} color="error">
-          <ReceiptLongIcon />
-        </Badge>
-      ),
-    },
-    {
-      id: 'scanner-qr',
-      label: 'Escáner QR',
-      icon: <QrCodeScannerIcon />,
-    },
     {
       id: 'dashboard',
       label: 'Dashboard',
-      icon: <DashboardIcon />,
+      icon: <SpaceDashboardOutlinedIcon fontSize="small" />,
+    },
+    {
+      id: 'productos',
+      label: 'Productos',
+      icon: <MenuBookOutlinedIcon fontSize="small" />,
+    },
+    {
+      id: 'inventario',
+      label: 'Inventario',
+      icon: <Inventory2OutlinedIcon fontSize="small" />,
     },
   ];
 
@@ -64,55 +45,120 @@ function Sidebar({ currentPage, onNavigate }) {
         '& .MuiDrawer-paper': {
           width: drawerWidth,
           boxSizing: 'border-box',
-          backgroundColor: '#0f172a',
-          color: '#f8fafc',
+          backgroundColor: '#433225', // Fondo café oscuro de los prototipos
+          color: '#FFFFFF',
+          borderRight: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
         },
       }}
     >
-      <Toolbar sx={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        <Typography variant="h6" fontWeight={800} color="#38bdf8">
-          ☕ CoffeeFaster
-        </Typography>
-      </Toolbar>
+      <Box>
+        {/* Cabecera del Sidebar */}
+        <Box sx={{ p: 3, pb: 2.5 }}>
+          <Typography
+            variant="h5"
+            fontWeight={800}
+            sx={{
+              color: '#FFFFFF',
+              letterSpacing: '-0.5px',
+            }}
+          >
+            CoffeeFaster
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              color: '#C8B6A6',
+              fontWeight: 600,
+              letterSpacing: '0.4px',
+              display: 'block',
+              mt: 0.3,
+            }}
+          >
+            Panel de Dueño
+          </Typography>
+        </Box>
 
-      <Box sx={{ overflow: 'auto', mt: 2 }}>
-        <List>
-          {menuItems.map((item) => (
-            <ListItemButton
-              key={item.id}
-              selected={currentPage === item.id}
-              onClick={() => onNavigate(item.id)}
-              sx={{
-                mx: 1,
-                mb: 0.5,
-                borderRadius: 2,
-                '&.Mui-selected': {
-                  backgroundColor: '#0284c7',
-                  color: '#ffffff',
-                  '& .MuiListItemIcon-root': {
-                    color: '#ffffff',
-                  },
-                  '&:hover': {
-                    backgroundColor: '#0369a1',
-                  },
-                },
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                },
-              }}
-            >
-              <ListItemIcon sx={{ color: currentPage === item.id ? '#ffffff' : '#94a3b8' }}>
-                {item.icon}
-              </ListItemIcon>
-
-              <ListItemText
-                primary={item.label}
-                primaryTypographyProps={{ fontWeight: currentPage === item.id ? 700 : 500 }}
-              />
-            </ListItemButton>
-          ))}
-        </List>
+        {/* Lista de navegación exclusiva para el Panel de Dueño */}
+        <Box sx={{ px: 1.5, mt: 1 }}>
+          <List disablePadding>
+            {menuItems.map((item) => {
+              const isActive = currentPage === item.id;
+              return (
+                <ListItemButton
+                  key={item.id}
+                  selected={isActive}
+                  onClick={() => onNavigate(item.id)}
+                  sx={{
+                    mb: 1,
+                    py: 1.3,
+                    px: 2,
+                    borderRadius: '10px',
+                    backgroundColor: isActive ? 'rgba(255, 255, 255, 0.16)' : 'transparent',
+                    color: isActive ? '#FFFFFF' : '#D0C0B4',
+                    '&.Mui-selected': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.16)',
+                      color: '#FFFFFF',
+                      '&:hover': {
+                        backgroundColor: 'rgba(255, 255, 255, 0.20)',
+                      },
+                    },
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                      color: '#FFFFFF',
+                    },
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 38,
+                      color: isActive ? '#FFFFFF' : '#C4B5A7',
+                    }}
+                  >
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={item.label}
+                    primaryTypographyProps={{
+                      fontSize: '0.92rem',
+                      fontWeight: isActive ? 700 : 500,
+                    }}
+                  />
+                </ListItemButton>
+              );
+            })}
+          </List>
+        </Box>
       </Box>
+
+      {/* Zona inferior con opción de cerrar sesión */}
+      {onLogout && (
+        <Box sx={{ px: 1.5, pb: 2.5 }}>
+          <ListItemButton
+            onClick={onLogout}
+            sx={{
+              py: 1.1,
+              px: 2,
+              borderRadius: '10px',
+              color: '#C8B8AB',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                color: '#FFFFFF',
+              },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 38, color: '#C8B8AB' }}>
+              <LogoutOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText
+              primary="Cerrar Sesión"
+              primaryTypographyProps={{ fontSize: '0.88rem', fontWeight: 500 }}
+            />
+          </ListItemButton>
+        </Box>
+      )}
     </Drawer>
   );
 }

@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 
-import App from './App';
+import App from './app';
 import theme from './theme/theme';
 import './index.css';
 

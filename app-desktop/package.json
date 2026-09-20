@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron": "electron electron/main.js",
+    "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron electron/main.js\"",
     "electron:build": "npm run build && electron-builder"
   },
   "dependencies": {

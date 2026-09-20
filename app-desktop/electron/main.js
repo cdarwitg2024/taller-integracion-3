@@ -1,5 +1,8 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const fs = require('fs');
+
+app.disableHardwareAcceleration();
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -13,7 +16,18 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL('http://localhost:5173');
+  const devUrl = 'http://localhost:5173';
+  const distPath = path.join(__dirname, '../dist/index.html');
+
+  if (process.env.NODE_ENV === 'production' || app.isPackaged) {
+    mainWindow.loadFile(distPath);
+  } else {
+    mainWindow.loadURL(devUrl).catch(() => {
+      if (fs.existsSync(distPath)) {
+        mainWindow.loadFile(distPath);
+      }
+    });
+  }
 }
 
 app.whenReady().then(() => {
