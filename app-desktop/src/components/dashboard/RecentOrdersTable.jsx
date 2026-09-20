@@ -98,6 +98,12 @@ function RecentOrdersTable({ pedidos }) {
         backgroundColor: '#FFFFFF',
         boxShadow: '0 2px 10px rgba(74, 55, 40, 0.04)',
         overflow: 'hidden',
+        height: '100%',
+        minHeight: 400,
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        boxSizing: 'border-box',
       }}
     >
       <Box sx={{ p: 3, pb: 2 }}>

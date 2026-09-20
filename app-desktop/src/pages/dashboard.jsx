@@ -41,7 +41,7 @@ function Dashboard() {
   }, []);
 
   return (
-    <Box sx={{ flexGrow: 1, pb: 4 }}>
+    <Box sx={{ width: '100%', maxWidth: '100%', pb: 4, boxSizing: 'border-box' }}>
       {/* 1. Encabezado y Acción de Actualizar */}
       <DashboardHeader onRefresh={loadData} loading={loading} />
 
@@ -49,21 +49,21 @@ function Dashboard() {
       <KpiCards stats={stats} />
 
       {/* 3. Gráficos de Ventas y Distribución */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} lg={8}>
+      <Grid container spacing={3} sx={{ width: '100%', mb: 4 }}>
+        <Grid size={{ xs: 12, md: 7, lg: 8 }}>
           <SalesChart salesData={salesData} />
         </Grid>
-        <Grid item xs={12} lg={4}>
+        <Grid size={{ xs: 12, md: 5, lg: 4 }}>
           <OrdersDistributionChart stats={stats} />
         </Grid>
       </Grid>
 
       {/* 4. Productos Populares y Tabla de Últimos Pedidos */}
-      <Grid container spacing={3}>
-        <Grid item xs={12} lg={5}>
+      <Grid container spacing={3} sx={{ width: '100%' }}>
+        <Grid size={{ xs: 12, md: 5, lg: 5 }}>
           <TopProductsChart data={topProducts} />
         </Grid>
-        <Grid item xs={12} lg={7}>
+        <Grid size={{ xs: 12, md: 7, lg: 7 }}>
           <RecentOrdersTable pedidos={pedidos} />
         </Grid>
       </Grid>

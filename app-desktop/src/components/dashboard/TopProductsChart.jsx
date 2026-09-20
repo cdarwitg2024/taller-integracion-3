@@ -21,9 +21,12 @@ function TopProductsChart({ data }) {
         border: '1px solid #EFEAE6',
         backgroundColor: '#FFFFFF',
         boxShadow: '0 2px 10px rgba(74, 55, 40, 0.04)',
-        height: 380,
+        height: '100%',
+        minHeight: 400,
         display: 'flex',
         flexDirection: 'column',
+        width: '100%',
+        boxSizing: 'border-box',
       }}
     >
       <Box sx={{ mb: 2 }}>

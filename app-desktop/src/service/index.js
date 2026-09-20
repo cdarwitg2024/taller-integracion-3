@@ -16,6 +16,7 @@ import pagos from './pagos';
 import dispositivos from './dispositivos';
 import logsValidacionQr from './logs_validacion_qr';
 import vistas from './vistas';
+import telegramDuenoService from './telegram_dueno';
 
 export {
   supabase,
@@ -39,6 +40,7 @@ export {
   dispositivos,
   logsValidacionQr,
   vistas,
+  telegramDuenoService,
 };
 
 export default {
@@ -63,4 +65,6 @@ export default {
   dispositivos,
   logsValidacionQr,
   vistas,
+  telegramDuenoService,
 };
+

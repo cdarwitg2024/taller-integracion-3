@@ -1,4 +1,4 @@
-import { Paper, Typography, Box, Stack, Chip } from '@mui/material';
+import { Paper, Typography, Box, Chip } from '@mui/material';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import {
   ResponsiveContainer,
@@ -184,17 +184,17 @@ function OrdersDistributionChart({ stats }) {
       </Box>
 
       {/* Resumen operativo al pie */}
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
+      <Box
         sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           mt: 2,
           pt: 1.5,
           borderTop: '1px solid #F2ECE6',
         }}
       >
-        <Stack direction="row" spacing={0.8} alignItems="center">
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
             En cocina:
           </Typography>
@@ -209,8 +209,8 @@ function OrdersDistributionChart({ stats }) {
               height: 22,
             }}
           />
-        </Stack>
-      </Stack>
+        </Box>
+      </Box>
     </Paper>
   );
 }

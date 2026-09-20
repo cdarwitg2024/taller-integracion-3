@@ -1,4 +1,4 @@
-import { Grid, Card, CardContent, Typography, Stack, Box } from '@mui/material';
+import { Grid, Card, CardContent, Typography, Box } from '@mui/material';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
@@ -41,12 +41,13 @@ function KpiCards({ stats }) {
   ];
 
   return (
-    <Grid container spacing={3} sx={{ mb: 4 }}>
+    <Grid container spacing={3} sx={{ width: '100%', mb: 4 }}>
       {cards.map((card, index) => (
-        <Grid item xs={12} sm={6} md={3} key={index}>
+        <Grid size={{ xs: 12, sm: 6, md: 6, lg: 3 }} key={index}>
           <Card
             elevation={0}
             sx={{
+              height: '100%',
               borderRadius: '16px',
               border: '1px solid #EFEAE6',
               backgroundColor: '#FFFFFF',
@@ -58,20 +59,49 @@ function KpiCards({ stats }) {
               },
             }}
           >
-            <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                <Box>
+            <CardContent
+              sx={{
+                p: 3,
+                '&:last-child': { pb: 3 },
+                height: '100%',
+                boxSizing: 'border-box',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  gap: 1.5,
+                }}
+              >
+                <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography
                     variant="caption"
                     fontWeight={700}
-                    sx={{ color: '#8C7A6F', textTransform: 'uppercase', letterSpacing: '0.6px' }}
+                    sx={{
+                      color: '#8C7A6F',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.6px',
+                      display: 'block',
+                    }}
                   >
                     {card.title}
                   </Typography>
                   <Typography
                     variant="h4"
                     fontWeight={800}
-                    sx={{ color: '#3B291D', mt: 0.8, letterSpacing: '-0.5px' }}
+                    sx={{
+                      color: '#3B291D',
+                      mt: 0.8,
+                      letterSpacing: '-0.5px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
                   >
                     {card.value}
                   </Typography>
@@ -89,11 +119,12 @@ function KpiCards({ stats }) {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    flexShrink: 0,
                   }}
                 >
                   {card.icon}
                 </Box>
-              </Stack>
+              </Box>
             </CardContent>
           </Card>
         </Grid>

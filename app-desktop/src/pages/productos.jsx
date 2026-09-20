@@ -506,7 +506,9 @@ function CatalogoProductos() {
               ) : (
                 filtered.map((prod) => {
                   const minVal = prod.minimo ?? prod.stock_minimo ?? 0;
-                  const isBajo = prod.stock <= minVal;
+                  const stockNum = Number(prod.stock || 0);
+                  const isSinStock = stockNum <= 0;
+                  const isBajo = stockNum > 0 && stockNum <= minVal;
                   return (
                     <TableRow
                       key={prod.id}
@@ -515,6 +517,7 @@ function CatalogoProductos() {
                         cursor: 'pointer',
                         '&:last-child td, &:last-child th': { border: 0 },
                         borderColor: '#F2ECE6',
+                        backgroundColor: isSinStock ? 'rgba(255, 205, 210, 0.25)' : 'inherit',
                       }}
                       onClick={() => handleOpenEdit(prod)}
                     >
@@ -544,7 +547,14 @@ function CatalogoProductos() {
                         ${Number(prod.precio || 0).toLocaleString('es-CL')}
                       </TableCell>
 
-                      <TableCell align="center" sx={{ fontWeight: 600, color: '#3E2D22', fontSize: '0.85rem' }}>
+                      <TableCell
+                        align="center"
+                        sx={{
+                          fontWeight: 700,
+                          color: isSinStock ? '#B71C1C' : isBajo ? '#E65100' : '#3E2D22',
+                          fontSize: '0.85rem',
+                        }}
+                      >
                         {prod.stock}
                       </TableCell>
 
@@ -554,14 +564,37 @@ function CatalogoProductos() {
 
                       <TableCell align="center">
                         <Chip
-                          label={!prod.activo ? 'NO DISPONIBLE' : isBajo ? 'STOCK BAJO' : 'DISPONIBLE'}
+                          label={
+                            !prod.activo
+                              ? 'NO DISPONIBLE'
+                              : isSinStock
+                              ? 'SIN STOCK'
+                              : isBajo
+                              ? 'STOCK BAJO'
+                              : 'DISPONIBLE'
+                          }
                           size="small"
                           sx={{
-                            backgroundColor: !prod.activo ? '#EEEEEE' : isBajo ? '#FFEBEE' : '#E8F5E9',
-                            color: !prod.activo ? '#757575' : isBajo ? '#C62828' : '#2E7D32',
-                            fontWeight: 700,
+                            backgroundColor:
+                              !prod.activo
+                                ? '#EEEEEE'
+                                : isSinStock
+                                ? '#FFCDD2'
+                                : isBajo
+                                ? '#FFF3E0'
+                                : '#E8F5E9',
+                            color:
+                              !prod.activo
+                                ? '#757575'
+                                : isSinStock
+                                ? '#B71C1C'
+                                : isBajo
+                                ? '#E65100'
+                                : '#2E7D32',
+                            fontWeight: 800,
                             fontSize: '0.68rem',
                             borderRadius: '6px',
+                            border: isSinStock ? '1px solid #EF9A9A' : 'none',
                           }}
                         />
                       </TableCell>
