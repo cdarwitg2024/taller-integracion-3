@@ -159,6 +159,7 @@ const normalizeProducto = (p) => ({
   minimo: p.stock_minimo ?? p.minimo ?? 0,
   stock_minimo: p.stock_minimo ?? p.minimo ?? 0,
   categoria: p.categorias?.nombre || p.categoria || 'GENERAL',
+  cafeteria_nombre: p.cafeterias?.nombre || p.cafeteria_nombre || 'Cafetería Central',
   unidad: p.unidad || 'un',
   catColor: p.catColor || '#8D6E63',
   catBg: p.catBg || '#EFEBE9',
@@ -230,15 +231,15 @@ export const productos = {
 
   async create(nuevoProducto) {
     const dbPayload = {
-      cafeteria_id: nuevoProducto.cafeteria_id || 1,
-      categoria_id: nuevoProducto.categoria_id || null,
+      cafeteria_id: nuevoProducto.cafeteria_id ? Number(nuevoProducto.cafeteria_id) : 1,
+      categoria_id: nuevoProducto.categoria_id ? Number(nuevoProducto.categoria_id) : null,
       nombre: nuevoProducto.nombre,
       descripcion: nuevoProducto.descripcion || '',
       precio: Number(nuevoProducto.precio || 0),
       stock: Number(nuevoProducto.stock || 0),
       stock_minimo: Number(nuevoProducto.stock_minimo || nuevoProducto.minimo || 0),
       imagen_url: nuevoProducto.imagen_url || null,
-      activo: true,
+      activo: nuevoProducto.activo !== undefined ? Boolean(nuevoProducto.activo) : true,
     };
 
     if (isSupabaseConfigured) {
@@ -246,17 +247,23 @@ export const productos = {
         const { data, error } = await supabase
           .from(TABLE)
           .insert(dbPayload)
-          .select('*, categorias(*)')
+          .select('*, cafeterias(*), categorias(*)')
           .single();
 
-        if (!error && data) {
+        if (error) {
+          console.error('Error al insertar producto en Supabase:', error);
+          throw error;
+        }
+
+        if (data) {
           const item = normalizeProducto({ ...data, unidad: nuevoProducto.unidad });
           const current = getStoredProductos();
           saveStoredProductos([item, ...current]);
           return item;
         }
       } catch (err) {
-        console.warn('Error al insertar en Supabase, guardando localmente:', err);
+        console.error('Fallo al guardar en Supabase:', err);
+        throw err;
       }
     }
 
@@ -283,8 +290,9 @@ export const productos = {
     if (updates.stock_minimo !== undefined || updates.minimo !== undefined) {
       dbPayload.stock_minimo = Number(updates.stock_minimo ?? updates.minimo);
     }
-    if (updates.categoria_id !== undefined) dbPayload.categoria_id = updates.categoria_id;
-    if (updates.activo !== undefined) dbPayload.activo = updates.activo;
+    if (updates.cafeteria_id !== undefined) dbPayload.cafeteria_id = Number(updates.cafeteria_id);
+    if (updates.categoria_id !== undefined) dbPayload.categoria_id = updates.categoria_id ? Number(updates.categoria_id) : null;
+    if (updates.activo !== undefined) dbPayload.activo = Boolean(updates.activo);
     dbPayload.actualizado_en = new Date().toISOString();
 
     if (isSupabaseConfigured) {
@@ -293,10 +301,15 @@ export const productos = {
           .from(TABLE)
           .update(dbPayload)
           .eq('id', id)
-          .select('*, categorias(*)')
+          .select('*, cafeterias(*), categorias(*)')
           .single();
 
-        if (!error && data) {
+        if (error) {
+          console.error('Error al actualizar en Supabase:', error);
+          throw error;
+        }
+
+        if (data) {
           const updatedItem = normalizeProducto({
             ...data,
             unidad: updates.unidad,
@@ -308,7 +321,8 @@ export const productos = {
           return updatedItem;
         }
       } catch (err) {
-        console.warn('Error al actualizar en Supabase, guardando en local:', err);
+        console.error('Fallo al actualizar producto en Supabase:', err);
+        throw err;
       }
     }
 
@@ -337,13 +351,17 @@ export const productos = {
           .update({ activo: false, eliminado_en: new Date().toISOString() })
           .eq('id', id);
 
-        if (!error) {
-          const current = getStoredProductos();
-          saveStoredProductos(current.filter((p) => p.id !== id));
-          return true;
+        if (error) {
+          console.error('Error al eliminar en Supabase:', error);
+          throw error;
         }
+
+        const current = getStoredProductos();
+        saveStoredProductos(current.filter((p) => p.id !== id));
+        return true;
       } catch (err) {
-        console.warn('Error al eliminar en Supabase:', err);
+        console.error('Fallo al eliminar producto en Supabase:', err);
+        throw err;
       }
     }
 

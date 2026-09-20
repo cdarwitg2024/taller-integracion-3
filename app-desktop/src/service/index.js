@@ -1,4 +1,4 @@
-import { supabase, supabaseAdmin, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 import pedidos, { pedidosService } from './pedidos';
 import productos, { productosService } from './productos';
 import categorias from './categorias';
@@ -19,7 +19,6 @@ import vistas from './vistas';
 
 export {
   supabase,
-  supabaseAdmin,
   isSupabaseConfigured,
   pedidos,
   pedidosService,
@@ -44,7 +43,6 @@ export {
 
 export default {
   supabase,
-  supabaseAdmin,
   isSupabaseConfigured,
   pedidos,
   pedidosService,

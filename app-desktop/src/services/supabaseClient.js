@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured, supabaseAdmin } from '../service/supabase';
+import { supabase, isSupabaseConfigured } from '../service/supabase';
 
-export { supabase, isSupabaseConfigured, supabaseAdmin };
+export { supabase, isSupabaseConfigured };
 export default supabase;

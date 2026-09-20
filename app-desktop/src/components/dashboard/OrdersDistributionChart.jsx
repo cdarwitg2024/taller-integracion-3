@@ -1,4 +1,5 @@
 import { Paper, Typography, Box, Stack, Chip } from '@mui/material';
+import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import {
   ResponsiveContainer,
   BarChart,
@@ -12,11 +13,12 @@ import {
 } from 'recharts';
 
 function OrdersDistributionChart({ stats }) {
-  const pendientes = stats?.pendientes ?? 1;
-  const preparando = stats?.preparando ?? 1;
-  const listos = stats?.listos ?? 1;
-  const entregados = stats?.entregados ?? 1;
+  const pendientes = stats?.pendientes ?? 0;
+  const preparando = stats?.preparando ?? 0;
+  const listos = stats?.listos ?? 0;
+  const entregados = stats?.entregados ?? 0;
 
+  // Solo etapas en curso en el gráfico de barras (sin "Entregado")
   const data = [
     {
       name: 'Pendiente',
@@ -39,17 +41,9 @@ function OrdersDistributionChart({ stats }) {
       color: '#C86237',
       badgeBg: '#FBE9E7',
     },
-    {
-      name: 'Entregado',
-      etapa: 'Entregados',
-      cantidad: entregados,
-      color: '#5CB85C',
-      badgeBg: '#E8F5E9',
-    },
   ];
 
   const totalActivos = pendientes + preparando;
-  const totalCompletados = listos + entregados;
 
   return (
     <Paper
@@ -65,17 +59,86 @@ function OrdersDistributionChart({ stats }) {
         flexDirection: 'column',
       }}
     >
-      {/* Encabezado del Gráfico */}
-      <Box sx={{ mb: 1 }}>
-        <Typography variant="h6" fontWeight={700} sx={{ color: '#4A3728', fontSize: '1.1rem' }}>
-          Flujo de Pedidos por Estado
-        </Typography>
-        <Typography variant="caption" sx={{ color: '#8C7A6F' }}>
-          Seguimiento por etapas del ciclo de atención
-        </Typography>
+      {/* Encabezado del Gráfico con Apartado Especial de Entregados */}
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 2,
+          mb: 1.5,
+        }}
+      >
+        <Box sx={{ flex: 1, minWidth: 0, pr: 1 }}>
+          <Typography
+            variant="h6"
+            fontWeight={700}
+            sx={{ color: '#4A3728', fontSize: '1rem', lineHeight: 1.25 }}
+          >
+            Flujo de Pedidos por Estado
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#8C7A6F', display: 'block', mt: 0.4 }}>
+            Etapas activas del ciclo de atención
+          </Typography>
+        </Box>
+
+        {/* Apartado Especial: Contador de Pedidos Entregados */}
+        <Box
+          sx={{
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            px: 1.6,
+            py: 0.8,
+            bgcolor: '#F2F9F3',
+            border: '1.5px solid #C8E6C9',
+            borderRadius: '12px',
+            boxShadow: '0 2px 6px rgba(46, 125, 50, 0.06)',
+          }}
+        >
+          <Box
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              bgcolor: '#E8F5E9',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <CheckCircleOutlinedIcon sx={{ color: '#2E7D32', fontSize: 19 }} />
+          </Box>
+
+          <Box sx={{ textAlign: 'right' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: '#2E7D32',
+                fontWeight: 700,
+                fontSize: '0.66rem',
+                display: 'block',
+                lineHeight: 1.1,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                mb: 0.3,
+              }}
+            >
+              Entregados
+            </Typography>
+            <Typography
+              variant="h6"
+              sx={{ color: '#1B5E20', fontWeight: 800, fontSize: '1.1rem', lineHeight: 1 }}
+            >
+              {entregados}
+            </Typography>
+          </Box>
+        </Box>
       </Box>
 
-      {/* Gráfico de Barras Verticales por Estado (Ideal para comparar 4 etapas) */}
+      {/* Gráfico de Barras: Exclusivo para pedidos activos (Pendiente, En Prep., Listo) */}
       <Box sx={{ flexGrow: 1, width: '100%', minHeight: 220, mt: 1 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 22, right: 10, left: -25, bottom: 0 }}>
@@ -84,7 +147,7 @@ function OrdersDistributionChart({ stats }) {
               dataKey="name"
               tickLine={false}
               axisLine={{ stroke: '#EFEAE6' }}
-              tick={{ fill: '#5C4535', fontSize: 11.5, fontWeight: 700 }}
+              tick={{ fill: '#5C4535', fontSize: 12, fontWeight: 700 }}
             />
             <YAxis
               allowDecimals={false}
@@ -104,7 +167,7 @@ function OrdersDistributionChart({ stats }) {
               itemStyle={{ color: '#F5EBE1', fontWeight: 600 }}
               labelStyle={{ display: 'none' }}
             />
-            <Bar dataKey="cantidad" radius={[8, 8, 0, 0]} maxBarSize={48}>
+            <Bar dataKey="cantidad" radius={[8, 8, 0, 0]} maxBarSize={52}>
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
@@ -141,23 +204,6 @@ function OrdersDistributionChart({ stats }) {
             sx={{
               backgroundColor: '#FFF3E0',
               color: '#E65100',
-              fontWeight: 700,
-              fontSize: '0.72rem',
-              height: 22,
-            }}
-          />
-        </Stack>
-
-        <Stack direction="row" spacing={0.8} alignItems="center">
-          <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
-            Completados:
-          </Typography>
-          <Chip
-            label={`${totalCompletados} listos`}
-            size="small"
-            sx={{
-              backgroundColor: '#E8F5E9',
-              color: '#2E7D32',
               fontWeight: 700,
               fontSize: '0.72rem',
               height: 22,
