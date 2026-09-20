@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -9,58 +9,11 @@ import {
 
 import CartItem from '../components/CartItem';
 
-const initialCart = [
-  {
-    id: 1,
-    name: 'Café Latte Vainilla',
-    description: 'Grande • Leche descremada',
-    price: 2400,
-    quantity: 1,
-    emoji: '☕',
-  },
-  {
-    id: 2,
-    name: 'Sándwich Ave Palta',
-    description: 'Pan rústico integral',
-    price: 3600,
-    quantity: 1,
-    emoji: '🥪',
-  },
-  {
-    id: 3,
-    name: 'Muffin de Arándanos',
-    description: 'Recién horneado',
-    price: 1800,
-    quantity: 1,
-    emoji: '🧁',
-  },
-];
-
-const CartScreen = () => {
-  const [cart, setCart] = useState(initialCart);
-
-  const increaseQuantity = (id) => {
-    setCart((currentCart) =>
-      currentCart.map((item) =>
-        item.id === id
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      )
-    );
-  };
-
-  const decreaseQuantity = (id) => {
-    setCart((currentCart) =>
-      currentCart
-        .map((item) =>
-          item.id === id
-            ? { ...item, quantity: item.quantity - 1 }
-            : item
-        )
-        .filter((item) => item.quantity > 0)
-    );
-  };
-
+const CartScreen = ({
+  cart,
+  onIncrease,
+  onDecrease,
+}) => {
   const totalProducts = cart.reduce(
     (sum, item) => sum + item.quantity,
     0
@@ -73,8 +26,6 @@ const CartScreen = () => {
 
   return (
     <View style={styles.container}>
-
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton}>
           <Text style={styles.backText}>‹</Text>
@@ -83,18 +34,29 @@ const CartScreen = () => {
         <Text style={styles.headerTitle}>Tu Pedido</Text>
 
         <View style={styles.headerIcon}>
-          <Text>▣</Text>
+          <Text style={styles.headerIconText}>▣</Text>
         </View>
       </View>
 
-      <FlatList
-        data={cart}
-        keyExtractor={(item) => item.id.toString()}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.list}
-        ListHeaderComponent={
-          <>
-            {/* Punto de retiro */}
+      {cart.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyEmoji}>🛒</Text>
+
+          <Text style={styles.emptyTitle}>
+            Tu carrito está vacío
+          </Text>
+
+          <Text style={styles.emptyDescription}>
+            Agrega productos desde el menú para comenzar tu pedido.
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={cart}
+          keyExtractor={(item) => item.id.toString()}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.list}
+          ListHeaderComponent={
             <View style={styles.pickupCard}>
               <View style={styles.locationCircle}>
                 <Text>●</Text>
@@ -114,78 +76,75 @@ const CartScreen = () => {
                 <Text style={styles.campusText}>• UCT</Text>
               </View>
             </View>
-          </>
-        }
-        renderItem={({ item }) => (
-          <CartItem
-            item={item}
-            onIncrease={increaseQuantity}
-            onDecrease={decreaseQuantity}
-          />
-        )}
-        ListFooterComponent={
-          <>
-            {/* Tiempo de preparación */}
-            <View style={styles.readyCard}>
-              <Text style={styles.bolt}>ϟ</Text>
+          }
+          renderItem={({ item }) => (
+            <CartItem
+              item={item}
+              onIncrease={onIncrease}
+              onDecrease={onDecrease}
+            />
+          )}
+          ListFooterComponent={
+            <>
+              <View style={styles.readyCard}>
+                <Text style={styles.bolt}>ϟ</Text>
 
-              <View>
-                <Text style={styles.readyTitle}>
-                  Listo en 6 - 8 minutos
-                </Text>
-
-                <Text style={styles.readyDescription}>
-                  Sin espera en caja al retirar
-                </Text>
-              </View>
-            </View>
-
-            {/* Resumen */}
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryRow}>
-                <Text style={styles.subtotalLabel}>
-                  Subtotal ({totalProducts} productos)
-                </Text>
-
-                <Text style={styles.subtotal}>
-                  ${total.toLocaleString('es-CL')}
-                </Text>
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.totalRow}>
                 <View>
-                  <Text style={styles.totalLabel}>
-                    Total a Pagar
+                  <Text style={styles.readyTitle}>
+                    Listo en 6 - 8 minutos
                   </Text>
 
-                  <Text style={styles.iva}>
-                    IVA incluido
+                  <Text style={styles.readyDescription}>
+                    Sin espera en caja al retirar
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.subtotalLabel}>
+                    Subtotal ({totalProducts} productos)
+                  </Text>
+
+                  <Text style={styles.subtotal}>
+                    ${total.toLocaleString('es-CL')}
                   </Text>
                 </View>
 
-                <Text style={styles.total}>
-                  ${total.toLocaleString('es-CL')}
-                </Text>
+                <View style={styles.divider} />
+
+                <View style={styles.totalRow}>
+                  <View>
+                    <Text style={styles.totalLabel}>
+                      Total a Pagar
+                    </Text>
+
+                    <Text style={styles.iva}>
+                      IVA incluido
+                    </Text>
+                  </View>
+
+                  <Text style={styles.total}>
+                    ${total.toLocaleString('es-CL')}
+                  </Text>
+                </View>
               </View>
-            </View>
 
-            {/* Botón */}
-            <TouchableOpacity style={styles.paymentButton}>
-              <Text style={styles.paymentText}>
-                Proceder al Pago
+              <TouchableOpacity style={styles.paymentButton}>
+                <Text style={styles.paymentText}>
+                  Proceder al Pago
+                </Text>
+
+                <Text style={styles.arrow}>→</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.footerText}>
+                Retiro sin filas en Barra de Cafetería Central • Campus UCT
               </Text>
-
-              <Text style={styles.arrow}>→</Text>
-            </TouchableOpacity>
-
-            <Text style={styles.footerText}>
-              Retiro sin filas en Barra de Cafetería Central • Campus UCT
-            </Text>
-          </>
-        }
-      />
+            </>
+          }
+        />
+      )}
     </View>
   );
 };
@@ -401,6 +360,32 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: '#9B908B',
     marginTop: 8,
+  },
+
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+
+  emptyEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#4A332C',
+  },
+
+  emptyDescription: {
+    fontSize: 12,
+    color: '#958781',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 18,
   },
 });
 
