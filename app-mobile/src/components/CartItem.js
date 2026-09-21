@@ -20,6 +20,8 @@ const CartItem = ({
     onRemove(item.id);
   };
 
+  const isMinimumQuantity = item.quantity === 1;
+
   return (
     <View style={styles.container}>
       <View style={styles.imagePlaceholder}>
@@ -44,10 +46,19 @@ const CartItem = ({
 
           <View style={styles.quantityContainer}>
             <TouchableOpacity
-              style={styles.quantityButton}
+              style={[
+                styles.quantityButton,
+                isMinimumQuantity && styles.quantityButtonDisabled,
+              ]}
               onPress={() => onDecrease(item.id)}
+              disabled={isMinimumQuantity}
             >
-              <Text style={styles.quantityButtonText}>
+              <Text
+                style={[
+                  styles.quantityButtonText,
+                  isMinimumQuantity && styles.quantityButtonTextDisabled,
+                ]}
+              >
                 −
               </Text>
             </TouchableOpacity>
@@ -207,9 +218,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  quantityButtonDisabled: {
+    opacity: 0.35,
+  },
+
   quantityButtonText: {
     fontSize: 17,
     color: '#7C6B65',
+  },
+
+  quantityButtonTextDisabled: {
+    color: '#B8AAA4',
   },
 
   quantity: {
