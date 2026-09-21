@@ -262,6 +262,45 @@ export function normalizarPedido(fila) {
   };
 }
 
+function aMinutosDelDia(horaRetiro) {
+  if (!horaRetiro) return null;
+  const match = String(horaRetiro).trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+  let horas = Number(match[1]) % 12;
+  if (/PM/i.test(match[3])) horas += 12;
+  return horas * 60 + Number(match[2]);
+}
+
+function aInstanteRetiro(pedido) {
+  const minutos = aMinutosDelDia(pedido.hora_retiro);
+  if (minutos !== null) return minutos;
+  if (pedido.creado_en) {
+    const fecha = new Date(pedido.creado_en);
+    if (!Number.isNaN(fecha.getTime())) {
+      const conAnticipo = new Date(fecha.getTime() + 15 * 60000);
+      return conAnticipo.getHours() * 60 + conAnticipo.getMinutes();
+    }
+  }
+  return null;
+}
+
+function comparadorPrioridad(a, b) {
+  const tA = aInstanteRetiro(a);
+  const tB = aInstanteRetiro(b);
+  if (tA !== null && tB !== null) {
+    if (tA !== tB) return tA - tB;
+  } else if (tA !== null) {
+    return -1;
+  } else if (tB !== null) {
+    return 1;
+  }
+  return new Date(a.creado_en || 0) - new Date(b.creado_en || 0);
+}
+
+export function ordenarPedidos(lista) {
+  return [...lista].sort(comparadorPrioridad);
+}
+
 export const pedidosService = {
   async getAll() {
     if (isSupabaseConfigured) {

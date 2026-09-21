@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
 
 import KdsTopBar from '../components/KdsTopBar';
@@ -6,7 +6,7 @@ import KanbanColumn from '../components/KanbanColumn';
 import PedidoCard from '../components/PedidoCard';
 import DetallePedidoDialog from '../components/DetallePedidoDialog';
 
-import pedidosService from '../services/pedidosService';
+import pedidosService, { ordenarPedidos } from '../services/pedidosService';
 import kdsRealtime, {
   ESTADO_CONECTADO,
   ESTADO_RECONECTANDO,
@@ -46,7 +46,7 @@ function Pedidos() {
   const agregarComandaRealTime = useCallback((comanda) => {
     const id = String(comanda.id);
     pedidosRealtime.current.set(id, comanda);
-    setPedidos(prev => (prev.some(p => String(p.id) === id) ? prev : [comanda, ...prev]));
+    setPedidos(prev => (prev.some(p => String(p.id) === id) ? prev : ordenarPedidos([comanda, ...prev])));
   }, []);
 
   useEffect(() => {
@@ -77,7 +77,8 @@ function Pedidos() {
     }
   };
 
-  const pedidosOperativos = pedidos.filter(p =>
+  const pedidosOrdenados = useMemo(() => ordenarPedidos(pedidos), [pedidos]);
+  const pedidosOperativos = pedidosOrdenados.filter(p =>
     p.estado === 'pendiente' || p.estado === 'preparando' || p.estado === 'listo'
   );
 
@@ -110,9 +111,7 @@ function Pedidos() {
           }}
         >
           {COLUMNAS.map(col => {
-            const items = pedidosOperativos
-              .filter(p => p.estado === col.estado)
-              .sort((a, b) => new Date(a.creado_en || 0) - new Date(b.creado_en || 0));
+            const items = pedidosOperativos.filter(p => p.estado === col.estado);
 
             return (
               <KanbanColumn
