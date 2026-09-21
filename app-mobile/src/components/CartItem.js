@@ -15,12 +15,13 @@ const CartItem = ({
 }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  const subtotal = item.price * item.quantity;
+  const isMinimumQuantity = item.quantity === 1;
+
   const handleRemove = () => {
     setShowDeleteModal(false);
     onRemove(item.id);
   };
-
-  const isMinimumQuantity = item.quantity === 1;
 
   return (
     <View style={styles.container}>
@@ -39,11 +40,17 @@ const CartItem = ({
           {item.description}
         </Text>
 
-        <View style={styles.bottomRow}>
-          <Text style={styles.price}>
-            ${item.price.toLocaleString('es-CL')}
+        <View style={styles.priceInfo}>
+          <Text style={styles.unitPrice}>
+            ${item.price.toLocaleString('es-CL')} c/u
           </Text>
 
+          <Text style={styles.subtotal}>
+            Subtotal: ${subtotal.toLocaleString('es-CL')}
+          </Text>
+        </View>
+
+        <View style={styles.bottomRow}>
           <View style={styles.quantityContainer}>
             <TouchableOpacity
               style={[
@@ -56,7 +63,8 @@ const CartItem = ({
               <Text
                 style={[
                   styles.quantityButtonText,
-                  isMinimumQuantity && styles.quantityButtonTextDisabled,
+                  isMinimumQuantity &&
+                    styles.quantityButtonTextDisabled,
                 ]}
               >
                 −
@@ -189,17 +197,27 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+  priceInfo: {
+    marginTop: 7,
+  },
+
+  unitPrice: {
+    fontSize: 10,
+    color: '#958781',
+  },
+
+  subtotal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4A332C',
+    marginTop: 2,
+  },
+
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 8,
-  },
-
-  price: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#4A332C',
   },
 
   quantityContainer: {

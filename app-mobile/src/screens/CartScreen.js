@@ -20,10 +20,12 @@ const CartScreen = ({
     0
   );
 
-  const total = cart.reduce(
+  const subtotal = cart.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0
   );
+
+  const total = subtotal;
 
   return (
     <View style={styles.container}>
@@ -74,7 +76,9 @@ const CartScreen = ({
               </View>
 
               <View style={styles.campusBadge}>
-                <Text style={styles.campusText}>• UCT</Text>
+                <Text style={styles.campusText}>
+                  • UCT
+                </Text>
               </View>
             </View>
           }
@@ -109,7 +113,7 @@ const CartScreen = ({
                   </Text>
 
                   <Text style={styles.subtotal}>
-                    ${total.toLocaleString('es-CL')}
+                    ${subtotal.toLocaleString('es-CL')}
                   </Text>
                 </View>
 
