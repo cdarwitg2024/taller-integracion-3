@@ -77,10 +77,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
             <List disablePadding>
               {pedido.productos?.map((prod, idx) => (
                 <ListItem key={idx} disableGutters>
-                  <ListItemText
-                    primary={`${prod.cantidad}x ${prod.nombre}`}
-                    secondary={prod.detalle && prod.detalle !== 'Sin modificaciones' ? prod.detalle : null}
-                  />
+                  <ListItemText primary={`${prod.nombre} × ${prod.cantidad}`} />
                 </ListItem>
               ))}
             </List>

@@ -102,7 +102,7 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
               fontWeight={700}
               sx={{ fontSize: '1.1rem', color: '#4A3B32', lineHeight: 1.5 }}
             >
-              {item.cantidad}x {item.nombre}
+              {item.nombre} × {item.cantidad}
             </Typography>
           )) || <Typography sx={{ color: 'text.secondary' }}>Sin productos</Typography>}
         </Box>
