@@ -13,6 +13,7 @@ const CartScreen = ({
   cart,
   onIncrease,
   onDecrease,
+  onRemove,
 }) => {
   const totalProducts = cart.reduce(
     (sum, item) => sum + item.quantity,
@@ -82,6 +83,7 @@ const CartScreen = ({
               item={item}
               onIncrease={onIncrease}
               onDecrease={onDecrease}
+              onRemove={onRemove}
             />
           )}
           ListFooterComponent={

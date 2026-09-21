@@ -96,6 +96,12 @@ const App = () => {
     );
   };
 
+  const removeFromCart = (id: number) => {
+    setCart((currentCart: CartItem[]) =>
+      currentCart.filter((item: CartItem) => item.id !== id)
+    );
+  };
+
   const totalProducts = cart.reduce(
     (sum, item) => sum + item.quantity,
     0
@@ -111,6 +117,7 @@ const App = () => {
             cart={cart}
             onIncrease={increaseQuantity}
             onDecrease={decreaseQuantity}
+            onRemove={removeFromCart}
           />
         )}
       </View>

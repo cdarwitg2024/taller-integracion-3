@@ -1,20 +1,31 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
+  Modal,
 } from 'react-native';
 
 const CartItem = ({
   item,
   onIncrease,
   onDecrease,
+  onRemove,
 }) => {
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const handleRemove = () => {
+    setShowDeleteModal(false);
+    onRemove(item.id);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.imagePlaceholder}>
-        <Text style={styles.imageEmoji}>{item.emoji}</Text>
+        <Text style={styles.imageEmoji}>
+          {item.emoji}
+        </Text>
       </View>
 
       <View style={styles.content}>
@@ -36,7 +47,9 @@ const CartItem = ({
               style={styles.quantityButton}
               onPress={() => onDecrease(item.id)}
             >
-              <Text style={styles.quantityButtonText}>−</Text>
+              <Text style={styles.quantityButtonText}>
+                −
+              </Text>
             </TouchableOpacity>
 
             <Text style={styles.quantity}>
@@ -47,11 +60,72 @@ const CartItem = ({
               style={styles.quantityButton}
               onPress={() => onIncrease(item.id)}
             >
-              <Text style={styles.quantityButtonText}>+</Text>
+              <Text style={styles.quantityButtonText}>
+                +
+              </Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={styles.removeButton}
+            onPress={() => setShowDeleteModal(true)}
+          >
+            <Text style={styles.removeButtonText}>
+              Eliminar
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
+
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalIconContainer}>
+              <Text style={styles.modalEmoji}>
+                {item.emoji}
+              </Text>
+            </View>
+
+            <Text style={styles.modalTitle}>
+              Eliminar producto
+            </Text>
+
+            <Text style={styles.modalProductName}>
+              {item.name}
+            </Text>
+
+            <Text style={styles.modalDescription}>
+              ¿Seguro que quieres eliminar este producto
+              del carrito?
+            </Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowDeleteModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.confirmButton}
+                onPress={handleRemove}
+              >
+                <Text style={styles.confirmButtonText}>
+                  Eliminar
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -143,6 +217,118 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     color: '#4A332C',
+  },
+
+  removeButton: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+
+  removeButtonText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#8A6A60',
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(61, 43, 38, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 28,
+  },
+
+  modalContainer: {
+    width: '100%',
+    backgroundColor: '#FFFDFB',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 8,
+
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+  },
+
+  modalIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F3E7DD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+
+  modalEmoji: {
+    fontSize: 32,
+  },
+
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#4A332C',
+    textAlign: 'center',
+  },
+
+  modalProductName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#6D554C',
+    textAlign: 'center',
+    marginTop: 6,
+  },
+
+  modalDescription: {
+    fontSize: 12,
+    color: '#8A7B76',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: 10,
+  },
+
+  modalButtons: {
+    width: '100%',
+    flexDirection: 'row',
+    marginTop: 22,
+  },
+
+  cancelButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#F3E7DD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+
+  cancelButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6D554C',
+  },
+
+  confirmButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#4A332C',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 6,
+  },
+
+  confirmButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
 
