@@ -12,7 +12,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 
-export const RegisterScreen = () => {
+interface RegisterScreenProps {
+  onNavigateToLogin?: () => void;
+}
+
+export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
   const [nombreCompleto, setNombreCompleto] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -103,6 +107,10 @@ export const RegisterScreen = () => {
                 setConfirmPassword('');
                 setAcceptedTerms(false);
                 setErrorMessage(null);
+                // Si existe la función para navegar a login, redirige tras cerrar la alerta
+                if (onNavigateToLogin) {
+                  onNavigateToLogin();
+                }
               },
             },
           ]
@@ -121,7 +129,7 @@ export const RegisterScreen = () => {
         
         {/* Encabezado Superior / Brand */}
         <View style={styles.topHeader}>
-          <TouchableOpacity style={styles.backButton}>
+          <TouchableOpacity style={styles.backButton} onPress={onNavigateToLogin}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
           <View style={styles.brandContainer}>
@@ -251,7 +259,7 @@ export const RegisterScreen = () => {
           </TouchableOpacity>
 
           {/* Enlace Login */}
-          <TouchableOpacity style={styles.loginLink}>
+          <TouchableOpacity style={styles.loginLink} onPress={onNavigateToLogin}>
             <Text style={styles.loginText}>
               ¿Ya tienes cuenta? <Text style={styles.loginBold}>Inicia sesión aquí</Text>
             </Text>
