@@ -1,24 +1,34 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Session } from '@supabase/supabase-js';
+import { Session, User } from '@supabase/supabase-js';
 import { supabase } from './src/lib/supabase';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
 
-// Componente HomeScreen incrustado directamente para evitar fallos de importación
-const HomeScreen = () => {
+// HomeScreen inline para garantizar resolucion de export/import
+const HomeScreenInternal = ({ user }: { user: User }) => {
+  const studentName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Estudiante';
+
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    Alert.alert('Cerrar Sesión', '¿Deseas salir de CoffeeFast?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Cerrar Sesión',
+        style: 'destructive',
+        onPress: async () => {
+          await supabase.auth.signOut();
+        },
+      },
+    ]);
   };
 
   return (
     <SafeAreaView style={styles.homeContainer}>
-      <Text style={styles.homeIcon}>☕</Text>
-      <Text style={styles.homeTitle}>¡Bienvenido a CoffeeFast!</Text>
-      <Text style={styles.homeSubtitle}>Sesión iniciada correctamente (FR-02)</Text>
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Cerrar Sesión</Text>
+      <Text style={styles.homeTitle}>¡Hola, {studentName}!</Text>
+      <Text style={styles.homeSubtitle}>{user.email}</Text>
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <Text style={styles.logoutBtnText}>Cerrar Sesión</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -53,8 +63,8 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      {session ? (
-        <HomeScreen />
+      {session && session.user ? (
+        <HomeScreenInternal user={session.user} />
       ) : currentScreen === 'login' ? (
         <LoginScreen onNavigateToRegister={() => setCurrentScreen('register')} />
       ) : (
@@ -76,31 +86,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FAF7F2',
-    paddingHorizontal: 24,
+    padding: 24,
   },
-  homeIcon: {
-    fontSize: 48,
+  homeLogo: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#4A3728',
     marginBottom: 16,
   },
   homeTitle: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: 'bold',
     color: '#2C1E16',
-    marginBottom: 8,
+    textAlign: 'center',
   },
   homeSubtitle: {
     fontSize: 14,
     color: '#8A7A70',
-    marginBottom: 24,
+    marginBottom: 32,
   },
-  logoutButton: {
-    backgroundColor: '#4A3728',
-    paddingHorizontal: 24,
+  logoutBtn: {
+    backgroundColor: '#E07A5F',
+    paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
+    elevation: 2,
   },
-  logoutText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+  logoutBtnText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 15,
   },
 });

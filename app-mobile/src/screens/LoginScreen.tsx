@@ -2,153 +2,211 @@ import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
+  View,
   TextInput,
   TouchableOpacity,
-  View,
   ActivityIndicator,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 
 interface LoginScreenProps {
   onNavigateToRegister: () => void;
+  onExploreAsGuest?: () => void;
 }
 
-export const LoginScreen = ({ onNavigateToRegister }: LoginScreenProps) => {
+export const LoginScreen = ({
+  onNavigateToRegister,
+  onExploreAsGuest,
+}: LoginScreenProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleLogin = async () => {
     setErrorMessage(null);
 
-    // Validación básica de campos vacíos
-    if (!email.trim() || !password) {
-      setErrorMessage('Por favor, ingresa tu correo y contraseña.');
+    if (!email.trim() || !password.trim()) {
+      setErrorMessage('Por favor ingresa tu correo y contraseña.');
       return;
     }
 
     setLoading(true);
 
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password: password,
-      });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
 
-      if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          setErrorMessage('Credenciales incorrectas. Verifica tu correo o contraseña.');
-        } else {
-          setErrorMessage(error.message);
-        }
+    setLoading(false);
+
+    if (error) {
+      if (error.message.includes('Invalid login credentials')) {
+        setErrorMessage('Correo o contraseña incorrectos.');
+      } else if (error.message.includes('Email not confirmed')) {
+        setErrorMessage('Tu correo aún no ha sido confirmado.');
+      } else {
+        setErrorMessage(error.message);
       }
-      // La redirección ocurrirá automáticamente en App.tsx vía onAuthStateChange
-    } catch (err: any) {
-      setErrorMessage('Ocurrió un error inesperado al intentar iniciar sesión.');
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        
-        {/* Encabezado Superior */}
-        <View style={styles.topHeader}>
-          <View style={styles.brandContainer}>
-            <View style={styles.logoBadge}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Badge Superior */}
+          <View style={styles.badgeContainer}>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>🎓 PORTAL ESTUDIANTES • UCT</Text>
+            </View>
+          </View>
+
+          {/* Logo e Identidad */}
+          <View style={styles.header}>
+            <View style={styles.logoBox}>
               <Text style={styles.logoIcon}>☕</Text>
             </View>
             <Text style={styles.brandName}>CoffeeFast</Text>
-          </View>
-        </View>
-
-        {/* Badge Institucional */}
-        <View style={styles.badgeContainer}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeIcon}>🎓</Text>
-            <Text style={styles.badgeText}>ACCESO ESTUDIANTIL UCT</Text>
-          </View>
-        </View>
-
-        {/* Títulos */}
-        <Text style={styles.title}>Iniciar Sesión</Text>
-        <Text style={styles.subtitle}>
-          Ingresa con tu correo institucional para realizar tus pedidos
-        </Text>
-
-        {/* Mensaje de Error */}
-        {errorMessage && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorIcon}>⚠️</Text>
-            <Text style={styles.errorText}>{errorMessage}</Text>
-          </View>
-        )}
-
-        {/* Formulario */}
-        <View style={styles.form}>
-          {/* Correo */}
-          <Text style={styles.label}>CORREO INSTITUCIONAL</Text>
-          <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>✉️</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="tu.usuario@alu.uct.cl"
-              placeholderTextColor="#A09A93"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
+            <Text style={styles.title}>Iniciar Sesión</Text>
+            <Text style={styles.subtitle}>
+              Pide tu café entre clases y retira sin esperas ni filas
+            </Text>
           </View>
 
-          {/* Contraseña */}
-          <Text style={styles.label}>CONTRASEÑA</Text>
-          <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>🔒</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Tu contraseña"
-              placeholderTextColor="#A09A93"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '🙈'}</Text>
+          {/* Alerta de Error */}
+          {errorMessage && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorIcon}>⚠️</Text>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          )}
+
+          {/* Tarjeta del Formulario */}
+          <View style={styles.card}>
+            {/* Campo: Correo Institucional */}
+            <View style={styles.inputGroup}>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>Correo Institucional</Text>
+                <Text style={styles.domainHint}>alu.uct.cl</Text>
+              </View>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputIcon}>✉️</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="tunombre@alu.uct.cl"
+                  placeholderTextColor="#BBB3A8"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            </View>
+
+            {/* Campo: Contraseña */}
+            <View style={styles.inputGroup}>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>Contraseña</Text>
+                <TouchableOpacity>
+                  <Text style={styles.forgotPassword}>¿La olvidaste?</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputIcon}>🔒</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="••••••••"
+                  placeholderTextColor="#BBB3A8"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeIcon}
+                >
+                  <Text>{showPassword ? '🙈' : '👁️'}</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.hintRow}>
+                <Text style={styles.hintIcon}>ⓘ</Text>
+                <Text style={styles.hintText}>Mínimo 8 caracteres</Text>
+              </View>
+            </View>
+
+            {/* Checkbox: Recordar Sesión */}
+            <TouchableOpacity
+              style={styles.checkboxContainer}
+              onPress={() => setRememberMe(!rememberMe)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                {rememberMe && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+              <Text style={styles.checkboxLabel}>Recordar sesión en este dispositivo</Text>
+            </TouchableOpacity>
+
+            {/* Botón Principal */}
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.9}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitButtonText}>Entrar y Pedir Café ⚡</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Divisor */}
+            <View style={styles.dividerContainer}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>O TAMBIÉN</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Botón Invitado */}
+            <TouchableOpacity
+              style={styles.guestButton}
+              onPress={onExploreAsGuest}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.guestButtonText}>☕ Explorar Carta como Invitado</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Botón de Inicio de Sesión */}
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <View style={styles.buttonContent}>
-                <Text style={styles.buttonText}>Ingresar</Text>
-                <Text style={styles.buttonArrow}>→</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          {/* Footer de Registro */}
+          <View style={styles.footerNav}>
+            <Text style={styles.footerText}>¿Primer semestre en campus? </Text>
+            <TouchableOpacity onPress={onNavigateToRegister}>
+              <Text style={styles.footerLink}>Regístrate aquí</Text>
+            </TouchableOpacity>
+          </View>
 
-          {/* Enlace para ir al Registro */}
-          <TouchableOpacity style={styles.registerLink} onPress={onNavigateToRegister}>
-            <Text style={styles.registerText}>
-              ¿Aún no tienes cuenta? <Text style={styles.registerBold}>Regístrate aquí</Text>
+          {/* Footer Seguridad */}
+          <View style={styles.securityFooter}>
+            <Text style={styles.securityText}>
+              🔒 Conexión segura vía Red Campus UCT
             </Text>
-          </TouchableOpacity>
-        </View>
-
-      </ScrollView>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -158,81 +216,74 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FAF7F2',
   },
-  scrollContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
+  keyboardView: {
+    flex: 1,
   },
-  topHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  brandContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  logoBadge: {
-    backgroundColor: '#3C2A21',
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoIcon: {
-    fontSize: 16,
-  },
-  brandName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#3C2A21',
-    fontFamily: 'serif',
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
   badgeContainer: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 16,
   },
   badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5EBE1',
-    paddingHorizontal: 12,
+    backgroundColor: '#F3E9E0',
+    paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 20,
-    gap: 6,
-  },
-  badgeIcon: {
-    fontSize: 12,
   },
   badgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#8C6D58',
+    color: '#6E5544',
     letterSpacing: 0.5,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#2C1E16',
-    fontFamily: 'serif',
+  header: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logoBox: {
+    width: 56,
+    height: 56,
+    backgroundColor: '#3C2A21',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#8A7A70',
-    lineHeight: 20,
-    marginBottom: 24,
+  logoIcon: {
+    fontSize: 28,
   },
-  errorBox: {
+  brandName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#3C2A21',
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    marginBottom: 6,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#2C1E16',
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#8A7A70',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    lineHeight: 18,
+  },
+  errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FCE8E6',
-    borderColor: '#F5C6CB',
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 12,
-    padding: 12,
     marginBottom: 16,
     gap: 8,
   },
@@ -240,34 +291,55 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   errorText: {
-    color: '#A94442',
+    color: '#D93025',
     fontSize: 13,
     flex: 1,
+    fontWeight: '500',
   },
-  form: {
-    width: '100%',
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#3C2A21',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  label: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#5A4A42',
-    letterSpacing: 0.8,
-    marginBottom: 8,
-    marginTop: 6,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3EDE6',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    height: 52,
+  inputGroup: {
     marginBottom: 16,
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#3C2A21',
+  },
+  domainHint: {
+    fontSize: 12,
+    color: '#9C8E85',
+  },
+  forgotPassword: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#E07A5F',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7F4F0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 48,
+  },
   inputIcon: {
-    fontSize: 16,
+    fontSize: 14,
     marginRight: 10,
-    opacity: 0.6,
   },
   input: {
     flex: 1,
@@ -275,51 +347,118 @@ const styles = StyleSheet.create({
     color: '#2C1E16',
   },
   eyeIcon: {
-    fontSize: 16,
     padding: 4,
-    opacity: 0.6,
   },
-  button: {
-    backgroundColor: '#4A3728',
-    borderRadius: 16,
-    height: 54,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 12,
-    shadowColor: '#4A3728',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  buttonDisabled: {
-    backgroundColor: '#9A8B80',
-  },
-  buttonContent: {
+  hintRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    marginTop: 6,
+    gap: 4,
   },
-  buttonText: {
+  hintIcon: {
+    fontSize: 12,
+    color: '#9C8E85',
+  },
+  hintText: {
+    fontSize: 11,
+    color: '#9C8E85',
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 10,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#9C8E85',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#5C4033',
+    borderColor: '#5C4033',
+  },
+  checkmark: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  checkboxLabel: {
+    fontSize: 12,
+    color: '#7A6B63',
+  },
+  submitButton: {
+    backgroundColor: '#4A3728',
+    borderRadius: 16,
+    height: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#4A3728',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  submitButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '700',
   },
-  buttonArrow: {
-    color: '#FFFFFF',
-    fontSize: 18,
-  },
-  registerLink: {
+  dividerContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 20,
+    marginVertical: 18,
   },
-  registerText: {
-    fontSize: 13,
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#EFE8E1',
+  },
+  dividerText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B5A89E',
+    paddingHorizontal: 12,
+    letterSpacing: 0.5,
+  },
+  guestButton: {
+    backgroundColor: '#F7F4F0',
+    borderRadius: 16,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  guestButtonText: {
+    color: '#4A3728',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  footerNav: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  footerText: {
+    fontSize: 12,
     color: '#8A7A70',
   },
-  registerBold: {
+  footerLink: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#3C2A21',
+    textDecorationLine: 'underline',
+  },
+  securityFooter: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  securityText: {
+    fontSize: 10,
+    color: '#A89B91',
   },
 });
