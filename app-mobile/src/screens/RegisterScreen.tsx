@@ -257,10 +257,6 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
               </View>
             )}
           </TouchableOpacity>
-          
-          await supabase.auth.signOut(); // Destruye la sesión recién creada
-          Alert.alert('¡Registro Exitoso!', 'Ahora puedes iniciar sesión con tu cuenta.');
-          onNavigateToLogin(); // Vuelve a la pantalla de Login
 
           {/* Enlace Login */}
           <TouchableOpacity style={styles.loginLink} onPress={onNavigateToLogin}>

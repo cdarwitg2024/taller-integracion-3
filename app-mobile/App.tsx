@@ -1,43 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Session, User } from '@supabase/supabase-js';
+import { Session } from '@supabase/supabase-js';
 import { supabase } from './src/lib/supabase';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
+import { CafeteriaListScreen } from './src/screens/CafeteriaListScreen';
+import { Cafeteria } from './src/types/cafeteria';
 
-// HomeScreen inline para garantizar resolucion de export/import
-const HomeScreenInternal = ({ user }: { user: User }) => {
-  const studentName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Estudiante';
-
-  const handleLogout = async () => {
-    Alert.alert('Cerrar Sesión', '¿Deseas salir de CoffeeFast?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Cerrar Sesión',
-        style: 'destructive',
-        onPress: async () => {
-          await supabase.auth.signOut();
-        },
-      },
-    ]);
-  };
-
-  return (
-    <SafeAreaView style={styles.homeContainer}>
-      <Text style={styles.homeTitle}>¡Hola, {studentName}!</Text>
-      <Text style={styles.homeSubtitle}>{user.email}</Text>
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Text style={styles.logoutBtnText}>Cerrar Sesión</Text>
-      </TouchableOpacity>
-    </SafeAreaView>
-  );
+type CafeteriaListProps = {
+  selectedCafeteriaId?: Cafeteria['id'];
+  onSelectCafeteria: (cafeteria: Cafeteria) => void;
 };
+
+const CafeteriaListWithProps = CafeteriaListScreen as React.ComponentType<CafeteriaListProps>;
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentScreen, setCurrentScreen] = useState<'login' | 'register'>('login');
+  
+  // AGREGADO: Estado para controlar si el usuario entra como invitado
+  const [isGuest, setIsGuest] = useState(false);
+
+  // Guardar temporalmente la cafetería seleccionada (FR-05)
+  const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -53,6 +40,36 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const handleLogout = async () => {
+    Alert.alert(
+      isGuest ? 'Salir de Invitado' : 'Cerrar Sesión',
+      '¿Deseas salir a la pantalla de inicio?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Salir',
+          style: 'destructive',
+          onPress: async () => {
+            setSelectedCafeteria(null);
+            if (isGuest) {
+              setIsGuest(false); // Resetear modo invitado
+            } else {
+              await supabase.auth.signOut();
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSelectCafeteria = (cafeteria: Cafeteria) => {
+    setSelectedCafeteria(cafeteria);
+    Alert.alert(
+      'Cafetería Seleccionada',
+      `Has elegido: ${cafeteria.nombre}`
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -61,12 +78,35 @@ export default function App() {
     );
   }
 
+  // MODIFICADO: Permite el paso si hay sesión activa O si es un invitado
+  const isUserAllowed = (session && session.user) || isGuest;
+
   return (
     <SafeAreaProvider>
-      {session && session.user ? (
-        <HomeScreenInternal user={session.user} />
+      {isUserAllowed ? (
+        <View style={{ flex: 1 }}>
+          {/* Barra superior con opción de salir */}
+          <SafeAreaView edges={['top']} style={styles.topBar}>
+            <Text style={styles.topBarTitle}>
+              ☕ CoffeeFast {isGuest ? '(Invitado)' : ''}
+            </Text>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+              <Text style={styles.logoutBtnText}>Salir</Text>
+            </TouchableOpacity>
+          </SafeAreaView>
+
+          {/* Listado de Cafeterías del Campus */}
+          <CafeteriaListWithProps
+            selectedCafeteriaId={selectedCafeteria?.id}
+            onSelectCafeteria={handleSelectCafeteria}
+          />
+        </View>
       ) : currentScreen === 'login' ? (
-        <LoginScreen onNavigateToRegister={() => setCurrentScreen('register')} />
+        /* MODIFICADO: Se pasa la función onExploreAsGuest al LoginScreen */
+        <LoginScreen 
+          onNavigateToRegister={() => setCurrentScreen('register')} 
+          onExploreAsGuest={() => setIsGuest(true)}
+        />
       ) : (
         <RegisterScreen onNavigateToLogin={() => setCurrentScreen('login')} />
       )}
@@ -81,40 +121,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FAF7F2',
   },
-  homeContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  topBar: {
     backgroundColor: '#FAF7F2',
-    padding: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFE7DD',
   },
-  homeLogo: {
-    fontSize: 28,
-    fontWeight: 'bold',
+  topBarTitle: {
+    fontSize: 18,
+    fontWeight: '800',
     color: '#4A3728',
-    marginBottom: 16,
-  },
-  homeTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#2C1E16',
-    textAlign: 'center',
-  },
-  homeSubtitle: {
-    fontSize: 14,
-    color: '#8A7A70',
-    marginBottom: 32,
   },
   logoutBtn: {
-    backgroundColor: '#E07A5F',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    elevation: 2,
+    backgroundColor: '#F5EBE1',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   logoutBtnText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 15,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#8C6D58',
   },
 });
