@@ -1,0 +1,100 @@
+# ============================================
+# Dependencias y Gestores de Paquetes
+# ============================================
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-store/
+
+# ============================================
+# Variables de Entorno y Secretos (Seguridad)
+# ============================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+**/.env
+**/.env.local
+!**/.env.example
+
+# ============================================
+# Archivos de Compilación y Cache (Vite, React, Node)
+# ============================================
+dist/
+**/dist/
+build/
+**/build/
+out/
+**/out/
+.vite/
+**/.vite/
+.cache/
+**/.cache/
+.eslintcache
+.parcel-cache
+.tsbuildinfo
+
+# ============================================
+# Electron & Paquetes de Escritorio
+# ============================================
+release/
+**/release/
+*.exe
+*.dmg
+*.deb
+*.rpm
+*.AppImage
+*.zip
+
+# ============================================
+# Android, Kotlin y Gradle (App Móvil)
+# ============================================
+.gradle/
+**/.gradle/
+.kotlin/
+**/.kotlin/
+**/build/
+**/app/build/
+**/captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.iml
+**/*.iml
+
+# ============================================
+# Editores de Código e IDEs
+# ============================================
+.vscode/
+**/.vscode/
+.idea/
+**/.idea/
+*.swp
+*.swo
+*.suo
+*.sln
+*.user
+*.userosct
+*.xcodeproj
+*.xcworkspace
+
+# ============================================
+# Archivos de Sistema Operativo y Logs
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.log

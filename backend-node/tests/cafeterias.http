@@ -1,0 +1,16 @@
+@baseUrl = http://localhost:3000
+
+### GET /cafeterias - Listar todas las cafeterías
+GET {{baseUrl}}/cafeterias
+
+### GET /cafeterias/1/productos - Productos de la Cafetería Central
+GET {{baseUrl}}/cafeterias/1/productos
+
+### GET /cafeterias/2/productos - Productos de Café Ingeniería
+GET {{baseUrl}}/cafeterias/2/productos
+
+### GET /cafeterias/3/productos - Productos de Biblioteca Café
+GET {{baseUrl}}/cafeterias/3/productos
+
+### GET /cafeterias/999/productos - Cafetería inexistente (debe retornar 404)
+GET {{baseUrl}}/cafeterias/999/productos

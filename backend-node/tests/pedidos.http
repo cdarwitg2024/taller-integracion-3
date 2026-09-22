@@ -1,0 +1,7 @@
+@baseUrl = http://localhost:3000
+
+### GET /pedidos - Listar todos los pedidos
+GET {{baseUrl}}/pedidos
+
+### GET /health - Health check
+GET {{baseUrl}}/health

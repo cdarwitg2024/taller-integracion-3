@@ -1,0 +1,154 @@
+@baseUrl = http://localhost:3000
+@token =
+
+### REGISTRO - Cliente
+# @name registroCliente
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "email": "juan.perez@universidad.edu",
+  "telefono": "3001234567",
+  "password": "password123",
+  "rol": "cliente"
+}
+
+### REGISTRO - Dueño
+# @name registroDueno
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "María",
+  "apellido": "González",
+  "email": "maria.gonzalez@cafeteria.com",
+  "password": "password123",
+  "rol": "dueño"
+}
+
+### REGISTRO - Empleado
+# @name registroEmpleado
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "Carlos",
+  "apellido": "Rodríguez",
+  "email": "carlos.rodriguez@cafeteria.com",
+  "telefono": "3007654321",
+  "password": "password123",
+  "rol": "empleado"
+}
+
+### REGISTRO - Superadmin
+# @name registroSuperadmin
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "Admin",
+  "apellido": "Sistema",
+  "email": "admin@sistema.com",
+  "password": "password123",
+  "rol": "superadmin"
+}
+
+### ERROR: Email duplicado
+# @name errorEmailDuplicado
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "Otro",
+  "apellido": "Usuario",
+  "email": "juan.perez@universidad.edu",
+  "password": "password123",
+  "rol": "cliente"
+}
+
+### ERROR: Campos faltantes
+# @name errorCamposFaltantes
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "Test",
+  "email": "test@test.com"
+}
+
+### ERROR: Rol inválido
+# @name errorRolInvalido
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "Test",
+  "apellido": "Test",
+  "email": "test2@test.com",
+  "password": "password123",
+  "rol": "admin"
+}
+
+### LOGIN - Cliente
+# @name loginCliente
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "juan.perez@universidad.edu",
+  "password": "password123"
+}
+
+### LOGIN - Dueño
+# @name loginDueno
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "maria.gonzalez@cafeteria.com",
+  "password": "password123"
+}
+
+### ERROR: Credenciales inválidas (password incorrecto)
+# @name errorPasswordIncorrecto
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "juan.perez@universidad.edu",
+  "password": "wrongpassword"
+}
+
+### ERROR: Credenciales inválidas (email inexistente)
+# @name errorEmailInexistente
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "noexiste@test.com",
+  "password": "password123"
+}
+
+### OBTENER TOKEN DEL LOGIN CLIENTE
+@token = {{loginCliente.response.body.token}}
+
+### GET /me - Cliente autenticado
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+### GET /me - Dueño autenticado
+# @name meDueno
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{loginDueno.response.body.token}}
+
+### GET /me - Sin token
+GET {{baseUrl}}/auth/me
+
+### GET /me - Token inválido
+GET {{baseUrl}}/auth/me
+Authorization: Bearer token_invalido_123
+
+### HEALTH CHECK
+GET {{baseUrl}}/health
