@@ -1,7 +1,0 @@
-# Reglas locales de backend-node
-node_modules/
-.env
-.env.local
-! .env.example
-*.log
-coverage/

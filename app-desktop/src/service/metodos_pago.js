@@ -1,35 +1,54 @@
-const { supabase } = require('./supabase');
+import { supabase, isSupabaseConfigured } from './supabase';
 
 const TABLE = 'metodos_pago';
 
-const metodosPago = {
+export const metodosPago = {
   async getAll() {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*')
-      .eq('activo', true);
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*')
+          .eq('activo', true)
+          .order('id', { ascending: true });
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener metodos_pago:', err);
+      }
+    }
+    return [];
   },
 
   async getById(id) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*')
+          .eq('id', id)
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener metodo_pago por id:', err);
+      }
+    }
+    return null;
   },
 
   async getByCodigo(codigo) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*')
-      .eq('codigo', codigo)
-      .single();
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*')
+          .eq('codigo', codigo)
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener metodo_pago por codigo:', err);
+      }
+    }
+    return null;
   },
 
   async create(metodo) {
@@ -63,4 +82,4 @@ const metodosPago = {
   }
 };
 
-module.exports = metodosPago;
+export default metodosPago;

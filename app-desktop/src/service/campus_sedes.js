@@ -1,35 +1,53 @@
-const { supabase } = require('./supabase');
+import { supabase, isSupabaseConfigured } from './supabase';
 
 const TABLE = 'campus_sedes';
 
-const campusSedes = {
+export const campusSedes = {
   async getAll() {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, universidades(*)')
-      .eq('activa', true);
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, universidades(*)')
+          .eq('activa', true);
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener campus_sedes:', err);
+      }
+    }
+    return [];
   },
 
   async getById(id) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, universidades(*)')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, universidades(*)')
+          .eq('id', id)
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener campus_sede por id:', err);
+      }
+    }
+    return null;
   },
 
   async getByUniversidad(universidadId) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*')
-      .eq('universidad_id', universidadId)
-      .eq('activa', true);
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*')
+          .eq('universidad_id', universidadId)
+          .eq('activa', true);
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener campus_sede por universidad:', err);
+      }
+    }
+    return [];
   },
 
   async create(sede) {
@@ -63,4 +81,4 @@ const campusSedes = {
   }
 };
 
-module.exports = campusSedes;
+export default campusSedes;

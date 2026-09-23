@@ -1,33 +1,51 @@
-const { supabase } = require('./supabase');
+import { supabase, isSupabaseConfigured } from './supabase';
 
 const TABLE = 'detalles_pedido';
 
-const detallesPedido = {
+export const detallesPedido = {
   async getAll() {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, pedidos(*), productos(*)');
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, pedidos(*), productos(*)');
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener detalles_pedido:', err);
+      }
+    }
+    return [];
   },
 
   async getById(id) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, pedidos(*), productos(*)')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, pedidos(*), productos(*)')
+          .eq('id', id)
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener detalle por id:', err);
+      }
+    }
+    return null;
   },
 
   async getByPedido(pedidoId) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, productos(*)')
-      .eq('pedido_id', pedidoId);
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*, productos(*)')
+          .eq('pedido_id', pedidoId);
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener detalles por pedido:', err);
+      }
+    }
+    return [];
   },
 
   async create(detalle) {
@@ -79,4 +97,4 @@ const detallesPedido = {
   }
 };
 
-module.exports = detallesPedido;
+export default detallesPedido;

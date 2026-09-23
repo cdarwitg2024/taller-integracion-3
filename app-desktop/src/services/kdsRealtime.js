@@ -1,9 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { normalizarPedido } from './pedidosService';
-
-const CAFETERIA_ID = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_CAFETERIA_ID)
-  ? Number(import.meta.env.VITE_CAFETERIA_ID)
-  : 1;
+import { CAFETERIA_ID } from './backendApi';
 
 export const ESTADO_CONECTADO = 'conectado';
 export const ESTADO_RECONECTANDO = 'reconectando';
@@ -12,8 +9,8 @@ export const ESTADO_INDISPONIBLE = 'indisponible';
 async function construirComanda(nuevoPedido) {
   try {
     const { data: detalles, error } = await supabase
-      .from('DETALLES_PEDIDO')
-      .select('cantidad, modificaciones, PRODUCTOS(nombre)')
+      .from('detalles_pedido')
+      .select('cantidad, modificaciones, productos(nombre)')
       .eq('pedido_id', nuevoPedido.id);
 
     if (error) return null;
@@ -25,7 +22,7 @@ async function construirComanda(nuevoPedido) {
       total: nuevoPedido.total,
       creado_en: nuevoPedido.creado_en,
       hora_retiro: nuevoPedido.hora_retiro,
-      DETALLES_PEDIDO: detalles || [],
+      detalles_pedido: detalles || [],
     });
   } catch {
     return null;
@@ -33,7 +30,12 @@ async function construirComanda(nuevoPedido) {
 }
 
 export const kdsRealtime = {
-  suscribir({ cafeteriaId = CAFETERIA_ID, onComanda, onEstadoCanal }) {
+  suscribir({
+    cafeteriaId = CAFETERIA_ID,
+    onComanda,
+    onActualizar,
+    onEstadoCanal,
+  }) {
     if (!isSupabaseConfigured) {
       onEstadoCanal?.(ESTADO_INDISPONIBLE);
       return { cerrar() {} };
@@ -47,7 +49,7 @@ export const kdsRealtime = {
       {
         event: 'INSERT',
         schema: 'public',
-        table: 'PEDIDOS',
+        table: 'pedidos',
         filter: `cafeteria_id=eq.${cafeteriaId}`,
       },
       async (payload) => {
@@ -58,6 +60,22 @@ export const kdsRealtime = {
 
         const comanda = await construirComanda(nuevo);
         if (comanda) onComanda?.(comanda);
+      }
+    );
+
+    canal.on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'pedidos',
+        filter: `cafeteria_id=eq.${cafeteriaId}`,
+      },
+      (payload) => {
+        const fila = payload?.new;
+        if (!fila) return;
+        // Refleja en tiempo real los cambios de estado (pendiente -> en_preparacion -> listo)
+        onActualizar?.(normalizarPedido(fila));
       }
     );
 

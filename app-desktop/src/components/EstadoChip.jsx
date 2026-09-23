@@ -3,6 +3,7 @@ import { Chip } from '@mui/material';
 const configEstado = {
   pendiente: { label: 'Pendiente', color: 'error' },
   preparando: { label: 'En Preparación', color: 'warning' },
+  en_preparacion: { label: 'En Preparación', color: 'warning' },
   listo: { label: 'Listo para Retiro', color: 'info' },
   entregado: { label: 'Entregado', color: 'success' },
 };

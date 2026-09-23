@@ -1,35 +1,59 @@
-const { supabase } = require('./supabase');
+import { supabase, isSupabaseConfigured } from './supabase';
 
 const TABLE = 'roles';
 
-const roles = {
+const defaultRoles = [
+  { id: 1, nombre: 'estudiante', descripcion: 'Consulta menús, realiza pedidos, paga y retira con QR via Android', activo: true },
+  { id: 2, nombre: 'empleado', descripcion: 'Opera el KDS en Windows para preparar y validar retiros QR', activo: true },
+  { id: 3, nombre: 'dueño', descripcion: 'Administra productos, stock, personal, métricas y recibe alertas de IA', activo: true },
+];
+
+export const roles = {
   async getAll() {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*')
-      .eq('activo', true);
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*')
+          .eq('activo', true);
+        if (!error && data && data.length > 0) return data;
+      } catch (err) {
+        console.warn('Error al obtener roles:', err);
+      }
+    }
+    return defaultRoles;
   },
 
   async getById(id) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*')
+          .eq('id', id)
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener rol por id:', err);
+      }
+    }
+    return defaultRoles.find((r) => r.id === id) || null;
   },
 
   async getByNombre(nombre) {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*')
-      .eq('nombre', nombre)
-      .single();
-    if (error) throw error;
-    return data;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLE)
+          .select('*')
+          .eq('nombre', nombre)
+          .single();
+        if (!error && data) return data;
+      } catch (err) {
+        console.warn('Error al obtener rol por nombre:', err);
+      }
+    }
+    return defaultRoles.find((r) => r.nombre.toLowerCase() === nombre.toLowerCase()) || null;
   },
 
   async create(rol) {
@@ -63,4 +87,4 @@ const roles = {
   }
 };
 
-module.exports = roles;
+export default roles;

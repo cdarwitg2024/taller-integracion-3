@@ -1,4 +1,7 @@
 {
-  "name": "AppMobile",
-  "displayName": "AppMobile"
+  "name": "CoffeeFastApp",
+  "displayName": "CoffeeFastApp",
+  "plugins": [
+    "expo-asset"
+  ]
 }

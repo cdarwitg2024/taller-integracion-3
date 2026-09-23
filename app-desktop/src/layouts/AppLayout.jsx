@@ -1,32 +1,32 @@
-import { Box, Toolbar } from '@mui/material';
-
+import { Box } from '@mui/material';
 import Sidebar from '../components/sidebar';
 
-const drawerWidth = 240;
+const drawerWidth = 260;
 
-const pages = [
-  { id: 'pedidos', label: 'Comandas' },
-  { id: 'scanner-qr', label: 'Escáner QR' },
-  { id: 'dashboard', label: 'Dashboard' },
-];
-
-function AppLayout({ currentPage, onNavigate, children }) {
+function AppLayout({ currentPage, onNavigate, onLogout, menuItems, subtitle, currentUser, children }) {
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-      <Sidebar currentPage={currentPage} onNavigate={onNavigate} menuItems={pages} />
+    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#FAF7F5', width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
+      <Sidebar
+        currentPage={currentPage}
+        onNavigate={onNavigate}
+        onLogout={onLogout}
+        menuItems={menuItems}
+        subtitle={subtitle}
+        currentUser={currentUser}
+      />
 
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          width: `calc(100% - ${drawerWidth}px)`,
-          p: 4,
-          backgroundColor: '#f8fafc',
+          width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
+          minWidth: 0,
+          p: { xs: 2.5, md: 4 },
+          backgroundColor: '#FAF7F5',
           minHeight: '100vh',
+          boxSizing: 'border-box',
         }}
       >
-        <Toolbar />
-
         {children}
       </Box>
     </Box>

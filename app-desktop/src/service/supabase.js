@@ -1,27 +1,29 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl =
-  (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL)) ||
-  'https://yrswjmxdpmiyfpclrfmg.supabase.co';
-
-const supabaseAnonKey =
-  (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY)) ||
-  'sb_publishable_CTXjURN8DxkNYj0ULlUUYQ_M6yH3P4B';
-
-const supabaseServiceRoleKey =
-  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.SUPABASE_SERVICE_ROLE_KEY) ||
-  '';
+// Lectura estricta y segura desde variables de entorno (.env)
+// Vite expone al frontend únicamente las variables con prefijo VITE_
+const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || '';
 
 export const isSupabaseConfigured = Boolean(
-  supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('placeholder')
+  supabaseUrl &&
+  supabaseAnonKey &&
+  !supabaseUrl.includes('placeholder')
 );
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-export const supabaseAdmin = supabaseServiceRoleKey
-  ? createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
-  : supabase;
+// Cliente seguro para el frontend:
+// - No expone claves maestras (service_role prohibido en frontend).
+// - Todas las operaciones se ejecutan bajo las políticas de seguridad RLS de PostgreSQL.
+// - Persistencia de sesión segura del usuario (Dueño) mediante JWT.
+export const supabase = createClient(
+  isSupabaseConfigured ? supabaseUrl : 'https://placeholder.supabase.co',
+  isSupabaseConfigured ? supabaseAnonKey : 'placeholder-anon-key',
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+  }
+);
 
 export default supabase;

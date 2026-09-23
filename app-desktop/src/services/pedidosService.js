@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { backendApi } from './backendApi';
 
 const initialMockPedidos = [
   {
@@ -218,7 +219,11 @@ const initialMockPedidos = [
 const getStoredPedidos = () => {
   const stored = localStorage.getItem('coffeefaster_pedidos_v2');
   if (stored) {
-    try { return JSON.parse(stored); } catch (e) { console.error(e); }
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      console.error('Error parseando pedidos de localStorage:', e);
+    }
   }
   localStorage.setItem('coffeefaster_pedidos_v2', JSON.stringify(initialMockPedidos));
   return initialMockPedidos;
@@ -230,7 +235,7 @@ const saveStoredPedidos = (pedidos) => {
 
 export function formatearHoraRetiro(valor) {
   if (!valor) return undefined;
-  if (typeof valor === 'string' && /(AM|PM)$/.test(valor.trim())) return valor;
+  if (typeof valor === 'string' && /(AM|PM)$/i.test(valor.trim())) return valor;
   const fecha = new Date(valor);
   if (Number.isNaN(fecha.getTime())) return undefined;
   const h24 = fecha.getHours();
@@ -240,24 +245,50 @@ export function formatearHoraRetiro(valor) {
 }
 
 export function normalizarPedido(fila) {
-  const detalles = Array.isArray(fila?.DETALLES_PEDIDO) ? fila.DETALLES_PEDIDO : [];
-  const productos = detalles.map(d => {
-    const p = d.PRODUCTOS;
-    const nombre = (Array.isArray(p) ? p[0]?.nombre : p?.nombre) || 'Producto';
+  if (!fila) return null;
+
+  const rawDetalles = Array.isArray(fila.detalles_pedido)
+    ? fila.detalles_pedido
+    : (Array.isArray(fila.DETALLES_PEDIDO)
+      ? fila.DETALLES_PEDIDO
+      : (Array.isArray(fila.productos) ? fila.productos : []));
+
+  const productos = rawDetalles.map((d) => {
+    const p = d.productos || d.PRODUCTOS;
+    const nombre = (Array.isArray(p) ? p[0]?.nombre : p?.nombre) || d.nombre || 'Producto';
     return {
+      id: d.id || d.producto_id,
       nombre,
-      cantidad: d.cantidad ?? 1,
-      detalle: d.modificaciones || 'Sin modificaciones',
+      cantidad: Number(d.cantidad) || 1,
+      detalle: d.nota || d.modificaciones || d.detalle || 'Sin modificaciones',
+      precio: Number(d.precio_unitario || d.precio || 0),
     };
   });
 
+  const userObj = fila.usuarios || fila.USUARIOS;
+  const clienteNombre =
+    fila.cliente ||
+    (userObj ? `${userObj.nombre || ''} ${userObj.apellido || ''}`.trim() : 'Cliente General');
+
+  const cafeObj = fila.cafeterias || fila.CAFETERIAS;
+  const ubicacionNombre = fila.ubicacion || (cafeObj?.nombre ? cafeObj.nombre : 'Campus Central');
+
+  const idStr = String(fila.codigo_retiro_diario || fila.id);
+
   return {
-    id: String(fila.id),
-    qr_token: fila.qr_token,
-    estado: fila.estado,
-    total: fila.total ?? 0,
-    creado_en: fila.creado_en,
+    ...fila,
+    id: idStr,
+    rawId: fila.id,
+    codigo_retiro_diario: fila.codigo_retiro_diario || idStr,
+    qr_token: fila.qr_token || idStr,
+    cliente: clienteNombre,
+    ubicacion: ubicacionNombre,
+    hora: fila.hora || (fila.creado_en ? formatearHoraRetiro(fila.creado_en) : undefined),
     hora_retiro: formatearHoraRetiro(fila.hora_retiro),
+    creado_en: fila.creado_en,
+    total: Number(fila.total) || 0,
+    estado: fila.estado === 'preparando' ? 'en_preparacion' : fila.estado,
+    detalles_pedido: rawDetalles,
     productos,
   };
 }
@@ -306,16 +337,38 @@ export const pedidosService = {
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase
-          .from('PEDIDOS')
-          .select('*, USUARIOS(nombre, apellido), CAFETERIAS(nombre), DETALLES_PEDIDO(*, PRODUCTOS(nombre, precio))')
+          .from('pedidos')
+          .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))')
           .order('creado_en', { ascending: false });
 
-        if (!error && data && data.length > 0) return data.map(normalizarPedido);
+        if (!error && data && data.length > 0) {
+          const normalized = data.map(normalizarPedido);
+          saveStoredPedidos(normalized);
+          return normalized;
+        }
       } catch (err) {
         console.warn('Fallback a datos mock por error en Supabase:', err);
       }
     }
-    return getStoredPedidos();
+    return getStoredPedidos().map(normalizarPedido);
+  },
+
+  async getById(id) {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('pedidos')
+          .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))')
+          .eq('id', id)
+          .single();
+
+        if (!error && data) return normalizarPedido(data);
+      } catch (err) {
+        console.warn('Fallback a mock para getById:', err);
+      }
+    }
+    const mockList = getStoredPedidos().map(normalizarPedido);
+    return mockList.find(p => String(p.id) === String(id) || String(p.rawId) === String(id)) || null;
   },
 
   async getByQrToken(qrToken) {
@@ -325,57 +378,82 @@ export const pedidosService = {
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase
-          .from('PEDIDOS')
-          .select('*, USUARIOS(nombre, apellido), DETALLES_PEDIDO(*, PRODUCTOS(nombre, precio))')
-          .or(`qr_token.eq.${cleanToken},id.eq.${cleanToken}`)
+          .from('pedidos')
+          .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))')
+          .or(`qr_token.eq.${cleanToken},id.eq.${cleanToken},codigo_retiro_diario.eq.${cleanToken}`)
           .single();
 
-        if (!error && data) return data;
+        if (!error && data) return normalizarPedido(data);
       } catch (err) {
         console.warn('Fallback a datos mock:', err);
       }
     }
 
-    const mockList = getStoredPedidos();
-    return mockList.find(p => p.qr_token === cleanToken || p.id === cleanToken) || null;
+    const mockList = getStoredPedidos().map(normalizarPedido);
+    return mockList.find(p => p.qr_token === cleanToken || String(p.id) === cleanToken || p.codigo_retiro_diario === cleanToken) || null;
   },
 
   async updateEstado(id, nuevoEstado) {
+    // 1. Vía MS Comercio (PATCH /pedidos/:id/estado) — valida la secuencia
+    //    pendiente -> en_preparacion -> listo en el backend.
+    try {
+      await backendApi.cambiarEstadoPedido(id, nuevoEstado);
+      const updated = await this.getById(id);
+      if (updated) return updated;
+    } catch (err) {
+      console.warn('MS Comercio no disponible, fallback a Supabase directo:', err.message);
+    }
+
+    // 2. Fallback: UPDATE directo en Supabase
     if (isSupabaseConfigured) {
       try {
         const updates = { estado: nuevoEstado };
-        if (nuevoEstado === 'preparando') updates.inicio_preparacion_en = new Date().toISOString();
-        if (nuevoEstado === 'entregado') updates.completado_en = new Date().toISOString();
+        const now = new Date().toISOString();
+        if (nuevoEstado === 'en_preparacion') updates.inicio_preparacion_en = now;
+        if (nuevoEstado === 'listo') updates.listo_en = now;
+        if (nuevoEstado === 'entregado') {
+          updates.entregado_en = now;
+          updates.completado_en = now;
+        }
+        if (nuevoEstado === 'cancelado') updates.cancelado_en = now;
 
         const { data, error } = await supabase
-          .from('PEDIDOS')
+          .from('pedidos')
           .update(updates)
           .eq('id', id)
           .select()
           .single();
 
-        if (!error && data) return data;
+        if (!error && data) return normalizarPedido(data);
+        if (error) throw error;
       } catch (err) {
         console.warn('Fallback a mock:', err);
       }
     }
 
     const mockList = getStoredPedidos();
-    const updated = mockList.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p);
+    const updated = mockList.map(p => (String(p.id) === String(id) ? { ...p, estado: nuevoEstado } : p));
     saveStoredPedidos(updated);
-    return updated.find(p => p.id === id);
+    return normalizarPedido(updated.find(p => String(p.id) === String(id)));
   },
 
   async getEstadisticas() {
     const pedidos = await this.getAll();
     const totalVentas = pedidos
       .filter(p => p.estado === 'entregado' || p.estado === 'listo' || p.estado === 'preparando')
-      .reduce((sum, p) => sum + (p.total || 0), 0);
+      .reduce((sum, p) => sum + (Number(p.total) || 0), 0);
 
     const pendientes = pedidos.filter(p => p.estado === 'pendiente').length;
     const preparando = pedidos.filter(p => p.estado === 'preparando').length;
     const listos = pedidos.filter(p => p.estado === 'listo').length;
     const entregados = pedidos.filter(p => p.estado === 'entregado').length;
+
+    const tiempos = pedidos
+      .filter(p => p.tiempo_real_min && Number(p.tiempo_real_min) > 0)
+      .map(p => Number(p.tiempo_real_min));
+    const tiempoPromedioMin = tiempos.length > 0
+      ? Number((tiempos.reduce((a, b) => a + b, 0) / tiempos.length).toFixed(1))
+      : 6.5;
 
     return {
       totalVentas,
@@ -384,9 +462,68 @@ export const pedidosService = {
       preparando,
       listos,
       entregados,
-      tiempoPromedioMin: 6.5,
+      tiempoPromedioMin,
     };
-  }
+  },
+
+  async getVentasPorHora() {
+    const list = await this.getAll();
+    const hourlyMap = {};
+
+    list.forEach((p) => {
+      const date = p.creado_en ? new Date(p.creado_en) : new Date();
+      const hourStr = `${String(date.getHours()).padStart(2, '0')}:00`;
+      if (!hourlyMap[hourStr]) {
+        hourlyMap[hourStr] = { hora: hourStr, ventas: 0, pedidos: 0 };
+      }
+      hourlyMap[hourStr].ventas += Number(p.total || 0);
+      hourlyMap[hourStr].pedidos += 1;
+    });
+
+    const result = Object.values(hourlyMap).sort((a, b) => a.hora.localeCompare(b.hora));
+    if (result.length > 0) return result;
+
+    return [
+      { hora: '08:00', ventas: 12400, pedidos: 5 },
+      { hora: '09:00', ventas: 28500, pedidos: 12 },
+      { hora: '10:00', ventas: 42000, pedidos: 18 },
+      { hora: '11:00', ventas: 31000, pedidos: 14 },
+      { hora: '12:00', ventas: 54000, pedidos: 22 },
+      { hora: '13:00', ventas: 68000, pedidos: 29 },
+      { hora: '14:00', ventas: 38000, pedidos: 15 },
+      { hora: '15:00', ventas: 26000, pedidos: 11 },
+    ];
+  },
+
+  async getTopProductos() {
+    const list = await this.getAll();
+    const productCountMap = {};
+
+    list.forEach((p) => {
+      const items = p.productos || p.detalles_pedido || [];
+      items.forEach((item) => {
+        const name = item.nombre || item.productos?.nombre || 'Producto';
+        const qty = Number(item.cantidad) || 1;
+        productCountMap[name] = (productCountMap[name] || 0) + qty;
+      });
+    });
+
+    const result = Object.entries(productCountMap)
+      .map(([nombre, cantidad]) => ({ nombre, cantidad }))
+      .sort((a, b) => b.cantidad - a.cantidad)
+      .slice(0, 5);
+
+    if (result.length > 0) return result;
+
+    return [
+      { nombre: 'Café Americano', cantidad: 48 },
+      { nombre: 'Capuchino', cantidad: 41 },
+      { nombre: 'Sándwich Ave', cantidad: 35 },
+      { nombre: 'Croissant J&Q', cantidad: 29 },
+      { nombre: 'Muffin Arándano', cantidad: 22 },
+    ];
+  },
 };
 
+export const pedidos = pedidosService;
 export default pedidosService;

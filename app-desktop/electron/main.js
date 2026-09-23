@@ -1,5 +1,8 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const fs = require('fs');
+
+app.disableHardwareAcceleration();
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 
@@ -17,10 +20,17 @@ function createWindow() {
     },
   });
 
-  if (isDev) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+  const devUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+  const distPath = path.join(__dirname, '..', 'dist', 'index.html');
+
+  if (process.env.NODE_ENV === 'production' || app.isPackaged) {
+    mainWindow.loadFile(distPath);
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+    mainWindow.loadURL(devUrl).catch(() => {
+      if (fs.existsSync(distPath)) {
+        mainWindow.loadFile(distPath);
+      }
+    });
   }
 }
 
