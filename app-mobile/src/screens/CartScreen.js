@@ -11,10 +11,13 @@ import CartItem from '../components/CartItem';
 
 const CartScreen = ({
   cart,
+  cafeteriaName,
   onIncrease,
   onDecrease,
   onRemove,
+  onCheckout,
 }) => {
+  const cafeName = cafeteriaName || 'Cafetería Central';
   const totalProducts = cart.reduce(
     (sum, item) => sum + item.quantity,
     0
@@ -71,7 +74,7 @@ const CartScreen = ({
                 </Text>
 
                 <Text style={styles.pickupName}>
-                  Cafetería Central
+                  {cafeName}
                 </Text>
               </View>
 
@@ -136,7 +139,7 @@ const CartScreen = ({
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.paymentButton}>
+              <TouchableOpacity style={styles.paymentButton} onPress={onCheckout}>
                 <Text style={styles.paymentText}>
                   Proceder al Pago
                 </Text>
@@ -145,7 +148,7 @@ const CartScreen = ({
               </TouchableOpacity>
 
               <Text style={styles.footerText}>
-                Retiro sin filas en Barra de Cafetería Central • Campus UCT
+                Retiro sin filas en Barra de {cafeName} • Campus UCT
               </Text>
             </>
           }

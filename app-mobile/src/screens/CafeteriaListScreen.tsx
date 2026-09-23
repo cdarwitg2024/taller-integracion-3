@@ -21,11 +21,46 @@ interface Cafeteria {
   imagen_url?: string;
 }
 
+const FALLBACK_CAFETERIAS: Cafeteria[] = [
+  {
+    id: 'mock-1',
+    nombre: 'Cafetería Central',
+    ubicacion: 'Edificio de Ingeniería • Campus Central',
+    demora: '1 - 3m',
+    rating: '4.5/5.0',
+    imagen_url: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500',
+  },
+  {
+    id: 'mock-2',
+    nombre: 'Cafetería Biblioteca',
+    ubicacion: 'Biblioteca General • Campus Central',
+    demora: '2 - 4m',
+    rating: '4.7/5.0',
+    imagen_url: 'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=500',
+  },
+  {
+    id: 'mock-3',
+    nombre: 'Cafetería Medicina',
+    ubicacion: 'Facultad de Medicina',
+    demora: '3 - 5m',
+    rating: '4.2/5.0',
+    imagen_url: 'https://images.unsplash.com/photo-1498804103079-a6351b050096?w=500',
+  },
+  {
+    id: 'mock-4',
+    nombre: 'Cafetería Economía',
+    ubicacion: 'Edificio de Economía',
+    demora: '1 - 2m',
+    rating: '4.6/5.0',
+    imagen_url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=500',
+  },
+];
+
 export const CafeteriaListScreen = ({
-  selectedCafeteriaId,
+  serverUserName,
   onSelectCafeteria,
 }: {
-  selectedCafeteriaId?: string;
+  serverUserName?: string;
   onSelectCafeteria?: (cafeteria: Cafeteria) => void;
 }) => {
   const [cafeterias, setCafeterias] = useState<Cafeteria[]>([]);
@@ -34,12 +69,18 @@ export const CafeteriaListScreen = ({
   const fetchCafeterias = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from('cafeterias').select('*');
-      if (error) throw error;
-      setCafeterias(data || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
+      const { data, error } = await supabase
+        .from('cafeterias')
+        .select('*')
+        .eq('activa', true);
+if (error) throw error;
+        // Si no hay cafeterías registradas o no se pueden leer (ej. política RLS),
+        // se muestra el catálogo de demostración
+        setCafeterias(data && data.length > 0 ? data : FALLBACK_CAFETERIAS);
+      } catch (err) {
+        console.warn('No se pudieron cargar las cafeterías, usando datos de demostración:', (err as Error).message);
+        setCafeterias(FALLBACK_CAFETERIAS);
+      } finally {
       setLoading(false);
     }
   };
@@ -78,13 +119,13 @@ export const CafeteriaListScreen = ({
       {/* Encabezado */}
       <View style={styles.topHeader}>
         <View style={{ width: 36 }} />
-        <Text style={styles.welcomeText}>Bienvenido Usuario</Text>
-        <TouchableOpacity style={styles.iconBadge}>
+        <Text style={styles.welcomeText}>Bienvenido {serverUserName || 'Usuario'}</Text>
+        <View style={styles.iconBadge}>
           <Text style={{ fontSize: 18 }}>☕</Text>
-        </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 80 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         {/* Banner Informativo Superior */}
         <View style={styles.infoBanner}>
           <Text style={styles.infoBannerText}>
@@ -95,6 +136,14 @@ export const CafeteriaListScreen = ({
         {/* Lista de Cafeterías */}
         {loading ? (
           <ActivityIndicator size="large" color="#4A2E2B" style={{ marginTop: 40 }} />
+        ) : cafeterias.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}>☕</Text>
+            <Text style={styles.emptyStateTitle}>Aún no hay cafeterías disponibles</Text>
+            <Text style={styles.emptyStateText}>
+              Por ahora no hay cafeterías activas. Vuelve más tarde para ver el menú del campus.
+            </Text>
+          </View>
         ) : (
           <View style={styles.listContainer}>
             {cafeterias.map((item) => (
@@ -113,26 +162,6 @@ export const CafeteriaListScreen = ({
           </Text>
         </View>
       </ScrollView>
-
-      {/* Barra de Navegación Inferior */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>☕</Text>
-          <Text style={[styles.navText, styles.navTextActive]}>Menú</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>📋</Text>
-          <Text style={styles.navText}>Pedidos</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>💼</Text>
-          <Text style={styles.navText}>Carrito</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>👤</Text>
-          <Text style={styles.navText}>Perfil</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 };
@@ -260,33 +289,30 @@ const styles = StyleSheet.create({
     color: '#7A685D',
     lineHeight: 16,
   },
-  bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 65,
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#F0E8E1',
-    justifyContent: 'space-around',
+  emptyState: {
+    marginTop: 40,
+    marginHorizontal: 20,
     alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    backgroundColor: '#F9F3EC',
+    borderRadius: 24,
   },
-  navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  emptyStateIcon: {
+    fontSize: 40,
+    marginBottom: 12,
   },
-  navIcon: {
-    fontSize: 18,
-  },
-  navText: {
-    fontSize: 10,
-    color: '#9C8A80',
-    marginTop: 2,
-  },
-  navTextActive: {
-    color: '#3B2319',
+  emptyStateTitle: {
+    fontSize: 16,
     fontWeight: '700',
+    color: '#3B2319',
+    textAlign: 'center',
+  },
+  emptyStateText: {
+    fontSize: 12,
+    color: '#7A685D',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: 8,
   },
 });

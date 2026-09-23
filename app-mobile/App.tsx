@@ -15,6 +15,9 @@ import { RegisterScreen } from './src/screens/RegisterScreen';
 import { CafeteriaListScreen } from './src/screens/CafeteriaListScreen';
 import MenuScreen from './src/screens/MenuScreen';
 import CartScreen from './src/screens/CartScreen';
+import PedidosScreen from './src/screens/PedidosScreen';
+import WalletScreen from './src/screens/WalletScreen';
+import PerfilScreen from './src/screens/PerfilScreen';
 import { Cafeteria } from './src/types/cafeteria';
 
 type Product = {
@@ -35,7 +38,15 @@ type CartItem = {
   quantity: number;
 };
 
-type AppTab = 'cafeterias' | 'menu' | 'cart';
+type AppTab = 'cafeterias' | 'pedidos' | 'carrito' | 'wallet' | 'perfil';
+
+const TABS: { key: AppTab; label: string }[] = [
+  { key: 'cafeterias', label: 'Cafeterías' },
+  { key: 'pedidos', label: 'Pedidos' },
+  { key: 'carrito', label: 'Carrito' },
+  { key: 'wallet', label: 'Wallet' },
+  { key: 'perfil', label: 'Perfil' },
+];
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -89,7 +100,14 @@ export default function App() {
 
   const handleSelectCafeteria = (cafeteria: Cafeteria) => {
     setSelectedCafeteria(cafeteria);
-    setActiveTab('menu');
+    setActiveTab('cafeterias');
+  };
+
+  const handleTabPress = (tab: AppTab) => {
+    if (tab === 'cafeterias') {
+      setSelectedCafeteria(null);
+    }
+    setActiveTab(tab);
   };
 
   const addToCart = (product: Product) => {
@@ -142,6 +160,76 @@ export default function App() {
     );
   };
 
+  const handleCheckout = async () => {
+    const user = session?.user;
+    const cafeteriaId = selectedCafeteria?.id;
+
+    if (!user) {
+      Alert.alert('Inicia sesión', 'Necesitas una cuenta para confirmar tu pedido.');
+      return;
+    }
+
+    if (!cafeteriaId || cart.length === 0) {
+      Alert.alert('Carrito vacío', 'Agrega productos desde el menú de una cafetería.');
+      return;
+    }
+
+    const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const pedidoPayload: Record<string, unknown> = {
+      cafeteria_id: cafeteriaId,
+      total,
+      estado: 'pendiente',
+    };
+
+    const insertPedido = async (
+      payload: Record<string, unknown>
+    ): Promise<{ id: number } | null> => {
+      const { data, error } = await supabase
+        .from('pedidos')
+        .insert(payload)
+        .select()
+        .single();
+      if (error) return null;
+      return data as { id: number };
+    };
+
+    let pedido = await insertPedido({ ...pedidoPayload, auth_user_id: user.id });
+    if (!pedido) {
+      pedido = await insertPedido(pedidoPayload);
+    }
+
+    if (!pedido) {
+      Alert.alert(
+        'No se pudo crear el pedido',
+        'Revisa tu conexión e inténtalo nuevamente.'
+      );
+      return;
+    }
+
+    const detalles = cart.map((item) => ({
+      pedido_id: pedido!.id,
+      producto_id: item.id,
+      cantidad: item.quantity,
+      precio_unitario: item.price,
+      subtotal: item.price * item.quantity,
+    }));
+
+    const { error: detalleError } = await supabase
+      .from('detalles_pedido')
+      .insert(detalles);
+
+    if (detalleError) {
+      Alert.alert('Aviso', 'El pedido se registró, pero el detalle no pudo guardarse.');
+      return;
+    }
+
+    setCart([]);
+    Alert.alert(
+      'Pedido creado',
+      `Tu pedido fue registrado. Retira en ${selectedCafeteria?.nombre || 'la cafetería seleccionada'} cuando esté listo.`
+    );
+  };
+
   const totalProducts = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   if (loading) {
@@ -169,14 +257,23 @@ export default function App() {
     );
   }
 
+  const userName = isGuest
+    ? 'Invitado'
+    : session?.user?.user_metadata?.full_name ||
+      session?.user?.email?.split('@')[0] ||
+      'Usuario';
+
   return (
     <SafeAreaProvider>
       <View style={styles.container}>
         {/* Barra superior con opción de salir */}
         <SafeAreaView edges={['top']} style={styles.topBar}>
-          <Text style={styles.topBarTitle}>
-            ☕ CoffeeFast {isGuest ? '(Invitado)' : ''}
-          </Text>
+          <View style={styles.topBarBrand}>
+            <Text style={styles.topBarTitle}>
+              ☕ CoffeeFast{isGuest ? ' (Invitado)' : ''}
+            </Text>
+            <Text style={styles.topBarGreeting}>{userName}</Text>
+          </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
             <Text style={styles.logoutBtnText}>Salir</Text>
           </TouchableOpacity>
@@ -184,101 +281,85 @@ export default function App() {
 
         {/* Contenido principal según la pestaña activa */}
         <View style={styles.content}>
-          {activeTab === 'cafeterias' && (
-            <CafeteriaListScreen
-              selectedCafeteriaId={selectedCafeteria?.id}
-              onSelectCafeteria={handleSelectCafeteria}
+          {activeTab === 'cafeterias' &&
+            (selectedCafeteria ? (
+              <MenuScreen
+                cafeteria={selectedCafeteria}
+                onAddToCart={addToCart}
+                onBack={() => setSelectedCafeteria(null)}
+              />
+            ) : (
+              <CafeteriaListScreen
+                serverUserName={userName}
+                onSelectCafeteria={handleSelectCafeteria}
+              />
+            ))}
+
+          {activeTab === 'pedidos' && (
+            <PedidosScreen
+              userId={isGuest ? null : session?.user?.id}
+              onGoToCafeterias={() => handleTabPress('cafeterias')}
             />
           )}
 
-          {activeTab === 'menu' && (
-            <MenuScreen onAddToCart={addToCart} />
-          )}
-
-          {activeTab === 'cart' && (
+          {activeTab === 'carrito' && (
             <CartScreen
               cart={cart}
+              cafeteriaName={selectedCafeteria?.nombre || 'Cafetería Central'}
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
               onRemove={removeFromCart}
+              onCheckout={handleCheckout}
+            />
+          )}
+
+          {activeTab === 'wallet' && <WalletScreen />}
+
+          {activeTab === 'perfil' && (
+            <PerfilScreen
+              session={session}
+              isGuest={isGuest}
+              onLogout={handleLogout}
             />
           )}
         </View>
 
-        {/* Barra de navegación inferior */}
+        {/* Barra de navegación inferior (única) */}
         <View style={styles.bottomNavigation}>
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => setActiveTab('cafeterias')}
-          >
-            <Text
-              style={[
-                styles.navIcon,
-                activeTab === 'cafeterias' && styles.activeNavIcon,
-              ]}
-            >
-              🏪
-            </Text>
-            <Text
-              style={[
-                styles.navText,
-                activeTab === 'cafeterias' && styles.activeNavText,
-              ]}
-            >
-              Cafeterías
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => setActiveTab('menu')}
-          >
-            <Text
-              style={[
-                styles.navIcon,
-                activeTab === 'menu' && styles.activeNavIcon,
-              ]}
-            >
-              ☕
-            </Text>
-            <Text
-              style={[
-                styles.navText,
-                activeTab === 'menu' && styles.activeNavText,
-              ]}
-            >
-              Menú
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => setActiveTab('cart')}
-          >
-            <View>
-              <Text
-                style={[
-                  styles.navIcon,
-                  activeTab === 'cart' && styles.activeNavIcon,
-                ]}
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={styles.navItem}
+                activeOpacity={0.7}
+                onPress={() => handleTabPress(tab.key)}
               >
-                🛒
-              </Text>
-              {totalProducts > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{totalProducts}</Text>
+                <View>
+                  <Text
+                    style={[
+                      styles.navText,
+                      isActive && styles.activeNavText,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {tab.label}
+                  </Text>
+                  {tab.key === 'carrito' && totalProducts > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{totalProducts}</Text>
+                    </View>
+                  )}
                 </View>
-              )}
-            </View>
-            <Text
-              style={[
-                styles.navText,
-                activeTab === 'cart' && styles.activeNavText,
-              ]}
-            >
-              Carrito
-            </Text>
-          </TouchableOpacity>
+                <View
+                  style={[
+                    styles.navIndicator,
+                    isActive && styles.activeNavIndicator,
+                  ]}
+                />
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
     </SafeAreaProvider>
@@ -288,7 +369,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAF7F2',
+    backgroundColor: '#F8F6F4',
   },
   loadingContainer: {
     flex: 1,
@@ -306,10 +387,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EFE7DD',
   },
+  topBarBrand: {
+    flexDirection: 'column',
+  },
   topBarTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: '#4A3728',
+    fontFamily: 'serif',
+  },
+  topBarGreeting: {
+    fontSize: 11,
+    color: '#8C6D58',
+    marginTop: 1,
   },
   logoutBtn: {
     backgroundColor: '#F5EBE1',
@@ -340,13 +430,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  navIcon: {
-    fontSize: 20,
-    marginBottom: 2,
-  },
-  activeNavIcon: {
-    opacity: 1,
-  },
   navText: {
     fontSize: 11,
     color: '#A39A96',
@@ -355,9 +438,19 @@ const styles = StyleSheet.create({
     color: '#4A332C',
     fontWeight: '700',
   },
+  navIndicator: {
+    width: 16,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'transparent',
+    marginTop: 3,
+  },
+  activeNavIndicator: {
+    backgroundColor: '#4A332C',
+  },
   badge: {
     position: 'absolute',
-    right: -10,
+    right: -12,
     top: -4,
     minWidth: 18,
     height: 18,

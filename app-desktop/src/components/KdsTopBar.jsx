@@ -1,9 +1,10 @@
-import { Box, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 
 import Clock from './Clock';
 import ConnectionBadge from './ConnectionBadge';
 
-function KdsTopBar({ conexion = 'conectado' }) {
+function KdsTopBar({ conexion = 'conectado', onEscanear }) {
   return (
     <Box
       sx={{
@@ -33,6 +34,22 @@ function KdsTopBar({ conexion = 'conectado' }) {
       </Typography>
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+        {onEscanear && (
+          <Button
+            variant="contained"
+            startIcon={<QrCodeScannerIcon />}
+            onClick={onEscanear}
+            sx={{
+              backgroundColor: '#C86237',
+              minHeight: 44,
+              fontWeight: 800,
+              textTransform: 'none',
+              '&:hover': { backgroundColor: '#B2522B' },
+            }}
+          >
+            Escanear QR
+          </Button>
+        )}
         <ConnectionBadge estado={conexion} />
         <Clock />
       </Box>

@@ -17,7 +17,6 @@ import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import CheckIcon from '@mui/icons-material/Check';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 
 import EstadoChip from './EstadoChip';
 
@@ -94,13 +93,13 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
                   variant="contained"
                   color="warning"
                   startIcon={<PlayArrowIcon />}
-                  onClick={() => onChangeEstado(pedido.id, 'preparando')}
+                  onClick={() => onChangeEstado(pedido.id, 'en_preparacion')}
                   sx={{ minHeight: 48 }}
                 >
                   Iniciar Preparación
                 </Button>
               )}
-              {pedido.estado === 'preparando' && (
+              {pedido.estado === 'en_preparacion' && (
                 <Button
                   variant="contained"
                   color="info"
@@ -112,15 +111,9 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
                 </Button>
               )}
               {pedido.estado === 'listo' && (
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<LocalShippingIcon />}
-                  onClick={() => onChangeEstado(pedido.id, 'entregado')}
-                  sx={{ minHeight: 48 }}
-                >
-                  Confirmar Entrega
-                </Button>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  Entrega pendiente: usa el botón "Escanear QR" de la barra superior para validar la entrega.
+                </Typography>
               )}
             </Stack>
           </DialogActions>

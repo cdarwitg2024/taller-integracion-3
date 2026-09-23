@@ -5,22 +5,25 @@ import KdsTopBar from '../../components/KdsTopBar';
 import KanbanColumn from '../../components/KanbanColumn';
 import PedidoCard from '../../components/PedidoCard';
 import DetallePedidoDialog from '../../components/DetallePedidoDialog';
+import EscanearQrDialog from '../../components/EscanearQrDialog';
 
 import pedidosService, { ordenarPedidos } from '../../services/pedidosService';
 import kdsRealtime, {
   ESTADO_CONECTADO,
   ESTADO_RECONECTANDO,
 } from '../../services/kdsRealtime';
+import { CAFETERIA_ID } from '../../services/backendApi';
 
 const COLUMNAS = [
   { estado: 'pendiente', titulo: 'Pendiente', backgroundColor: '#F2ECE7' },
-  { estado: 'preparando', titulo: 'En Preparación', backgroundColor: '#FFF3E0' },
+  { estado: 'en_preparacion', titulo: 'En Preparación', backgroundColor: '#FFF3E0' },
   { estado: 'listo', titulo: 'Listos para Retiro', backgroundColor: '#E8F5E9' },
 ];
 
-function Comandas() {
+function Comandas({ currentUser }) {
   const [pedidos, setPedidos] = useState([]);
   const [selectedPedido, setSelectedPedido] = useState(null);
+  const [escaneando, setEscaneando] = useState(false);
   const [loading, setLoading] = useState(true);
   const [conexion, setConexion] = useState(ESTADO_RECONECTANDO);
 
@@ -49,6 +52,16 @@ function Comandas() {
     setPedidos(prev => (prev.some(p => String(p.id) === id) ? prev : ordenarPedidos([comanda, ...prev])));
   }, []);
 
+  const actualizarPedidoRealTime = useCallback((comanda) => {
+    const id = String(comanda.id);
+    pedidosRealtime.current.set(id, comanda);
+    setPedidos(prev => {
+      if (!prev.some(p => String(p.id) === id)) return ordenarPedidos([comanda, ...prev]);
+      return ordenarPedidos(prev.map(p => (String(p.id) === id ? comanda : p)));
+    });
+    setSelectedPedido(prev => (prev && String(prev.id) === id ? { ...prev, ...comanda } : prev));
+  }, []);
+
   useEffect(() => {
     fetchPedidos();
   }, [fetchPedidos]);
@@ -56,10 +69,11 @@ function Comandas() {
   useEffect(() => {
     const suscripcion = kdsRealtime.suscribir({
       onComanda: agregarComandaRealTime,
+      onActualizar: actualizarPedidoRealTime,
       onEstadoCanal: setConexion,
     });
     return () => suscripcion.cerrar();
-  }, [agregarComandaRealTime]);
+  }, [agregarComandaRealTime, actualizarPedidoRealTime]);
 
   useEffect(() => {
     const poll = setInterval(() => {
@@ -70,16 +84,20 @@ function Comandas() {
 
   const handleCambiarEstado = async (id, nuevoEstado, e) => {
     if (e) e.stopPropagation();
-    await pedidosService.updateEstado(id, nuevoEstado);
-    setPedidos(prev => prev.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p));
-    if (selectedPedido && selectedPedido.id === id) {
-      setSelectedPedido(prev => ({ ...prev, estado: nuevoEstado }));
+    const actualizado = await pedidosService.updateEstado(id, nuevoEstado);
+    if (actualizado) {
+      actualizarPedidoRealTime(actualizado);
+    } else {
+      setPedidos(prev => prev.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p));
+      if (selectedPedido && selectedPedido.id === id) {
+        setSelectedPedido(prev => ({ ...prev, estado: nuevoEstado }));
+      }
     }
   };
 
   const pedidosOrdenados = useMemo(() => ordenarPedidos(pedidos), [pedidos]);
   const pedidosOperativos = pedidosOrdenados.filter(p =>
-    p.estado === 'pendiente' || p.estado === 'preparando' || p.estado === 'listo'
+    p.estado === 'pendiente' || p.estado === 'preparando' || p.estado === 'en_preparacion' || p.estado === 'listo'
   );
 
   return (
@@ -93,7 +111,7 @@ function Comandas() {
       }}
     >
       <Box sx={{ mb: 2, flexShrink: 0 }}>
-        <KdsTopBar conexion={conexion} />
+        <KdsTopBar conexion={conexion} onEscanear={() => setEscaneando(true)} />
       </Box>
 
       {loading ? (
@@ -153,6 +171,13 @@ function Comandas() {
         pedido={selectedPedido}
         onClose={() => setSelectedPedido(null)}
         onChangeEstado={handleCambiarEstado}
+      />
+
+      <EscanearQrDialog
+        open={escaneando}
+        cafeteriaId={CAFETERIA_ID}
+        usuarioId={currentUser?.id != null ? String(currentUser.id) : 'empleado'}
+        onClose={() => setEscaneando(false)}
       />
     </Box>
   );

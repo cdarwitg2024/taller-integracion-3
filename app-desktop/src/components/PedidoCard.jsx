@@ -13,12 +13,14 @@ import TimeAgo from './TimeAgo';
 const etiquetaPorEstado = {
   pendiente: { fondo: '#F2ECE7', texto: '#4A3B32', label: 'PENDIENTE' },
   preparando: { fondo: '#FFF3E0', texto: '#E65100', label: 'EN PREPARACIÓN' },
+  en_preparacion: { fondo: '#FFF3E0', texto: '#E65100', label: 'EN PREPARACIÓN' },
   listo: { fondo: '#E8F5E9', texto: '#2E7D32', label: 'LISTO PARA RETIRO' },
 };
 
 const botonPorEstado = {
-  pendiente: { label: 'COMENZAR PREPARACIÓN', background: '#4A3B32' },
-  preparando: { label: 'MARCAR COMO LISTO', background: '#E65100' },
+  pendiente: { label: 'COMENZAR PREPARACIÓN', background: '#4A3B32', siguiente: 'en_preparacion' },
+  preparando: { label: 'MARCAR COMO LISTO', background: '#E65100', siguiente: 'listo' },
+  en_preparacion: { label: 'MARCAR COMO LISTO', background: '#E65100', siguiente: 'listo' },
 };
 
 function formatoHM(fecha) {
@@ -113,7 +115,7 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
           <Button
             fullWidth
             variant="contained"
-            onClick={(e) => onChangeEstado(pedido.id, pedido.estado === 'pendiente' ? 'preparando' : 'listo', e)}
+            onClick={(e) => onChangeEstado(pedido.id, boton.siguiente, e)}
             sx={{
               minHeight: 56,
               minWidth: 56,

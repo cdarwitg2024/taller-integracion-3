@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { backendApi } from './backendApi';
 
 const initialMockPedidos = [
   {
@@ -286,7 +287,7 @@ export function normalizarPedido(fila) {
     hora_retiro: formatearHoraRetiro(fila.hora_retiro),
     creado_en: fila.creado_en,
     total: Number(fila.total) || 0,
-    estado: fila.estado,
+    estado: fila.estado === 'preparando' ? 'en_preparacion' : fila.estado,
     detalles_pedido: rawDetalles,
     productos,
   };
@@ -393,29 +394,22 @@ export const pedidosService = {
   },
 
   async updateEstado(id, nuevoEstado) {
-    if (isSupabaseConfigured) {
-      // 1. Intentar llamar a RPC si está disponible
-      try {
-        const numId = Number(id);
-        if (!Number.isNaN(numId)) {
-          const { data: rpcData, error: rpcError } = await supabase.rpc('cambiar_estado_pedido', {
-            p_pedido_id: numId,
-            p_nuevo_estado: nuevoEstado,
-          });
-          if (!rpcError && rpcData) {
-            const updated = await this.getById(id);
-            if (updated) return updated;
-          }
-        }
-      } catch (err) {
-        console.warn('RPC cambiar_estado_pedido no disponible, ejecutando UPDATE directo:', err);
-      }
+    // 1. Vía MS Comercio (PATCH /pedidos/:id/estado) — valida la secuencia
+    //    pendiente -> en_preparacion -> listo en el backend.
+    try {
+      await backendApi.cambiarEstadoPedido(id, nuevoEstado);
+      const updated = await this.getById(id);
+      if (updated) return updated;
+    } catch (err) {
+      console.warn('MS Comercio no disponible, fallback a Supabase directo:', err.message);
+    }
 
-      // 2. Fallback de UPDATE directo en Supabase
+    // 2. Fallback: UPDATE directo en Supabase
+    if (isSupabaseConfigured) {
       try {
         const updates = { estado: nuevoEstado };
         const now = new Date().toISOString();
-        if (nuevoEstado === 'preparando') updates.inicio_preparacion_en = now;
+        if (nuevoEstado === 'en_preparacion') updates.inicio_preparacion_en = now;
         if (nuevoEstado === 'listo') updates.listo_en = now;
         if (nuevoEstado === 'entregado') {
           updates.entregado_en = now;
@@ -431,6 +425,7 @@ export const pedidosService = {
           .single();
 
         if (!error && data) return normalizarPedido(data);
+        if (error) throw error;
       } catch (err) {
         console.warn('Fallback a mock:', err);
       }
