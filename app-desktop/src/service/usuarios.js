@@ -1,6 +1,8 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 
 const TABLE = 'usuarios';
+// Campos seguros que nunca exponen password_hash ni tokens sensibles
+const SAFE_USER_FIELDS = 'id, rol_id, nombre, apellido, email, telefono, foto_url, activo, ultima_conexion, creado_en, actualizado_en, auth_user_id';
 
 export const usuarios = {
   async getAll() {
@@ -8,7 +10,7 @@ export const usuarios = {
       try {
         const { data, error } = await supabase
           .from(TABLE)
-          .select('*, roles(*)')
+          .select(`${SAFE_USER_FIELDS}, roles(*)`)
           .eq('activo', true);
         if (!error && data) return data;
       } catch (err) {
@@ -23,7 +25,7 @@ export const usuarios = {
       try {
         const { data, error } = await supabase
           .from(TABLE)
-          .select('*, roles(*)')
+          .select(`${SAFE_USER_FIELDS}, roles(*)`)
           .eq('id', id)
           .single();
         if (!error && data) return data;
@@ -39,7 +41,7 @@ export const usuarios = {
       try {
         const { data, error } = await supabase
           .from(TABLE)
-          .select('*, roles(*)')
+          .select(`${SAFE_USER_FIELDS}, roles(*)`)
           .eq('email', email)
           .single();
         if (!error && data) return data;
@@ -55,7 +57,7 @@ export const usuarios = {
       try {
         const { data, error } = await supabase
           .from(TABLE)
-          .select('*')
+          .select(SAFE_USER_FIELDS)
           .eq('rol_id', rolId)
           .eq('activo', true);
         if (!error && data) return data;
@@ -67,7 +69,7 @@ export const usuarios = {
   },
 
   async loginDueno(email, password) {
-    // 1. Si Supabase Auth está disponible, intentar sign in
+    // 1. Autenticación segura del lado del servidor mediante Supabase GoTrue Auth
     if (isSupabaseConfigured) {
       try {
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -75,14 +77,11 @@ export const usuarios = {
           password,
         });
 
-        if (authError) {
-          return { success: false, error: 'Correo o Contraseña incorrectos.' };
-        }
-
-        if (authData?.user) {
+        if (!authError && authData?.user) {
+          // Obtener perfil sin exponer hashes
           const { data: userProfile } = await supabase
             .from(TABLE)
-            .select('*, roles(*)')
+            .select(`${SAFE_USER_FIELDS}, roles(*)`)
             .eq('auth_user_id', authData.user.id)
             .single();
 
@@ -100,46 +99,85 @@ export const usuarios = {
           return { success: true, user: userProfile || authData.user };
         }
       } catch (err) {
-        console.warn('Error en Supabase Auth, intentando verificación en tabla usuarios:', err);
-      }
-
-      // 2. Consulta directa a tabla usuarios si se autentica fuera de GoTrue
-      try {
-        const { data: directUser, error: directError } = await supabase
-          .from(TABLE)
-          .select('*, roles(*)')
-          .eq('email', email)
-          .single();
-
-        if (!directError && directUser) {
-          if (directUser.roles?.nombre && directUser.roles.nombre.toLowerCase() !== 'dueño') {
-            return {
-              success: false,
-              error: 'Acceso denegado. Interfaz exclusiva para Dueños.',
-            };
-          }
-          return { success: true, user: directUser };
-        }
-      } catch (err) {
-        console.warn('Consulta directa usuarios:', err);
+        console.warn('Error en Supabase Auth:', err);
       }
     }
 
-    // Fallback de desarrollo configurable exclusivamente vía variables de entorno
-    const devEmail = import.meta.env?.VITE_DEV_ADMIN_EMAIL;
-    const devPass = import.meta.env?.VITE_DEV_ADMIN_PASSWORD;
+    // Fallback de desarrollo: activo ÚNICAMENTE en entorno de desarrollo (import.meta.env.DEV)
+    if (import.meta.env.DEV) {
+      const devEmail = import.meta.env?.VITE_DEV_ADMIN_EMAIL || 'dueno@coffeefaster.cl';
+      const devPass = import.meta.env?.VITE_DEV_ADMIN_PASSWORD || '123456';
 
-    if (devEmail && devPass && email === devEmail && password === devPass) {
-      return {
-        success: true,
-        user: {
-          id: 1,
-          nombre: 'Administrador',
-          apellido: 'Dueño',
-          email: devEmail,
-          roles: { nombre: 'dueño' },
-        },
-      };
+      if (email === devEmail && password === devPass) {
+        return {
+          success: true,
+          user: {
+            id: 1,
+            nombre: 'Administrador',
+            apellido: 'Dueño',
+            email: devEmail,
+            roles: { nombre: 'dueño' },
+          },
+        };
+      }
+    }
+
+    return { success: false, error: 'Correo o Contraseña incorrectos.' };
+  },
+
+  async loginEmpleado(email, password) {
+    // 1. Autenticación segura del lado del servidor mediante Supabase GoTrue Auth
+    if (isSupabaseConfigured) {
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (!authError && authData?.user) {
+          // Obtener perfil sin exponer hashes
+          const { data: userProfile } = await supabase
+            .from(TABLE)
+            .select(`${SAFE_USER_FIELDS}, roles(*)`)
+            .eq('auth_user_id', authData.user.id)
+            .single();
+
+          const rolNombre = userProfile?.roles?.nombre || authData.user?.user_metadata?.rol;
+
+          // Restricción para Empleado
+          if (rolNombre && rolNombre.toLowerCase() !== 'empleado') {
+            await supabase.auth.signOut();
+            return {
+              success: false,
+              error: 'Acceso denegado. Interfaz exclusiva para Empleados.',
+            };
+          }
+
+          return { success: true, user: userProfile || authData.user };
+        }
+      } catch (err) {
+        console.warn('Error en Supabase Auth:', err);
+      }
+    }
+
+    // Fallback de desarrollo: activo ÚNICAMENTE en entorno de desarrollo (import.meta.env.DEV)
+    if (import.meta.env.DEV) {
+      const devEmail = import.meta.env?.VITE_DEV_EMPLEADO_EMAIL || 'empleado@coffeefaster.cl';
+      const devPass = import.meta.env?.VITE_DEV_EMPLEADO_PASSWORD || '123456';
+
+      if (email === devEmail && password === devPass) {
+        return {
+          success: true,
+          user: {
+            id: 2,
+            nombre: 'Juan',
+            apellido: 'Empleado',
+            email: devEmail,
+            roles: { nombre: 'empleado' },
+            cafeteria_id: 1,
+          },
+        };
+      }
     }
 
     return { success: false, error: 'Correo o Contraseña incorrectos.' };
@@ -149,7 +187,7 @@ export const usuarios = {
     const { data, error } = await supabase
       .from(TABLE)
       .insert(usuario)
-      .select()
+      .select(SAFE_USER_FIELDS)
       .single();
     if (error) throw error;
     return data;
@@ -160,7 +198,7 @@ export const usuarios = {
       .from(TABLE)
       .update({ ...updates, actualizado_en: new Date().toISOString() })
       .eq('id', id)
-      .select()
+      .select(SAFE_USER_FIELDS)
       .single();
     if (error) throw error;
     return data;

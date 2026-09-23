@@ -326,44 +326,9 @@ export const telegramDuenoService = {
       }
     }
 
-    // 4. Fallback directo a la API de Telegram SOLO si el token está definido en el archivo .env
-    const botToken =
-      import.meta.env?.VITE_TELEGRAM_BOT_TOKEN ||
-      import.meta.env?.VITE_BOT_TOKEN_KEY;
-
-    if (botToken) {
-      try {
-        const textoTelegram =
-          `<b>Mensaje de prueba</b>\n\n` +
-          `Este es un mensaje de prueba para verificar que las notificaciones de CoffeeFaster están funcionando correctamente.`;
-
-        const tgRes = await fetch(
-          `https://api.telegram.org/bot${botToken}/sendMessage`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: Number(telegramChatId),
-              text: textoTelegram,
-              parse_mode: "HTML",
-            }),
-          },
-        );
-
-        if (tgRes.ok) {
-          return {
-            success: true,
-            message: "Mensaje de prueba enviado exitosamente a tu Telegram.",
-          };
-        }
-      } catch (tgErr) {
-        console.error("Error en envío directo a Telegram:", tgErr);
-      }
-    }
-
     return {
-      success: true,
-      message: "Mensaje de prueba enviado a tu cuenta de Telegram.",
+      success: false,
+      error: "No se pudo conectar con el servidor de Telegram/Webhook. Asegúrate de que el bot esté en ejecución.",
     };
   },
 };

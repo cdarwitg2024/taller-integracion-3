@@ -20,7 +20,7 @@ import pedidosService from '../services/pedidosService';
 
 const drawerWidth = 260;
 
-function Sidebar({ currentPage, onNavigate, onLogout, menuItems }) {
+function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Panel de Control', currentUser }) {
   const [pendientesCount, setPendientesCount] = useState(0);
 
   useEffect(() => {
@@ -112,7 +112,7 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems }) {
               mt: 0.3,
             }}
           >
-            Panel de Control
+            {subtitle}
           </Typography>
         </Box>
 
@@ -120,8 +120,10 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems }) {
         <Box sx={{ px: 1.5, mt: 1 }}>
           <List disablePadding>
             {items.map((item) => {
-              const isActive = currentPage === item.id;
-              const iconElement = item.id === 'pedidos' ? (
+              const itemTarget = item.path || item.id;
+              const isActive = currentPage === itemTarget || (item.path && currentPage.startsWith(item.path));
+              const isComandas = item.id === 'pedidos' || item.id === 'comandas' || String(itemTarget).includes('comandas');
+              const iconElement = isComandas ? (
                 <Badge badgeContent={pendientesCount} color="error" max={99}>
                   {item.icon}
                 </Badge>
@@ -133,7 +135,7 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems }) {
                 <ListItemButton
                   key={item.id}
                   selected={isActive}
-                  onClick={() => onNavigate(item.id)}
+                  onClick={() => onNavigate(itemTarget)}
                   sx={{
                     mb: 1,
                     py: 1.3,
@@ -177,8 +179,46 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems }) {
       </Box>
 
       {/* Zona inferior con opción de cerrar sesión */}
-      {onLogout && (
-        <Box sx={{ px: 1.5, pb: 2.5 }}>
+      <Box sx={{ px: 1.5, pb: 2.5 }}>
+        {currentUser && (
+          <Box
+            sx={{
+              p: 1.5,
+              mb: 1.5,
+              borderRadius: '10px',
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{
+                color: '#FFFFFF',
+                fontWeight: 700,
+                fontSize: '0.82rem',
+                display: 'block',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {currentUser.nombre} {currentUser.apellido || ''}
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{
+                color: '#C8B6A6',
+                fontSize: '0.72rem',
+                textTransform: 'capitalize',
+                display: 'block',
+              }}
+            >
+              {currentUser.roles?.nombre || 'Usuario'}
+            </Typography>
+          </Box>
+        )}
+
+        {onLogout && (
           <ListItemButton
             onClick={onLogout}
             sx={{
@@ -200,8 +240,8 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems }) {
               primaryTypographyProps={{ fontSize: '0.88rem', fontWeight: 500 }}
             />
           </ListItemButton>
-        </Box>
-      )}
+        )}
+      </Box>
     </Drawer>
   );
 }

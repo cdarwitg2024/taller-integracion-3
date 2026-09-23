@@ -3,10 +3,17 @@ import Sidebar from '../components/sidebar';
 
 const drawerWidth = 260;
 
-function AppLayout({ currentPage, onNavigate, onLogout, menuItems, children }) {
+function AppLayout({ currentPage, onNavigate, onLogout, menuItems, subtitle, currentUser, children }) {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#FAF7F5', width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
-      <Sidebar currentPage={currentPage} onNavigate={onNavigate} onLogout={onLogout} menuItems={menuItems} />
+      <Sidebar
+        currentPage={currentPage}
+        onNavigate={onNavigate}
+        onLogout={onLogout}
+        menuItems={menuItems}
+        subtitle={subtitle}
+        currentUser={currentUser}
+      />
 
       <Box
         component="main"
