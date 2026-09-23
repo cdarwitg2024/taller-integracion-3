@@ -1,4 +1,4 @@
-package com.AppMobile
+package com.coffeefastapp
 
 import android.app.Application
 import com.facebook.react.PackageList

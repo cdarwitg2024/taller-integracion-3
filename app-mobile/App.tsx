@@ -1,13 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   View,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
+  Alert,
 } from 'react-native';
-
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { Session } from '@supabase/supabase-js';
+import { supabase } from './src/lib/supabase';
+import { LoginScreen } from './src/screens/LoginScreen';
+import { RegisterScreen } from './src/screens/RegisterScreen';
+import { CafeteriaListScreen } from './src/screens/CafeteriaListScreen';
 import MenuScreen from './src/screens/MenuScreen';
 import CartScreen from './src/screens/CartScreen';
+import { Cafeteria } from './src/types/cafeteria';
 
 type Product = {
   id: number;
@@ -27,11 +35,62 @@ type CartItem = {
   quantity: number;
 };
 
-type Screen = 'menu' | 'cart';
+type AppTab = 'cafeterias' | 'menu' | 'cart';
 
-const App = () => {
+export default function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
+  const [isGuest, setIsGuest] = useState(false);
+
+  const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
+  const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [screen, setScreen] = useState<Screen>('menu');
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = () => {
+    Alert.alert(
+      isGuest ? 'Salir de Invitado' : 'Cerrar Sesión',
+      '¿Deseas salir a la pantalla de inicio?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Salir',
+          style: 'destructive',
+          onPress: async () => {
+            setSelectedCafeteria(null);
+            setCart([]);
+            setActiveTab('cafeterias');
+            if (isGuest) {
+              setIsGuest(false);
+            } else {
+              await supabase.auth.signOut();
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSelectCafeteria = (cafeteria: Cafeteria) => {
+    setSelectedCafeteria(cafeteria);
+    setActiveTab('menu');
+  };
 
   const addToCart = (product: Product) => {
     if (!product.available) {
@@ -39,21 +98,12 @@ const App = () => {
     }
 
     setCart((currentCart: CartItem[]) => {
-      const existingProduct = currentCart.find(
-        (item: CartItem) => item.id === product.id
-      );
-
-      if (existingProduct) {
-        return currentCart.map((item: CartItem) =>
-          item.id === product.id
-            ? {
-                ...item,
-                quantity: item.quantity + 1,
-              }
-            : item
+      const existing = currentCart.find((item) => item.id === product.id);
+      if (existing) {
+        return currentCart.map((item) =>
+          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-
       return [
         ...currentCart,
         {
@@ -70,13 +120,8 @@ const App = () => {
 
   const increaseQuantity = (id: number) => {
     setCart((currentCart: CartItem[]) =>
-      currentCart.map((item: CartItem) =>
-        item.id === id
-          ? {
-              ...item,
-              quantity: item.quantity + 1,
-            }
-          : item
+      currentCart.map((item) =>
+        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
       )
     );
   };
@@ -84,185 +129,247 @@ const App = () => {
   const decreaseQuantity = (id: number) => {
     setCart((currentCart: CartItem[]) =>
       currentCart
-        .map((item: CartItem) =>
-          item.id === id
-            ? {
-                ...item,
-                quantity: item.quantity - 1,
-              }
-            : item
+        .map((item) =>
+          item.id === id ? { ...item, quantity: item.quantity - 1 } : item
         )
-        .filter((item: CartItem) => item.quantity > 0)
+        .filter((item) => item.quantity > 0)
     );
   };
 
   const removeFromCart = (id: number) => {
     setCart((currentCart: CartItem[]) =>
-      currentCart.filter((item: CartItem) => item.id !== id)
+      currentCart.filter((item) => item.id !== id)
     );
   };
 
-  const totalProducts = cart.reduce(
-    (sum, item) => sum + item.quantity,
-    0
-  );
+  const totalProducts = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4A3728" />
+      </View>
+    );
+  }
+
+  const isUserAllowed = Boolean((session && session.user) || isGuest);
+
+  if (!isUserAllowed) {
+    return (
+      <SafeAreaProvider>
+        {authScreen === 'login' ? (
+          <LoginScreen
+            onNavigateToRegister={() => setAuthScreen('register')}
+            onExploreAsGuest={() => setIsGuest(true)}
+          />
+        ) : (
+          <RegisterScreen onNavigateToLogin={() => setAuthScreen('login')} />
+        )}
+      </SafeAreaProvider>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.content}>
-        {screen === 'menu' ? (
-          <MenuScreen onAddToCart={addToCart} />
-        ) : (
-          <CartScreen
-            cart={cart}
-            onIncrease={increaseQuantity}
-            onDecrease={decreaseQuantity}
-            onRemove={removeFromCart}
-          />
-        )}
-      </View>
-
-      <View style={styles.bottomNavigation}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => setScreen('menu')}
-        >
-          <Text
-            style={[
-              styles.navIcon,
-              screen === 'menu' && styles.activeNavIcon,
-            ]}
-          >
-            ▰
+    <SafeAreaProvider>
+      <View style={styles.container}>
+        {/* Barra superior con opción de salir */}
+        <SafeAreaView edges={['top']} style={styles.topBar}>
+          <Text style={styles.topBarTitle}>
+            ☕ CoffeeFast {isGuest ? '(Invitado)' : ''}
           </Text>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+            <Text style={styles.logoutBtnText}>Salir</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
 
-          <Text
-            style={[
-              styles.navText,
-              screen === 'menu' && styles.activeNavText,
-            ]}
-          >
-            Menú
-          </Text>
-        </TouchableOpacity>
+        {/* Contenido principal según la pestaña activa */}
+        <View style={styles.content}>
+          {activeTab === 'cafeterias' && (
+            <CafeteriaListScreen
+              selectedCafeteriaId={selectedCafeteria?.id}
+              onSelectCafeteria={handleSelectCafeteria}
+            />
+          )}
 
-        <View style={styles.navItem}>
-          <Text style={styles.navIcon}>▤</Text>
+          {activeTab === 'menu' && (
+            <MenuScreen onAddToCart={addToCart} />
+          )}
 
-          <Text style={styles.navText}>
-            Pedidos
-          </Text>
+          {activeTab === 'cart' && (
+            <CartScreen
+              cart={cart}
+              onIncrease={increaseQuantity}
+              onDecrease={decreaseQuantity}
+              onRemove={removeFromCart}
+            />
+          )}
         </View>
 
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => setScreen('cart')}
-        >
-          <View>
+        {/* Barra de navegación inferior */}
+        <View style={styles.bottomNavigation}>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => setActiveTab('cafeterias')}
+          >
             <Text
               style={[
                 styles.navIcon,
-                screen === 'cart' && styles.activeNavIcon,
+                activeTab === 'cafeterias' && styles.activeNavIcon,
               ]}
             >
-              ▢
+              🏪
             </Text>
+            <Text
+              style={[
+                styles.navText,
+                activeTab === 'cafeterias' && styles.activeNavText,
+              ]}
+            >
+              Cafeterías
+            </Text>
+          </TouchableOpacity>
 
-            {totalProducts > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {totalProducts}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <Text
-            style={[
-              styles.navText,
-              screen === 'cart' && styles.activeNavText,
-            ]}
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => setActiveTab('menu')}
           >
-            Carrito
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={[
+                styles.navIcon,
+                activeTab === 'menu' && styles.activeNavIcon,
+              ]}
+            >
+              ☕
+            </Text>
+            <Text
+              style={[
+                styles.navText,
+                activeTab === 'menu' && styles.activeNavText,
+              ]}
+            >
+              Menú
+            </Text>
+          </TouchableOpacity>
 
-        <View style={styles.navItem}>
-          <Text style={styles.navIcon}>●</Text>
-
-          <Text style={styles.navText}>
-            Perfil
-          </Text>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => setActiveTab('cart')}
+          >
+            <View>
+              <Text
+                style={[
+                  styles.navIcon,
+                  activeTab === 'cart' && styles.activeNavIcon,
+                ]}
+              >
+                🛒
+              </Text>
+              {totalProducts > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{totalProducts}</Text>
+                </View>
+              )}
+            </View>
+            <Text
+              style={[
+                styles.navText,
+                activeTab === 'cart' && styles.activeNavText,
+              ]}
+            >
+              Carrito
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </SafeAreaProvider>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F6F4',
+    backgroundColor: '#FAF7F2',
   },
-
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FAF7F2',
+  },
+  topBar: {
+    backgroundColor: '#FAF7F2',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFE7DD',
+  },
+  topBarTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#4A3728',
+  },
+  logoutBtn: {
+    backgroundColor: '#F5EBE1',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  logoutBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#8C6D58',
+  },
   content: {
     flex: 1,
   },
-
   bottomNavigation: {
-    height: 68,
+    height: 64,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#EDE8E5',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingBottom: 5,
+    paddingBottom: 4,
   },
-
   navItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   navIcon: {
-    fontSize: 18,
-    color: '#A39A96',
-    marginBottom: 3,
+    fontSize: 20,
+    marginBottom: 2,
   },
-
   activeNavIcon: {
-    color: '#4A332C',
+    opacity: 1,
   },
-
   navText: {
-    fontSize: 9,
+    fontSize: 11,
     color: '#A39A96',
   },
-
   activeNavText: {
     color: '#4A332C',
     fontWeight: '700',
   },
-
   badge: {
     position: 'absolute',
-    right: -8,
-    top: -6,
-    minWidth: 15,
-    height: 15,
-    borderRadius: 8,
-    backgroundColor: '#4A332C',
+    right: -10,
+    top: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#E65100',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 4,
   },
-
   badgeText: {
     color: '#FFFFFF',
-    fontSize: 8,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
   },
 });
-
-export default App;
