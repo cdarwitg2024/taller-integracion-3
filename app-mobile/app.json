@@ -1,4 +1,7 @@
 {
   "name": "CoffeeFastApp",
-  "displayName": "CoffeeFastApp"
+  "displayName": "CoffeeFastApp",
+  "plugins": [
+    "expo-asset"
+  ]
 }
