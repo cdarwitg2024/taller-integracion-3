@@ -19,13 +19,7 @@ import pedidosService from '../services/pedidosService';
 
 const drawerWidth = 240;
 
-const iconosPorSeccion = {
-  pedidos: <ReceiptLongIcon />,
-  'scanner-qr': <QrCodeScannerIcon />,
-  dashboard: <DashboardIcon />,
-};
-
-function Sidebar({ menuItems = [], currentPage, onNavigate }) {
+function Sidebar({ currentPage, onNavigate }) {
   const [pendientesCount, setPendientesCount] = useState(0);
 
   useEffect(() => {
@@ -38,6 +32,28 @@ function Sidebar({ menuItems = [], currentPage, onNavigate }) {
     const interval = setInterval(updateCount, 4000);
     return () => clearInterval(interval);
   }, []);
+
+  const menuItems = [
+    {
+      id: 'pedidos',
+      label: 'Pedidos',
+      icon: (
+        <Badge badgeContent={pendientesCount} color="error">
+          <ReceiptLongIcon />
+        </Badge>
+      ),
+    },
+    {
+      id: 'scanner-qr',
+      label: 'Escáner QR',
+      icon: <QrCodeScannerIcon />,
+    },
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: <DashboardIcon />,
+    },
+  ];
 
   return (
     <Drawer
@@ -61,51 +77,40 @@ function Sidebar({ menuItems = [], currentPage, onNavigate }) {
 
       <Box sx={{ overflow: 'auto', mt: 2 }}>
         <List>
-          {menuItems.map((item) => {
-            const selected = currentPage === item.id;
-
-            return (
-              <ListItemButton
-                key={item.id}
-                selected={selected}
-                onClick={() => onNavigate(item.id)}
-                sx={{
-                  mx: 1,
-                  mb: 0.5,
-                  borderRadius: 2,
-                  minHeight: 56,
-                  '&.Mui-selected': {
-                    backgroundColor: '#0284c7',
+          {menuItems.map((item) => (
+            <ListItemButton
+              key={item.id}
+              selected={currentPage === item.id}
+              onClick={() => onNavigate(item.id)}
+              sx={{
+                mx: 1,
+                mb: 0.5,
+                borderRadius: 2,
+                '&.Mui-selected': {
+                  backgroundColor: '#0284c7',
+                  color: '#ffffff',
+                  '& .MuiListItemIcon-root': {
                     color: '#ffffff',
-                    '& .MuiListItemIcon-root': {
-                      color: '#ffffff',
-                    },
-                    '&:hover': {
-                      backgroundColor: '#0369a1',
-                    },
                   },
                   '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    backgroundColor: '#0369a1',
                   },
-                }}
-              >
-                <ListItemIcon sx={{ color: selected ? '#ffffff' : '#94a3b8' }}>
-                  {item.id === 'pedidos' ? (
-                    <Badge badgeContent={pendientesCount} color="error">
-                      {iconosPorSeccion[item.id]}
-                    </Badge>
-                  ) : (
-                    iconosPorSeccion[item.id]
-                  )}
-                </ListItemIcon>
+                },
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: currentPage === item.id ? '#ffffff' : '#94a3b8' }}>
+                {item.icon}
+              </ListItemIcon>
 
-                <ListItemText
-                  primary={item.label}
-                  primaryTypographyProps={{ fontWeight: selected ? 700 : 500 }}
-                />
-              </ListItemButton>
-            );
-          })}
+              <ListItemText
+                primary={item.label}
+                primaryTypographyProps={{ fontWeight: currentPage === item.id ? 700 : 500 }}
+              />
+            </ListItemButton>
+          ))}
         </List>
       </Box>
     </Drawer>

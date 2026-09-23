@@ -1,159 +1,359 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { useState, useEffect } from 'react';
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogActions,
+  Grid,
+  IconButton,
+  Stack,
+  Typography,
+  TextField,
+  Tabs,
+  Tab,
+  InputAdornment,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
+} from '@mui/material';
 
-import KdsTopBar from '../components/KdsTopBar';
-import KanbanColumn from '../components/KanbanColumn';
-import PedidoCard from '../components/PedidoCard';
-import DetallePedidoDialog from '../components/DetallePedidoDialog';
+import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import CheckIcon from '@mui/icons-material/Check';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import PrintIcon from '@mui/icons-material/Print';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
-import pedidosService, { ordenarPedidos } from '../services/pedidosService';
-import kdsRealtime, {
-  ESTADO_CONECTADO,
-  ESTADO_RECONECTANDO,
-} from '../services/kdsRealtime';
-
-const COLUMNAS = [
-  { estado: 'pendiente', titulo: 'Pendiente', backgroundColor: '#F2ECE7' },
-  { estado: 'preparando', titulo: 'En Preparación', backgroundColor: '#FFF3E0' },
-  { estado: 'listo', titulo: 'Listos para Retiro', backgroundColor: '#E8F5E9' },
-];
+import pedidosService from '../services/pedidosService';
 
 function Pedidos() {
   const [pedidos, setPedidos] = useState([]);
   const [selectedPedido, setSelectedPedido] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [conexion, setConexion] = useState(ESTADO_RECONECTANDO);
+  const [tabIndex, setTabIndex] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const pedidosRealtime = useRef(new Map());
-
-  const mergeConSnapshot = useCallback((snapshot) => {
-    setPedidos(prev => {
-      const idsSnap = new Set(snapshot.map(p => String(p.id)));
-      const extra = [];
-      pedidosRealtime.current.forEach((comanda, id) => {
-        if (!idsSnap.has(id) && !prev.some(p => String(p.id) === id)) extra.push(comanda);
-      });
-      return [...extra, ...snapshot];
-    });
-  }, []);
-
-  const fetchPedidos = useCallback(async () => {
+  const fetchPedidos = async () => {
+    setLoading(true);
     const data = await pedidosService.getAll();
-    mergeConSnapshot(data);
+    setPedidos(data);
     setLoading(false);
-  }, [mergeConSnapshot]);
-
-  const agregarComandaRealTime = useCallback((comanda) => {
-    const id = String(comanda.id);
-    pedidosRealtime.current.set(id, comanda);
-    setPedidos(prev => (prev.some(p => String(p.id) === id) ? prev : ordenarPedidos([comanda, ...prev])));
-  }, []);
+  };
 
   useEffect(() => {
     fetchPedidos();
-  }, [fetchPedidos]);
-
-  useEffect(() => {
-    const suscripcion = kdsRealtime.suscribir({
-      onComanda: agregarComandaRealTime,
-      onEstadoCanal: setConexion,
-    });
-    return () => suscripcion.cerrar();
-  }, [agregarComandaRealTime]);
-
-  useEffect(() => {
-    const poll = setInterval(() => {
-      pedidosService.getAll().then(mergeConSnapshot);
-    }, 10000);
-    return () => clearInterval(poll);
-  }, [mergeConSnapshot]);
+  }, []);
 
   const handleCambiarEstado = async (id, nuevoEstado, e) => {
     if (e) e.stopPropagation();
-    await pedidosService.updateEstado(id, nuevoEstado);
+    const updated = await pedidosService.updateEstado(id, nuevoEstado);
     setPedidos(prev => prev.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p));
     if (selectedPedido && selectedPedido.id === id) {
       setSelectedPedido(prev => ({ ...prev, estado: nuevoEstado }));
     }
   };
 
-  const pedidosOrdenados = useMemo(() => ordenarPedidos(pedidos), [pedidos]);
-  const pedidosOperativos = pedidosOrdenados.filter(p =>
-    p.estado === 'pendiente' || p.estado === 'preparando' || p.estado === 'listo'
-  );
+  const estadosFiltro = ['todos', 'pendiente', 'preparando', 'listo', 'entregado'];
+
+  const filteredPedidos = pedidos.filter(p => {
+    const coincideEstado = tabIndex === 0 || p.estado === estadosFiltro[tabIndex];
+    const coincideBusqueda =
+      p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.cliente.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.qr_token.toLowerCase().includes(searchQuery.toLowerCase());
+    return coincideEstado && coincideBusqueda;
+  });
+
+  const getChipForEstado = (estado) => {
+    switch (estado) {
+      case 'pendiente':
+        return <Chip label="Pendiente" color="error" fontWeight={700} />;
+      case 'preparando':
+        return <Chip label="En Preparación" color="warning" fontWeight={700} />;
+      case 'listo':
+        return <Chip label="Listo para Retiro" color="info" fontWeight={700} />;
+      case 'entregado':
+        return <Chip label="Entregado" color="success" fontWeight={700} />;
+      default:
+        return <Chip label={estado} />;
+    }
+  };
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: 'calc(100vh - 128px)',
-        minHeight: 560,
-        pb: 2,
-      }}
-    >
-      <Box sx={{ mb: 2, flexShrink: 0 }}>
-        <KdsTopBar conexion={conexion} />
-      </Box>
-
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1 }}>
-          <CircularProgress size={56} />
+    <Box sx={{ flexGrow: 1, pb: 4 }}>
+      {/* Header */}
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+        <Box>
+          <Typography variant="h4" fontWeight={700} color="primary.main">
+            Gestión de Pedidos
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Administra las comandas activas y actualiza sus estados para los alumnos.
+          </Typography>
         </Box>
-      ) : (
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 3,
-            flexGrow: 1,
-            minHeight: 0,
-          }}
-        >
-          {COLUMNAS.map(col => {
-            const items = pedidosOperativos.filter(p => p.estado === col.estado);
 
-            return (
-              <KanbanColumn
-                key={col.estado}
-                titulo={col.titulo}
-                count={items.length}
-                backgroundColor={col.backgroundColor}
+        <Button startIcon={<RefreshIcon />} variant="outlined" onClick={fetchPedidos}>
+          Refrescar
+        </Button>
+      </Stack>
+
+      {/* Barra de Búsqueda y Pestañas de Filtro */}
+      <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 3 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={7}>
+            <Tabs
+              value={tabIndex}
+              onChange={(e, val) => setTabIndex(val)}
+              variant="scrollable"
+              scrollButtons="auto"
+            >
+              <Tab label={`Todos (${pedidos.length})`} />
+              <Tab label={`Pendientes (${pedidos.filter(p => p.estado === 'pendiente').length})`} />
+              <Tab label={`En Prep. (${pedidos.filter(p => p.estado === 'preparando').length})`} />
+              <Tab label={`Listos (${pedidos.filter(p => p.estado === 'listo').length})`} />
+              <Tab label={`Entregados (${pedidos.filter(p => p.estado === 'entregado').length})`} />
+            </Tabs>
+          </Grid>
+
+          <Grid item xs={12} md={5}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Buscar por ID, cliente o código QR..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* Rejilla de Tarjetas de Pedidos */}
+      <Grid container spacing={3}>
+        {filteredPedidos.length === 0 ? (
+          <Grid item xs={12}>
+            <Box textAlign="center" py={6}>
+              <Typography variant="h6" color="text.secondary">
+                No hay pedidos que coincidan con el filtro seleccionado.
+              </Typography>
+            </Box>
+          </Grid>
+        ) : (
+          filteredPedidos.map((pedido) => (
+            <Grid item xs={12} sm={6} md={4} key={pedido.id}>
+              <Card
+                elevation={3}
+                sx={{
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s',
+                  '&:hover': { transform: 'translateY(-3px)', boxShadow: 6 },
+                  borderTop: `6px solid ${
+                    pedido.estado === 'pendiente'
+                      ? '#d32f2f'
+                      : pedido.estado === 'preparando'
+                      ? '#ed6c02'
+                      : pedido.estado === 'listo'
+                      ? '#0288d1'
+                      : '#2e7d32'
+                  }`,
+                }}
+                onClick={() => setSelectedPedido(pedido)}
               >
-                {items.length === 0 ? (
-                  <Box
-                    sx={{
-                      borderRadius: 3,
-                      border: '2px dashed #C8B2A1',
-                      p: 3,
-                      textAlign: 'center',
-                    }}
-                  >
-                    <Typography sx={{ color: '#78665B', fontWeight: 700 }}>
-                      Sin comandas
+                <CardContent>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                    <Typography variant="h6" fontWeight={800}>
+                      #{pedido.id}
                     </Typography>
-                  </Box>
-                ) : (
-                  items.map(pedido => (
-                    <PedidoCard
-                      key={pedido.id}
-                      pedido={pedido}
-                      onOpen={setSelectedPedido}
-                      onChangeEstado={handleCambiarEstado}
-                    />
-                  ))
-                )}
-              </KanbanColumn>
-            );
-          })}
-        </Box>
-      )}
+                    {getChipForEstado(pedido.estado)}
+                  </Stack>
 
-      <DetallePedidoDialog
-        pedido={selectedPedido}
+                  <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                    {pedido.cliente}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                    ⏰ {pedido.hora} - {pedido.ubicacion}
+                  </Typography>
+
+                  <Divider sx={{ my: 1.5 }} />
+
+                  <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                    PRODUCTOS ({pedido.productos?.length || 0}):
+                  </Typography>
+                  <List disablePadding sx={{ my: 1 }}>
+                    {pedido.productos?.slice(0, 2).map((item, idx) => (
+                      <ListItem key={idx} disableGutters sx={{ py: 0.2 }}>
+                        <ListItemText
+                          primary={`${item.cantidad}x ${item.nombre}`}
+                          primaryTypographyProps={{ variant: 'body2' }}
+                        />
+                      </ListItem>
+                    ))}
+                    {(pedido.productos?.length || 0) > 2 && (
+                      <Typography variant="caption" color="primary">
+                        +{(pedido.productos.length - 2)} más...
+                      </Typography>
+                    )}
+                  </List>
+
+                  <Divider sx={{ my: 1.5 }} />
+
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography variant="subtitle1" fontWeight={800} color="success.main">
+                      ${pedido.total?.toLocaleString('es-CL')}
+                    </Typography>
+
+                    {/* Botones de acción directa según estado */}
+                    {pedido.estado === 'pendiente' && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="warning"
+                        startIcon={<PlayArrowIcon />}
+                        onClick={(e) => handleCambiarEstado(pedido.id, 'preparando', e)}
+                      >
+                        Preparar
+                      </Button>
+                    )}
+                    {pedido.estado === 'preparando' && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="info"
+                        startIcon={<CheckIcon />}
+                        onClick={(e) => handleCambiarEstado(pedido.id, 'listo', e)}
+                      >
+                        Marcar Listo
+                      </Button>
+                    )}
+                    {pedido.estado === 'listo' && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        startIcon={<LocalShippingIcon />}
+                        onClick={(e) => handleCambiarEstado(pedido.id, 'entregado', e)}
+                      >
+                        Entregar
+                      </Button>
+                    )}
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))
+        )}
+      </Grid>
+
+      {/* Modal Detalle de Pedido */}
+      <Dialog
+        open={Boolean(selectedPedido)}
         onClose={() => setSelectedPedido(null)}
-        onChangeEstado={handleCambiarEstado}
-      />
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        {selectedPedido && (
+          <>
+            <DialogTitle sx={{ pb: 1 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="h5" fontWeight={800}>
+                  Detalle de Comanda #{selectedPedido.id}
+                </Typography>
+                <IconButton onClick={() => setSelectedPedido(null)}>
+                  <CloseIcon />
+                </IconButton>
+              </Stack>
+            </DialogTitle>
+
+            <DialogContent dividers>
+              <Stack spacing={1} sx={{ mb: 2 }}>
+                <Typography variant="body1"><strong>Cliente:</strong> {selectedPedido.cliente}</Typography>
+                <Typography variant="body2"><strong>Lugar de Entrega:</strong> {selectedPedido.ubicacion}</Typography>
+                <Typography variant="body2"><strong>Código QR:</strong> <code>{selectedPedido.qr_token}</code></Typography>
+                <Typography variant="body2"><strong>Estado Actual:</strong> {getChipForEstado(selectedPedido.estado)}</Typography>
+              </Stack>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                Ítems del Pedido:
+              </Typography>
+              <List disablePadding>
+                {selectedPedido.productos?.map((prod, idx) => (
+                  <ListItem key={idx} disableGutters>
+                    <ListItemText
+                      primary={`${prod.cantidad}x ${prod.nombre}`}
+                      secondary={prod.detalle}
+                    />
+                    <Typography fontWeight={700}>
+                      ${(prod.precio * prod.cantidad).toLocaleString('es-CL')}
+                    </Typography>
+                  </ListItem>
+                ))}
+              </List>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="h6" fontWeight={800}>Total a Pagar:</Typography>
+                <Typography variant="h5" fontWeight={800} color="success.main">
+                  ${selectedPedido.total?.toLocaleString('es-CL')}
+                </Typography>
+              </Stack>
+            </DialogContent>
+
+            <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
+              <Button startIcon={<PrintIcon />} variant="outlined">
+                Imprimir Comanda
+              </Button>
+
+              <Stack direction="row" spacing={1}>
+                {selectedPedido.estado === 'pendiente' && (
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={() => handleCambiarEstado(selectedPedido.id, 'preparando')}
+                  >
+                    Iniciar Preparación
+                  </Button>
+                )}
+                {selectedPedido.estado === 'preparando' && (
+                  <Button
+                    variant="contained"
+                    color="info"
+                    onClick={() => handleCambiarEstado(selectedPedido.id, 'listo')}
+                  >
+                    Marcar Como Listo
+                  </Button>
+                )}
+                {selectedPedido.estado === 'listo' && (
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={() => handleCambiarEstado(selectedPedido.id, 'entregado')}
+                  >
+                    Confirmar Entrega
+                  </Button>
+                )}
+              </Stack>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 }

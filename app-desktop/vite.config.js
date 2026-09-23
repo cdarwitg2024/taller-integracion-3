@@ -3,8 +3,6 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: './',
 });
 
 //Esto le dice a Vite que el proyecto utiliza React.
-//base './' permite que el build funcione cargado desde file:// en Electron.

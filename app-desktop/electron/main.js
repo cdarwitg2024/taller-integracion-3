@@ -1,14 +1,10 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
-const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
-
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    minWidth: 1024,
-    minHeight: 768,
 
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -17,11 +13,7 @@ function createWindow() {
     },
   });
 
-  if (isDev) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
-  }
+  mainWindow.loadURL('http://localhost:5173');
 }
 
 app.whenReady().then(() => {
