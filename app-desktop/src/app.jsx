@@ -3,6 +3,7 @@ import { Box, CssBaseline } from '@mui/material';
 
 import Sidebar from './components/sidebar';
 import Dashboard from './pages/dashboard';
+import Pedidos from './pages/pedidos';
 import Productos from './pages/productos';
 import Inventario from './pages/inventario';
 import Login from './pages/login';
@@ -67,6 +68,9 @@ function App() {
       case 'dashboard':
         return <Dashboard currentUser={currentUser} />;
 
+      case 'pedidos':
+        return <Pedidos currentUser={currentUser} />;
+
       case 'productos':
         return <Productos currentUser={currentUser} />;
 
@@ -78,19 +82,18 @@ function App() {
     }
   };
 
-
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#FAF7F5', width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
       <CssBaseline />
 
-      {/* 1. Sidebar / Menú exclusivo de Dueño */}
+      {/* 1. Sidebar / Menú de navegación */}
       <Sidebar
         currentPage={currentPage}
         onNavigate={setCurrentPage}
         onLogout={handleLogout}
       />
 
-      {/* Contenedor principal para las páginas del Panel de Dueño */}
+      {/* Contenedor principal para las páginas */}
       <Box
         component="main"
         sx={{

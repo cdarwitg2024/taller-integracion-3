@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   Drawer,
   List,
@@ -6,23 +7,55 @@ import {
   ListItemText,
   Typography,
   Box,
-  Divider,
+  Badge,
 } from '@mui/material';
 
 import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlined';
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 
+import pedidosService from '../services/pedidosService';
+
 const drawerWidth = 260;
 
-function Sidebar({ currentPage, onNavigate, onLogout }) {
-  // Ítems exclusivos para el Panel de Dueño
-  const menuItems = [
+function Sidebar({ currentPage, onNavigate, onLogout, menuItems }) {
+  const [pendientesCount, setPendientesCount] = useState(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    const updateCount = async () => {
+      try {
+        const pedidos = await pedidosService.getAll();
+        if (isMounted && Array.isArray(pedidos)) {
+          const count = pedidos.filter(
+            (p) => p.estado === 'pendiente' || p.estado === 'preparando'
+          ).length;
+          setPendientesCount(count);
+        }
+      } catch (err) {
+        // Silently ignore
+      }
+    };
+    updateCount();
+    const interval = setInterval(updateCount, 5000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const defaultMenuItems = [
     {
       id: 'dashboard',
       label: 'Dashboard',
       icon: <SpaceDashboardOutlinedIcon fontSize="small" />,
+    },
+    {
+      id: 'pedidos',
+      label: 'Comandas',
+      icon: <ReceiptLongOutlinedIcon fontSize="small" />,
     },
     {
       id: 'productos',
@@ -35,6 +68,8 @@ function Sidebar({ currentPage, onNavigate, onLogout }) {
       icon: <Inventory2OutlinedIcon fontSize="small" />,
     },
   ];
+
+  const items = menuItems || defaultMenuItems;
 
   return (
     <Drawer
@@ -77,15 +112,23 @@ function Sidebar({ currentPage, onNavigate, onLogout }) {
               mt: 0.3,
             }}
           >
-            Panel de Dueño
+            Panel de Control
           </Typography>
         </Box>
 
-        {/* Lista de navegación exclusiva para el Panel de Dueño */}
+        {/* Lista de navegación */}
         <Box sx={{ px: 1.5, mt: 1 }}>
           <List disablePadding>
-            {menuItems.map((item) => {
+            {items.map((item) => {
               const isActive = currentPage === item.id;
+              const iconElement = item.id === 'pedidos' ? (
+                <Badge badgeContent={pendientesCount} color="error" max={99}>
+                  {item.icon}
+                </Badge>
+              ) : (
+                item.icon
+              );
+
               return (
                 <ListItemButton
                   key={item.id}
@@ -117,7 +160,7 @@ function Sidebar({ currentPage, onNavigate, onLogout }) {
                       color: isActive ? '#FFFFFF' : '#C4B5A7',
                     }}
                   >
-                    {item.icon}
+                    {iconElement}
                   </ListItemIcon>
                   <ListItemText
                     primary={item.label}

@@ -8,3 +8,4 @@ export default defineConfig({
 });
 
 //Esto le dice a Vite que el proyecto utiliza React.
+//base './' permite que el build funcione cargado desde file:// en Electron.

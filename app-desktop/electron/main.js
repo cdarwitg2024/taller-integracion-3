@@ -4,10 +4,14 @@ const fs = require('fs');
 
 app.disableHardwareAcceleration();
 
+const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
+
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    minWidth: 1024,
+    minHeight: 768,
 
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -16,8 +20,8 @@ function createWindow() {
     },
   });
 
-  const devUrl = 'http://localhost:5173';
-  const distPath = path.join(__dirname, '../dist/index.html');
+  const devUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+  const distPath = path.join(__dirname, '..', 'dist', 'index.html');
 
   if (process.env.NODE_ENV === 'production' || app.isPackaged) {
     mainWindow.loadFile(distPath);

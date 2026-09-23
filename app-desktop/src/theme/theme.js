@@ -56,6 +56,49 @@ const theme = createTheme({
   shape: {
     borderRadius: 12,
   },
+
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          minHeight: 48,
+          minWidth: 48,
+          fontSize: '1rem',
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          minHeight: 48,
+          minWidth: 48,
+        },
+      },
+    },
+    MuiListItemButton: {
+      styleOverrides: {
+        root: {
+          minHeight: 56,
+        },
+      },
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: {
+          minHeight: 48,
+        },
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          '& .MuiOutlinedInput-root': {
+            minHeight: 48,
+          },
+        },
+      },
+    },
+  },
 });
 
 export default theme;
