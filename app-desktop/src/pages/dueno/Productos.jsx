@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
   Paper,
+  Grid,
   TextField,
   Button,
   Table,
@@ -13,6 +15,7 @@ import {
   TableRow,
   Chip,
   IconButton,
+  Tooltip,
   Dialog,
   DialogContent,
   Stack,
@@ -25,24 +28,49 @@ import {
   FormControlLabel,
   Switch,
   InputAdornment,
+  Card,
+  CardContent,
+  Divider,
 } from '@mui/material';
 
 import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import PriceChangeOutlinedIcon from '@mui/icons-material/PriceChangeOutlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
+import SortIcon from '@mui/icons-material/Sort';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import ErrorOutlinedIcon from '@mui/icons-material/ErrorOutlined';
+import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
+import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
+import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 
 import { productos as productosService } from '../../service/productos';
 import { cafeterias as cafeteriasService } from '../../service/cafeterias';
 import { categorias as categoriasService } from '../../service/categorias';
+import ModificarPrecioDialog from '../../components/productos/ModificarPrecioDialog';
+import ModificarStockDialog from '../../components/productos/ModificarStockDialog';
 
 function CatalogoProductos() {
+  const navigate = useNavigate();
+
   const [productos, setProductos] = useState([]);
   const [cafeteriasList, setCafeteriasList] = useState([]);
   const [categoriasList, setCategoriasList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategoria, setSelectedCategoria] = useState('todas');
+  const [selectedCafeteria, setSelectedCafeteria] = useState('todas');
+  const [selectedEstado, setSelectedEstado] = useState('todos');
+  const [sortBy, setSortBy] = useState('nombre_asc');
   
   // Diálogo y formulario de edición (FR-44)
   const [selectedProducto, setSelectedProducto] = useState(null);
@@ -80,6 +108,46 @@ function CatalogoProductos() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productoToDelete, setProductoToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Operación separada: Diálogo para Modificar Precio (FR-46)
+  const [precioDialogOpen, setPrecioDialogOpen] = useState(false);
+  const [productoParaPrecio, setProductoParaPrecio] = useState(null);
+
+  // Operación separada: Diálogo para Modificar Stock (FR-47)
+  const [stockDialogOpen, setStockDialogOpen] = useState(false);
+  const [productoParaStock, setProductoParaStock] = useState(null);
+
+  const handleOpenPrecio = (prod) => {
+    setProductoParaPrecio(prod);
+    setPrecioDialogOpen(true);
+  };
+
+  const handleOpenStock = (prod) => {
+    setProductoParaStock(prod);
+    setStockDialogOpen(true);
+  };
+
+  const handlePrecioSuccess = (updatedProd, message) => {
+    setProductos((prev) =>
+      prev.map((p) => (p.id === updatedProd.id ? { ...p, ...updatedProd } : p))
+    );
+    setSnackbar({
+      open: true,
+      message: message || 'Precio actualizado exitosamente.',
+      severity: 'success',
+    });
+  };
+
+  const handleStockSuccess = (updatedProd, message) => {
+    setProductos((prev) =>
+      prev.map((p) => (p.id === updatedProd.id ? { ...p, ...updatedProd } : p))
+    );
+    setSnackbar({
+      open: true,
+      message: message || 'Stock actualizado exitosamente.',
+      severity: 'success',
+    });
+  };
 
   // Snackbar para notificaciones
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -324,22 +392,172 @@ function CatalogoProductos() {
     }
   };
 
-  const filtered = productos.filter((p) =>
-    (p.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.categoria || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Métricas rápidas para filtros y KPI
+  const totalCount = productos.length;
+  const disponiblesCount = productos.filter((p) => p.activo && Number(p.stock || 0) > 0).length;
+  const stockBajoCount = productos.filter((p) => {
+    const s = Number(p.stock || 0);
+    const m = Number(p.stock_minimo ?? p.minimo ?? 0);
+    return s > 0 && s <= m;
+  }).length;
+  const sinStockCount = productos.filter((p) => Number(p.stock || 0) <= 0).length;
+  const optimosCount = productos.filter((p) => {
+    const s = Number(p.stock || 0);
+    const m = Number(p.stock_minimo ?? p.minimo ?? 0);
+    return s > m;
+  }).length;
+  const inactivosCount = productos.filter((p) => !p.activo).length;
+
+  // Valor total del inventario para KPI financiero
+  const valorTotalInventario = useMemo(() => {
+    return productos.reduce((acc, p) => {
+      const stock = Number(p.stock || 0);
+      const precio = Number(p.precio || 0);
+      return acc + (stock > 0 && precio > 0 ? stock * precio : 0);
+    }, 0);
+  }, [productos]);
+
+  const formatPrecio = (num) => {
+    return new Intl.NumberFormat('es-CL', {
+      style: 'currency',
+      currency: 'CLP',
+      maximumFractionDigits: 0,
+    }).format(Number(num) || 0);
+  };
+
+  // Lista unificada de categorías
+  const categoriasUnicas = useMemo(() => {
+    const map = new Map();
+    categoriasList.forEach((c) => {
+      if (c && c.nombre) map.set(String(c.id), c.nombre);
+    });
+    productos.forEach((p) => {
+      if (p.categoria && !map.has(p.categoria)) {
+        map.set(p.categoria, p.categoria);
+      }
+    });
+    return Array.from(map.entries()).map(([id, nombre]) => ({ id, nombre }));
+  }, [categoriasList, productos]);
+
+  const hasActiveFilters =
+    Boolean(searchTerm.trim()) ||
+    selectedCategoria !== 'todas' ||
+    selectedCafeteria !== 'todas' ||
+    selectedEstado !== 'todos' ||
+    sortBy !== 'nombre_asc';
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setSelectedCategoria('todas');
+    setSelectedCafeteria('todas');
+    setSelectedEstado('todos');
+    setSortBy('nombre_asc');
+  };
+
+  // Filtrado y ordenamiento inteligente avanzado
+  const filtered = useMemo(() => {
+    const result = productos.filter((p) => {
+      // 1. Buscador de texto (nombre, categoría, descripción)
+      const term = searchTerm.trim().toLowerCase();
+      const matchSearch =
+        !term ||
+        (p.nombre || '').toLowerCase().includes(term) ||
+        (p.categoria || '').toLowerCase().includes(term) ||
+        (p.descripcion || '').toLowerCase().includes(term);
+
+      // 2. Filtro de Categoría
+      const matchCat =
+        selectedCategoria === 'todas' ||
+        String(p.categoria_id) === String(selectedCategoria) ||
+        (p.categoria || '').toLowerCase() === selectedCategoria.toLowerCase();
+
+      // 3. Filtro de Cafetería
+      const matchCafeteria =
+        selectedCafeteria === 'todas' ||
+        String(p.cafeteria_id) === String(selectedCafeteria);
+
+      // 4. Filtro de Estado / Disponibilidad
+      const stockNum = Number(p.stock || 0);
+      const minVal = Number(p.stock_minimo ?? p.minimo ?? 0);
+      const isSinStock = stockNum <= 0;
+      const isBajo = stockNum > 0 && stockNum <= minVal;
+      const isOptimo = stockNum > minVal;
+      const isActivo = Boolean(p.activo);
+
+      let matchEstado = true;
+      if (selectedEstado === 'disponibles') {
+        matchEstado = isActivo && stockNum > 0;
+      } else if (selectedEstado === 'reposicion') {
+        matchEstado = isSinStock || isBajo;
+      } else if (selectedEstado === 'Sin Stock') {
+        matchEstado = isSinStock;
+      } else if (selectedEstado === 'Stock Bajo') {
+        matchEstado = isBajo;
+      } else if (selectedEstado === 'optimo') {
+        matchEstado = isOptimo;
+      } else if (selectedEstado === 'inactivos') {
+        matchEstado = !isActivo;
+      }
+
+      return matchSearch && matchCat && matchCafeteria && matchEstado;
+    });
+
+    result.sort((a, b) => {
+      const stockA = Number(a.stock || 0);
+      const stockB = Number(b.stock || 0);
+      const precioA = Number(a.precio || 0);
+      const precioB = Number(b.precio || 0);
+
+      if (sortBy === 'precio_desc') return precioB - precioA;
+      if (sortBy === 'precio_asc') return precioA - precioB;
+      if (sortBy === 'stock_asc') return stockA - stockB;
+      if (sortBy === 'stock_desc') return stockB - stockA;
+      if (sortBy === 'nombre_asc') {
+        return (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' });
+      }
+      if (sortBy === 'nombre_desc') {
+        return (b.nombre || '').localeCompare(a.nombre || '', 'es', { sensitivity: 'base' });
+      }
+      return 0;
+    });
+
+    return result;
+  }, [productos, searchTerm, selectedCategoria, selectedCafeteria, selectedEstado, sortBy]);
 
   return (
     <Box sx={{ flexGrow: 1, pb: 4 }}>
-      {/* Título de la página y botones de acción */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography
-          variant="h5"
-          fontWeight={800}
-          sx={{ color: '#4A3728', letterSpacing: '-0.5px' }}
-        >
-          Catálogo de Productos
-        </Typography>
+      {/* Título unificado y acciones principales */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, gap: 1.5 }}>
+        <Box>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                borderRadius: '12px',
+                backgroundColor: '#FAF2EA',
+                color: '#C86237',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <StorefrontOutlinedIcon />
+            </Box>
+            <Box>
+              <Typography
+                variant="h5"
+                fontWeight={800}
+                sx={{ color: '#4A3728', letterSpacing: '-0.5px' }}
+              >
+                Gestión de Productos y Stock
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
+                Catálogo general, control de precios, existencias y valorización de inventario
+              </Typography>
+            </Box>
+          </Stack>
+        </Box>
 
         <Stack direction="row" spacing={1.5}>
           <Button
@@ -384,70 +602,561 @@ function CatalogoProductos() {
         </Stack>
       </Box>
 
-      {/* Tarjeta contenedora principal */}
+      {/* 5 Tarjetas KPI con Métricas y Valorización Total */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        {/* Total Productos */}
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+          <Tooltip title="Ver todos los productos registrados">
+            <Card
+              elevation={0}
+              onClick={() => setSelectedEstado('todos')}
+              sx={{
+                p: 1.5,
+                borderRadius: '14px',
+                border: '1px solid #EFEAE6',
+                bgcolor: '#FFFFFF',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 4px 12px rgba(74, 55, 40, 0.08)' },
+              }}
+            >
+              <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '10px',
+                      bgcolor: '#F5EBE1',
+                      color: '#6F4E37',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <MenuBookOutlinedIcon fontSize="small" />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
+                      Total Catálogo
+                    </Typography>
+                    <Typography variant="h6" fontWeight={800} sx={{ color: '#3E2D22' }}>
+                      {totalCount}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Tooltip>
+        </Grid>
+
+        {/* Valor Total del Inventario */}
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+          <Card
+            elevation={0}
+            sx={{
+              p: 1.5,
+              borderRadius: '14px',
+              border: '1px solid #EFEAE6',
+              bgcolor: '#FFFFFF',
+            }}
+          >
+            <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Box
+                  sx={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: '10px',
+                    bgcolor: '#EDE7F6',
+                    color: '#5E35B1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <AccountBalanceWalletOutlinedIcon fontSize="small" />
+                </Box>
+                <Box>
+                  <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
+                    Valor Inventario
+                  </Typography>
+                  <Typography variant="h6" fontWeight={800} sx={{ color: '#3E2D22' }}>
+                    {formatPrecio(valorTotalInventario)}
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Sin Stock */}
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+          <Tooltip title={selectedEstado === 'Sin Stock' ? 'Quitar filtro' : 'Filtrar productos sin stock'}>
+            <Card
+              elevation={0}
+              onClick={() => setSelectedEstado(selectedEstado === 'Sin Stock' ? 'todos' : 'Sin Stock')}
+              sx={{
+                p: 1.5,
+                borderRadius: '14px',
+                border: selectedEstado === 'Sin Stock' ? '2px solid #B71C1C' : sinStockCount > 0 ? '1px solid #FFCDD2' : '1px solid #EFEAE6',
+                bgcolor: sinStockCount > 0 ? '#FFEBEE' : '#FFFFFF',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: selectedEstado === 'Sin Stock' ? '0 4px 12px rgba(183, 28, 28, 0.2)' : 'none',
+                '&:hover': { transform: 'translateY(-2px)' },
+              }}
+            >
+              <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '10px',
+                      bgcolor: sinStockCount > 0 ? '#FFCDD2' : '#F5F5F5',
+                      color: sinStockCount > 0 ? '#B71C1C' : '#757575',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <ErrorOutlinedIcon fontSize="small" />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
+                      Sin Stock (0 unid.)
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      fontWeight={800}
+                      sx={{ color: sinStockCount > 0 ? '#B71C1C' : '#3E2D22' }}
+                    >
+                      {sinStockCount}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Tooltip>
+        </Grid>
+
+        {/* Stock Bajo */}
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+          <Tooltip title={selectedEstado === 'Stock Bajo' ? 'Quitar filtro' : 'Filtrar stock bajo o crítico'}>
+            <Card
+              elevation={0}
+              onClick={() => setSelectedEstado(selectedEstado === 'Stock Bajo' ? 'todos' : 'Stock Bajo')}
+              sx={{
+                p: 1.5,
+                borderRadius: '14px',
+                border: selectedEstado === 'Stock Bajo' ? '2px solid #E65100' : stockBajoCount > 0 ? '1px solid #FFE0B2' : '1px solid #EFEAE6',
+                bgcolor: stockBajoCount > 0 ? '#FFF3E0' : '#FFFFFF',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: selectedEstado === 'Stock Bajo' ? '0 4px 12px rgba(230, 81, 0, 0.2)' : 'none',
+                '&:hover': { transform: 'translateY(-2px)' },
+              }}
+            >
+              <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '10px',
+                      bgcolor: stockBajoCount > 0 ? '#FFE0B2' : '#F5F5F5',
+                      color: stockBajoCount > 0 ? '#E65100' : '#757575',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <WarningAmberIcon fontSize="small" />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
+                      Stock Bajo (≤ Mínimo)
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      fontWeight={800}
+                      sx={{ color: stockBajoCount > 0 ? '#E65100' : '#3E2D22' }}
+                    >
+                      {stockBajoCount}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Tooltip>
+        </Grid>
+
+        {/* Stock Óptimo */}
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+          <Tooltip title={selectedEstado === 'optimo' ? 'Quitar filtro' : 'Filtrar productos con stock óptimo'}>
+            <Card
+              elevation={0}
+              onClick={() => setSelectedEstado(selectedEstado === 'optimo' ? 'todos' : 'optimo')}
+              sx={{
+                p: 1.5,
+                borderRadius: '14px',
+                border: selectedEstado === 'optimo' ? '2px solid #2E7D32' : '1px solid #EFEAE6',
+                bgcolor: '#FFFFFF',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: selectedEstado === 'optimo' ? '0 4px 12px rgba(46, 125, 50, 0.2)' : 'none',
+                '&:hover': { transform: 'translateY(-2px)' },
+              }}
+            >
+              <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '10px',
+                      bgcolor: '#E8F5E9',
+                      color: '#2E7D32',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <CheckCircleOutlinedIcon fontSize="small" />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
+                      Stock Óptimo
+                    </Typography>
+                    <Typography variant="h6" fontWeight={800} sx={{ color: '#2E7D32' }}>
+                      {optimosCount}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Tooltip>
+        </Grid>
+      </Grid>
+
+      {/* Tarjeta contenedora principal con Filtros y Tabla */}
       <Paper
         elevation={0}
         sx={{
-          p: 3.5,
+          p: 3,
           borderRadius: '16px',
           border: '1px solid #EFEAE6',
           backgroundColor: '#FFFFFF',
           boxShadow: '0 2px 10px rgba(74, 55, 40, 0.04)',
         }}
       >
-        {/* Barra de búsqueda */}
+        {/* ======================================================== */}
+        {/* PANEL DE BÚSQUEDA Y FILTROS AVANZADOS (SIN EMOJIS)        */}
+        {/* ======================================================== */}
         <Box sx={{ mb: 3 }}>
-          <Typography
-            variant="subtitle2"
-            fontWeight={700}
-            sx={{ color: '#4A3728', mb: 1 }}
-          >
-            Buscar Producto
-          </Typography>
+          <Stack spacing={2}>
+            {/* Fila 1: Buscador de texto, Categoría, Cafetería, Estado y Orden */}
+            <Grid container spacing={1.5} alignItems="center">
+              {/* Buscador de texto con icono y botón de borrado */}
+              <Grid size={{ xs: 12, md: cafeteriasList.length > 1 ? 3.5 : 4.5 }}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="Buscar por nombre, categoría o descripción..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ color: '#8C7A6F', fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: searchTerm ? (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setSearchTerm('')}>
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ) : null,
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: '12px',
+                      backgroundColor: '#FAF7F5',
+                      fontSize: '0.85rem',
+                      '& fieldset': { borderColor: '#E8E1DA' },
+                      '&:hover fieldset': { borderColor: '#C8B2A1' },
+                      '&.Mui-focused fieldset': { borderColor: '#4A3728' },
+                    },
+                  }}
+                />
+              </Grid>
 
-          <Stack direction="row" spacing={1.5} sx={{ maxWidth: 500 }}>
-            <TextField
-              size="small"
-              fullWidth
-              placeholder="Ingrese el nombre del Producto para buscarlo"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '24px',
-                  backgroundColor: '#F8F6F4',
-                  fontSize: '0.85rem',
-                  '& fieldset': {
-                    borderColor: '#E8E1DA',
-                  },
-                  '&:hover fieldset': {
-                    borderColor: '#C8B2A1',
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: '#4A3728',
-                  },
-                },
-              }}
-            />
+              {/* Selector de Categoría */}
+              <Grid size={{ xs: 12, sm: 6, md: cafeteriasList.length > 1 ? 2.5 : 2.5 }}>
+                <FormControl size="small" fullWidth>
+                  <Select
+                    value={selectedCategoria}
+                    onChange={(e) => setSelectedCategoria(e.target.value)}
+                    displayEmpty
+                    sx={{
+                      borderRadius: '12px',
+                      backgroundColor: '#FAF7F5',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <MenuItem value="todas">Todas las Categorías</MenuItem>
+                    {categoriasUnicas.map((cat) => (
+                      <MenuItem key={cat.id} value={cat.id}>
+                        {cat.nombre}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
 
-            <Button
-              variant="contained"
+              {/* Selector de Cafetería (si hay más de 1) */}
+              {cafeteriasList.length > 1 && (
+                <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+                  <FormControl size="small" fullWidth>
+                    <Select
+                      value={selectedCafeteria}
+                      onChange={(e) => setSelectedCafeteria(e.target.value)}
+                      displayEmpty
+                      sx={{
+                        borderRadius: '12px',
+                        backgroundColor: '#FAF7F5',
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      <MenuItem value="todas">Todas las Cafeterías</MenuItem>
+                      {cafeteriasList.map((caf) => (
+                        <MenuItem key={caf.id} value={caf.id}>
+                          {caf.nombre}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+
+              {/* Selector de Estado / Disponibilidad (SIN EMOJIS) */}
+              <Grid size={{ xs: 12, sm: 6, md: cafeteriasList.length > 1 ? 2 : 2.5 }}>
+                <FormControl size="small" fullWidth>
+                  <Select
+                    value={selectedEstado}
+                    onChange={(e) => setSelectedEstado(e.target.value)}
+                    displayEmpty
+                    sx={{
+                      borderRadius: '12px',
+                      backgroundColor: '#FAF7F5',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <MenuItem value="todos">Todos los Estados</MenuItem>
+                    <MenuItem value="disponibles">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CheckCircleOutlinedIcon sx={{ fontSize: 16, color: '#2E7D32' }} />
+                        Disponibles para Venta
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="reposicion">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <WarningAmberIcon sx={{ fontSize: 16, color: '#C62828' }} />
+                        Requiere Reposición
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="Sin Stock">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ErrorOutlinedIcon sx={{ fontSize: 16, color: '#B71C1C' }} />
+                        Sin Stock (0 unid.)
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="Stock Bajo">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <WarningAmberIcon sx={{ fontSize: 16, color: '#E65100' }} />
+                        Stock Bajo (≤ Mínimo)
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="optimo">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CheckCircleOutlinedIcon sx={{ fontSize: 16, color: '#2E7D32' }} />
+                        Stock Óptimo
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="inactivos">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <BlockOutlinedIcon sx={{ fontSize: 16, color: '#757575' }} />
+                        Inactivos / Ocultos
+                      </Box>
+                    </MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {/* Selector de Ordenamiento */}
+              <Grid size={{ xs: 12, sm: 6, md: cafeteriasList.length > 1 ? 2 : 2.5 }}>
+                <FormControl size="small" fullWidth>
+                  <Select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    startAdornment={
+                      <InputAdornment position="start">
+                        <SortIcon sx={{ color: '#8C7A6F', fontSize: 18 }} />
+                      </InputAdornment>
+                    }
+                    sx={{
+                      borderRadius: '12px',
+                      backgroundColor: '#FAF7F5',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <MenuItem value="nombre_asc">Nombre: A → Z</MenuItem>
+                    <MenuItem value="nombre_desc">Nombre: Z → A</MenuItem>
+                    <MenuItem value="precio_desc">Precio: Mayor a Menor</MenuItem>
+                    <MenuItem value="precio_asc">Precio: Menor a Mayor</MenuItem>
+                    <MenuItem value="stock_asc">Menor Stock Primero</MenuItem>
+                    <MenuItem value="stock_desc">Mayor Stock Primero</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+
+            {/* Fila 2: Chips interactivos de acceso rápido con iconos y contador */}
+            <Box
               sx={{
-                backgroundColor: '#7A5E4E',
-                color: '#FFFFFF',
-                borderRadius: '24px',
-                px: 3,
-                textTransform: 'none',
-                fontWeight: 600,
-                boxShadow: 'none',
-                '&:hover': {
-                  backgroundColor: '#5A4335',
-                  boxShadow: 'none',
-                },
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                pt: 1,
+                borderTop: '1px solid #F4EFEB',
+                gap: 1.5,
               }}
             >
-              Buscar
-            </Button>
+              {/* Chips de filtro rápido por estado con iconos */}
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 0.8 }}>
+                <Chip
+                  label={`Todos (${totalCount})`}
+                  size="small"
+                  onClick={() => setSelectedEstado('todos')}
+                  sx={{
+                    backgroundColor: selectedEstado === 'todos' ? '#4A3728' : '#FAF5F0',
+                    color: selectedEstado === 'todos' ? '#FFFFFF' : '#6E5C50',
+                    fontWeight: 700,
+                    fontSize: '0.72rem',
+                    cursor: 'pointer',
+                    '&:hover': {
+                      backgroundColor: selectedEstado === 'todos' ? '#38281E' : '#EFEAE6',
+                    },
+                  }}
+                />
+                <Chip
+                  label={`Disponibles (${disponiblesCount})`}
+                  size="small"
+                  icon={<CheckCircleOutlinedIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />}
+                  onClick={() => setSelectedEstado(selectedEstado === 'disponibles' ? 'todos' : 'disponibles')}
+                  sx={{
+                    backgroundColor: selectedEstado === 'disponibles' ? '#2E7D32' : '#F1F8E9',
+                    color: selectedEstado === 'disponibles' ? '#FFFFFF' : '#2E7D32',
+                    fontWeight: 700,
+                    fontSize: '0.72rem',
+                    cursor: 'pointer',
+                    border: '1px solid',
+                    borderColor: selectedEstado === 'disponibles' ? '#2E7D32' : '#C8E6C9',
+                    '&:hover': {
+                      backgroundColor: selectedEstado === 'disponibles' ? '#1B5E20' : '#E8F5E9',
+                    },
+                  }}
+                />
+                <Chip
+                  label={`Stock Bajo (${stockBajoCount})`}
+                  size="small"
+                  icon={<WarningAmberIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />}
+                  onClick={() => setSelectedEstado(selectedEstado === 'Stock Bajo' ? 'todos' : 'Stock Bajo')}
+                  sx={{
+                    backgroundColor: selectedEstado === 'Stock Bajo' ? '#E65100' : '#FFF3E0',
+                    color: selectedEstado === 'Stock Bajo' ? '#FFFFFF' : '#E65100',
+                    fontWeight: 700,
+                    fontSize: '0.72rem',
+                    cursor: 'pointer',
+                    border: '1px solid',
+                    borderColor: selectedEstado === 'Stock Bajo' ? '#E65100' : '#FFE0B2',
+                    '&:hover': {
+                      backgroundColor: selectedEstado === 'Stock Bajo' ? '#BF360C' : '#FFE0B2',
+                    },
+                  }}
+                />
+                <Chip
+                  label={`Sin Stock (${sinStockCount})`}
+                  size="small"
+                  icon={<ErrorOutlinedIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />}
+                  onClick={() => setSelectedEstado(selectedEstado === 'Sin Stock' ? 'todos' : 'Sin Stock')}
+                  sx={{
+                    backgroundColor: selectedEstado === 'Sin Stock' ? '#B71C1C' : '#FFEBEE',
+                    color: selectedEstado === 'Sin Stock' ? '#FFFFFF' : '#B71C1C',
+                    fontWeight: 700,
+                    fontSize: '0.72rem',
+                    cursor: 'pointer',
+                    border: '1px solid',
+                    borderColor: selectedEstado === 'Sin Stock' ? '#B71C1C' : '#FFCDD2',
+                    '&:hover': {
+                      backgroundColor: selectedEstado === 'Sin Stock' ? '#880E4F' : '#FFCDD2',
+                    },
+                  }}
+                />
+                {inactivosCount > 0 && (
+                  <Chip
+                    label={`Inactivos (${inactivosCount})`}
+                    size="small"
+                    icon={<BlockOutlinedIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />}
+                    onClick={() => setSelectedEstado(selectedEstado === 'inactivos' ? 'todos' : 'inactivos')}
+                    sx={{
+                      backgroundColor: selectedEstado === 'inactivos' ? '#616161' : '#F5F5F5',
+                      color: selectedEstado === 'inactivos' ? '#FFFFFF' : '#757575',
+                      fontWeight: 700,
+                      fontSize: '0.72rem',
+                      cursor: 'pointer',
+                      border: '1px solid',
+                      borderColor: selectedEstado === 'inactivos' ? '#616161' : '#E0E0E0',
+                      '&:hover': {
+                        backgroundColor: selectedEstado === 'inactivos' ? '#424242' : '#EEEEEE',
+                      },
+                    }}
+                  />
+                )}
+              </Stack>
+
+              {/* Botón de limpiar y contador */}
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
+                  Mostrando {filtered.length} de {productos.length} productos
+                </Typography>
+
+                {hasActiveFilters && (
+                  <Button
+                    size="small"
+                    startIcon={<FilterAltOffIcon fontSize="small" />}
+                    onClick={handleResetFilters}
+                    sx={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: '#C86237',
+                      textTransform: 'none',
+                      py: 0.3,
+                      px: 1,
+                      borderRadius: '8px',
+                      '&:hover': {
+                        backgroundColor: '#FBE9E7',
+                      },
+                    }}
+                  >
+                    Limpiar Filtros
+                  </Button>
+                )}
+              </Stack>
+            </Box>
           </Stack>
         </Box>
 
@@ -462,7 +1171,7 @@ function CatalogoProductos() {
           />
         )}
 
-        {/* Tabla de Productos */}
+        {/* Tabla Unificada de Catálogo, Precios y Stock */}
         <TableContainer sx={{ borderRadius: '8px', overflow: 'hidden' }}>
           <Table>
             <TableHead>
@@ -473,9 +1182,11 @@ function CatalogoProductos() {
                 <TableCell sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
                   CATEGORÍA
                 </TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
-                  CAFETERÍA
-                </TableCell>
+                {cafeteriasList.length > 1 && (
+                  <TableCell sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
+                    CAFETERÍA
+                  </TableCell>
+                )}
                 <TableCell align="right" sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
                   PRECIO
                 </TableCell>
@@ -485,8 +1196,11 @@ function CatalogoProductos() {
                 <TableCell align="center" sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
                   MÍNIMO
                 </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
+                  VALOR TOTAL
+                </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
-                  DISPONIBILIDAD
+                  ESTADO
                 </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
                   ACCIONES
@@ -497,10 +1211,24 @@ function CatalogoProductos() {
             <TableBody>
               {filtered.length === 0 && !loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#8C7A6F' }}>
-                    {searchTerm
-                      ? `No se encontraron productos que coincidan con "${searchTerm}".`
-                      : 'No se encontraron productos registrados.'}
+                  <TableCell colSpan={cafeteriasList.length > 1 ? 9 : 8} align="center" sx={{ py: 4, color: '#8C7A6F' }}>
+                    {hasActiveFilters ? (
+                      <Stack spacing={1} alignItems="center" sx={{ py: 2 }}>
+                        <Typography variant="body2" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
+                          No se encontraron productos con los criterios y filtros seleccionados.
+                        </Typography>
+                        <Button
+                          size="small"
+                          startIcon={<FilterAltOffIcon fontSize="small" />}
+                          onClick={handleResetFilters}
+                          sx={{ color: '#C86237', textTransform: 'none', fontWeight: 700 }}
+                        >
+                          Restablecer todos los filtros
+                        </Button>
+                      </Stack>
+                    ) : (
+                      'No se encontraron productos registrados.'
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -509,6 +1237,8 @@ function CatalogoProductos() {
                   const stockNum = Number(prod.stock || 0);
                   const isSinStock = stockNum <= 0;
                   const isBajo = stockNum > 0 && stockNum <= minVal;
+                  const valorFila = stockNum * Number(prod.precio || 0);
+
                   return (
                     <TableRow
                       key={prod.id}
@@ -517,14 +1247,23 @@ function CatalogoProductos() {
                         cursor: 'pointer',
                         '&:last-child td, &:last-child th': { border: 0 },
                         borderColor: '#F2ECE6',
-                        backgroundColor: isSinStock ? 'rgba(255, 205, 210, 0.25)' : 'inherit',
+                        backgroundColor: isSinStock ? 'rgba(255, 205, 210, 0.2)' : 'inherit',
                       }}
                       onClick={() => handleOpenEdit(prod)}
                     >
+                      {/* Producto */}
                       <TableCell sx={{ fontWeight: 600, color: '#3E2D22', fontSize: '0.85rem' }}>
-                        {prod.nombre}
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#3E2D22' }}>
+                          {prod.nombre}
+                        </Typography>
+                        {prod.descripcion && (
+                          <Typography variant="caption" sx={{ color: '#8C7A6F', display: 'block', maxWidth: 260 }} noWrap>
+                            {prod.descripcion}
+                          </Typography>
+                        )}
                       </TableCell>
 
+                      {/* Categoría */}
                       <TableCell>
                         <Chip
                           label={prod.categoria || 'GENERAL'}
@@ -539,39 +1278,105 @@ function CatalogoProductos() {
                         />
                       </TableCell>
 
-                      <TableCell sx={{ color: '#5C4535', fontSize: '0.82rem' }}>
-                        {prod.cafeteria_nombre || prod.cafeterias?.nombre || 'Cafetería Central'}
+                      {/* Cafetería (si hay más de 1) */}
+                      {cafeteriasList.length > 1 && (
+                        <TableCell sx={{ color: '#5C4535', fontSize: '0.82rem' }}>
+                          {prod.cafeteria_nombre || prod.cafeterias?.nombre || 'Cafetería Central'}
+                        </TableCell>
+                      )}
+
+                      {/* Precio Unitario Modificable */}
+                      <TableCell
+                        align="right"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenPrecio(prod);
+                        }}
+                        sx={{ cursor: 'pointer' }}
+                      >
+                        <Tooltip title="Clic para modificar precio">
+                          <Chip
+                            icon={<PriceChangeOutlinedIcon sx={{ fontSize: '15px !important', color: '#4A3728 !important' }} />}
+                            label={`$${Number(prod.precio || 0).toLocaleString('es-CL')}`}
+                            size="small"
+                            sx={{
+                              fontWeight: 800,
+                              fontSize: '0.85rem',
+                              backgroundColor: '#FAF2EA',
+                              color: '#4A3728',
+                              cursor: 'pointer',
+                              border: '1px solid #E8D8CC',
+                              '&:hover': {
+                                backgroundColor: '#F5EBE1',
+                                borderColor: '#C86237',
+                              },
+                            }}
+                          />
+                        </Tooltip>
                       </TableCell>
 
-                      <TableCell align="right" sx={{ fontWeight: 700, color: '#3E2D22', fontSize: '0.85rem' }}>
-                        ${Number(prod.precio || 0).toLocaleString('es-CL')}
-                      </TableCell>
-
+                      {/* Stock Actual Modificable */}
                       <TableCell
                         align="center"
-                        sx={{
-                          fontWeight: 700,
-                          color: isSinStock ? '#B71C1C' : isBajo ? '#E65100' : '#3E2D22',
-                          fontSize: '0.85rem',
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenStock(prod);
                         }}
+                        sx={{ cursor: 'pointer' }}
                       >
-                        {prod.stock}
+                        <Tooltip title="Clic para ajustar stock en bodega">
+                          <Chip
+                            icon={<Inventory2OutlinedIcon sx={{ fontSize: '15px !important', color: 'inherit !important' }} />}
+                            label={`${prod.stock} ${prod.unidad || 'un'}`}
+                            size="small"
+                            sx={{
+                              fontWeight: 800,
+                              fontSize: '0.82rem',
+                              backgroundColor: isSinStock ? '#FFCDD2' : isBajo ? '#FFE0B2' : '#E8F5E9',
+                              color: isSinStock ? '#B71C1C' : isBajo ? '#E65100' : '#2E7D32',
+                              cursor: 'pointer',
+                              border: '1px solid',
+                              borderColor: isSinStock ? '#EF9A9A' : isBajo ? '#FFCC80' : '#A5D6A7',
+                              '&:hover': {
+                                filter: 'brightness(0.96)',
+                              },
+                            }}
+                          />
+                        </Tooltip>
                       </TableCell>
 
-                      <TableCell align="center" sx={{ color: '#78665B', fontSize: '0.85rem' }}>
-                        {minVal}
+                      {/* Stock Mínimo */}
+                      <TableCell align="center" sx={{ color: '#78665B', fontSize: '0.85rem', fontWeight: 600 }}>
+                        {minVal} {prod.unidad || 'un'}
                       </TableCell>
 
+                      {/* Valor Total en Stock */}
+                      <TableCell align="right" sx={{ fontWeight: 800, color: '#4A3728', fontSize: '0.85rem' }}>
+                        ${valorFila.toLocaleString('es-CL')}
+                      </TableCell>
+
+                      {/* Estado */}
                       <TableCell align="center">
                         <Chip
+                          icon={
+                            !prod.activo ? (
+                              <BlockOutlinedIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />
+                            ) : isSinStock ? (
+                              <ErrorOutlinedIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />
+                            ) : isBajo ? (
+                              <WarningAmberIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />
+                            ) : (
+                              <CheckCircleOutlinedIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />
+                            )
+                          }
                           label={
                             !prod.activo
-                              ? 'NO DISPONIBLE'
+                              ? 'INACTIVO'
                               : isSinStock
                               ? 'SIN STOCK'
                               : isBajo
                               ? 'STOCK BAJO'
-                              : 'DISPONIBLE'
+                              : 'ÓPTIMO'
                           }
                           size="small"
                           sx={{
@@ -579,7 +1384,7 @@ function CatalogoProductos() {
                               !prod.activo
                                 ? '#EEEEEE'
                                 : isSinStock
-                                ? '#FFCDD2'
+                                ? '#FFEBEE'
                                 : isBajo
                                 ? '#FFF3E0'
                                 : '#E8F5E9',
@@ -594,29 +1399,73 @@ function CatalogoProductos() {
                             fontWeight: 800,
                             fontSize: '0.68rem',
                             borderRadius: '6px',
-                            border: isSinStock ? '1px solid #EF9A9A' : 'none',
+                            border: '1px solid',
+                            borderColor:
+                              !prod.activo
+                                ? '#E0E0E0'
+                                : isSinStock
+                                ? '#FFCDD2'
+                                : isBajo
+                                ? '#FFE0B2'
+                                : '#C8E6C9',
                           }}
                         />
                       </TableCell>
 
+                      {/* Acciones Rápidas Integradas */}
                       <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                        <Stack direction="row" spacing={0.5} justifyContent="center">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenEdit(prod)}
-                            sx={{ color: '#C86237' }}
-                            title="Editar Producto"
-                          >
-                            <EditOutlinedIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenDelete(prod)}
-                            sx={{ color: '#D32F2F' }}
-                            title="Eliminar Producto"
-                          >
-                            <DeleteOutlineOutlinedIcon fontSize="small" />
-                          </IconButton>
+                        <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
+                          <Tooltip title="Modificar Precio">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenPrecio(prod)}
+                              sx={{
+                                color: '#C86237',
+                                '&:hover': { backgroundColor: 'rgba(200, 98, 55, 0.1)' },
+                              }}
+                            >
+                              <PriceChangeOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+
+                          <Tooltip title="Modificar Stock">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenStock(prod)}
+                              sx={{
+                                color: '#4A3728',
+                                '&:hover': { backgroundColor: 'rgba(74, 55, 40, 0.1)' },
+                              }}
+                            >
+                              <Inventory2OutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+
+                          <Tooltip title="Editar Producto Completo">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenEdit(prod)}
+                              sx={{
+                                color: '#78665B',
+                                '&:hover': { backgroundColor: 'rgba(120, 102, 91, 0.1)' },
+                              }}
+                            >
+                              <EditOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+
+                          <Tooltip title="Eliminar Producto">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenDelete(prod)}
+                              sx={{
+                                color: '#D32F2F',
+                                '&:hover': { backgroundColor: 'rgba(211, 47, 47, 0.1)' },
+                              }}
+                            >
+                              <DeleteOutlineOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                         </Stack>
                       </TableCell>
                     </TableRow>
@@ -629,7 +1478,7 @@ function CatalogoProductos() {
       </Paper>
 
       {/* ======================================================== */}
-      {/* FORMULARIO DE CREACIÓN DE PRODUCTO (FR-43)                */}
+      {/* FORMULARIO DE CREACIÓN DE PRODUCTO                        */}
       {/* ======================================================== */}
       <Dialog
         open={createDialogOpen}
@@ -913,7 +1762,7 @@ function CatalogoProductos() {
       </Dialog>
 
       {/* ======================================================== */}
-      {/* FORMULARIO DE EDICIÓN DE PRODUCTO EXISTENTE (FR-44)      */}
+      {/* FORMULARIO DE EDICIÓN DE PRODUCTO EXISTENTE               */}
       {/* ======================================================== */}
       <Dialog
         open={dialogOpen}
@@ -1174,7 +2023,7 @@ function CatalogoProductos() {
       </Dialog>
 
       {/* ======================================================== */}
-      {/* DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN (FR-45)           */}
+      {/* DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN                    */}
       {/* ======================================================== */}
       <Dialog
         open={deleteDialogOpen}
@@ -1260,6 +2109,32 @@ function CatalogoProductos() {
           </Stack>
         </DialogContent>
       </Dialog>
+
+      {/* ======================================================== */}
+      {/* OPERACIÓN DE MODIFICAR PRECIO                            */}
+      {/* ======================================================== */}
+      <ModificarPrecioDialog
+        open={precioDialogOpen}
+        onClose={() => {
+          setPrecioDialogOpen(false);
+          setProductoParaPrecio(null);
+        }}
+        producto={productoParaPrecio}
+        onSuccess={handlePrecioSuccess}
+      />
+
+      {/* ======================================================== */}
+      {/* OPERACIÓN DE MODIFICAR STOCK                             */}
+      {/* ======================================================== */}
+      <ModificarStockDialog
+        open={stockDialogOpen}
+        onClose={() => {
+          setStockDialogOpen(false);
+          setProductoParaStock(null);
+        }}
+        producto={productoParaStock}
+        onSuccess={handleStockSuccess}
+      />
 
       {/* Notificaciones visuales de éxito / error */}
       <Snackbar
