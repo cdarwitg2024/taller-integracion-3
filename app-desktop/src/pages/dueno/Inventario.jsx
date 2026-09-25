@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -27,6 +27,12 @@ import {
   DialogActions,
   Snackbar,
   Alert,
+  TextField,
+  FormControl,
+  Select,
+  InputAdornment,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -41,11 +47,17 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
+import SortIcon from '@mui/icons-material/Sort';
 
 import { productos as productosService } from '../../service/productos';
 import { alertasStock as alertasService } from '../../service/alertas_stock';
 import { telegramDuenoService } from '../../service/telegram_dueno';
 import TelegramConfigModal from '../../components/telegram/TelegramConfigModal';
+import ModificarStockDialog from '../../components/productos/ModificarStockDialog';
 
 function StockInventario({ currentUser }) {
   const [items, setItems] = useState([]);
@@ -58,6 +70,31 @@ function StockInventario({ currentUser }) {
   const [confirmUnlinkDialogOpen, setConfirmUnlinkDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
+  // Diálogo para Modificar Stock (FR-47)
+  const [stockDialogOpen, setStockDialogOpen] = useState(false);
+  const [productoParaStock, setProductoParaStock] = useState(null);
+
+  const handleOpenStockDialog = (row) => {
+    setProductoParaStock({
+      id: row.id,
+      nombre: row.insumo,
+      stock: row.actual,
+      stock_minimo: row.minimo,
+      minimo: row.minimo,
+      unidad: row.unidad,
+      categoria: row.categoria,
+    });
+    setStockDialogOpen(true);
+  };
+
+  const handleStockSuccess = async (updatedProd, message) => {
+    setSnackbar({
+      open: true,
+      message: message || 'Stock actualizado exitosamente en Supabase.',
+      severity: 'success',
+    });
+    await loadData();
+  };
 
   const duenoId = currentUser?.id || 1;
   const cafeteriaId = currentUser?.cafeteria_id || 1;
@@ -118,11 +155,88 @@ function StockInventario({ currentUser }) {
   const atencionCount = items.filter((i) => i.estado === 'Atención').length;
   const optimosCount = items.filter((i) => i.estado === 'Óptimo').length;
 
+  // Estados de Búsqueda y Filtros Avanzados
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategoria, setSelectedCategoria] = useState('todas');
+  const [selectedEstado, setSelectedEstado] = useState('todos');
+  const [sortBy, setSortBy] = useState('urgencia');
+
+  // Categorías únicas dinámicas
+  const categoriasList = useMemo(() => {
+    const set = new Set(items.map((i) => i.categoria).filter(Boolean));
+    return Array.from(set).sort();
+  }, [items]);
+
+  // Filtrado y ordenamiento avanzado de insumos
+  const filteredItems = useMemo(() => {
+    const result = items.filter((item) => {
+      // 1. Filtro por término de búsqueda (insumo, categoría, unidad)
+      const term = searchTerm.trim().toLowerCase();
+      const matchSearch =
+        !term ||
+        item.insumo.toLowerCase().includes(term) ||
+        item.categoria.toLowerCase().includes(term) ||
+        item.unidad.toLowerCase().includes(term);
+
+      // 2. Filtro por categoría
+      const matchCat =
+        selectedCategoria === 'todas' ||
+        item.categoria.toLowerCase() === selectedCategoria.toLowerCase();
+
+      // 3. Filtro por estado
+      let matchEstado = true;
+      if (selectedEstado === 'reposicion') {
+        matchEstado = item.estado === 'Sin Stock' || item.estado === 'Crítico';
+      } else if (selectedEstado !== 'todos') {
+        matchEstado = item.estado.toLowerCase() === selectedEstado.toLowerCase();
+      }
+
+      return matchSearch && matchCat && matchEstado;
+    });
+
+    // 4. Ordenamiento inteligente
+    result.sort((a, b) => {
+      if (sortBy === 'urgencia') {
+        return a.diferencia - b.diferencia;
+      }
+      if (sortBy === 'stock_asc') {
+        return a.actual - b.actual;
+      }
+      if (sortBy === 'stock_desc') {
+        return b.actual - a.actual;
+      }
+      if (sortBy === 'nombre_asc') {
+        return a.insumo.localeCompare(b.insumo, 'es', { sensitivity: 'base' });
+      }
+      if (sortBy === 'nombre_desc') {
+        return b.insumo.localeCompare(a.insumo, 'es', { sensitivity: 'base' });
+      }
+      return 0;
+    });
+
+    return result;
+  }, [items, searchTerm, selectedCategoria, selectedEstado, sortBy]);
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setSelectedCategoria('todas');
+    setSelectedEstado('todos');
+    setSortBy('urgencia');
+  };
+
+  const hasActiveFilters = Boolean(
+    searchTerm.trim() !== '' ||
+    selectedCategoria !== 'todas' ||
+    selectedEstado !== 'todos' ||
+    sortBy !== 'urgencia'
+  );
+
   const handleExport = () => {
+    const listToExport = filteredItems.length > 0 ? filteredItems : items;
     const csvContent =
       'data:text/csv;charset=utf-8,' +
       'Insumo,Categoria,Stock Disponible,Minimo Requerido,Balance vs Minimo,Unidad,Estado\n' +
-      items
+      listToExport
         .map(
           (e) =>
             `"${e.insumo}","${e.categoria}",${e.actual},${e.minimo},${e.diferencia},"${e.unidad}","${e.estado}"`
@@ -322,94 +436,410 @@ function StockInventario({ currentUser }) {
 
 
 
-      {/* Letreros de alerta condicionales: Sólo aparecen si existen advertencias reales */}
+      {/* Letreros de alerta condicionales: Interactivos como filtros rápidos */}
       {(sinStockCount > 0 || criticosCount > 0 || atencionCount > 0) && (
         <Grid container spacing={2.5} sx={{ width: '100%', mb: 3 }}>
           {sinStockCount > 0 && (
             <Grid size={{ xs: 12, sm: criticosCount > 0 || atencionCount > 0 ? 4 : 12 }}>
-              <Card
-                elevation={0}
-                sx={{
-                  p: 1.5,
-                  borderRadius: '14px',
-                  border: '1px solid #EF9A9A',
-                  bgcolor: '#FFEBEE',
-                }}
-              >
-                <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                  <Stack direction="row" spacing={1.8} alignItems="center">
-                    <ErrorOutlinedIcon sx={{ color: '#B71C1C', fontSize: 36 }} />
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#B71C1C' }}>
-                        {sinStockCount} Insumo{sinStockCount > 1 ? 's' : ''} Sin Stock
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#C62828', display: 'block' }}>
-                        0 unidades disponibles. Requiere reposición inmediata.
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
+              <Tooltip title={selectedEstado === 'Sin Stock' ? 'Quitar filtro de Sin Stock' : 'Filtrar solo insumos Sin Stock'}>
+                <Card
+                  elevation={0}
+                  onClick={() => setSelectedEstado(selectedEstado === 'Sin Stock' ? 'todos' : 'Sin Stock')}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: '14px',
+                    border: selectedEstado === 'Sin Stock' ? '2px solid #B71C1C' : '1px solid #EF9A9A',
+                    bgcolor: '#FFEBEE',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: selectedEstado === 'Sin Stock' ? '0 4px 14px rgba(183, 28, 28, 0.25)' : 'none',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 6px 16px rgba(183, 28, 28, 0.2)',
+                    },
+                  }}
+                >
+                  <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                    <Stack direction="row" spacing={1.8} alignItems="center">
+                      <ErrorOutlinedIcon sx={{ color: '#B71C1C', fontSize: 36 }} />
+                      <Box>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#B71C1C' }}>
+                            {sinStockCount} Insumo{sinStockCount > 1 ? 's' : ''} Sin Stock
+                          </Typography>
+                          {selectedEstado === 'Sin Stock' && (
+                            <Chip label="ACTIVO" size="small" sx={{ height: 18, fontSize: '0.62rem', bgcolor: '#B71C1C', color: '#FFF', fontWeight: 800 }} />
+                          )}
+                        </Stack>
+                        <Typography variant="caption" sx={{ color: '#C62828', display: 'block' }}>
+                          0 unidades disponibles. Clic para filtrar.
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Tooltip>
             </Grid>
           )}
 
           {criticosCount > 0 && (
             <Grid size={{ xs: 12, sm: sinStockCount > 0 ? 4 : atencionCount > 0 ? 6 : 12 }}>
-              <Card
-                elevation={0}
-                sx={{
-                  p: 1.5,
-                  borderRadius: '14px',
-                  border: '1px solid #FFCDD2',
-                  bgcolor: '#FFEBEE',
-                }}
-              >
-                <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                  <Stack direction="row" spacing={1.8} alignItems="center">
-                    <ErrorOutlinedIcon sx={{ color: '#C62828', fontSize: 36 }} />
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#B71C1C' }}>
-                        {criticosCount} Insumo{criticosCount > 1 ? 's' : ''} Crítico{criticosCount > 1 ? 's' : ''}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#C62828', display: 'block' }}>
-                        Stock igual o menor al mínimo requerido. Requiere reposición.
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
+              <Tooltip title={selectedEstado === 'Crítico' ? 'Quitar filtro de Críticos' : 'Filtrar solo insumos Críticos'}>
+                <Card
+                  elevation={0}
+                  onClick={() => setSelectedEstado(selectedEstado === 'Crítico' ? 'todos' : 'Crítico')}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: '14px',
+                    border: selectedEstado === 'Crítico' ? '2px solid #C62828' : '1px solid #FFCDD2',
+                    bgcolor: '#FFEBEE',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: selectedEstado === 'Crítico' ? '0 4px 14px rgba(198, 40, 40, 0.25)' : 'none',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 6px 16px rgba(198, 40, 40, 0.2)',
+                    },
+                  }}
+                >
+                  <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                    <Stack direction="row" spacing={1.8} alignItems="center">
+                      <ErrorOutlinedIcon sx={{ color: '#C62828', fontSize: 36 }} />
+                      <Box>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#B71C1C' }}>
+                            {criticosCount} Insumo{criticosCount > 1 ? 's' : ''} Crítico{criticosCount > 1 ? 's' : ''}
+                          </Typography>
+                          {selectedEstado === 'Crítico' && (
+                            <Chip label="ACTIVO" size="small" sx={{ height: 18, fontSize: '0.62rem', bgcolor: '#C62828', color: '#FFF', fontWeight: 800 }} />
+                          )}
+                        </Stack>
+                        <Typography variant="caption" sx={{ color: '#C62828', display: 'block' }}>
+                          Stock igual o menor al mínimo requerido. Clic para filtrar.
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Tooltip>
             </Grid>
           )}
 
           {atencionCount > 0 && (
             <Grid size={{ xs: 12, sm: sinStockCount > 0 ? 4 : criticosCount > 0 ? 6 : 12 }}>
-              <Card
-                elevation={0}
-                sx={{
-                  p: 1.5,
-                  borderRadius: '14px',
-                  border: '1px solid #FFE0B2',
-                  bgcolor: '#FFF3E0',
-                }}
-              >
-                <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                  <Stack direction="row" spacing={1.8} alignItems="center">
-                    <WarningAmberIcon sx={{ color: '#E65100', fontSize: 36 }} />
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#E65100' }}>
-                        {atencionCount} Insumo{atencionCount > 1 ? 's' : ''} en Advertencia
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#BF360C', display: 'block' }}>
-                        Próximos a cruzar el umbral mínimo de stock.
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
+              <Tooltip title={selectedEstado === 'Atención' ? 'Quitar filtro de Advertencia' : 'Filtrar insumos en Advertencia'}>
+                <Card
+                  elevation={0}
+                  onClick={() => setSelectedEstado(selectedEstado === 'Atención' ? 'todos' : 'Atención')}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: '14px',
+                    border: selectedEstado === 'Atención' ? '2px solid #E65100' : '1px solid #FFE0B2',
+                    bgcolor: '#FFF3E0',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: selectedEstado === 'Atención' ? '0 4px 14px rgba(230, 81, 0, 0.25)' : 'none',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 6px 16px rgba(230, 81, 0, 0.2)',
+                    },
+                  }}
+                >
+                  <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                    <Stack direction="row" spacing={1.8} alignItems="center">
+                      <WarningAmberIcon sx={{ color: '#E65100', fontSize: 36 }} />
+                      <Box>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#E65100' }}>
+                            {atencionCount} Insumo{atencionCount > 1 ? 's' : ''} en Advertencia
+                          </Typography>
+                          {selectedEstado === 'Atención' && (
+                            <Chip label="ACTIVO" size="small" sx={{ height: 18, fontSize: '0.62rem', bgcolor: '#E65100', color: '#FFF', fontWeight: 800 }} />
+                          )}
+                        </Stack>
+                        <Typography variant="caption" sx={{ color: '#BF360C', display: 'block' }}>
+                          Próximos a cruzar el umbral mínimo. Clic para filtrar.
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Tooltip>
             </Grid>
           )}
         </Grid>
       )}
+
+      {/* ======================================================== */}
+      {/* PANEL DE BÚSQUEDA Y FILTROS AVANZADOS DE INVENTARIO       */}
+      {/* ======================================================== */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2.5,
+          mb: 3,
+          borderRadius: '16px',
+          border: '1px solid #EFEAE6',
+          backgroundColor: '#FFFFFF',
+          boxShadow: '0 2px 10px rgba(74, 55, 40, 0.04)',
+        }}
+      >
+        <Stack spacing={2}>
+          {/* Fila 1: Buscador de texto, Categoría, Estado de Stock y Ordenamiento */}
+          <Grid container spacing={2} alignItems="center">
+            {/* Buscador de texto */}
+            <Grid size={{ xs: 12, md: 4.5 }}>
+              <TextField
+                size="small"
+                fullWidth
+                placeholder="Buscar por insumo, categoría o unidad..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ color: '#8C7A6F', fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchTerm ? (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setSearchTerm('')}>
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '12px',
+                    backgroundColor: '#FAF7F5',
+                    fontSize: '0.85rem',
+                  },
+                }}
+              />
+            </Grid>
+
+            {/* Selector de Categoría */}
+            <Grid size={{ xs: 12, sm: 4, md: 2.5 }}>
+              <FormControl size="small" fullWidth>
+                <Select
+                  value={selectedCategoria}
+                  onChange={(e) => setSelectedCategoria(e.target.value)}
+                  displayEmpty
+                  sx={{
+                    borderRadius: '12px',
+                    backgroundColor: '#FAF7F5',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  <MenuItem value="todas">Todas las Categorías</MenuItem>
+                  {categoriasList.map((cat) => (
+                    <MenuItem key={cat} value={cat}>
+                      {cat}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Selector de Estado de Stock */}
+            <Grid size={{ xs: 12, sm: 4, md: 2.5 }}>
+              <FormControl size="small" fullWidth>
+                <Select
+                  value={selectedEstado}
+                  onChange={(e) => setSelectedEstado(e.target.value)}
+                  displayEmpty
+                  sx={{
+                    borderRadius: '12px',
+                    backgroundColor: '#FAF7F5',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  <MenuItem value="todos">Todos los Estados</MenuItem>
+                  <MenuItem value="reposicion">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <WarningAmberIcon sx={{ fontSize: 16, color: '#C62828' }} />
+                      Requiere Reposición
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="Sin Stock">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <ErrorOutlinedIcon sx={{ fontSize: 16, color: '#B71C1C' }} />
+                      Sin Stock (Agotados)
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="Crítico">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <ErrorOutlinedIcon sx={{ fontSize: 16, color: '#C62828' }} />
+                      Críticos (≤ Mínimo)
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="Atención">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <WarningAmberIcon sx={{ fontSize: 16, color: '#E65100' }} />
+                      En Advertencia
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="Óptimo">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CheckCircleOutlinedIcon sx={{ fontSize: 16, color: '#2E7D32' }} />
+                      Óptimos
+                    </Box>
+                  </MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Selector de Ordenamiento */}
+            <Grid size={{ xs: 12, sm: 4, md: 2.5 }}>
+              <FormControl size="small" fullWidth>
+                <Select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  startAdornment={
+                    <InputAdornment position="start">
+                      <SortIcon sx={{ color: '#8C7A6F', fontSize: 18 }} />
+                    </InputAdornment>
+                  }
+                  sx={{
+                    borderRadius: '12px',
+                    backgroundColor: '#FAF7F5',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  <MenuItem value="urgencia">Mayor Urgencia (Balance)</MenuItem>
+                  <MenuItem value="stock_asc">Menor Stock Disponible</MenuItem>
+                  <MenuItem value="stock_desc">Mayor Stock Disponible</MenuItem>
+                  <MenuItem value="nombre_asc">Nombre: A → Z</MenuItem>
+                  <MenuItem value="nombre_desc">Nombre: Z → A</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+
+          {/* Fila 2: Chips interactivos de acceso rápido y resumen */}
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              pt: 1,
+              borderTop: '1px solid #F4EFEB',
+              gap: 1.5,
+            }}
+          >
+            {/* Chips de filtro rápido por estado */}
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 0.8 }}>
+              <Chip
+                label={`Todos (${items.length})`}
+                size="small"
+                onClick={() => setSelectedEstado('todos')}
+                sx={{
+                  backgroundColor: selectedEstado === 'todos' ? '#4A3728' : '#FAF5F0',
+                  color: selectedEstado === 'todos' ? '#FFFFFF' : '#6E5C50',
+                  fontWeight: 700,
+                  fontSize: '0.72rem',
+                  cursor: 'pointer',
+                  '&:hover': {
+                    backgroundColor: selectedEstado === 'todos' ? '#38281E' : '#EFEAE6',
+                  },
+                }}
+              />
+              <Chip
+                label={`Requiere Reposición (${sinStockCount + criticosCount})`}
+                size="small"
+                icon={<WarningAmberIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />}
+                onClick={() => setSelectedEstado(selectedEstado === 'reposicion' ? 'todos' : 'reposicion')}
+                sx={{
+                  backgroundColor: selectedEstado === 'reposicion' ? '#D32F2F' : '#FFEBEE',
+                  color: selectedEstado === 'reposicion' ? '#FFFFFF' : '#C62828',
+                  fontWeight: 700,
+                  fontSize: '0.72rem',
+                  cursor: 'pointer',
+                }}
+              />
+              <Chip
+                label={`Sin Stock (${sinStockCount})`}
+                size="small"
+                icon={<ErrorOutlinedIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />}
+                onClick={() => setSelectedEstado(selectedEstado === 'Sin Stock' ? 'todos' : 'Sin Stock')}
+                sx={{
+                  backgroundColor: selectedEstado === 'Sin Stock' ? '#B71C1C' : '#FFCDD2',
+                  color: selectedEstado === 'Sin Stock' ? '#FFFFFF' : '#B71C1C',
+                  fontWeight: 700,
+                  fontSize: '0.72rem',
+                  cursor: 'pointer',
+                }}
+              />
+              <Chip
+                label={`Críticos (${criticosCount})`}
+                size="small"
+                icon={<ErrorOutlinedIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />}
+                onClick={() => setSelectedEstado(selectedEstado === 'Crítico' ? 'todos' : 'Crítico')}
+                sx={{
+                  backgroundColor: selectedEstado === 'Crítico' ? '#C62828' : '#FFEBEE',
+                  color: selectedEstado === 'Crítico' ? '#FFFFFF' : '#C62828',
+                  fontWeight: 700,
+                  fontSize: '0.72rem',
+                  cursor: 'pointer',
+                }}
+              />
+              <Chip
+                label={`Advertencia (${atencionCount})`}
+                size="small"
+                icon={<WarningAmberIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />}
+                onClick={() => setSelectedEstado(selectedEstado === 'Atención' ? 'todos' : 'Atención')}
+                sx={{
+                  backgroundColor: selectedEstado === 'Atención' ? '#E65100' : '#FFF3E0',
+                  color: selectedEstado === 'Atención' ? '#FFFFFF' : '#E65100',
+                  fontWeight: 700,
+                  fontSize: '0.72rem',
+                  cursor: 'pointer',
+                }}
+              />
+              <Chip
+                label={`Óptimos (${optimosCount})`}
+                size="small"
+                icon={<CheckCircleOutlinedIcon sx={{ fontSize: '14px !important', color: 'inherit !important' }} />}
+                onClick={() => setSelectedEstado(selectedEstado === 'Óptimo' ? 'todos' : 'Óptimo')}
+                sx={{
+                  backgroundColor: selectedEstado === 'Óptimo' ? '#2E7D32' : '#E8F5E9',
+                  color: selectedEstado === 'Óptimo' ? '#FFFFFF' : '#2E7D32',
+                  fontWeight: 700,
+                  fontSize: '0.72rem',
+                  cursor: 'pointer',
+                }}
+              />
+            </Stack>
+
+            {/* Resumen de resultados y botón Limpiar Filtros */}
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Typography variant="caption" sx={{ color: '#78665B', fontWeight: 600 }}>
+                Mostrando <b>{filteredItems.length}</b> de <b>{items.length}</b> insumos
+              </Typography>
+
+              {hasActiveFilters && (
+                <Button
+                  size="small"
+                  startIcon={<FilterAltOffIcon fontSize="small" />}
+                  onClick={handleResetFilters}
+                  sx={{
+                    color: '#C86237',
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.75rem',
+                    py: 0.2,
+                    px: 1,
+                  }}
+                >
+                  Limpiar Filtros
+                </Button>
+              )}
+            </Stack>
+          </Box>
+        </Stack>
+      </Paper>
 
       {/* Tabla Principal de Inventario */}
       <Paper
@@ -452,18 +882,23 @@ function StockInventario({ currentUser }) {
                 <TableCell align="center" sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
                   ESTADO
                 </TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
+                  ACCIONES
+                </TableCell>
               </TableRow>
             </TableHead>
 
             <TableBody>
-              {items.length === 0 && !loading ? (
+              {filteredItems.length === 0 && !loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 4, color: '#8C7A6F' }}>
-                    No hay insumos registrados en inventario.
+                  <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#8C7A6F' }}>
+                    {hasActiveFilters
+                      ? 'No se encontraron insumos que coincidan con los filtros aplicados.'
+                      : 'No hay insumos registrados en inventario.'}
                   </TableCell>
                 </TableRow>
               ) : (
-                items.map((row) => {
+                filteredItems.map((row) => {
                   const isSinStock = row.estado === 'Sin Stock';
                   const isCritico = row.estado === 'Crítico';
                   const isAtencion = row.estado === 'Atención';
@@ -583,6 +1018,33 @@ function StockInventario({ currentUser }) {
                           }}
                         />
                       </TableCell>
+
+                      {/* Operación de Stock */}
+                      <TableCell align="center">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<Inventory2OutlinedIcon fontSize="small" />}
+                          onClick={() => handleOpenStockDialog(row)}
+                          sx={{
+                            borderRadius: '8px',
+                            borderColor: '#C8B2A1',
+                            color: '#4A3728',
+                            backgroundColor: '#FAF7F4',
+                            textTransform: 'none',
+                            fontWeight: 700,
+                            fontSize: '0.72rem',
+                            py: 0.4,
+                            px: 1.2,
+                            '&:hover': {
+                              borderColor: '#4A3728',
+                              backgroundColor: '#EFEBE6',
+                            },
+                          }}
+                        >
+                          Ajustar Stock
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   );
                 })
@@ -669,6 +1131,17 @@ function StockInventario({ currentUser }) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Diálogo para Modificar Stock del Insumo */}
+      <ModificarStockDialog
+        open={stockDialogOpen}
+        onClose={() => {
+          setStockDialogOpen(false);
+          setProductoParaStock(null);
+        }}
+        producto={productoParaStock}
+        onSuccess={handleStockSuccess}
+      />
 
       {/* Snackbar para notificaciones de Telegram y acciones rápidas */}
       <Snackbar

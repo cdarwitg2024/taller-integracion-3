@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase.js';
 
 const TABLE = 'productos';
 
@@ -310,12 +310,14 @@ export const productos = {
         }
 
         if (data) {
-          const updatedItem = normalizeProducto({
-            ...data,
-            unidad: updates.unidad,
-            categoria: updates.categoria || data.categorias?.nombre,
-          });
           const current = getStoredProductos();
+          const existing = current.find((p) => p.id === id);
+          const updatedItem = normalizeProducto({
+            ...existing,
+            ...data,
+            ...(updates.unidad !== undefined ? { unidad: updates.unidad } : {}),
+            categoria: updates.categoria || data.categorias?.nombre || existing?.categoria,
+          });
           const newList = current.map((p) => (p.id === id ? updatedItem : p));
           saveStoredProductos(newList);
           return updatedItem;
@@ -370,8 +372,82 @@ export const productos = {
     return true;
   },
 
-  async updateStock(id, nuevoStock) {
-    return this.update(id, { stock: Number(nuevoStock) });
+  /**
+   * Operación de Modificación de Precio (FR-46)
+   * Separada de la gestión de stock y de la edición general.
+   * Valida que el precio sea numérico y estrictamente mayor a 0.
+   * Actualiza el registro en Supabase y sincroniza la persistencia local.
+   *
+   * @param {number|string} id - ID del producto
+   * @param {number|string} nuevoPrecio - Nuevo valor de venta en CLP
+   * @returns {Promise<Object>} Producto actualizado
+   */
+  async updatePrecio(id, nuevoPrecio) {
+    if (!id) {
+      throw new Error('El identificador del producto es requerido.');
+    }
+    if (nuevoPrecio === '' || nuevoPrecio === null || nuevoPrecio === undefined) {
+      throw new Error('El precio es obligatorio.');
+    }
+    const precioNum = Number(nuevoPrecio);
+    if (isNaN(precioNum)) {
+      throw new Error('El precio debe ser un valor numérico válido.');
+    }
+    if (precioNum <= 0) {
+      throw new Error('El precio debe ser un número mayor a 0.');
+    }
+
+    return this.update(id, { precio: precioNum });
+  },
+
+  /**
+   * Operación de Modificación de Stock (FR-47)
+   * Separada de la gestión de precio y de la edición general.
+   * Valida que el stock sea un valor numérico entero no negativo (>= 0).
+   * Valida opcionalmente que el stock mínimo no sea negativo (>= 0).
+   * Actualiza el registro en Supabase y sincroniza la persistencia local.
+   *
+   * @param {number|string} id - ID del producto
+   * @param {number|string} nuevoStock - Cantidad disponible actual
+   * @param {number|string} [nuevoStockMinimo] - Umbral mínimo para alertas de reposición
+   * @returns {Promise<Object>} Producto actualizado
+   */
+  async updateStock(id, nuevoStock, nuevoStockMinimo) {
+    if (!id) {
+      throw new Error('El identificador del producto es requerido.');
+    }
+    if (nuevoStock === '' || nuevoStock === null || nuevoStock === undefined) {
+      throw new Error('El stock es obligatorio.');
+    }
+    const stockNum = Number(nuevoStock);
+    if (isNaN(stockNum)) {
+      throw new Error('El stock debe ser un valor numérico.');
+    }
+    if (stockNum < 0) {
+      throw new Error('El stock no puede ser un valor negativo (debe ser mayor o igual a 0).');
+    }
+    if (!Number.isInteger(stockNum)) {
+      throw new Error('El stock debe ser un número entero mayor o igual a 0.');
+    }
+
+    const payload = { stock: stockNum };
+
+    if (nuevoStockMinimo !== undefined && nuevoStockMinimo !== null && nuevoStockMinimo !== '') {
+      const minNum = Number(nuevoStockMinimo);
+      if (isNaN(minNum)) {
+        throw new Error('El stock mínimo debe ser un número válido.');
+      }
+      if (minNum < 0) {
+        throw new Error('El stock mínimo no puede ser un valor negativo (debe ser mayor o igual a 0).');
+      }
+      if (!Number.isInteger(minNum)) {
+        throw new Error('El stock mínimo debe ser un número entero mayor o igual a 0.');
+      }
+      payload.stock_minimo = minNum;
+      payload.minimo = minNum;
+    }
+
+    return this.update(id, payload);
   }
 };
 
