@@ -2,6 +2,13 @@
 -- Fix error 42P17: "infinite recursion detected in policy for
 -- relation \"usuarios\""
 -- ============================================================
+-- ** OBSOLETO / NO EJECUTAR **
+-- Este script DESHABILITABA RLS en 10 tablas. El plan final en su lugar
+-- mantiene RLS habilitado y elimina SOLO las políticas recursivas:
+--    -> usar bloquear_anon_sensibles.sql
+-- La única parte que sigue siendo útil era habilitar Realtime:
+--    -> usar habilitar_realtime.sql
+-- ============================================================
 -- Las políticas RLS actuales de este proyecto son recursivas
 -- (una política de la tabla `usuarios` vuelve a consultar `usuarios`),
 -- lo que rompe TODAS las lecturas desde el cliente (app móvil, KDS, desktop)
@@ -10,8 +17,6 @@
 -- Para el flujo mínimo, el control de acceso se delega en los
 -- microservicios (NestJS + service_role). Por eso se deshabilita RLS:
 -- NO se crean columnas ni se cambian tipos de dato.
---
--- Ejecutar una sola vez en: Supabase Dashboard -> SQL Editor
 -- ============================================================
 
 ALTER TABLE public.usuarios           DISABLE ROW LEVEL SECURITY;

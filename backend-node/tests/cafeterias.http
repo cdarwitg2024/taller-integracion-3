@@ -1,5 +1,12 @@
 @baseUrl = http://localhost:3000
 
+# NOTA: cafeterias.controller.js ahora usa cafeterias.service y productos.service (Supabase).
+# - Con la BD hosted desbalanceada se activa el fallback de los services (cafeteriasMock/productosMock)
+#   y estos endpoints responden igual, pero con datos de respaldo.
+# - Para que respondan con DATOS REALES falta: (1) ejecutar database/fixes/fix_rls_recursion.sql y
+#   (2) ejecutar database/fixes/seed_datos_basicos.sql (siembra cafeterias 1-3 y productos).
+# - El ids de cafetería ahora son enteros (Number), no strings '1'..'3'. 999 sigue dando 404.
+
 ### GET /cafeterias - Listar todas las cafeterías
 GET {{baseUrl}}/cafeterias
 

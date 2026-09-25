@@ -1,0 +1,12 @@
+-- ============================================================
+-- Habilitar Realtime para la tabla public.pedidos
+-- ============================================================
+-- Necesario para que el KDS y la app móvil reciban los INSERT/UPDATE
+-- de pedidos vía supabase-js (canal postgres_changes).
+--
+-- Verificado manualmente: el canal se suscribe, pero los eventos no
+-- llegan hasta que la tabla está en esta publicación.
+--
+-- Ejecutar una sola vez en: Supabase Dashboard -> SQL Editor
+-- ============================================================
+ALTER PUBLICATION supabase_realtime ADD TABLE public.pedidos;

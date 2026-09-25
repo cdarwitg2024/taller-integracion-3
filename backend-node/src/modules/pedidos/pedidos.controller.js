@@ -31,6 +31,9 @@ async function crearPedido(req, res, next) {
       pedido: nuevoPedido
     });
   } catch (error) {
+    if (error.codigo === 503) {
+      return res.status(503).json({ error: error.message });
+    }
     return res.status(400).json({ error: error.message });
   }
 }
@@ -111,6 +114,9 @@ async function updateEstado(req, res, next) {
       pedido: actualizado
     });
   } catch (error) {
+    if (error.codigo === 503) {
+      return res.status(503).json({ error: error.message });
+    }
     return res.status(400).json({ error: error.message });
   }
 }
@@ -131,6 +137,9 @@ async function obtenerQR(req, res, next) {
       data: resultado
     });
   } catch (error) {
+    if (error.codigo === 503) {
+      return res.status(503).json({ error: error.message });
+    }
     if (error.codigo === 409) {
       return res.status(409).json({ error: error.message });
     }
@@ -154,6 +163,9 @@ async function obtenerTokenContingencia(req, res, next) {
       data: resultado
     });
   } catch (error) {
+    if (error.codigo === 503) {
+      return res.status(503).json({ error: error.message });
+    }
     if (error.codigo === 409) {
       return res.status(409).json({ error: error.message });
     }
@@ -178,6 +190,9 @@ async function validarQR(req, res, next) {
 
     return res.status(200).json(resultado);
   } catch (error) {
+    if (error.codigo === 503) {
+      return res.status(503).json({ error: error.message });
+    }
     return res.status(400).json({ error: error.message });
   }
 }

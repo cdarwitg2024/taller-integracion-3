@@ -1,4 +1,5 @@
 const request = require('supertest');
+jest.mock('../src/config/supabase');
 const app = require('../src/app');
 
 jest.setTimeout(30000);
@@ -77,12 +78,13 @@ describe('FR-22 - Generación de QR dinámico', () => {
     expect(res.status).toBe(200);
     const payload = res.body.data.payload;
 
-    // Datos mínimos para poder validar la entrega posteriormente
+    // Datos mínimos para poder validar la entrega posteriormente.
+    // NOTA: franja_retiro no es columna del esquema real y no se persiste;
+    // el payload del QR (reconstruido desde BD) lo deja en null.
     expect(payload).toMatchObject({
       pedido_id: pedido.id,
       qr_token: pedido.qr_token,
       cafeteria_id: pedido.cafeteria_id,
-      franja_retiro: pedido.franja_retiro,
       tipo: 'RETIRO_COFFEEFAST'
     });
     expect(payload.created_at).toBeDefined();

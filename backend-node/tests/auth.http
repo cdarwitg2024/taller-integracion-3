@@ -1,5 +1,15 @@
-@baseUrl = http://localhost:3000
+@baseUrl = http://localhost:3000/api
 @token =
+
+# NOTA: auth.controller.js ahora usa usuarios.service (Supabase).
+# - LOGIN (/auth/login), GET /me y el middleware autenticarToken son ESTRICTOS (getByEmailStrict /
+#   getById sin fallback): consultan solo la BD real. Si Supabase no responde (p. ej. error 42P17 por
+#   RLS recursiva), responden 503 con error claro y NUNCA autentican ni resuelven identidad contra
+#   datos de respaldo. Con la BD rota, login y me fallarán hasta aplicar
+#   (1) database/fixes/fix_rls_recursion.sql y (2) database/fixes/seed_datos_basicos.sql.
+# - REGISTER / GET cafeterías / productos conservan fallback (datos de respaldo) hasta que la BD esté sana.
+# - El rol del payload se resuelve desde la tabla `roles` (rol_id) y el campo de esquema empieza a ser
+#   `rol_id`/`roles.nombre` (no `rol` como en el mock).
 
 ### REGISTRO - Cliente
 # @name registroCliente
@@ -152,3 +162,27 @@ Authorization: Bearer token_invalido_123
 
 ### HEALTH CHECK
 GET {{baseUrl}}/health
+
+
+
+### REGISTRO
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "email": "juan.perez@universidad.edu",
+  "telefono": "3001234567",
+  "password": "password123",
+  "rol": "cliente"
+}
+
+### LOGIN
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "juan.perez@universidad.edu",
+  "password": "password123"
+}

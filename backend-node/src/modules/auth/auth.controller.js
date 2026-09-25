@@ -1,14 +1,24 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const {
-  buscarPorEmail,
-  buscarPorId,
-  crearUsuario,
-  actualizarUltimaConexion
-} = require('../../utils/usuariosMock');
+const UsuariosService = require('./usuarios.service');
 
-const ROLES_VALIDOS = ['cliente', 'dueño', 'empleado', 'superadmin'];
+// 'cliente' es un alias del contrato antiguo; el nombre real de la BD es 'estudiante'
+const ROLES_VALIDOS = ['cliente', 'estudiante', 'dueño', 'empleado', 'superadmin'];
 const SALT_ROUNDS = 10;
+
+function rolNombre(usuario) {
+  if (!usuario) return null;
+  const rolEmbed = usuario.roles;
+  if (rolEmbed && rolEmbed.nombre) return rolEmbed.nombre;
+  if (Array.isArray(rolEmbed) && rolEmbed[0] && rolEmbed[0].nombre) return rolEmbed[0].nombre;
+  return usuario.rol || null;
+}
+
+function usuarioPublico(usuario) {
+  const rol = rolNombre(usuario);
+  const { password_hash, ...sinHash } = usuario;
+  return { ...sinHash, roles: rol ? { nombre: rol } : sinHash.roles };
+}
 
 async function register(req, res) {
   try {
@@ -39,26 +49,33 @@ async function register(req, res) {
     }
 
     const emailNormalizado = email.toLowerCase().trim();
-    const usuarioExistente = buscarPorEmail(emailNormalizado);
+    const usuarioExistente = await UsuariosService.getByEmail(emailNormalizado);
 
     if (usuarioExistente) {
       return res.status(409).json({ error: 'El email ya está registrado' });
     }
 
+    const rolRegistrado = await UsuariosService.getRolByNombre(rol);
+
+    if (!rolRegistrado) {
+      return res.status(400).json({ error: `No existe el rol '${rol}' en la base de datos` });
+    }
+
     const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const usuario = crearUsuario({
+    const usuario = await UsuariosService.create({
       nombre: nombre.trim(),
       apellido: apellido.trim(),
       email: emailNormalizado,
       telefono: telefono?.trim() || null,
       password_hash,
-      rol
+      rol_id: rolRegistrado.id,
+      foto_url: null,
+      activo: true,
+      ultima_conexion: null
     });
 
-    const { password_hash: _, ...usuarioSinHash } = usuario;
-
-    return res.status(201).json(usuarioSinHash);
+    return res.status(201).json(usuarioPublico(usuario));
   } catch (error) {
     console.error('Error en register:', error);
     return res.status(500).json({ error: 'Error interno del servidor' });
@@ -74,13 +91,22 @@ async function login(req, res) {
     }
 
     const emailNormalizado = email.toLowerCase().trim();
-    const usuario = buscarPorEmail(emailNormalizado);
+
+    // El login verifica credenciales SIEMPRE contra la BD real.
+    // Si Supabase no está disponible, falla con error claro en vez de autenticar contra datos de respaldo.
+    let usuario;
+    try {
+      usuario = await UsuariosService.getByEmailStrict(emailNormalizado);
+    } catch (err) {
+      console.error('Error al consultar la BD real en login:', err);
+      return res.status(503).json({ error: 'No se pudo consultar la base de datos de usuarios' });
+    }
 
     if (!usuario) {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    if (!usuario.activo) {
+    if (usuario.activo === false || usuario.activo === 'false') {
       return res.status(401).json({ error: 'Usuario inactivo' });
     }
 
@@ -90,12 +116,14 @@ async function login(req, res) {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    actualizarUltimaConexion(usuario.id);
+    await UsuariosService.update(usuario.id, { ultima_conexion: new Date().toISOString() });
+
+    const rol = rolNombre(usuario);
 
     const payload = {
       id: usuario.id,
       email: usuario.email,
-      rol: usuario.rol,
+      rol,
       nombre: usuario.nombre
     };
 
@@ -103,11 +131,9 @@ async function login(req, res) {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d'
     });
 
-    const { password_hash: _, ...usuarioSinHash } = usuario;
-
     return res.json({
       token,
-      usuario: usuarioSinHash
+      usuario: usuarioPublico(usuario)
     });
   } catch (error) {
     console.error('Error en login:', error);
@@ -115,17 +141,23 @@ async function login(req, res) {
   }
 }
 
-function me(req, res) {
+async function me(req, res) {
   try {
-    const usuario = buscarPorId(req.user.id);
+    // /me resuelve la identidad SIEMPRE contra la BD real. Si Supabase no
+    // responde, falla con error claro en vez de usar datos de respaldo.
+    let usuario;
+    try {
+      usuario = await UsuariosService.getById(req.user.id);
+    } catch (err) {
+      console.error('Error al consultar la BD real en /me:', err);
+      return res.status(503).json({ error: 'No se pudo consultar la base de datos de usuarios' });
+    }
 
     if (!usuario) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    const { password_hash: _, ...usuarioSinHash } = usuario;
-
-    return res.json(usuarioSinHash);
+    return res.json(usuarioPublico(usuario));
   } catch (error) {
     console.error('Error en me:', error);
     return res.status(500).json({ error: 'Error interno del servidor' });

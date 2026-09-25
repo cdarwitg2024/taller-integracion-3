@@ -1,12 +1,12 @@
 const supabase = require('../../config/supabase');
 
-const TableName = 'CAFETERIA_USUARIOS';
+const TableName = 'cafeteria_usuarios';
 
 const CafeteriaUsuariosService = {
   async getByCafeteria(cafeteriaId) {
     const { data, error } = await supabase
       .from(TableName)
-      .select('*, USUARIOS(nombre, apellido, email)')
+      .select('*, usuarios(nombre, apellido, email)')
       .eq('cafeteria_id', cafeteriaId);
     
     if (error) throw error;
@@ -16,7 +16,7 @@ const CafeteriaUsuariosService = {
   async getByUsuario(usuarioId) {
     const { data, error } = await supabase
       .from(TableName)
-      .select('*, CAFETERIAS(nombre)')
+      .select('*, cafeterias(nombre)')
       .eq('usuario_id', usuarioId);
     
     if (error) throw error;

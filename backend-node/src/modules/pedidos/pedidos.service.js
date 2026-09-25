@@ -3,8 +3,29 @@ const QRCode = require('qrcode');
 const supabase = require('../../config/supabase');
 const { pedidosMock } = require('../../utils/pedidosMock');
 
-const TableName = 'PEDIDOS';
-const DetallesTableName = 'DETALLES_PEDIDO';
+const TableName = 'pedidos';
+const DetallesTableName = 'detalles_pedido';
+
+// Error operacional de base de datos: debe traducirse a 503 en el controller
+function errorBd(mensaje) {
+  const err = new Error(mensaje);
+  err.codigo = 503;
+  return err;
+}
+
+// La tabla real usa codigo_retiro_diario (no codigo_legible) y no tiene
+// franja_retiro ni token_contingencia. Se normaliza la fila de BD para
+// mantener el contrato de la API (codigo_legible) y dejar en null lo que
+// el esquema real no persiste.
+function normalizarPedidoDB(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    codigo_legible: row.codigo_retiro_diario ?? row.codigo_legible ?? null,
+    franja_retiro: row.franja_retiro ?? null,
+    token_contingencia: row.token_contingencia ?? null
+  };
+}
 
 // Memoria local como respaldo / fallback resiliente
 let memoryPedidos = [...pedidosMock].map((p, idx) => ({
@@ -35,18 +56,9 @@ async function generarTokenContingenciaUnico() {
   return token;
 }
 
-// Comprueba si un Token de contingencia ya está asociado a otro pedido
+// El esquema real NO tiene columna token_contingencia: el token de contingencia
+// (FR-23) se genera y se mantiene en la caché en memoria del backend.
 async function existeTokenContingencia(token) {
-  try {
-    const { data, error } = await supabase
-      .from(TableName)
-      .select('id')
-      .eq('token_contingencia', token)
-      .maybeSingle();
-    if (!error && data) return true;
-  } catch (e) {
-    // fallback a memoria
-  }
   return memoryPedidos.some(p => p.token_contingencia === token);
 }
 
@@ -163,49 +175,71 @@ const PedidosService = {
       productos: detallesFormateados
     };
 
-    // 4. Persistir en Supabase con fallback resiliente
-    let guardadoEnDB = false;
+    // 4. Persistir en Supabase (obligatorio). Si el INSERT real falla, NO se
+    //    responde como pedido creado: se lanza error claro (503) y no queda
+    //    ningún pedido fantasma en memoria.
+    //    IMPORTANTE: el esquema real NO tiene las columnas id (autogenerada),
+    //    creado_en (default), franja_retiro, token_contingencia ni qr_image;
+    //    la única columna de código es codigo_retiro_diario y las notas van a "nota".
+    let dbPedido;
     try {
-      const { data: dbPedido, error: errorPedido } = await supabase
+      const { data, error } = await supabase
         .from(TableName)
         .insert({
-          id: nuevoPedido.id,
-          codigo_legible: nuevoPedido.codigo_legible,
+          codigo_retiro_diario: nuevoPedido.codigo_legible,
           usuario_id: nuevoPedido.usuario_id,
           cafeteria_id: nuevoPedido.cafeteria_id,
-          franja_retiro: nuevoPedido.franja_retiro,
           total: nuevoPedido.total,
           estado: nuevoPedido.estado,
           qr_token: nuevoPedido.qr_token,
-          token_contingencia: nuevoPedido.token_contingencia,
-          creado_en: nuevoPedido.creado_en
+          nota: nuevoPedido.notas_generales
         })
         .select()
         .single();
 
-      if (!errorPedido && dbPedido) {
-        guardadoEnDB = true;
-        const lineasDetalle = detallesFormateados.map(d => ({
-          pedido_id: dbPedido.id,
-          producto_id: d.producto_id,
-          cantidad: d.cantidad,
-          precio_unitario_historico: d.precio_unitario,
-          subtotal: d.subtotal,
-          notas: d.notas
-        }));
-
-        await supabase.from(DetallesTableName).insert(lineasDetalle);
-      }
+      if (error) throw error;
+      dbPedido = data;
     } catch (dbError) {
-      console.warn('ℹ️ Usando almacenamiento resiliente local por desconexión en BD:', dbError.message);
+      console.error(`No se pudo crear el pedido en la BD: ${dbError.message}`);
+      throw errorBd(`No se pudo crear el pedido en la base de datos: ${dbError.message}`);
     }
 
-    // Siempre registrar en el store en memoria para disponibilidad local instantánea
-    memoryPedidos.unshift(nuevoPedido);
+    // El id y creado_en reales los asigna la BD
+    const pedidoPersistido = {
+      ...nuevoPedido,
+      id: dbPedido.id,
+      creado_en: dbPedido.creado_en
+    };
+
+    // Insertar detalles (obligatorio, sin fallback). Si falla, el pedido no
+    // se considera creado de forma completa.
+    if (detallesFormateados.length > 0) {
+      const lineasDetalle = detallesFormateados.map(d => ({
+        pedido_id: dbPedido.id,
+        producto_id: d.producto_id,
+        cantidad: d.cantidad,
+        precio_unitario: d.precio_unitario,
+        subtotal: d.subtotal,
+        nota: d.notas
+      }));
+
+      try {
+        const { error: errorDetalle } = await supabase
+          .from(DetallesTableName)
+          .insert(lineasDetalle);
+        if (errorDetalle) throw errorDetalle;
+      } catch (detError) {
+        console.error(`No se pudieron guardar los detalles del pedido: ${detError.message}`);
+        throw errorBd(`No se pudieron guardar los detalles del pedido en la base de datos: ${detError.message}`);
+      }
+    }
+
+    // Caché local de lectura (no es la fuente de verdad)
+    memoryPedidos.unshift(pedidoPersistido);
 
     return {
-      ...nuevoPedido,
-      persistencia: guardadoEnDB ? 'Supabase' : 'Memoria/Fallback'
+      ...pedidoPersistido,
+      persistencia: 'Supabase'
     };
   },
 
@@ -216,10 +250,10 @@ const PedidosService = {
     try {
       const { data, error } = await supabase
         .from(TableName)
-        .select('*, DETALLES_PEDIDO(*)')
+        .select('*, detalles_pedido(*)')
         .order('creado_en', { ascending: false });
 
-      if (!error && data && data.length > 0) return data;
+      if (!error && data && data.length > 0) return data.map(normalizarPedidoDB);
     } catch (e) {
       // fallback
     }
@@ -233,11 +267,11 @@ const PedidosService = {
     try {
       const { data, error } = await supabase
         .from(TableName)
-        .select('*, DETALLES_PEDIDO(*)')
+        .select('*, detalles_pedido(*)')
         .eq('id', id)
         .single();
 
-      if (!error && data) return data;
+      if (!error && data) return normalizarPedidoDB(data);
     } catch (e) {
       // fallback
     }
@@ -261,9 +295,16 @@ const PedidosService = {
       qrToken = await generarTokenQRUnico();
       const updates = { qr_token: qrToken };
       try {
-        await supabase.from(TableName).update(updates).eq('id', pedido.id);
+        const { error } = await supabase
+          .from(TableName)
+          .update(updates)
+          .eq('id', pedido.id)
+          .select()
+          .single();
+        if (error) throw error;
       } catch (e) {
-        // fallback resiliente
+        console.error(`No se pudo guardar qr_token del pedido en la BD: ${e.message}`);
+        throw errorBd(`No se pudo guardar el QR del pedido en la base de datos: ${e.message}`);
       }
       const index = memoryPedidos.findIndex(p => p.id === pedido.id);
       if (index !== -1) {
@@ -315,19 +356,14 @@ const PedidosService = {
     }
 
     // Asociación: si el pedido aún no tiene token (datos precargados), se le asigna
-    // un token único y se persiste en la misma fila del pedido.
+    // un token único. El esquema real NO tiene columna token_contingencia, así que
+    // el token se mantiene en la caché del backend (no se persiste en Supabase).
     let tokenContingencia = pedido.token_contingencia;
     if (!tokenContingencia) {
       tokenContingencia = await generarTokenContingenciaUnico();
-      const updates = { token_contingencia: tokenContingencia };
-      try {
-        await supabase.from(TableName).update(updates).eq('id', pedido.id);
-      } catch (e) {
-        // fallback resiliente
-      }
       const index = memoryPedidos.findIndex(p => p.id === pedido.id);
       if (index !== -1) {
-        memoryPedidos[index] = { ...memoryPedidos[index], ...updates };
+        memoryPedidos[index] = { ...memoryPedidos[index], token_contingencia: tokenContingencia };
       }
       pedido.token_contingencia = tokenContingencia;
     }
@@ -343,7 +379,7 @@ const PedidosService = {
       garantias: {
         token_unico: 'Token alfanumérico único por pedido (verificación de colisión)',
         asociacion: `El token está asociado al pedido ${pedido.id}`,
-        guardado: 'Persistido en PEDIDOS.token_contingencia (Supabase + memoria)',
+        guardado: 'En caché del backend (el esquema real de Supabase no tiene columna token_contingencia)',
         posterior_validacion: 'Validado en POST /api/pedidos/validar-qr',
         un_solo_uso: 'Se marca como utilizado al marcar el pedido como Retirado'
       }
@@ -354,11 +390,11 @@ const PedidosService = {
     try {
       const { data, error } = await supabase
         .from(TableName)
-        .select('*, DETALLES_PEDIDO(*)')
+        .select('*, detalles_pedido(*)')
         .eq('cafeteria_id', cafeteriaId)
-        .order('franja_retiro', { ascending: true });
+        .order('creado_en', { ascending: false });
 
-      if (!error && data && data.length > 0) return data;
+      if (!error && data && data.length > 0) return data.map(normalizarPedidoDB);
     } catch (e) {
       // fallback
     }
@@ -374,11 +410,11 @@ const PedidosService = {
     try {
       const { data, error } = await supabase
         .from(TableName)
-        .select('*, DETALLES_PEDIDO(*)')
+        .select('*, detalles_pedido(*)')
         .eq('usuario_id', usuarioId)
         .order('creado_en', { ascending: false });
 
-      if (!error && data && data.length > 0) return data;
+      if (!error && data && data.length > 0) return data.map(normalizarPedidoDB);
     } catch (e) {
       // fallback
     }
@@ -398,32 +434,42 @@ const PedidosService = {
     const updates = { estado: nuevoEstado };
     const ahora = new Date().toISOString();
 
+    // Columnas reales del esquema: inicio_preparacion_en, listo_en, entregado_en
     if (nuevoEstado === 'En preparación' || nuevoEstado === 'preparando') {
       updates.inicio_preparacion_en = ahora;
+    } else if (nuevoEstado === 'Listo' || nuevoEstado === 'listo') {
+      updates.listo_en = ahora;
     } else if (nuevoEstado === 'Retirado' || nuevoEstado === 'entregado') {
-      updates.completado_en = ahora;
+      updates.entregado_en = ahora;
+      updates.qr_usado = true;
     }
 
+    // UPDATE obligatorio contra la BD real (sin fallback de memoria).
+    let data;
     try {
-      const { data, error } = await supabase
+      const { data: fila, error } = await supabase
         .from(TableName)
         .update(updates)
         .eq('id', id)
         .select()
-        .single();
+        .maybeSingle();
 
-      if (!error && data) return data;
+      if (error) throw error;
+      data = fila;
     } catch (e) {
-      // fallback
+      console.error(`No se pudo actualizar el estado del pedido en la BD: ${e.message}`);
+      throw errorBd(`No se pudo actualizar el estado del pedido en la base de datos: ${e.message}`);
     }
 
+    if (!data) return null;
+
+    // Actualizar caché local de lectura (no es la fuente de verdad)
     const index = memoryPedidos.findIndex(p => p.id === id || p.codigo_legible === id);
     if (index !== -1) {
       memoryPedidos[index] = { ...memoryPedidos[index], ...updates };
-      return memoryPedidos[index];
     }
 
-    return null;
+    return normalizarPedidoDB(data);
   },
 
   /**
@@ -444,14 +490,14 @@ const PedidosService = {
     );
     let metodoValidacion = 'desconocido';
 
-    if (!pedido) {
+if (!pedido) {
       try {
-        const { data, error } = await supabase
-          .from(TableName)
-          .select('*, DETALLES_PEDIDO(*)')
-          .or(`qr_token.eq.${tokenLimpio},token_contingencia.eq.${tokenLimpio},id.eq.${tokenLimpio}`)
-          .single();
-        if (!error && data) pedido = data;
+const { data, error } = await supabase
+        .from(TableName)
+        .select('*, detalles_pedido(*)')
+        .or(`qr_token.eq.${tokenLimpio},codigo_retiro_diario.eq.${tokenLimpio},id.eq.${tokenLimpio}`)
+        .single();
+        if (!error && data) pedido = normalizarPedidoDB(data);
       } catch (e) {
         // fallback
       }

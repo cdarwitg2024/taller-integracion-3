@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
-const { buscarPorId } = require('../../utils/usuariosMock');
+const UsuariosService = require('./usuarios.service');
 
-function autenticarToken(req, res, next) {
+async function autenticarToken(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
 
@@ -27,20 +27,34 @@ function autenticarToken(req, res, next) {
       return res.status(401).json({ error: 'Token inválido' });
     }
 
-    const usuario = buscarPorId(payload.id);
+    // La identidad del token se resuelve SIEMPRE contra la BD real. Si Supabase
+    // no responde, falla con error claro en vez de resolver contra datos de respaldo.
+    let usuario;
+    try {
+      usuario = await UsuariosService.getById(payload.id);
+    } catch (err) {
+      console.error('Error al consultar la BD real en autenticación:', err);
+      return res.status(503).json({ error: 'No se pudo consultar la base de datos de usuarios' });
+    }
 
     if (!usuario) {
       return res.status(401).json({ error: 'Usuario no encontrado' });
     }
 
-    if (!usuario.activo) {
+    if (usuario.activo === false || usuario.activo === 'false') {
       return res.status(401).json({ error: 'Usuario inactivo' });
     }
+
+    const rolEmbed = usuario.roles;
+    const rol = (rolEmbed && rolEmbed.nombre) ||
+      (Array.isArray(rolEmbed) && rolEmbed[0] && rolEmbed[0].nombre) ||
+      usuario.rol ||
+      null;
 
     req.user = {
       id: usuario.id,
       email: usuario.email,
-      rol: usuario.rol,
+      rol,
       nombre: usuario.nombre
     };
 

@@ -1,12 +1,12 @@
 const supabase = require('../../config/supabase');
 
-const TableName = 'DETALLES_PEDIDO';
+const TableName = 'detalles_pedido';
 
 const DetallesPedidoService = {
   async getByPedido(pedidoId) {
     const { data, error } = await supabase
       .from(TableName)
-      .select('*, PRODUCTOS(nombre, imagen_url)')
+      .select('*, productos(nombre, imagen_url)')
       .eq('pedido_id', pedidoId);
     
     if (error) throw error;

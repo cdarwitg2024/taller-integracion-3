@@ -1,6 +1,6 @@
 const supabase = require('../../config/supabase');
 
-const TableName = 'CATEGORIAS';
+const TableName = 'categorias';
 
 const CategoriasService = {
   async getAll() {

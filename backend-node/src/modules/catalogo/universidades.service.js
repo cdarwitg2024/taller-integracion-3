@@ -1,6 +1,6 @@
 const supabase = require('../../config/supabase');
 
-const TableName = 'UNIVERSIDADES';
+const TableName = 'universidades';
 
 const UniversidadesService = {
   async getAll() {

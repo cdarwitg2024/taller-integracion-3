@@ -6,7 +6,7 @@ const InventarioService = {
   async getByProducto(productoId) {
     const { data, error } = await supabase
       .from(TableName)
-      .select('*, USUARIOS(nombre, apellido), PRODUCTOS(nombre)')
+      .select('*, usuarios(nombre, apellido), productos(nombre)')
       .eq('producto_id', productoId)
       .order('creado_en', { ascending: false });
     

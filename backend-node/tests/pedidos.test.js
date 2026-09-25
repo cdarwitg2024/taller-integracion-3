@@ -1,4 +1,5 @@
 const request = require('supertest');
+jest.mock('../src/config/supabase');
 const app = require('../src/app');
 
 describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
@@ -161,7 +162,7 @@ describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
       expect(res.status).toBe(200);
       expect(res.body.valido).toBe(true);
       expect(res.body.pedido.estado).toBe('Retirado');
-      expect(res.body.pedido).toHaveProperty('completado_en');
+      expect(res.body.pedido).toHaveProperty('entregado_en');
     });
 
     test('POST /api/pedidos/validar-qr - Rechazo de token ya usado (Un solo uso)', async () => {
