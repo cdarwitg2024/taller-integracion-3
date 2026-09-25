@@ -5,11 +5,14 @@ const morgan = require('morgan');
 const path = require('path');
 
 // Importar rutas principales
-const tiemposRoutes = require('./routes/tiempos/tiemposRoutes');
+const tiemposRoutes = require('./modules/tiempos/tiemposRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 // ✅ Importar rutas QR y Pedidos
-const qrRoutes = require('./services/qr/routes/qrRoutes');
-const pedidosRoutes = require('./routes/pedidos.routes');
+const qrRoutes = require('./modules/qr/routes/qrRoutes');
+const pedidosRoutes = require('./modules/pedidos/pedidos.routes');
+const authRoutes = require('./modules/auth/auth.routes');
+const cafeteriasRoutes = require('./modules/catalogo/cafeterias.routes');
+const pagosRoutes = require('./modules/pagos/pagos.routes');
 
 const app = express();
 
@@ -27,6 +30,9 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/tiempos', tiemposRoutes);
 app.use('/api/qr', qrRoutes);
 app.use('/api/pedidos', pedidosRoutes);
+app.use('/auth', authRoutes);
+app.use('/cafeterias', cafeteriasRoutes);
+app.use('/api/pagos', pagosRoutes);
 app.use('/health', healthRoutes);
 
 // Ruta raíz
@@ -37,6 +43,9 @@ app.get('/', (req, res) => {
     status: 'online',
     endpoints: {
       health: '/health',
+      auth: '/auth',
+      cafeterias: '/cafeterias',
+      pagos: '/api/pagos',
       tiempos: '/api/tiempos',
       qr: '/api/qr',
       pedidos: '/api/pedidos'
