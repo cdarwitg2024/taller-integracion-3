@@ -1,6 +1,6 @@
 const supabase = require('../../config/supabase');
 
-const TableName = 'MOVIMIENTOS_INVENTARIO';
+const TableName = 'movimientos_inventario';
 
 const InventarioService = {
   async getByProducto(productoId) {

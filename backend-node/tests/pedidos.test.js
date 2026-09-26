@@ -1,6 +1,9 @@
 const request = require('supertest');
 jest.mock('../src/config/supabase');
 const app = require('../src/app');
+const { sembrarProductosBase } = require('./helpers/sembrarProductos');
+
+sembrarProductosBase();
 
 describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
   let pedidoCreado = null;
@@ -45,7 +48,7 @@ describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
 
     test('Debe crear un pedido exitosamente con todos los requerimientos del SRS', async () => {
       const payload = {
-        usuario_id: 'usr-estudiante-test-01',
+        usuario_id: 2,
         cafeteria_id: 'cafe-central-01',
         franja_retiro: '10:15 - 10:25',
         productos: [
@@ -81,7 +84,7 @@ describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
       expect(pedido).toHaveProperty('codigo_legible');
       expect(pedido.codigo_legible).toMatch(/^#CF-/);
       expect(pedido.cafeteria_id).toBe('cafe-central-01');
-      expect(pedido.usuario_id).toBe('usr-estudiante-test-01');
+      expect(pedido.usuario_id).toBe(2);
       expect(pedido.franja_retiro).toBe('10:15 - 10:25');
       expect(pedido.estado).toBe('Pagado'); // Estado inicial según BR-06
       
@@ -120,7 +123,7 @@ describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
     });
 
     test('GET /api/pedidos/usuario/:usuarioId - Visible para App Móvil (Estudiante)', async () => {
-      const res = await request(app).get('/api/pedidos/usuario/usr-estudiante-test-01');
+      const res = await request(app).get(`/api/pedidos/usuario/${pedidoCreado.usuario_id}`);
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
       expect(res.body.some(p => p.id === pedidoCreado.id)).toBe(true);

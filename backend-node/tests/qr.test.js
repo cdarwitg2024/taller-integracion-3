@@ -1,6 +1,9 @@
 const request = require('supertest');
 jest.mock('../src/config/supabase');
 const app = require('../src/app');
+const { sembrarProductosBase } = require('./helpers/sembrarProductos');
+
+sembrarProductosBase();
 
 jest.setTimeout(30000);
 

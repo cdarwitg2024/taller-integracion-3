@@ -34,6 +34,9 @@ async function crearPedido(req, res, next) {
     if (error.codigo === 503) {
       return res.status(503).json({ error: error.message });
     }
+    if (error.codigo === 409) {
+      return res.status(409).json({ error: error.message });
+    }
     return res.status(400).json({ error: error.message });
   }
 }

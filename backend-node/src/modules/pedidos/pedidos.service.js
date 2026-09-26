@@ -9,6 +9,11 @@ const {
   esEstadoTerminal,
   ESTADO_INICIAL
 } = require('./pedidos.maquina-estados');
+const {
+  verificarDisponibilidad,
+  descontarStock,
+  reponerStock
+} = require('../inventario/stock.service');
 
 const TableName = 'pedidos';
 const DetallesTableName = 'detalles_pedido';
@@ -139,6 +144,17 @@ const PedidosService = {
       };
     });
 
+    // 1b. Normalizar usuario: la BD exige un número (FK a usuarios). Si el
+    //     cliente no envía id válido (ej. placeholder anónimo), se usa un
+    //     usuario real por defecto (configurable vía DEFAULT_USUARIO_ID).
+    const usuarioIdNumerico = Number(usuario_id);
+    const usuarioIdFinal = (Number.isInteger(usuarioIdNumerico) && usuarioIdNumerico > 0)
+      ? usuarioIdNumerico
+      : Number(process.env.DEFAULT_USUARIO_ID || 1);
+
+    // 1c. Validar stock disponible antes de crear el pedido (409 si falta stock)
+    await verificarDisponibilidad(detallesFormateados);
+
     // 2. Generar identificadores únicos de retiro (SRS: QR y Token de contingencia).
     //    FR-22: token QR único por pedido. FR-23: Token de contingencia alfanumérico único.
     const pedidoId = uuidv4();
@@ -169,7 +185,7 @@ const PedidosService = {
     const nuevoPedido = {
       id: pedidoId,
       codigo_legible: codigoLegible,
-      usuario_id: usuario_id || 'usr-estudiante-anonimo',
+      usuario_id: usuarioIdFinal,
       cafeteria_id,
       franja_retiro,
       total: totalCalculado,
@@ -239,6 +255,22 @@ const PedidosService = {
         console.error(`No se pudieron guardar los detalles del pedido: ${detError.message}`);
         throw errorBd(`No se pudieron guardar los detalles del pedido en la base de datos: ${detError.message}`);
       }
+    }
+
+    // 4b. Descontar stock por cada línea (el pedido ya quedó pagado).
+    //     Si falla, el pedido existe pero no se puede servir: se informa como 503.
+    try {
+      for (const detalle of detallesFormateados) {
+        await descontarStock({
+          producto_id: detalle.producto_id,
+          cantidad: detalle.cantidad,
+          usuario_id: usuarioIdFinal,
+          motivo: `Pedido #${dbPedido.codigo_retiro_diario || codigoLegible}`
+        });
+      }
+    } catch (stockError) {
+      console.error(`No se pudo descontar stock del pedido: ${stockError.message}`);
+      throw errorBd(`El pedido se creó, pero no se pudo descontar el stock: ${stockError.message}`);
     }
 
     // Caché local de lectura (no es la fuente de verdad)
@@ -453,7 +485,7 @@ const PedidosService = {
     const updates = { estado: destino };
     const ahora = new Date().toISOString();
 
-    // Columnas reales del esquema: inicio_preparacion_en, listo_en, entregado_en
+    // Columnas reales del esquema: inicio_preparacion_en, listo_en, entregado_en, cancelado_en
     if (destino === 'En preparación') {
       updates.inicio_preparacion_en = ahora;
     } else if (destino === 'Listo') {
@@ -461,6 +493,8 @@ const PedidosService = {
     } else if (destino === 'Retirado') {
       updates.entregado_en = ahora;
       updates.qr_usado = true;
+    } else if (destino === 'Cancelado') {
+      updates.cancelado_en = ahora;
     }
 
     // UPDATE obligatorio contra la BD real (sin fallback de memoria).
@@ -489,6 +523,30 @@ const PedidosService = {
     );
     if (index !== -1) {
       memoryPedidos[index] = { ...memoryPedidos[index], ...updates };
+    }
+
+    // Al cancelar se devuelve el stock de cada línea del pedido (una sola vez,
+    // porque 'Cancelado' es un estado terminal).
+    if (destino === 'Cancelado') {
+      const { data: detalles, error: errorDetalles } = await supabase
+        .from(DetallesTableName)
+        .select('*')
+        .eq('pedido_id', id);
+
+      if (!errorDetalles && detalles && detalles.length > 0) {
+        for (const detalle of detalles) {
+          try {
+            await reponerStock({
+              producto_id: detalle.producto_id,
+              cantidad: detalle.cantidad,
+              usuario_id: actual.usuario_id,
+              motivo: `Pedido ${actual.codigo_legible || actual.codigo_retiro_diario || id} cancelado`
+            });
+          } catch (e) {
+            console.error(`No se pudo reponer stock al cancelar: ${e.message}`);
+          }
+        }
+      }
     }
 
     return normalizarPedidoDB(data);

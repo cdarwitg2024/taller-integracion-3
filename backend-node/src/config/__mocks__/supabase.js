@@ -38,6 +38,11 @@ function crearBuilder(tablaActual) {
     insert(payload) { estado.ultimoInsert = payload; return builder; },
     update(payload) { estado.ultimoUpdate = payload; return builder; },
     eq(field, value) { estado.filtros.push(row => String(row[field]) === String(value)); return builder; },
+    in(field, values) {
+      const lista = Array.isArray(values) ? values : [values];
+      estado.filtros.push(row => lista.some(v => String(row[field]) === String(v)));
+      return builder;
+    },
     or(predicate) { estado.orPredicado = matcherOR(predicate); return builder; },
     order() { return builder; },
     maybeSingle() { return resolver(false); },
@@ -50,12 +55,13 @@ function crearBuilder(tablaActual) {
     let error = null;
 
     if (estado.ultimoInsert) {
-      const fila = asignarId(lista, {
-        ...estado.ultimoInsert,
-        creado_en: estado.ultimoInsert.creado_en || new Date().toISOString(),
-      });
-      lista.push(fila);
-      data = fila;
+      const lote = Array.isArray(estado.ultimoInsert) ? estado.ultimoInsert : [estado.ultimoInsert];
+      const filas = lote.map(p => asignarId(lista, {
+        ...p,
+        creado_en: p.creado_en || new Date().toISOString(),
+      }));
+      lista.push(...filas);
+      data = filas.length === 1 ? filas[0] : filas;
     } else if (estado.ultimoUpdate) {
       const filas = lista.filter(row => estado.filtros.every(f => f(row)));
       if (filas.length > 0) {
@@ -108,4 +114,15 @@ function crearBuilder(tablaActual) {
 module.exports = {
   channel: () => ({ on: () => ({ subscribe: () => {} }), unsubscribe: () => Promise.resolve() }),
   from: (tablaActual) => crearBuilder(tablaActual),
+  __seed(tablaActual, filas) {
+    const lista = tabla(tablaActual);
+    lista.push(...filas.map(f => ({ ...f })));
+    return lista;
+  },
+  __reset() {
+    for (const k of Object.keys(store)) delete store[k];
+  },
+  __tabla(tablaActual) {
+    return tabla(tablaActual);
+  }
 };
