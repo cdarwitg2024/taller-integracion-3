@@ -17,6 +17,7 @@ async function construirComanda(nuevoPedido) {
 
     return normalizarPedido({
       id: nuevoPedido.id,
+      codigo_retiro_diario: nuevoPedido.codigo_retiro_diario,
       qr_token: nuevoPedido.qr_token,
       estado: nuevoPedido.estado,
       total: nuevoPedido.total,
@@ -71,11 +72,13 @@ export const kdsRealtime = {
         table: 'pedidos',
         filter: `cafeteria_id=eq.${cafeteriaId}`,
       },
-      (payload) => {
+      async (payload) => {
         const fila = payload?.new;
         if (!fila) return;
-        // Refleja en tiempo real los cambios de estado (pendiente -> en_preparacion -> listo)
-        onActualizar?.(normalizarPedido(fila));
+        // Refleja en tiempo real los cambios de estado (pendiente -> en_preparacion -> listo),
+        // enriqueciendo con sus detalles para que la comanda nunca pierda los productos.
+        const comanda = await construirComanda(fila);
+        onActualizar?.(comanda || normalizarPedido(fila));
       }
     );
 
