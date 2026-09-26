@@ -2,6 +2,13 @@ const { v4: uuidv4 } = require('uuid');
 const QRCode = require('qrcode');
 const supabase = require('../../config/supabase');
 const { pedidosMock } = require('../../utils/pedidosMock');
+const {
+  normalizarEstado,
+  puedeTransicionar,
+  transicionesDe,
+  esEstadoTerminal,
+  ESTADO_INICIAL
+} = require('./pedidos.maquina-estados');
 
 const TableName = 'pedidos';
 const DetallesTableName = 'detalles_pedido';
@@ -166,7 +173,7 @@ const PedidosService = {
       cafeteria_id,
       franja_retiro,
       total: totalCalculado,
-      estado: 'Pagado', // Estado inicial según SRS BR-06
+      estado: ESTADO_INICIAL, // Estado inicial según SRS BR-06
       qr_token: qrToken,
       qr_image: qrImage,
       token_contingencia: tokenContingencia,
@@ -275,7 +282,7 @@ const PedidosService = {
     } catch (e) {
       // fallback
     }
-    return memoryPedidos.find(p => p.id === id || p.codigo_legible === id) || null;
+    return memoryPedidos.find(p => String(p.id) === String(id) || String(p.codigo_legible) === String(id)) || null;
   },
   
   async obtenerQR(id) {
@@ -283,7 +290,7 @@ const PedidosService = {
     if (!pedido) return null;
 
     // No reutilización: un pedido ya entregado no puede volver a generar su QR
-    if (pedido.estado === 'Retirado' || pedido.estado === 'entregado') {
+    if (esEstadoTerminal(pedido.estado)) {
       const error = new Error('El pedido ya fue entregado; el código QR no puede reutilizarse.');
       error.codigo = 409;
       throw error;
@@ -349,7 +356,7 @@ const PedidosService = {
     if (!pedido) return null;
 
     // No reutilización: un pedido ya entregado no puede volver a usar su token
-    if (pedido.estado === 'Retirado' || pedido.estado === 'entregado') {
+    if (esEstadoTerminal(pedido.estado)) {
       const error = new Error('El pedido ya fue entregado; el Token de contingencia no puede reutilizarse.');
       error.codigo = 409;
       throw error;
@@ -426,20 +433,32 @@ const PedidosService = {
    * Creado -> Pagado -> En preparación -> Listo -> Retirado
    */
   async updateEstado(id, nuevoEstado) {
-    const estadosValidos = ['Creado', 'Pagado', 'En preparación', 'Listo', 'Retirado', 'Cancelado', 'pendiente', 'preparando', 'listo', 'entregado'];
-    if (!estadosValidos.includes(nuevoEstado)) {
+    const destino = normalizarEstado(nuevoEstado);
+    if (!destino) {
       throw new Error(`Estado '${nuevoEstado}' no es válido.`);
     }
 
-    const updates = { estado: nuevoEstado };
+    const actual = await this.getById(id);
+    if (!actual) return null;
+
+    const desde = normalizarEstado(actual.estado);
+    if (!puedeTransicionar(desde, destino)) {
+      const permitidas = transicionesDe(desde);
+      const mensaje = permitidas.length === 0
+        ? `El estado '${desde}' es terminal; no admite transiciones.`
+        : `Transición no permitida: '${desde}' → '${destino}'. Transiciones válidas: ${permitidas.join(', ')}.`;
+      throw new Error(mensaje);
+    }
+
+    const updates = { estado: destino };
     const ahora = new Date().toISOString();
 
     // Columnas reales del esquema: inicio_preparacion_en, listo_en, entregado_en
-    if (nuevoEstado === 'En preparación' || nuevoEstado === 'preparando') {
+    if (destino === 'En preparación') {
       updates.inicio_preparacion_en = ahora;
-    } else if (nuevoEstado === 'Listo' || nuevoEstado === 'listo') {
+    } else if (destino === 'Listo') {
       updates.listo_en = ahora;
-    } else if (nuevoEstado === 'Retirado' || nuevoEstado === 'entregado') {
+    } else if (destino === 'Retirado') {
       updates.entregado_en = ahora;
       updates.qr_usado = true;
     }
@@ -464,7 +483,10 @@ const PedidosService = {
     if (!data) return null;
 
     // Actualizar caché local de lectura (no es la fuente de verdad)
-    const index = memoryPedidos.findIndex(p => p.id === id || p.codigo_legible === id);
+    // Comparar por String(): el id llega como string (params) y en memoria puede ser number.
+    const index = memoryPedidos.findIndex(p =>
+      String(p.id) === String(id) || String(p.codigo_legible) === String(id)
+    );
     if (index !== -1) {
       memoryPedidos[index] = { ...memoryPedidos[index], ...updates };
     }
@@ -514,8 +536,12 @@ const { data, error } = await supabase
       metodoValidacion = 'qr';
     }
 
-    if (pedido.estado === 'Retirado' || pedido.estado === 'entregado') {
+    if (esEstadoTerminal(pedido.estado)) {
       return { valido: false, razon: 'El pedido ya fue entregado previamente (token de un solo uso)', pedido };
+    }
+
+    if (normalizarEstado(pedido.estado) !== 'Listo') {
+      return { valido: false, razon: 'El pedido aún no está listo para retiro', pedido };
     }
 
     // Marcar como entregado/retirado. El token consumido no puede reutilizarse.
