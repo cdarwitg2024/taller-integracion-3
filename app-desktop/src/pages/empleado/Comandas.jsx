@@ -41,7 +41,7 @@ function Comandas({ currentUser }) {
   }, []);
 
   const fetchPedidos = useCallback(async () => {
-    const data = await pedidosService.getAll();
+    const data = await pedidosService.getAll({ cafeteriaId: CAFETERIA_ID });
     mergeConSnapshot(data);
     setLoading(false);
   }, [mergeConSnapshot]);
@@ -77,10 +77,17 @@ function Comandas({ currentUser }) {
 
   useEffect(() => {
     const poll = setInterval(() => {
-      pedidosService.getAll().then(mergeConSnapshot);
+      pedidosService.getAll({ cafeteriaId: CAFETERIA_ID }).then(mergeConSnapshot);
     }, 10000);
     return () => clearInterval(poll);
   }, [mergeConSnapshot]);
+
+  useEffect(() => {
+    const idsVisibles = new Set(pedidos.map(p => String(p.id)));
+    pedidosRealtime.current.forEach((_comanda, id) => {
+      if (!idsVisibles.has(id)) pedidosRealtime.current.delete(id);
+    });
+  }, [pedidos]);
 
   const handleCambiarEstado = async (id, nuevoEstado, e) => {
     if (e) e.stopPropagation();

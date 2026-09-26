@@ -103,15 +103,29 @@ export function ordenarPedidos(lista) {
   return [...lista].sort(comparadorPrioridad);
 }
 
+const TRANSICIONES_VALIDAS = {
+  pendiente: new Set(['en_preparacion', 'cancelado']),
+  en_preparacion: new Set(['listo', 'cancelado']),
+  listo: new Set(['entregado']),
+};
+
+export function esTransicionValida(estadoActual, estadoNuevo) {
+  const permitidos = TRANSICIONES_VALIDAS[estadoActual];
+  return Boolean(permitidos && permitidos.has(estadoNuevo));
+}
+
 export const pedidosService = {
-  async getAll() {
+  async getAll({ cafeteriaId } = {}) {
     if (!isSupabaseConfigured) {
       throw new Error('Supabase no está configurado en el cliente');
     }
-    const { data, error } = await supabase
+    let query = supabase
       .from('pedidos')
-      .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))')
-      .order('creado_en', { ascending: false });
+      .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))');
+
+    if (cafeteriaId) query = query.eq('cafeteria_id', cafeteriaId);
+
+    const { data, error } = await query.order('creado_en', { ascending: false });
 
     if (error) {
       console.error('Error al obtener pedidos desde Supabase:', error);
@@ -158,6 +172,14 @@ export const pedidosService = {
   },
 
   async updateEstado(id, nuevoEstado) {
+    // 0. Regla de flujo: no se puede saltar estados
+    //    (pendiente -> en_preparacion -> listo -> entregado).
+    const actual = await this.getById(id);
+    if (actual && !esTransicionValida(actual.estado, nuevoEstado)) {
+      console.warn(`Transición inválida de estado: ${actual.estado} -> ${nuevoEstado} (pedido ${id})`);
+      return actual;
+    }
+
     // 1. Vía MS Comercio (PATCH /pedidos/:id/estado) — valida la secuencia
     //    pendiente -> en_preparacion -> listo en el backend.
     try {
