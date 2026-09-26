@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -8,12 +8,17 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  InputAdornment,
   Stack,
+  Tab,
+  Tabs,
+  TextField,
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { QrReader } from 'react-qr-reader';
+import KeyIcon from '@mui/icons-material/Key';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
+import { QrReader } from 'react-qr-reader';
 
 import backendApi from '../services/backendApi';
 import pedidosService, { normalizarTokenQR } from '../services/pedidosService';
@@ -21,8 +26,21 @@ import pedidosService, { normalizarTokenQR } from '../services/pedidosService';
 function EscanearQrDialog({ open, cafeteriaId, onClose }) {
   const procesando = useRef(false);
   const ultimoToken = useRef(null);
+  const [modo, setModo] = useState('qr'); // 'qr' | 'token'
+  const [tokenInput, setTokenInput] = useState('');
   const [resultado, setResultado] = useState(null); // { valido, razon?, mensaje?, pedido? }
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      setModo('qr');
+      setTokenInput('');
+      setResultado(null);
+      setError('');
+      procesando.current = false;
+      ultimoToken.current = null;
+    }
+  }, [open]);
 
   const validar = async (tokenCrudo) => {
     const token = normalizarTokenQR(tokenCrudo);
@@ -79,6 +97,19 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
       </DialogTitle>
 
       <DialogContent dividers>
+        <Tabs
+          value={modo}
+          onChange={(_e, nuevoModo) => {
+            resetear();
+            setModo(nuevoModo);
+          }}
+          variant="fullWidth"
+          sx={{ mb: 2 }}
+        >
+          <Tab icon={<QrCodeScannerIcon />} iconPosition="start" label="Escanear QR" value="qr" />
+          <Tab icon={<KeyIcon />} iconPosition="start" label="Ingresar Token" value="token" />
+        </Tabs>
+
         <Box
           sx={{
             position: 'relative',
@@ -91,34 +122,86 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
             mx: 'auto',
           }}
         >
-          <QrReader
-            onResult={(result, scanError) => {
-              if (result?.text) {
-                void validar(String(result.text));
+          {modo === 'qr' ? (
+            <QrReader
+              onResult={(result, scanError) => {
+                if (result?.text) {
+                  void validar(String(result.text));
+                }
+                if (scanError) {
+                  // errores de cámara/percepción: no bloquear la captura
+                }
+              }}
+              constraints={{ facingMode: 'environment' }}
+              scanDelay={400}
+              ViewFinder={({ isScanning }) =>
+                isScanning && !resultado && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <QrCodeScannerIcon sx={{ fontSize: 64, color: 'rgba(255,255,255,0.6)' }} />
+                  </Box>
+                )
               }
-              if (scanError) {
-                // errores de cámara/percepción: no bloquear la captura
-              }
-            }}
-            constraints={{ facingMode: 'environment' }}
-            scanDelay={400}
-            ViewFinder={({ isScanning }) =>
-              isScanning && !resultado && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    pointerEvents: 'none',
-                  }}
-                >
-                  <QrCodeScannerIcon sx={{ fontSize: 64, color: 'rgba(255,255,255,0.6)' }} />
-                </Box>
-              )
-            }
-          />
+            />
+          ) : (
+            <Box
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                gap: 2,
+                p: 3,
+              }}
+            >
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', textAlign: 'center' }}>
+                Ingrese el token del pedido (código QR, de retiro diario o ID).
+              </Typography>
+              <TextField
+                autoFocus
+                fullWidth
+                size="medium"
+                variant="outlined"
+                label="Token"
+                placeholder="Ej. QR-TST-0001"
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void validar(tokenInput);
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <KeyIcon sx={{ color: 'rgba(255,255,255,0.6)' }} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 2,
+                  '& .MuiOutlinedInput-root': { borderRadius: 2 },
+                }}
+              />
+              <Button
+                variant="contained"
+                size="large"
+                sx={{ minHeight: 48 }}
+                disabled={!tokenInput.trim() || procesando.current}
+                onClick={() => void validar(tokenInput)}
+              >
+                Validar Token
+              </Button>
+            </Box>
+          )}
 
           {resultado && (
             <Box
@@ -148,7 +231,9 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
           )}
         </Box>
         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1.5 }}>
-          El QR debe corresponder a un pedido en estado "listo" de esta cafetería.
+          {modo === 'qr'
+            ? 'El QR debe corresponder a un pedido en estado "listo" de esta cafetería.'
+            : 'El token debe corresponder a un pedido en estado "listo" de esta cafetería y es de un solo uso.'}
         </Typography>
 
         {error && (
@@ -165,7 +250,7 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
         <Stack direction="row" spacing={1}>
           {resultado && (
             <Button onClick={resetear} variant="outlined" sx={{ minHeight: 48 }}>
-              Escanear otro
+              {modo === 'qr' ? 'Escanear otro' : 'Validar otro'}
             </Button>
           )}
           <Button onClick={cerrar} variant="contained" sx={{ minHeight: 48 }}>
