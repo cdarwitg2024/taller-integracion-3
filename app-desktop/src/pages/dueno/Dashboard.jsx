@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Box, Grid } from '@mui/material';
+import { Box, Grid, Alert, Button } from '@mui/material';
 
+import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 import pedidosService from '../../services/pedidosService';
 import DashboardHeader from '../../components/dashboard/DashboardHeader';
 import KpiCards from '../../components/dashboard/KpiCards';
@@ -15,9 +16,11 @@ function Dashboard() {
   const [salesData, setSalesData] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dbError, setDbError] = useState(null);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    setDbError(null);
     try {
       const [resStats, resPedidos, resSales, resTop] = await Promise.all([
         pedidosService.getEstadisticas(),
@@ -31,19 +34,66 @@ function Dashboard() {
       setTopProducts(resTop);
     } catch (err) {
       console.error('Error cargando datos del dashboard:', err);
+      setDbError(
+        'Sin conexión con la base de datos Supabase. Verifique que el servicio de base de datos se encuentre iniciado.'
+      );
+      setStats(null);
+      setPedidos([]);
+      setSalesData([]);
+      setTopProducts([]);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadData(true);
+
+    if (!isSupabaseConfigured) return;
+
+    const canalDashboard = supabase.channel('dueno-dashboard-realtime');
+
+    canalDashboard
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'pedidos' },
+        () => {
+          loadData(false);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'detalles_pedido' },
+        () => {
+          loadData(false);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canalDashboard);
+    };
   }, []);
 
   return (
     <Box sx={{ width: '100%', maxWidth: '100%', pb: 4, boxSizing: 'border-box' }}>
       {/* 1. Encabezado y Acción de Actualizar */}
       <DashboardHeader onRefresh={loadData} loading={loading} />
+
+      {/* Alerta de Error de Base de Datos */}
+      {dbError && (
+        <Alert
+          severity="error"
+          sx={{ mb: 3, borderRadius: '12px', fontWeight: 500 }}
+          action={
+            <Button color="inherit" size="small" onClick={loadData}>
+              Reintentar
+            </Button>
+          }
+        >
+          {dbError}
+        </Alert>
+      )}
 
       {/* 2. Tarjetas de Indicadores Principales (KPIs) */}
       <KpiCards stats={stats} />

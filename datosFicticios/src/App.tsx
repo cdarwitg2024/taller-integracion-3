@@ -167,6 +167,21 @@ export default function App() {
     return () => clearInterval(timer);
   }, [pasoActual, selectedCafeteriaId, fetchProcesoCafeteria, loadCafeteriaData]);
 
+  // Polling en tiempo real mientras el menú desplegable de "ver los datos en vivo" esté abierto (cada 1.5s)
+  useEffect(() => {
+    if (!mostrarMenuVisualizacion || !selectedCafeteriaId) return;
+
+    fetchProcesoCafeteria(selectedCafeteriaId);
+    loadCafeteriaData(selectedCafeteriaId);
+
+    const timer = setInterval(() => {
+      fetchProcesoCafeteria(selectedCafeteriaId);
+      loadCafeteriaData(selectedCafeteriaId);
+    }, 1500);
+
+    return () => clearInterval(timer);
+  }, [mostrarMenuVisualizacion, selectedCafeteriaId, fetchProcesoCafeteria, loadCafeteriaData]);
+
   // Avanzar manualmente de etapa (para pruebas inmediatas)
   const handleAvanzarPaso = async (pedidoId: number) => {
     try {
@@ -1087,7 +1102,14 @@ export default function App() {
               <button
                 type="button"
                 className={`collapsible-menu-button ${mostrarMenuVisualizacion ? 'is-open' : ''}`}
-                onClick={() => setMostrarMenuVisualizacion(!mostrarMenuVisualizacion)}
+                onClick={() => {
+                  const nuevo = !mostrarMenuVisualizacion;
+                  setMostrarMenuVisualizacion(nuevo);
+                  if (nuevo && selectedCafeteriaId) {
+                    loadCafeteriaData(selectedCafeteriaId);
+                    fetchProcesoCafeteria(selectedCafeteriaId);
+                  }
+                }}
               >
                 <div className="menu-btn-left">
                   <span className="menu-icon">{mostrarMenuVisualizacion ? '📂' : '📁'}</span>

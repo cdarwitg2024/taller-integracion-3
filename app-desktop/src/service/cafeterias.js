@@ -2,66 +2,59 @@ import { supabase, isSupabaseConfigured } from './supabase';
 
 const TABLE = 'cafeterias';
 
-const defaultCafeterias = [
-  {
-    id: 1,
-    nombre: 'Cafetería Central',
-    descripcion: 'Punto de venta y retiro principal',
-    hora_apertura: '08:00',
-    hora_cierre: '19:00',
-    activa: true,
-  },
-];
+function asegurarConexion() {
+  if (!isSupabaseConfigured) {
+    throw new Error('Supabase no está configurado en las variables de entorno.');
+  }
+}
 
 export const cafeterias = {
   async getAll() {
-    if (isSupabaseConfigured) {
-      try {
-        const { data, error } = await supabase
-          .from(TABLE)
-          .select('*, campus_sedes(*, universidades(*))')
-          .eq('activa', true);
-        if (!error && data && data.length > 0) return data;
-      } catch (err) {
-        console.warn('Error al obtener cafeterias:', err);
-      }
+    asegurarConexion();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select('*, campus_sedes(*, universidades(*))')
+      .eq('activa', true);
+
+    if (error) {
+      console.error('Error al obtener cafeterias de Supabase:', error);
+      throw new Error(`Error al obtener cafeterías de la base de datos: ${error.message}`);
     }
-    return defaultCafeterias;
+    return data || [];
   },
 
   async getById(id) {
-    if (isSupabaseConfigured) {
-      try {
-        const { data, error } = await supabase
-          .from(TABLE)
-          .select('*, campus_sedes(*, universidades(*))')
-          .eq('id', id)
-          .single();
-        if (!error && data) return data;
-      } catch (err) {
-        console.warn('Error al obtener cafeteria por id:', err);
-      }
+    asegurarConexion();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select('*, campus_sedes(*, universidades(*))')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('Error al obtener cafeteria por id en Supabase:', error);
+      throw new Error(`Error al obtener cafetería de la base de datos: ${error.message}`);
     }
-    return defaultCafeterias.find((c) => c.id === id) || defaultCafeterias[0];
+    return data || null;
   },
 
   async getByCampus(campusId) {
-    if (isSupabaseConfigured) {
-      try {
-        const { data, error } = await supabase
-          .from(TABLE)
-          .select('*')
-          .eq('campus_id', campusId)
-          .eq('activa', true);
-        if (!error && data) return data;
-      } catch (err) {
-        console.warn('Error al obtener cafeterias por campus:', err);
-      }
+    asegurarConexion();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select('*')
+      .eq('campus_id', campusId)
+      .eq('activa', true);
+
+    if (error) {
+      console.error('Error al obtener cafeterias por campus en Supabase:', error);
+      throw new Error(`Error al obtener cafeterías por campus: ${error.message}`);
     }
-    return [];
+    return data || [];
   },
 
   async create(cafeteria) {
+    asegurarConexion();
     const { data, error } = await supabase
       .from(TABLE)
       .insert(cafeteria)
@@ -72,6 +65,7 @@ export const cafeterias = {
   },
 
   async update(id, updates) {
+    asegurarConexion();
     const { data, error } = await supabase
       .from(TABLE)
       .update({ ...updates, actualizado_en: new Date().toISOString() })
@@ -83,6 +77,7 @@ export const cafeterias = {
   },
 
   async delete(id) {
+    asegurarConexion();
     const { error } = await supabase
       .from(TABLE)
       .delete()
