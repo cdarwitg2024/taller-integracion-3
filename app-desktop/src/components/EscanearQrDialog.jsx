@@ -16,6 +16,7 @@ import { QrReader } from 'react-qr-reader';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 
 import backendApi from '../services/backendApi';
+import pedidosService, { normalizarTokenQR } from '../services/pedidosService';
 
 function EscanearQrDialog({ open, cafeteriaId, onClose }) {
   const procesando = useRef(false);
@@ -23,13 +24,20 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
   const [error, setError] = useState('');
   const [leido, setLeido] = useState(false);
 
-  const validar = async (token) => {
+  const validar = async (tokenCrudo) => {
     if (procesando.current) return;
     procesando.current = true;
     setLeido(true);
     setError('');
+    const token = normalizarTokenQR(tokenCrudo);
     try {
-      const res = await backendApi.validarQr(token);
+      let res;
+      try {
+        res = await backendApi.validarQr(token);
+      } catch (backendErr) {
+        console.warn('MS Comercio no disponible para validar QR, fallback a Supabase:', backendErr.message);
+        res = await pedidosService.validarQrEntrega(token);
+      }
       setResultado(res);
     } catch (err) {
       setResultado(null);

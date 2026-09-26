@@ -1,6 +1,15 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { backendApi } from './backendApi';
+import { backendApi, CAFETERIA_ID } from './backendApi';
 import { parsearFecha, formatearHora, formatearHoraBucket } from '../utils/dateUtils';
+
+export function normalizarTokenQR(texto) {
+  let token = String(texto || '').trim().replace(/^["']+|["']+$/g, '');
+  if (/^https?:\/\//i.test(token)) {
+    const partes = token.split('/').filter(Boolean);
+    token = partes[partes.length - 1] || token;
+  }
+  return token;
+}
 
 export function formatearHoraRetiro(valor) {
   return formatearHora(valor);
@@ -158,10 +167,12 @@ export const pedidosService = {
     if (!isSupabaseConfigured) {
       throw new Error('Supabase no está configurado en el cliente');
     }
+    const orClauses = [`qr_token.eq.${cleanToken}`, `codigo_retiro_diario.eq.${cleanToken}`];
+    if (/^\d+$/.test(cleanToken)) orClauses.push(`id.eq.${cleanToken}`);
     const { data, error } = await supabase
       .from('pedidos')
       .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))')
-      .or(`qr_token.eq.${cleanToken},id.eq.${cleanToken},codigo_retiro_diario.eq.${cleanToken}`)
+      .or(orClauses.join(','))
       .single();
 
     if (error) {
@@ -217,6 +228,38 @@ export const pedidosService = {
       throw error;
     }
     return normalizarPedido(data);
+  },
+
+  async validarQrEntrega(textoQr) {
+    const token = normalizarTokenQR(textoQr);
+    if (!token) return { valido: false, razon: 'QR vacío o ilegible, intenta nuevamente.' };
+
+    try {
+      const pedido = await this.getByQrToken(token);
+      if (!pedido) return { valido: false, razon: 'QR no reconocido. Verifica que corresponda a un pedido de CofeeFaster.' };
+      if (Number(pedido.cafeteria_id) !== CAFETERIA_ID) {
+        return { valido: false, razon: `El pedido #${pedido.id} no pertenece a esta cafetería.` };
+      }
+      if (pedido.estado === 'entregado') {
+        return { valido: false, razon: `El pedido #${pedido.id} ya fue entregado.` };
+      }
+      if (pedido.estado !== 'listo') {
+        return { valido: false, razon: `El pedido #${pedido.id} aún no está listo para retiro (estado: ${pedido.estado}).` };
+      }
+
+      const entregado = await this.updateEstado(pedido.rawId ?? pedido.id, 'entregado');
+      if (!entregado || entregado.estado !== 'entregado') {
+        return { valido: false, razon: `El pedido #${pedido.id} no pudo marcarse como entregado.` };
+      }
+      return {
+        valido: true,
+        mensaje: 'Entrega validada exitosamente. ¡Qué disfrute su pedido!',
+        pedido: entregado,
+      };
+    } catch (err) {
+      console.warn('validarQrEntrega:', err);
+      return { valido: false, razon: 'No se pudo validar el QR en este momento.' };
+    }
   },
 
   async getEstadisticas() {
