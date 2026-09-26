@@ -10,6 +10,7 @@ import {
   TableRow,
   Chip,
 } from '@mui/material';
+import { formatearHora } from '../../utils/dateUtils';
 
 function RecentOrdersTable({ pedidos }) {
   const getEstadoChip = (estado) => {
@@ -157,7 +158,7 @@ function RecentOrdersTable({ pedidos }) {
                 const ubicacionNombre =
                   p.ubicacion ||
                   (cafeObj?.nombre ? cafeObj.nombre : 'Campus Central');
-                const horaFormat = p.hora || (p.creado_en ? new Date(p.creado_en).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--');
+                const horaFormat = formatearHora(p.creado_en || p.hora);
 
                 return (
                   <TableRow

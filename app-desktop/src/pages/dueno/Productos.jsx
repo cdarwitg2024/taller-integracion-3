@@ -55,6 +55,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { productos as productosService } from '../../service/productos';
 import { cafeterias as cafeteriasService } from '../../service/cafeterias';
 import { categorias as categoriasService } from '../../service/categorias';
+import { supabase, isSupabaseConfigured } from '../../service/supabase';
 import ModificarPrecioDialog from '../../components/productos/ModificarPrecioDialog';
 import ModificarStockDialog from '../../components/productos/ModificarStockDialog';
 
@@ -116,13 +117,30 @@ function CatalogoProductos() {
   // Operación separada: Diálogo para Modificar Stock (FR-47)
   const [stockDialogOpen, setStockDialogOpen] = useState(false);
   const [productoParaStock, setProductoParaStock] = useState(null);
+  const [dbError, setDbError] = useState(null);
 
   const handleOpenPrecio = (prod) => {
+    if (dbError) {
+      setSnackbar({
+        open: true,
+        message: 'No es posible modificar precios: la base de datos se encuentra apagada o inaccesible.',
+        severity: 'error',
+      });
+      return;
+    }
     setProductoParaPrecio(prod);
     setPrecioDialogOpen(true);
   };
 
   const handleOpenStock = (prod) => {
+    if (dbError) {
+      setSnackbar({
+        open: true,
+        message: 'No es posible modificar stock: la base de datos se encuentra apagada o inaccesible.',
+        severity: 'error',
+      });
+      return;
+    }
     setProductoParaStock(prod);
     setStockDialogOpen(true);
   };
@@ -152,20 +170,25 @@ function CatalogoProductos() {
   // Snackbar para notificaciones
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  const loadProductos = async () => {
-    setLoading(true);
+  const loadProductos = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const data = await productosService.getAll();
-      setProductos(data);
+      setProductos(data || []);
+      setDbError(null);
     } catch (err) {
       console.error('Error al cargar productos desde la base de datos:', err);
-      setSnackbar({
-        open: true,
-        message: 'Error al cargar productos de la base de datos.',
-        severity: 'error',
-      });
+      setDbError(err.message || 'Sin conexión con la base de datos Supabase.');
+      setProductos([]);
+      if (showLoading) {
+        setSnackbar({
+          open: true,
+          message: 'Error de conexión: No se pudo conectar a la base de datos.',
+          severity: 'error',
+        });
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -194,13 +217,39 @@ function CatalogoProductos() {
   };
 
   useEffect(() => {
-    loadProductos();
+    loadProductos(true);
     loadCafeterias();
     loadCategorias();
+
+    if (!isSupabaseConfigured) return;
+
+    const canalProds = supabase.channel('dueno-productos-realtime');
+
+    canalProds
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'productos' },
+        () => {
+          loadProductos(false);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canalProds);
+    };
   }, []);
 
   // --- Apertura y manejo de Creación (FR-43) ---
   const handleOpenCreate = () => {
+    if (dbError) {
+      setSnackbar({
+        open: true,
+        message: 'No es posible crear productos: la base de datos se encuentra apagada o inaccesible.',
+        severity: 'error',
+      });
+      return;
+    }
     setCreateFormError('');
     setCreateForm({
       ...initialCreateForm,
@@ -601,6 +650,28 @@ function CatalogoProductos() {
           </Button>
         </Stack>
       </Box>
+
+      {/* Alerta de Desconexión / Error con la Base de Datos */}
+      {dbError && (
+        <Alert
+          severity="error"
+          variant="filled"
+          action={
+            <Button color="inherit" size="small" onClick={() => loadProductos(true)}>
+              Reintentar Conexión
+            </Button>
+          }
+          sx={{
+            mb: 3,
+            borderRadius: '14px',
+            fontWeight: 700,
+            backgroundColor: '#C62828',
+            boxShadow: '0 4px 14px rgba(198, 40, 40, 0.25)',
+          }}
+        >
+          {dbError}. La base de datos se encuentra apagada o inaccesible. No se muestran datos falsos ni se permiten modificaciones.
+        </Alert>
+      )}
 
       {/* 5 Tarjetas KPI con Métricas y Valorización Total */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -1226,6 +1297,8 @@ function CatalogoProductos() {
                           Restablecer todos los filtros
                         </Button>
                       </Stack>
+                    ) : dbError ? (
+                      `⚠️ ${dbError}. Verifique que la base de datos esté encendida para cargar los datos reales.`
                     ) : (
                       'No se encontraron productos registrados.'
                     )}
