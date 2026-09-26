@@ -341,11 +341,12 @@ export const pedidosService = {
           .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))')
           .order('creado_en', { ascending: false });
 
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           const normalized = data.map(normalizarPedido);
-          saveStoredPedidos(normalized);
+          if (normalized.length > 0) saveStoredPedidos(normalized);
           return normalized;
         }
+        console.warn('Supabase sin datos, fallback a mock:', error?.message);
       } catch (err) {
         console.warn('Fallback a datos mock por error en Supabase:', err);
       }
