@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 
 import TimeAgo from './TimeAgo';
+import { parsearFecha, formatearHora } from '../utils/dateUtils';
 
 const etiquetaPorEstado = {
   pendiente: { fondo: '#F2ECE7', texto: '#4A3B32', label: 'PENDIENTE' },
@@ -23,19 +24,12 @@ const botonPorEstado = {
   en_preparacion: { label: 'MARCAR COMO LISTO', background: '#E65100', siguiente: 'listo' },
 };
 
-function formatoHM(fecha) {
-  const h24 = fecha.getHours();
-  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
-  const ampm = h24 < 12 ? 'AM' : 'PM';
-  return `${String(h12).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')} ${ampm}`;
-}
-
 function getHoraRetiro(pedido) {
-  if (pedido.hora_retiro) return pedido.hora_retiro;
+  if (pedido.hora_retiro) return formatearHora(pedido.hora_retiro);
   if (pedido.creado_en) {
-    const fecha = new Date(pedido.creado_en);
-    if (!Number.isNaN(fecha.getTime())) {
-      return formatoHM(new Date(fecha.getTime() + 15 * 60000));
+    const fecha = parsearFecha(pedido.creado_en);
+    if (fecha) {
+      return formatearHora(new Date(fecha.getTime() + 15 * 60000));
     }
   }
   return '—';

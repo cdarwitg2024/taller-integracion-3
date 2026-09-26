@@ -56,6 +56,7 @@ import SortIcon from '@mui/icons-material/Sort';
 import { productos as productosService } from '../../service/productos';
 import { alertasStock as alertasService } from '../../service/alertas_stock';
 import { telegramDuenoService } from '../../service/telegram_dueno';
+import { supabase, isSupabaseConfigured } from '../../service/supabase';
 import TelegramConfigModal from '../../components/telegram/TelegramConfigModal';
 import ModificarStockDialog from '../../components/productos/ModificarStockDialog';
 
@@ -63,7 +64,11 @@ function StockInventario({ currentUser }) {
   const [items, setItems] = useState([]);
   const [alertas, setAlertas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dbError, setDbError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState('');
+  const [realtimeStatus, setRealtimeStatus] = useState(
+    isSupabaseConfigured ? 'conectado' : 'indisponible'
+  );
   const [telegramConfig, setTelegramConfig] = useState(null);
   const [telegramModalOpen, setTelegramModalOpen] = useState(false);
   const [telegramMenuAnchor, setTelegramMenuAnchor] = useState(null);
@@ -75,6 +80,14 @@ function StockInventario({ currentUser }) {
   const [productoParaStock, setProductoParaStock] = useState(null);
 
   const handleOpenStockDialog = (row) => {
+    if (dbError) {
+      setSnackbar({
+        open: true,
+        message: 'No es posible modificar el stock: la base de datos se encuentra inaccesible o apagada.',
+        severity: 'error',
+      });
+      return;
+    }
     setProductoParaStock({
       id: row.id,
       nombre: row.insumo,
@@ -93,14 +106,14 @@ function StockInventario({ currentUser }) {
       message: message || 'Stock actualizado exitosamente en Supabase.',
       severity: 'success',
     });
-    await loadData();
+    await loadData(false);
   };
 
   const duenoId = currentUser?.id || 1;
   const cafeteriaId = currentUser?.cafeteria_id || 1;
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const [prodsData, alertasData, tgConfig] = await Promise.all([
         productosService.getAll(),
@@ -108,7 +121,6 @@ function StockInventario({ currentUser }) {
         telegramDuenoService.getConfiguracion(duenoId),
       ]);
       setTelegramConfig(tgConfig);
-
 
       const formatted = prodsData.map((p) => {
         const actual = Number(p.stock || 0);
@@ -138,17 +150,84 @@ function StockInventario({ currentUser }) {
 
       setItems(formatted);
       setAlertas(alertasData || []);
-      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      setDbError(null);
+      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }));
     } catch (err) {
-      console.error('Error cargando inventario:', err);
+      console.error('Error cargando inventario desde Supabase:', err);
+      setDbError(err.message || 'Sin conexión con la base de datos Supabase.');
+      setItems([]);
+      setRealtimeStatus('indisponible');
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    // 1. Carga inicial completa
+    loadData(true);
+
+    if (!isSupabaseConfigured) {
+      setRealtimeStatus('indisponible');
+      return;
+    }
+
+    // 2. Suscripción en tiempo real (Supabase Realtime)
+    const canalInventario = supabase.channel('dueno-inventario-realtime');
+
+    canalInventario
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'productos',
+        },
+        (payload) => {
+          // Refrescar datos en segundo plano sin interrumpir la vista
+          loadData(false);
+          if (payload.eventType === 'UPDATE' && payload.new) {
+            setSnackbar({
+              open: true,
+              message: `🔔 Stock sincronizado en tiempo real: "${payload.new.nombre}" actualizado a ${payload.new.stock} unidades.`,
+              severity: 'info',
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'alertas_stock',
+        },
+        () => {
+          loadData(false);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'movimientos_inventario',
+        },
+        () => {
+          loadData(false);
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('conectado');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeStatus('reconectando');
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(canalInventario);
+    };
+  }, [cafeteriaId]);
 
   const sinStockCount = items.filter((i) => i.estado === 'Sin Stock').length;
   const criticosCount = items.filter((i) => i.estado === 'Crítico').length;
@@ -266,15 +345,69 @@ function StockInventario({ currentUser }) {
         }}
       >
         <Box>
-          <Typography
-            variant="h5"
-            fontWeight={800}
-            sx={{ color: '#4A3728', letterSpacing: '-0.5px' }}
-          >
-            Control de Stock e Inventario
-          </Typography>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Typography
+              variant="h5"
+              fontWeight={800}
+              sx={{ color: '#4A3728', letterSpacing: '-0.5px' }}
+            >
+              Control de Stock e Inventario
+            </Typography>
+
+            <Chip
+              icon={
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    bgcolor:
+                      realtimeStatus === 'conectado'
+                        ? '#2E7D32'
+                        : realtimeStatus === 'reconectando'
+                        ? '#E65100'
+                        : '#9E9E9E',
+                    boxShadow:
+                      realtimeStatus === 'conectado'
+                        ? '0 0 0 0 rgba(46, 125, 50, 0.7)'
+                        : 'none',
+                    animation:
+                      realtimeStatus === 'conectado'
+                        ? 'pulse-dot-inv 1.8s infinite'
+                        : 'none',
+                    '@keyframes pulse-dot-inv': {
+                      '0%': { boxShadow: '0 0 0 0 rgba(46, 125, 50, 0.7)' },
+                      '70%': { boxShadow: '0 0 0 6px rgba(46, 125, 50, 0)' },
+                      '100%': { boxShadow: '0 0 0 0 rgba(46, 125, 50, 0)' },
+                    },
+                  }}
+                />
+              }
+              label={
+                realtimeStatus === 'conectado'
+                  ? 'En Vivo (Realtime)'
+                  : realtimeStatus === 'reconectando'
+                  ? 'Reconectando…'
+                  : 'Modo Estático'
+              }
+              size="small"
+              sx={{
+                backgroundColor:
+                  realtimeStatus === 'conectado' ? '#E8F5E9' : '#FFF3E0',
+                color:
+                  realtimeStatus === 'conectado' ? '#2E7D32' : '#E65100',
+                fontWeight: 700,
+                fontSize: '0.72rem',
+                borderRadius: '16px',
+                border:
+                  realtimeStatus === 'conectado'
+                    ? '1px solid #A5D6A7'
+                    : '1px solid #FFE0B2',
+              }}
+            />
+          </Stack>
           <Typography variant="caption" sx={{ color: '#8C7A6F' }}>
-            Supervisión directa de umbrales mínimos y balances de reposición
+            Supervisión directa de umbrales mínimos y balances de reposición {lastUpdated ? `• Sincronizado: ${lastUpdated}` : ''}
           </Typography>
         </Box>
 
@@ -433,8 +566,27 @@ function StockInventario({ currentUser }) {
         </Stack>
       </Box>
 
-
-
+      {/* Alerta visible cuando la Base de Datos está apagada o inaccesible */}
+      {dbError && (
+        <Alert
+          severity="error"
+          variant="filled"
+          action={
+            <Button color="inherit" size="small" onClick={() => loadData(true)}>
+              Reintentar Conexión
+            </Button>
+          }
+          sx={{
+            mb: 3,
+            borderRadius: '14px',
+            fontWeight: 700,
+            backgroundColor: '#C62828',
+            boxShadow: '0 4px 14px rgba(198, 40, 40, 0.25)',
+          }}
+        >
+          {dbError}. La base de datos se encuentra apagada o inaccesible. No se muestran datos falsos ni se permiten modificaciones.
+        </Alert>
+      )}
 
       {/* Letreros de alerta condicionales: Interactivos como filtros rápidos */}
       {(sinStockCount > 0 || criticosCount > 0 || atencionCount > 0) && (
@@ -892,7 +1044,9 @@ function StockInventario({ currentUser }) {
               {filteredItems.length === 0 && !loading ? (
                 <TableRow>
                   <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#8C7A6F' }}>
-                    {hasActiveFilters
+                    {dbError
+                      ? `⚠️ ${dbError}. Verifique que la base de datos esté encendida para cargar los datos reales.`
+                      : hasActiveFilters
                       ? 'No se encontraron insumos que coincidan con los filtros aplicados.'
                       : 'No hay insumos registrados en inventario.'}
                   </TableCell>

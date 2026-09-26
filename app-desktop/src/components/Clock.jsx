@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react';
 import { Typography } from '@mui/material';
 
 function formatHora(fecha) {
-  const h24 = fecha.getHours();
-  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
-  const ampm = h24 < 12 ? 'AM' : 'PM';
-  return `${String(h12).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')} ${ampm}`;
+  const h24 = String(fecha.getHours()).padStart(2, '0');
+  const min = String(fecha.getMinutes()).padStart(2, '0');
+  return `${h24}:${min}`;
 }
 
 function Clock({ sx }) {
