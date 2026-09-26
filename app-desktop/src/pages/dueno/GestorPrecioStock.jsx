@@ -44,6 +44,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 import { productos as productosService } from '../../service/productos';
 import { categorias as categoriasService } from '../../service/categorias';
+import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 import ModificarPrecioDialog from '../../components/productos/ModificarPrecioDialog';
 import ModificarStockDialog from '../../components/productos/ModificarStockDialog';
 
@@ -72,9 +73,11 @@ function GestorPrecioStock({ currentUser }) {
 
   // Notificaciones Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [dbError, setDbError] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
+    setDbError(null);
     try {
       const [prodsData, catsData] = await Promise.all([
         productosService.getAll(),
@@ -84,9 +87,12 @@ function GestorPrecioStock({ currentUser }) {
       setCategorias(catsData || []);
     } catch (err) {
       console.error('Error al cargar datos en Gestor de Precio y Stock:', err);
+      setDbError(err.message || 'Sin conexión con la base de datos Supabase.');
+      setProductos([]);
+      setCategorias([]);
       setSnackbar({
         open: true,
-        message: 'Error al conectar con la base de datos.',
+        message: 'Error de conexión: No se pudo conectar a la base de datos.',
         severity: 'error',
       });
     } finally {
@@ -96,6 +102,24 @@ function GestorPrecioStock({ currentUser }) {
 
   useEffect(() => {
     loadData();
+
+    if (!isSupabaseConfigured) return;
+
+    const canalGestor = supabase.channel('dueno-gestor-realtime');
+
+    canalGestor
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'productos' },
+        () => {
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canalGestor);
+    };
   }, []);
 
   // Filtrado y ordenamiento avanzado de productos
@@ -209,12 +233,28 @@ function GestorPrecioStock({ currentUser }) {
 
   // Manejo de apertura de diálogo de precio
   const handleOpenPrecioDialog = (producto) => {
+    if (dbError) {
+      setSnackbar({
+        open: true,
+        message: 'No es posible modificar precios: la base de datos se encuentra apagada o inaccesible.',
+        severity: 'error',
+      });
+      return;
+    }
     setProductoParaPrecio(producto);
     setPrecioDialogOpen(true);
   };
 
   // Manejo de apertura de diálogo de stock
   const handleOpenStockDialog = (producto) => {
+    if (dbError) {
+      setSnackbar({
+        open: true,
+        message: 'No es posible modificar stock: la base de datos se encuentra apagada o inaccesible.',
+        severity: 'error',
+      });
+      return;
+    }
     setProductoParaStock(producto);
     setStockDialogOpen(true);
   };
@@ -287,6 +327,28 @@ function GestorPrecioStock({ currentUser }) {
           {loading ? 'Cargando...' : 'Actualizar Datos'}
         </Button>
       </Box>
+
+      {/* Alerta de Desconexión / Error con la Base de Datos */}
+      {dbError && (
+        <Alert
+          severity="error"
+          variant="filled"
+          action={
+            <Button color="inherit" size="small" onClick={loadData}>
+              Reintentar Conexión
+            </Button>
+          }
+          sx={{
+            mb: 3,
+            borderRadius: '14px',
+            fontWeight: 700,
+            backgroundColor: '#C62828',
+            boxShadow: '0 4px 14px rgba(198, 40, 40, 0.25)',
+          }}
+        >
+          {dbError}. La base de datos se encuentra apagada o inaccesible. No se muestran datos falsos ni se permiten modificaciones.
+        </Alert>
+      )}
 
       {/* 2. Tarjetas de Resumen y Valorización de Inventario (Interactivas) */}
       <Grid container spacing={2} sx={{ mb: 3 }}>

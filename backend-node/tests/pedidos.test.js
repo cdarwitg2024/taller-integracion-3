@@ -1,6 +1,9 @@
 const request = require('supertest');
 jest.mock('../src/config/supabase');
 const app = require('../src/app');
+const { sembrarProductosBase } = require('./helpers/sembrarProductos');
+
+sembrarProductosBase();
 
 describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
   let pedidoCreado = null;
@@ -45,7 +48,7 @@ describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
 
     test('Debe crear un pedido exitosamente con todos los requerimientos del SRS', async () => {
       const payload = {
-        usuario_id: 'usr-estudiante-test-01',
+        usuario_id: 2,
         cafeteria_id: 'cafe-central-01',
         franja_retiro: '10:15 - 10:25',
         productos: [
@@ -81,7 +84,7 @@ describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
       expect(pedido).toHaveProperty('codigo_legible');
       expect(pedido.codigo_legible).toMatch(/^#CF-/);
       expect(pedido.cafeteria_id).toBe('cafe-central-01');
-      expect(pedido.usuario_id).toBe('usr-estudiante-test-01');
+      expect(pedido.usuario_id).toBe(2);
       expect(pedido.franja_retiro).toBe('10:15 - 10:25');
       expect(pedido.estado).toBe('Pagado'); // Estado inicial según BR-06
       
@@ -120,7 +123,7 @@ describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
     });
 
     test('GET /api/pedidos/usuario/:usuarioId - Visible para App Móvil (Estudiante)', async () => {
-      const res = await request(app).get('/api/pedidos/usuario/usr-estudiante-test-01');
+      const res = await request(app).get(`/api/pedidos/usuario/${pedidoCreado.usuario_id}`);
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
       expect(res.body.some(p => p.id === pedidoCreado.id)).toBe(true);
@@ -187,6 +190,17 @@ describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
 
       const tokenContingencia = nuevo.body.pedido.token_contingencia;
       expect(tokenContingencia).toBeDefined();
+      expect(nuevo.body.pedido.estado).toBe('Pagado');
+
+      // El pedido debe estar "Listo" antes de poder retirarlo (BR-07)
+      await request(app)
+        .patch(`/api/pedidos/${nuevo.body.pedido.id}/estado`)
+        .send({ estado: 'En preparación' })
+        .expect(200);
+      await request(app)
+        .patch(`/api/pedidos/${nuevo.body.pedido.id}/estado`)
+        .send({ estado: 'Listo' })
+        .expect(200);
 
       const resValidar = await request(app)
         .post('/api/pedidos/validar-qr')
@@ -195,6 +209,139 @@ describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
       expect(resValidar.status).toBe(200);
       expect(resValidar.body.valido).toBe(true);
       expect(resValidar.body.pedido.estado).toBe('Retirado');
+    });
+  });
+
+  describe('Máquina de Estados - Transiciones prohibidas', () => {
+    async function crearPedidoBase() {
+      const res = await request(app)
+        .post('/api/pedidos')
+        .send({
+          cafeteria_id: 'cafe-central-01',
+          franja_retiro: '12:00 - 12:15',
+          productos: [{ producto_id: '1', cantidad: 1, precio_unitario: 1500 }]
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.pedido.estado).toBe('Pagado');
+      return res.body.pedido;
+    }
+
+    const estadoValidosResp400 = [
+      { de: 'Pagado', a: 'Retirado', razon: /Transición no permitida/ },
+      { de: 'Pagado', a: 'Listo', razon: /Transición no permitida/ },
+      { de: 'En preparación', a: 'En preparación', razon: /Transición no permitida/ },
+      { de: 'En preparación', a: 'Creado', razon: /Transición no permitida/ }
+    ];
+
+    test.each(estadoValidosResp400)(
+      'No debe permitir la transición $de -> $a (respuesta 400)',
+      async ({ de, a, razon }) => {
+        const pedido = await crearPedidoBase();
+        if (de === 'En preparación') {
+          await request(app)
+            .patch(`/api/pedidos/${pedido.id}/estado`)
+            .send({ estado: 'En preparación' })
+            .expect(200);
+        }
+        const res = await request(app)
+          .patch(`/api/pedidos/${pedido.id}/estado`)
+          .send({ estado: a });
+        expect(res.status).toBe(400);
+        expect(res.body.error).toMatch(razon);
+      }
+    );
+
+    test('Listo -> En preparación no debe permitirse (no se puede volver atrás)', async () => {
+      const pedido = await crearPedidoBase();
+      await request(app)
+        .patch(`/api/pedidos/${pedido.id}/estado`)
+        .send({ estado: 'En preparación' })
+        .expect(200);
+      await request(app)
+        .patch(`/api/pedidos/${pedido.id}/estado`)
+        .send({ estado: 'Listo' })
+        .expect(200);
+
+      const res = await request(app)
+        .patch(`/api/pedidos/${pedido.id}/estado`)
+        .send({ estado: 'En preparación' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/Transición no permitida/);
+    });
+
+    test('Los estados terminales (Retirado/Cancelado) no admiten más transiciones', async () => {
+      const retirado = await crearPedidoBase();
+      await request(app)
+        .patch(`/api/pedidos/${retirado.id}/estado`)
+        .send({ estado: 'En preparación' })
+        .expect(200);
+      await request(app)
+        .patch(`/api/pedidos/${retirado.id}/estado`)
+        .send({ estado: 'Listo' })
+        .expect(200);
+      await request(app)
+        .patch(`/api/pedidos/${retirado.id}/estado`)
+        .send({ estado: 'Retirado' })
+        .expect(200);
+
+      const resRetirado = await request(app)
+        .patch(`/api/pedidos/${retirado.id}/estado`)
+        .send({ estado: 'En preparación' });
+      expect(resRetirado.status).toBe(400);
+      expect(resRetirado.body.error).toMatch(/terminal/);
+
+      const cancelado = await crearPedidoBase();
+      await request(app)
+        .patch(`/api/pedidos/${cancelado.id}/estado`)
+        .send({ estado: 'Cancelado' })
+        .expect(200);
+
+      const resCancelado = await request(app)
+        .patch(`/api/pedidos/${cancelado.id}/estado`)
+        .send({ estado: 'Listo' });
+      expect(resCancelado.status).toBe(400);
+      expect(resCancelado.body.error).toMatch(/terminal/);
+    });
+
+    test('Cancelado es válido desde Pagado y desde Listo (BR-08)', async () => {
+      const pedido = await crearPedidoBase();
+      const res = await request(app)
+        .patch(`/api/pedidos/${pedido.id}/estado`)
+        .send({ estado: 'Cancelado' });
+      expect(res.status).toBe(200);
+      expect(res.body.pedido.estado).toBe('Cancelado');
+    });
+
+    test('validar-qr rechaza cuando el pedido aún no está "Listo" (BR-07)', async () => {
+      const pedido = await crearPedidoBase();
+      const res = await request(app)
+        .post('/api/pedidos/validar-qr')
+        .send({ token: pedido.qr_token });
+
+      expect(res.status).toBe(400);
+      expect(res.body.valido).toBe(false);
+      expect(res.body.razon).toMatch(/aún no está listo/i);
+    });
+
+    test('Alias "entregado" y "preparando" se normalizan al estado canónico', async () => {
+      const pedido = await crearPedidoBase();
+
+      const resPrep = await request(app)
+        .patch(`/api/pedidos/${pedido.id}/estado`)
+        .send({ estado: 'preparando' });
+      expect(resPrep.status).toBe(200);
+      expect(resPrep.body.pedido.estado).toBe('En preparación');
+
+      await request(app)
+        .patch(`/api/pedidos/${pedido.id}/estado`)
+        .send({ estado: 'listo' })
+        .expect(200);
+
+      const resEntregado = await request(app)
+        .patch(`/api/pedidos/${pedido.id}/estado`)
+        .send({ estado: 'entregado' });
+      expect(resEntregado.status).toBe(200);
+      expect(resEntregado.body.pedido.estado).toBe('Retirado');
     });
   });
 });

@@ -1,6 +1,9 @@
 const request = require('supertest');
 jest.mock('../src/config/supabase');
 const app = require('../src/app');
+const { sembrarProductosBase } = require('./helpers/sembrarProductos');
+
+sembrarProductosBase();
 
 jest.setTimeout(30000);
 
@@ -21,6 +24,17 @@ describe('FR-22 - Generación de QR dinámico', () => {
       });
     expect(res.status).toBe(201);
     return res.body.pedido;
+  }
+
+  async function ponerListo(pedido) {
+    await request(app)
+      .patch(`/api/pedidos/${pedido.id}/estado`)
+      .send({ estado: 'En preparación' })
+      .expect(200);
+    await request(app)
+      .patch(`/api/pedidos/${pedido.id}/estado`)
+      .send({ estado: 'Listo' })
+      .expect(200);
   }
 
   test('Criterio 1: Código diferente por pedido', async () => {
@@ -90,6 +104,8 @@ describe('FR-22 - Generación de QR dinámico', () => {
     expect(payload.created_at).toBeDefined();
 
     // El qr_token del payload permite ejecutar la validación de entrega
+    // (solo válido cuando el pedido está "Listo", BR-07)
+    await ponerListo(pedido);
     const validacion = await request(app)
       .post('/api/pedidos/validar-qr')
       .send({ token: payload.qr_token });
@@ -103,6 +119,8 @@ describe('FR-22 - Generación de QR dinámico', () => {
     const pedido = await crearPedido();
     const qr = await request(app).get(`/api/pedidos/${pedido.id}/qr`);
     const token = qr.body.data.qr_token;
+
+    await ponerListo(pedido);
 
     // Primera validación: exitosa
     const primera = await request(app)
@@ -123,6 +141,7 @@ describe('FR-22 - Generación de QR dinámico', () => {
   test('Criterio 3: No reutilización - sin QR para pedidos ya entregados', async () => {
     const pedido = await crearPedido();
 
+    await ponerListo(pedido);
     await request(app)
       .post('/api/pedidos/validar-qr')
       .send({ token: pedido.qr_token });

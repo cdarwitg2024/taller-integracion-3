@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Typography } from '@mui/material';
+import { parsearFecha } from '../utils/dateUtils';
 
 function parseInicio(pedido) {
   if (pedido.creado_en) {
-    const fecha = new Date(pedido.creado_en);
-    if (!Number.isNaN(fecha.getTime())) return fecha.getTime();
+    const fecha = parsearFecha(pedido.creado_en);
+    if (fecha) return fecha.getTime();
   }
   if (pedido.hora) {
     const hoy = new Date();

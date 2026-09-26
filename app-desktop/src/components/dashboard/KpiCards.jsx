@@ -5,11 +5,15 @@ import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 
 function KpiCards({ stats }) {
+  const tiempoProm = stats?.tiempoPromedioMin && Number(stats.tiempoPromedioMin) > 0
+    ? `${stats.tiempoPromedioMin} min`
+    : '0 min';
+
   const cards = [
     {
       title: 'Ventas del Día',
       value: `$${(stats?.totalVentas || 0).toLocaleString('es-CL')}`,
-      subtitle: '+14% respecto a ayer',
+      subtitle: (stats?.totalVentas || 0) > 0 ? 'Total facturado en la jornada' : 'Sin ventas registradas hoy',
       icon: <AttachMoneyIcon sx={{ fontSize: 32, color: '#2E7D32' }} />,
       iconBg: '#E8F5E9',
       borderColor: '#2E7D32',
@@ -32,8 +36,8 @@ function KpiCards({ stats }) {
     },
     {
       title: 'Tiempo Prom. Prep.',
-      value: `${stats?.tiempoPromedioMin || 6.5} min`,
-      subtitle: 'Promedio de entrega rápida',
+      value: tiempoProm,
+      subtitle: 'Promedio real de atención',
       icon: <AccessTimeIcon sx={{ fontSize: 30, color: '#8D6E63' }} />,
       iconBg: '#EFEBE9',
       borderColor: '#8D6E63',
