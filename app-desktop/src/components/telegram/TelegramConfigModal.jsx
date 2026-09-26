@@ -177,7 +177,7 @@ function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
       <DialogContent sx={{ pt: 2, pb: 3 }}>
         {/* Cabecera del Diálogo */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
             <Box
               sx={{
                 width: 44,
@@ -222,7 +222,7 @@ function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
                 justifyContent: 'space-between',
               }}
             >
-              <Stack direction="row" spacing={1.5} alignItems="center">
+              <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                 {isConectado ? (
                   <CheckCircleOutlinedIcon sx={{ color: '#2E7D32', fontSize: 24 }} />
                 ) : (
@@ -240,7 +240,7 @@ function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
                 </Box>
               </Stack>
 
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
                 <Chip
                   label={isConectado ? 'CONECTADO' : 'INACTIVO'}
                   size="small"
@@ -356,7 +356,7 @@ function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
                     <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
                       Chat ID Protegido:
                     </Typography>
-                    <Stack direction="row" spacing={0.8} alignItems="center">
+                    <Stack direction="row" spacing={0.8} sx={{alignItems: 'center'}}>
                       <Typography
                         variant="caption"
                         sx={{
@@ -494,7 +494,7 @@ function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
             <Divider sx={{ borderColor: '#EFEAE6' }} />
 
             {/* Acciones del Modal */}
-            <Stack direction="row" spacing={1.5} justifyContent="flex-end" alignItems="center">
+            <Stack direction="row" spacing={1.5} sx={{justifyContent: 'flex-end', alignItems: 'center'}}>
               <Stack direction="row" spacing={1.2}>
                 {isConectado && (
                   <Button

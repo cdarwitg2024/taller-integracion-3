@@ -166,9 +166,11 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
                   </ListItemIcon>
                   <ListItemText
                     primary={item.label}
-                    primaryTypographyProps={{
-                      fontSize: '0.92rem',
-                      fontWeight: isActive ? 700 : 500,
+                    slotProps={{
+                      primary: {
+                        fontSize: '0.92rem',
+                        fontWeight: isActive ? 700 : 500,
+                      },
                     }}
                   />
                 </ListItemButton>
@@ -237,7 +239,7 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
             </ListItemIcon>
             <ListItemText
               primary="Cerrar Sesión"
-              primaryTypographyProps={{ fontSize: '0.88rem', fontWeight: 500 }}
+              slotProps={{ primary: { fontSize: '0.88rem', fontWeight: 500 } }}
             />
           </ListItemButton>
         )}

@@ -578,7 +578,7 @@ function CatalogoProductos() {
       {/* Título unificado y acciones principales */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, gap: 1.5 }}>
         <Box>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
             <Box
               sx={{
                 width: 44,
@@ -692,7 +692,7 @@ function CatalogoProductos() {
               }}
             >
               <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                <Stack direction="row" spacing={1.5} alignItems="center">
+                <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                   <Box
                     sx={{
                       width: 42,
@@ -733,7 +733,7 @@ function CatalogoProductos() {
             }}
           >
             <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-              <Stack direction="row" spacing={1.5} alignItems="center">
+              <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                 <Box
                   sx={{
                     width: 42,
@@ -779,7 +779,7 @@ function CatalogoProductos() {
               }}
             >
               <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                <Stack direction="row" spacing={1.5} alignItems="center">
+                <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                   <Box
                     sx={{
                       width: 42,
@@ -830,7 +830,7 @@ function CatalogoProductos() {
               }}
             >
               <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                <Stack direction="row" spacing={1.5} alignItems="center">
+                <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                   <Box
                     sx={{
                       width: 42,
@@ -881,7 +881,7 @@ function CatalogoProductos() {
               }}
             >
               <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                <Stack direction="row" spacing={1.5} alignItems="center">
+                <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                   <Box
                     sx={{
                       width: 42,
@@ -928,7 +928,7 @@ function CatalogoProductos() {
         <Box sx={{ mb: 3 }}>
           <Stack spacing={2}>
             {/* Fila 1: Buscador de texto, Categoría, Cafetería, Estado y Orden */}
-            <Grid container spacing={1.5} alignItems="center">
+            <Grid container spacing={1.5} sx={{ alignItems: 'center' }}>
               {/* Buscador de texto con icono y botón de borrado */}
               <Grid size={{ xs: 12, md: cafeteriasList.length > 1 ? 3.5 : 4.5 }}>
                 <TextField
@@ -1200,7 +1200,7 @@ function CatalogoProductos() {
               </Stack>
 
               {/* Botón de limpiar y contador */}
-              <Stack direction="row" spacing={1.5} alignItems="center">
+              <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                 <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
                   Mostrando {filtered.length} de {productos.length} productos
                 </Typography>
@@ -1284,7 +1284,7 @@ function CatalogoProductos() {
                 <TableRow>
                   <TableCell colSpan={cafeteriasList.length > 1 ? 9 : 8} align="center" sx={{ py: 4, color: '#8C7A6F' }}>
                     {hasActiveFilters ? (
-                      <Stack spacing={1} alignItems="center" sx={{ py: 2 }}>
+                      <Stack spacing={1} sx={{ py: 2, alignItems: 'center'}}>
                         <Typography variant="body2" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
                           No se encontraron productos con los criterios y filtros seleccionados.
                         </Typography>
@@ -1487,7 +1487,7 @@ function CatalogoProductos() {
 
                       {/* Acciones Rápidas Integradas */}
                       <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                        <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
+                        <Stack direction="row" spacing={0.5} sx={{justifyContent: 'center', alignItems: 'center'}}>
                           <Tooltip title="Modificar Precio">
                             <IconButton
                               size="small"

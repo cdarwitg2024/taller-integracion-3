@@ -8,7 +8,6 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  InputAdornment,
   Stack,
   Tab,
   Tabs,
@@ -83,10 +82,10 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
       onClose={cerrar}
       maxWidth="sm"
       fullWidth
-      PaperProps={{ sx: { borderRadius: 3 } }}
+      slotProps={{ paper: { sx: { borderRadius: 3 } } }}
     >
       <DialogTitle sx={{ pb: 1 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Stack direction="row" sx={{justifyContent: 'space-between', alignItems: 'center'}}>
           <Typography variant="h5" fontWeight={800}>
             Escanear QR de Entrega
           </Typography>
@@ -178,12 +177,8 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') void validar(tokenInput);
                 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <KeyIcon sx={{ color: 'rgba(255,255,255,0.6)' }} />
-                    </InputAdornment>
-                  ),
+                slotProps={{
+                  input: { startAdornment: <KeyIcon sx={{ color: 'rgba(255,255,255,0.6)' }} /> },
                 }}
                 sx={{
                   backgroundColor: '#FFFFFF',
