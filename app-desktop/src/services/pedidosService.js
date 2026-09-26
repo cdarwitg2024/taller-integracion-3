@@ -332,6 +332,17 @@ export function ordenarPedidos(lista) {
   return [...lista].sort(comparadorPrioridad);
 }
 
+const TRANSICIONES_VALIDAS = {
+  pendiente: new Set(['en_preparacion', 'cancelado']),
+  en_preparacion: new Set(['listo', 'cancelado']),
+  listo: new Set(['entregado']),
+};
+
+export function esTransicionValida(estadoActual, estadoNuevo) {
+  const permitidos = TRANSICIONES_VALIDAS[estadoActual];
+  return Boolean(permitidos && permitidos.has(estadoNuevo));
+}
+
 export const pedidosService = {
   async getAll({ cafeteriaId } = {}) {
     if (isSupabaseConfigured) {
@@ -398,6 +409,14 @@ export const pedidosService = {
   },
 
   async updateEstado(id, nuevoEstado) {
+    // 0. Regla de flujo: no se puede saltar estados
+    //    (pendiente -> en_preparacion -> listo -> entregado).
+    const actual = await this.getById(id);
+    if (actual && !esTransicionValida(actual.estado, nuevoEstado)) {
+      console.warn(`Transición inválida de estado: ${actual.estado} -> ${nuevoEstado} (pedido ${id})`);
+      return actual;
+    }
+
     // 1. Vía MS Comercio (PATCH /pedidos/:id/estado) — valida la secuencia
     //    pendiente -> en_preparacion -> listo en el backend.
     try {

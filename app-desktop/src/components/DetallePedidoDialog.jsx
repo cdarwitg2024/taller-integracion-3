@@ -93,7 +93,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
                   variant="contained"
                   color="warning"
                   startIcon={<PlayArrowIcon />}
-                  onClick={() => onChangeEstado(pedido.id, 'en_preparacion')}
+                  onClick={() => onChangeEstado(pedido.rawId ?? pedido.id, 'en_preparacion')}
                   sx={{ minHeight: 48 }}
                 >
                   Iniciar Preparación
@@ -104,7 +104,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
                   variant="contained"
                   color="info"
                   startIcon={<CheckIcon />}
-                  onClick={() => onChangeEstado(pedido.id, 'listo')}
+                  onClick={() => onChangeEstado(pedido.rawId ?? pedido.id, 'listo')}
                   sx={{ minHeight: 48 }}
                 >
                   Marcar Como Listo
