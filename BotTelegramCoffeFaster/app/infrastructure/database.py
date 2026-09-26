@@ -1,7 +1,11 @@
 import logging
 from typing import List, Dict, Any, Optional
-import psycopg2
-from psycopg2.extras import RealDictCursor
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:
+    psycopg2 = None
+    RealDictCursor = None
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -144,9 +148,49 @@ class DatabaseRepository:
         try:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                    cur.execute("SELECT * FROM verificar_dueno_telegram(%s);", (chat_id,))
+                    cur.execute(
+                        """
+                        SELECT 
+                            ctd.cafeteria_id,
+                            c.nombre AS cafeteria_nombre,
+                            u.id AS dueno_id,
+                            u.nombre AS dueno_nombre,
+                            ctd.notificaciones_activas
+                        FROM configuracion_telegram_dueno ctd
+                        JOIN cafeterias c ON c.id = ctd.cafeteria_id
+                        JOIN usuarios u ON u.id = ctd.usuario_id
+                        WHERE ctd.telegram_chat_id = %s
+                        LIMIT 1;
+                        """,
+                        (chat_id,)
+                    )
                     row = cur.fetchone()
-                    return dict(row) if row else None
+                    if row:
+                        return dict(row)
+
+                    cur.execute("SELECT * FROM verificar_dueno_telegram(%s);", (chat_id,))
+                    row_rpc = cur.fetchone()
+                    if row_rpc:
+                        return dict(row_rpc)
+
+                    # Soporte de contingencia si el chat_id está configurado en .env
+                    if chat_id in settings.DEFAULT_CHAT_IDS:
+                        cur.execute(
+                            """
+                            SELECT c.id as cafeteria_id, c.nombre as cafeteria_nombre, u.id as dueno_id, u.nombre as dueno_nombre, true as notificaciones_activas
+                            FROM usuarios u
+                            JOIN roles r ON r.id = u.rol_id
+                            JOIN cafeteria_usuarios cu ON cu.usuario_id = u.id
+                            JOIN cafeterias c ON c.id = cu.cafeteria_id
+                            WHERE r.nombre = 'dueño'
+                            LIMIT 1;
+                            """
+                        )
+                        fallback_dueno = cur.fetchone()
+                        if fallback_dueno:
+                            return dict(fallback_dueno)
+
+                    return None
         except Exception as e:
             logger.error(f"Error verificando autorización de dueño para chat {chat_id}: {e}")
             return None
@@ -161,24 +205,190 @@ class DatabaseRepository:
                         "SELECT * FROM obtener_alertas_dueno(%s, %s);",
                         (chat_id, limite)
                     )
+                    rows = cur.fetchall()
+                    if rows:
+                        return [dict(row) for row in rows]
+
+                    # Consulta directa de respaldo por cafeteria_id vinculada
+                    cur.execute(
+                        """
+                        SELECT 
+                            a.id, a.cafeteria_id, a.producto_id, a.stock_actual, a.stock_minimo, a.mensaje, a.creado_en,
+                            p.nombre AS producto_nombre, c.nombre AS cafeteria_nombre
+                        FROM alertas_stock a
+                        LEFT JOIN productos p ON p.id = a.producto_id
+                        JOIN cafeterias c ON c.id = a.cafeteria_id
+                        JOIN configuracion_telegram_dueno ctd ON ctd.cafeteria_id = a.cafeteria_id
+                        WHERE ctd.telegram_chat_id = %s
+                        ORDER BY a.id DESC
+                        LIMIT %s;
+                        """,
+                        (chat_id, limite)
+                    )
                     return [dict(row) for row in cur.fetchall()]
         except Exception as e:
             logger.error(f"Error consultando alertas seguras: {e}")
             return []
 
-    def obtener_productos_stock_bajo(self, chat_id: int, umbral: int = 10) -> List[Dict[str, Any]]:
-        """Consulta productos de stock bajo EXCLUSIVOS de la cafetería del Dueño vinculado.
-        Si el chat está desvinculado o no autorizado, retorna lista vacía por seguridad."""
+    def obtener_stock_general(self, chat_id: int) -> List[Dict[str, Any]]:
+        """Consulta TODO el inventario de la cafetería del Dueño vinculado."""
         try:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute(
-                        "SELECT * FROM obtener_stock_bajo_dueno(%s, %s);",
+                        """
+                        SELECT 
+                            p.id,
+                            p.nombre,
+                            p.stock,
+                            p.stock_minimo,
+                            p.precio,
+                            p.cafeteria_id,
+                            c.nombre AS cafeteria_nombre
+                        FROM productos p
+                        JOIN cafeterias c ON c.id = p.cafeteria_id
+                        JOIN configuracion_telegram_dueno ctd ON ctd.cafeteria_id = p.cafeteria_id
+                        WHERE ctd.telegram_chat_id = %s
+                          AND (p.activo = true OR p.activo IS NULL)
+                          AND p.eliminado_en IS NULL
+                        ORDER BY p.stock ASC, p.nombre ASC;
+                        """,
+                        (chat_id,)
+                    )
+                    rows = cur.fetchall()
+                    if rows:
+                        return [dict(r) for r in rows]
+
+                    if chat_id in settings.DEFAULT_CHAT_IDS:
+                        cur.execute(
+                            """
+                            SELECT 
+                                p.id, p.nombre, p.stock, p.stock_minimo, p.precio, p.cafeteria_id, c.nombre AS cafeteria_nombre
+                            FROM productos p
+                            JOIN cafeterias c ON c.id = p.cafeteria_id
+                            WHERE (p.activo = true OR p.activo IS NULL)
+                              AND p.eliminado_en IS NULL
+                            ORDER BY p.stock ASC, p.nombre ASC;
+                            """
+                        )
+                        return [dict(r) for r in cur.fetchall()]
+                    return []
+        except Exception as e:
+            logger.error(f"Error consultando inventario general: {e}")
+            return []
+
+    def obtener_productos_stock_bajo(self, chat_id: int, umbral: int = 10) -> List[Dict[str, Any]]:
+        """Consulta productos de stock bajo (0 < stock <= stock_minimo o <= umbral) de la cafetería del Dueño vinculado."""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(
+                        """
+                        SELECT 
+                            p.id,
+                            p.nombre,
+                            p.stock,
+                            p.stock_minimo,
+                            p.precio,
+                            p.cafeteria_id,
+                            c.nombre AS cafeteria_nombre
+                        FROM productos p
+                        JOIN cafeterias c ON c.id = p.cafeteria_id
+                        JOIN configuracion_telegram_dueno ctd ON ctd.cafeteria_id = p.cafeteria_id
+                        WHERE ctd.telegram_chat_id = %s
+                          AND p.stock > 0
+                          AND (p.stock <= p.stock_minimo OR p.stock <= %s)
+                          AND (p.activo = true OR p.activo IS NULL)
+                          AND p.eliminado_en IS NULL
+                        ORDER BY p.stock ASC, p.nombre ASC;
+                        """,
                         (chat_id, umbral)
                     )
-                    return [dict(row) for row in cur.fetchall()]
+                    rows = cur.fetchall()
+                    if rows:
+                        return [dict(r) for r in rows]
+
+                    # Fallback a RPC si está disponible
+                    try:
+                        cur.execute(
+                            "SELECT * FROM obtener_stock_bajo_dueno(%s, %s);",
+                            (chat_id, umbral)
+                        )
+                        rpc_rows = cur.fetchall()
+                        rpc_filtrados = [dict(r) for r in rpc_rows if r.get('stock', 0) > 0]
+                        if rpc_filtrados:
+                            return rpc_filtrados
+                    except Exception:
+                        pass
+
+                    if chat_id in settings.DEFAULT_CHAT_IDS:
+                        cur.execute(
+                            """
+                            SELECT 
+                                p.id, p.nombre, p.stock, p.stock_minimo, p.precio, p.cafeteria_id, c.nombre AS cafeteria_nombre
+                            FROM productos p
+                            JOIN cafeterias c ON c.id = p.cafeteria_id
+                            WHERE p.stock > 0
+                              AND (p.stock <= p.stock_minimo OR p.stock <= %s)
+                              AND (p.activo = true OR p.activo IS NULL)
+                              AND p.eliminado_en IS NULL
+                            ORDER BY p.stock ASC, p.nombre ASC;
+                            """,
+                            (umbral,)
+                        )
+                        return [dict(r) for r in cur.fetchall()]
+                    return []
         except Exception as e:
-            logger.error(f"Error consultando inventario seguro: {e}")
+            logger.error(f"Error consultando stock bajo: {e}")
+            return []
+
+    def obtener_productos_agotados(self, chat_id: int) -> List[Dict[str, Any]]:
+        """Consulta productos agotados (stock <= 0) de la cafetería del Dueño vinculado."""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(
+                        """
+                        SELECT 
+                            p.id,
+                            p.nombre,
+                            p.stock,
+                            p.stock_minimo,
+                            p.precio,
+                            p.cafeteria_id,
+                            c.nombre AS cafeteria_nombre
+                        FROM productos p
+                        JOIN cafeterias c ON c.id = p.cafeteria_id
+                        JOIN configuracion_telegram_dueno ctd ON ctd.cafeteria_id = p.cafeteria_id
+                        WHERE ctd.telegram_chat_id = %s
+                          AND p.stock <= 0
+                          AND (p.activo = true OR p.activo IS NULL)
+                          AND p.eliminado_en IS NULL
+                        ORDER BY p.nombre ASC;
+                        """,
+                        (chat_id,)
+                    )
+                    rows = cur.fetchall()
+                    if rows:
+                        return [dict(r) for r in rows]
+
+                    if chat_id in settings.DEFAULT_CHAT_IDS:
+                        cur.execute(
+                            """
+                            SELECT 
+                                p.id, p.nombre, p.stock, p.stock_minimo, p.precio, p.cafeteria_id, c.nombre AS cafeteria_nombre
+                            FROM productos p
+                            JOIN cafeterias c ON c.id = p.cafeteria_id
+                            WHERE p.stock <= 0
+                              AND (p.activo = true OR p.activo IS NULL)
+                              AND p.eliminado_en IS NULL
+                            ORDER BY p.nombre ASC;
+                            """
+                        )
+                        return [dict(r) for r in cur.fetchall()]
+                    return []
+        except Exception as e:
+            logger.error(f"Error consultando productos agotados: {e}")
             return []
 
 
