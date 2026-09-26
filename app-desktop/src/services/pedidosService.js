@@ -333,13 +333,16 @@ export function ordenarPedidos(lista) {
 }
 
 export const pedidosService = {
-  async getAll() {
+  async getAll({ cafeteriaId } = {}) {
     if (isSupabaseConfigured) {
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('pedidos')
-          .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))')
-          .order('creado_en', { ascending: false });
+          .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))');
+
+        if (cafeteriaId) query = query.eq('cafeteria_id', cafeteriaId);
+
+        const { data, error } = await query.order('creado_en', { ascending: false });
 
         if (!error && data) {
           const normalized = data.map(normalizarPedido);
