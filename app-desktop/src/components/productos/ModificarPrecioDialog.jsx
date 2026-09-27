@@ -161,7 +161,7 @@ function ModificarPrecioDialog({ open, onClose, producto, onSuccess }) {
             border: '1px solid #EFEAE6',
           }}
         >
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
+          <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between', alignItems: 'flex-start'}}>
             <Box sx={{ maxWidth: '65%' }}>
               <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600, display: 'block' }}>
                 PRODUCTO
@@ -268,7 +268,7 @@ function ModificarPrecioDialog({ open, onClose, producto, onSuccess }) {
                 justifyContent: 'space-between',
               }}
             >
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
                 {variacion.diff > 0 ? (
                   <TrendingUpIcon sx={{ color: '#2E7D32', fontSize: 20 }} />
                 ) : variacion.diff < 0 ? (

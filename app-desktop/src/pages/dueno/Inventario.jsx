@@ -345,7 +345,7 @@ function StockInventario({ currentUser }) {
         }}
       >
         <Box>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
             <Typography
               variant="h5"
               fontWeight={800}
@@ -612,10 +612,10 @@ function StockInventario({ currentUser }) {
                   }}
                 >
                   <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                    <Stack direction="row" spacing={1.8} alignItems="center">
+                    <Stack direction="row" spacing={1.8} sx={{alignItems: 'center'}}>
                       <ErrorOutlinedIcon sx={{ color: '#B71C1C', fontSize: 36 }} />
                       <Box>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
                           <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#B71C1C' }}>
                             {sinStockCount} Insumo{sinStockCount > 1 ? 's' : ''} Sin Stock
                           </Typography>
@@ -655,10 +655,10 @@ function StockInventario({ currentUser }) {
                   }}
                 >
                   <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                    <Stack direction="row" spacing={1.8} alignItems="center">
+                    <Stack direction="row" spacing={1.8} sx={{alignItems: 'center'}}>
                       <ErrorOutlinedIcon sx={{ color: '#C62828', fontSize: 36 }} />
                       <Box>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
                           <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#B71C1C' }}>
                             {criticosCount} Insumo{criticosCount > 1 ? 's' : ''} Crítico{criticosCount > 1 ? 's' : ''}
                           </Typography>
@@ -698,10 +698,10 @@ function StockInventario({ currentUser }) {
                   }}
                 >
                   <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                    <Stack direction="row" spacing={1.8} alignItems="center">
+                    <Stack direction="row" spacing={1.8} sx={{alignItems: 'center'}}>
                       <WarningAmberIcon sx={{ color: '#E65100', fontSize: 36 }} />
                       <Box>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
                           <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#E65100' }}>
                             {atencionCount} Insumo{atencionCount > 1 ? 's' : ''} en Advertencia
                           </Typography>
@@ -738,7 +738,7 @@ function StockInventario({ currentUser }) {
       >
         <Stack spacing={2}>
           {/* Fila 1: Buscador de texto, Categoría, Estado de Stock y Ordenamiento */}
-          <Grid container spacing={2} alignItems="center">
+          <Grid container spacing={2} sx={{ alignItems: 'center' }}>
             {/* Buscador de texto */}
             <Grid size={{ xs: 12, md: 4.5 }}>
               <TextField
@@ -966,7 +966,7 @@ function StockInventario({ currentUser }) {
             </Stack>
 
             {/* Resumen de resultados y botón Limpiar Filtros */}
-            <Stack direction="row" spacing={1.5} alignItems="center">
+            <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
               <Typography variant="caption" sx={{ color: '#78665B', fontWeight: 600 }}>
                 Mostrando <b>{filteredItems.length}</b> de <b>{items.length}</b> insumos
               </Typography>

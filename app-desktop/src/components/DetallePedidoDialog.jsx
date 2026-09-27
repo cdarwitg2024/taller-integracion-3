@@ -39,12 +39,12 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
       onClose={onClose}
       maxWidth="sm"
       fullWidth
-      PaperProps={{ sx: { borderRadius: 3 } }}
+      slotProps={{ paper: { sx: { borderRadius: 3 } } }}
     >
       {pedido && (
         <>
           <DialogTitle sx={{ pb: 1 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{justifyContent: 'space-between', alignItems: 'center'}}>
               <Typography variant="h5" fontWeight={800}>
                 Detalle de Comanda #{pedido.id}
               </Typography>
@@ -55,7 +55,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
           </DialogTitle>
 
           <DialogContent dividers>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{justifyContent: 'space-between', alignItems: 'center'}}>
               <EstadoChip estado={pedido.estado} />
               <Typography fontWeight={800} sx={{ color: '#4A3B32' }}>
                 🕐 Hora de retiro: {getHoraRetiro(pedido)}

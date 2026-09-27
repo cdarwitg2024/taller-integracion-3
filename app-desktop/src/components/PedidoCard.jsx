@@ -55,14 +55,14 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
       onClick={() => onOpen(pedido)}
     >
       <CardContent sx={{ p: 2.5 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+        <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between', alignItems: 'center'}}>
           <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.5rem' }}>
             #{pedido.id}
           </Typography>
           <TimeAgo pedido={pedido} sx={{ fontSize: '1.05rem' }} />
         </Stack>
 
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1.5 }}>
+        <Stack direction="row" sx={{ mt: 1.5, justifyContent: 'space-between', alignItems: 'center'}}>
           {etiqueta && (
             <Box
               sx={{

@@ -244,7 +244,7 @@ function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
             border: '1px solid #EFEAE6',
           }}
         >
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1.5 }}>
+          <Stack direction="row" sx={{ mb: 1.5, justifyContent: 'space-between', alignItems: 'flex-start'}}>
             <Box sx={{ maxWidth: '65%' }}>
               <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600, display: 'block' }}>
                 INSUMO / PRODUCTO
@@ -309,7 +309,7 @@ function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
         <Stack spacing={2}>
           {/* Campo de Stock Disponible */}
           <Box>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.8 }}>
+            <Stack direction="row" sx={{ mb: 0.8, justifyContent: 'space-between', alignItems: 'center'}}>
               <Typography variant="caption" fontWeight={700} sx={{ color: '#78665B' }}>
                 Nuevo Stock Disponible ({unidad}) *
               </Typography>
@@ -463,7 +463,7 @@ function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
                 justifyContent: 'space-between',
               }}
             >
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
                 {estadoProyectado.icon}
                 <Typography variant="caption" fontWeight={700} sx={{ color: estadoProyectado.color }}>
                   Estado proyectado: {estadoProyectado.label}

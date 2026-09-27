@@ -173,7 +173,7 @@ export const pedidosService = {
       .from('pedidos')
       .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))')
       .or(orClauses.join(','))
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Error al obtener pedido por QR token desde Supabase:', error);
@@ -236,21 +236,38 @@ export const pedidosService = {
 
     try {
       const pedido = await this.getByQrToken(token);
-      if (!pedido) return { valido: false, razon: 'QR no reconocido. Verifica que corresponda a un pedido de CofeeFaster.' };
+      if (!pedido) {
+        await this._registrarLogValidacion({ qrToken: token, resultado: 'rechazado', detalle: 'QR no reconocido.' });
+        return { valido: false, razon: 'QR no reconocido. Verifica que corresponda a un pedido de CofeeFaster.' };
+      }
       if (Number(pedido.cafeteria_id) !== CAFETERIA_ID) {
-        return { valido: false, razon: `El pedido #${pedido.id} no pertenece a esta cafetería.` };
+        const razon = `El pedido #${pedido.id} no pertenece a esta cafetería.`;
+        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: token, resultado: 'rechazado', detalle: razon });
+        return { valido: false, razon };
       }
       if (pedido.estado === 'entregado') {
-        return { valido: false, razon: `El pedido #${pedido.id} ya fue entregado.` };
+        const razon = `El pedido #${pedido.id} ya fue entregado.`;
+        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: token, resultado: 'rechazado', detalle: razon });
+        return { valido: false, razon };
       }
       if (pedido.estado !== 'listo') {
-        return { valido: false, razon: `El pedido #${pedido.id} aún no está listo para retiro (estado: ${pedido.estado}).` };
+        const razon = `El pedido #${pedido.id} aún no está listo para retiro (estado: ${pedido.estado}).`;
+        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: token, resultado: 'rechazado', detalle: razon });
+        return { valido: false, razon };
       }
 
       const entregado = await this.updateEstado(pedido.rawId ?? pedido.id, 'entregado');
       if (!entregado || entregado.estado !== 'entregado') {
-        return { valido: false, razon: `El pedido #${pedido.id} no pudo marcarse como entregado.` };
+        const razon = `El pedido #${pedido.id} no pudo marcarse como entregado.`;
+        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: token, resultado: 'rechazado', detalle: razon });
+        return { valido: false, razon };
       }
+      await this._registrarLogValidacion({
+        pedidoId: pedido.rawId ?? pedido.id,
+        qrToken: token,
+        resultado: 'entregado',
+        detalle: `Pedido #${pedido.id} marcado como entregado por QR/Token.`,
+      });
       return {
         valido: true,
         mensaje: 'Entrega validada exitosamente. ¡Qué disfrute su pedido!',
@@ -258,7 +275,37 @@ export const pedidosService = {
       };
     } catch (err) {
       console.warn('validarQrEntrega:', err);
+      await this._registrarLogValidacion({ qrToken: token, resultado: 'error', detalle: 'No se pudo validar el QR en este momento.' });
       return { valido: false, razon: 'No se pudo validar el QR en este momento.' };
+    }
+  },
+
+  async _registrarLogValidacion({ pedidoId = null, qrToken = null, resultado, detalle }) {
+    if (!isSupabaseConfigured) return;
+    try {
+      let usuarioId = null;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) {
+        const { data: usuario } = await supabase
+          .from('usuarios')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .maybeSingle();
+        usuarioId = usuario?.id ?? null;
+      }
+      const { error } = await supabase
+        .from('logs_validacion_qr')
+        .insert({
+          pedido_id: pedidoId,
+          cafeteria_id: CAFETERIA_ID,
+          usuario_id: usuarioId,
+          qr_token: qrToken,
+          resultado,
+          detalle,
+        });
+      if (error) console.warn('_registrarLogValidacion:', error?.message);
+    } catch (err) {
+      console.warn('_registrarLogValidacion:', err?.message || err);
     }
   },
 

@@ -7,6 +7,7 @@ import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import PriceChangeOutlinedIcon from '@mui/icons-material/PriceChangeOutlined';
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 
 import Sidebar from './components/sidebar';
 import RoleSelector from './pages/auth/RoleSelector';
@@ -15,6 +16,7 @@ import Dashboard from './pages/dueno/Dashboard';
 import Productos from './pages/dueno/Productos';
 import Inventario from './pages/dueno/Inventario';
 import GestorPrecioStock from './pages/dueno/GestorPrecioStock';
+import LogsValidacion from './pages/dueno/LogsValidacion';
 import LoginEmpleado from './pages/empleado/LoginEmpleado';
 import Comandas from './pages/empleado/Comandas';
 
@@ -45,6 +47,12 @@ function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
       path: '/dueno/inventario',
       label: 'Inventario',
       icon: <Inventory2OutlinedIcon fontSize="small" />,
+    },
+    {
+      id: 'logs',
+      path: '/dueno/logs',
+      label: 'Logs Validación',
+      icon: <HistoryOutlinedIcon fontSize="small" />,
     },
   ];
 
@@ -244,6 +252,17 @@ function App() {
             <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
               <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
                 <Inventario currentUser={currentUser} />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dueno/logs"
+          element={
+            <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
+              <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
+                <LogsValidacion currentUser={currentUser} />
               </AuthenticatedLayout>
             </ProtectedRoute>
           }

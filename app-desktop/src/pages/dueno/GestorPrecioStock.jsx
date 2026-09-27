@@ -369,7 +369,7 @@ function GestorPrecioStock({ currentUser }) {
               }}
             >
               <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                <Stack direction="row" spacing={1.5} alignItems="center">
+                <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                   <Box
                     sx={{
                       width: 42,
@@ -416,7 +416,7 @@ function GestorPrecioStock({ currentUser }) {
               }}
             >
               <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                <Stack direction="row" spacing={1.5} alignItems="center">
+                <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                   <Box
                     sx={{
                       width: 42,
@@ -467,7 +467,7 @@ function GestorPrecioStock({ currentUser }) {
               }}
             >
               <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                <Stack direction="row" spacing={1.5} alignItems="center">
+                <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                   <Box
                     sx={{
                       width: 42,
@@ -512,7 +512,7 @@ function GestorPrecioStock({ currentUser }) {
             }}
           >
             <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-              <Stack direction="row" spacing={1.5} alignItems="center">
+              <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                 <Box
                   sx={{
                     width: 42,
@@ -552,7 +552,7 @@ function GestorPrecioStock({ currentUser }) {
             }}
           >
             <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-              <Stack direction="row" spacing={1.5} alignItems="center">
+              <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
                 <Box
                   sx={{
                     width: 42,
@@ -595,7 +595,7 @@ function GestorPrecioStock({ currentUser }) {
       >
         <Stack spacing={2}>
           {/* Fila 1 de Controles: Texto, Categoría, Estado y Ordenamiento */}
-          <Grid container spacing={2} alignItems="center">
+          <Grid container spacing={2} sx={{ alignItems: 'center' }}>
             {/* Buscador de texto */}
             <Grid size={{ xs: 12, md: 4.5 }}>
               <TextField
@@ -803,7 +803,7 @@ function GestorPrecioStock({ currentUser }) {
               />
             </Stack>
 
-            <Stack direction="row" spacing={1.5} alignItems="center">
+            <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
               <Typography variant="caption" sx={{ color: '#78665B', fontWeight: 600 }}>
                 Mostrando <b>{filteredProductos.length}</b> de <b>{productos.length}</b> productos
               </Typography>
