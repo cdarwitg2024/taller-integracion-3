@@ -109,7 +109,7 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
           <Button
             fullWidth
             variant="contained"
-            onClick={(e) => onChangeEstado(pedido.id, boton.siguiente, e)}
+            onClick={(e) => onChangeEstado(pedido.rawId ?? pedido.id, boton.siguiente, e)}
             sx={{
               minHeight: 56,
               minWidth: 56,

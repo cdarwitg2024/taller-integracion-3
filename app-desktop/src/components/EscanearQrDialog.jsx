@@ -16,20 +16,28 @@ import { QrReader } from 'react-qr-reader';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 
 import backendApi from '../services/backendApi';
+import pedidosService, { normalizarTokenQR } from '../services/pedidosService';
 
 function EscanearQrDialog({ open, cafeteriaId, onClose }) {
   const procesando = useRef(false);
+  const ultimoToken = useRef(null);
   const [resultado, setResultado] = useState(null); // { valido, razon?, mensaje?, pedido? }
   const [error, setError] = useState('');
-  const [leido, setLeido] = useState(false);
 
-  const validar = async (token) => {
-    if (procesando.current) return;
+  const validar = async (tokenCrudo) => {
+    const token = normalizarTokenQR(tokenCrudo);
+    if (!token || procesando.current || ultimoToken.current === token) return;
     procesando.current = true;
-    setLeido(true);
+    ultimoToken.current = token;
     setError('');
     try {
-      const res = await backendApi.validarQr(token);
+      let res;
+      try {
+        res = await backendApi.validarQr(token);
+      } catch (backendErr) {
+        console.warn('MS Comercio no disponible para validar QR, fallback a Supabase:', backendErr.message);
+        res = await pedidosService.validarQrEntrega(token);
+      }
       setResultado(res);
     } catch (err) {
       setResultado(null);
@@ -42,8 +50,8 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
   const resetear = () => {
     setResultado(null);
     setError('');
-    setLeido(false);
     procesando.current = false;
+    ultimoToken.current = null;
   };
 
   const cerrar = () => {
@@ -71,66 +79,77 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
       </DialogTitle>
 
       <DialogContent dividers>
-        {resultado ? (
-          <Stack spacing={2}>
-            <Alert severity={resultado.valido ? 'success' : 'error'}>
-              {resultado.valido
-                ? resultado.mensaje || 'Entrega validada exitosamente.'
-                : `Validación rechazada: ${resultado.razon || 'QR no válido'}`}
-            </Alert>
-            {resultado.pedido && (
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Pedido #{resultado.pedido.id} · {resultado.pedido.estado}
-              </Typography>
-            )}
-          </Stack>
-        ) : (
-          <>
+        <Box
+          sx={{
+            position: 'relative',
+            width: '100%',
+            aspectRatio: '1',
+            maxHeight: 400,
+            borderRadius: 3,
+            overflow: 'hidden',
+            backgroundColor: '#1A110C',
+            mx: 'auto',
+          }}
+        >
+          <QrReader
+            onResult={(result, scanError) => {
+              if (result?.text) {
+                void validar(String(result.text));
+              }
+              if (scanError) {
+                // errores de cámara/percepción: no bloquear la captura
+              }
+            }}
+            constraints={{ facingMode: 'environment' }}
+            scanDelay={400}
+            ViewFinder={({ isScanning }) =>
+              isScanning && !resultado && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <QrCodeScannerIcon sx={{ fontSize: 64, color: 'rgba(255,255,255,0.6)' }} />
+                </Box>
+              )
+            }
+          />
+
+          {resultado && (
             <Box
               sx={{
-                width: '100%',
-                aspectRatio: '1',
-                maxHeight: 400,
-                borderRadius: 3,
-                overflow: 'hidden',
+                position: 'absolute',
+                inset: 0,
                 backgroundColor: '#1A110C',
-                mx: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                p: 2,
               }}
             >
-              <QrReader
-                onResult={(result, scanError) => {
-                  if (result?.text) {
-                    void validar(String(result.text));
-                  }
-                  if (scanError) {
-                    // errores de cámara/percepción: no bloquear la captura
-                  }
-                }}
-                constraints={{ facingMode: 'environment' }}
-                scanDelay={400}
-                ViewFinder={({ isScanning }) =>
-                  isScanning && (
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        inset: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        pointerEvents: 'none',
-                      }}
-                    >
-                      <QrCodeScannerIcon sx={{ fontSize: 64, color: 'rgba(255,255,255,0.6)' }} />
-                    </Box>
-                  )
-                }
-              />
+              <Stack spacing={2} sx={{ width: '100%' }}>
+                <Alert severity={resultado.valido ? 'success' : 'error'}>
+                  {resultado.valido
+                    ? resultado.mensaje || 'Entrega validada exitosamente.'
+                    : `Validación rechazada: ${resultado.razon || 'QR no válido'}`}
+                </Alert>
+                {resultado.pedido && (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Pedido #{resultado.pedido.id} · {resultado.pedido.estado}
+                  </Typography>
+                )}
+              </Stack>
             </Box>
-            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1.5 }}>
-              El QR debe corresponder a un pedido en estado "listo" de esta cafetería.
-            </Typography>
-          </>
-        )}
+          )}
+        </Box>
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1.5 }}>
+          El QR debe corresponder a un pedido en estado "listo" de esta cafetería.
+        </Typography>
 
         {error && (
           <Alert severity="error" sx={{ mt: 2 }}>
