@@ -142,6 +142,76 @@ export default function App() {
     );
   };
 
+  const handleCheckout = async () => {
+    const user = session?.user;
+    const cafeteriaId = selectedCafeteria?.id;
+
+    if (!user) {
+      Alert.alert('Inicia sesión', 'Necesitas una cuenta para confirmar tu pedido.');
+      return;
+    }
+
+    if (!cafeteriaId || cart.length === 0) {
+      Alert.alert('Carrito vacío', 'Agrega productos desde el menú de una cafetería.');
+      return;
+    }
+
+    const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const pedidoPayload: Record<string, unknown> = {
+      cafeteria_id: cafeteriaId,
+      total,
+      estado: 'pendiente',
+    };
+
+    const insertPedido = async (
+      payload: Record<string, unknown>
+    ): Promise<{ id: number } | null> => {
+      const { data, error } = await supabase
+        .from('pedidos')
+        .insert(payload)
+        .select()
+        .single();
+      if (error) return null;
+      return data as { id: number };
+    };
+
+    let pedido = await insertPedido({ ...pedidoPayload, auth_user_id: user.id });
+    if (!pedido) {
+      pedido = await insertPedido(pedidoPayload);
+    }
+
+    if (!pedido) {
+      Alert.alert(
+        'No se pudo crear el pedido',
+        'Revisa tu conexión e inténtalo nuevamente.'
+      );
+      return;
+    }
+
+    const detalles = cart.map((item) => ({
+      pedido_id: pedido!.id,
+      producto_id: item.id,
+      cantidad: item.quantity,
+      precio_unitario: item.price,
+      subtotal: item.price * item.quantity,
+    }));
+
+    const { error: detalleError } = await supabase
+      .from('detalles_pedido')
+      .insert(detalles);
+
+    if (detalleError) {
+      Alert.alert('Aviso', 'El pedido se registró, pero el detalle no pudo guardarse.');
+      return;
+    }
+
+    setCart([]);
+    Alert.alert(
+      'Pedido creado',
+      `Tu pedido fue registrado. Retira en ${selectedCafeteria?.nombre || 'la cafetería seleccionada'} cuando esté listo.`
+    );
+  };
+
   const totalProducts = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   if (loading) {
