@@ -201,6 +201,19 @@ export default function App() {
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
               onRemove={removeFromCart}
+              onCheckout={handleCheckout}
+            />
+          )}
+
+          {activeTab === 'wallet' && (
+            <WalletScreen userId={isGuest ? null : session?.user?.id || null} />
+          )}
+
+          {activeTab === 'perfil' && (
+            <PerfilScreen
+              session={session}
+              isGuest={isGuest}
+              onLogout={handleLogout}
             />
           )}
         </View>
