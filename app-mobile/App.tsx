@@ -286,14 +286,6 @@ export default function App() {
           {activeTab === 'wallet' && (
             <WalletScreen userId={isGuest ? null : session?.user?.id || null} />
           )}
-
-          {activeTab === 'perfil' && (
-            <PerfilScreen
-              session={session}
-              isGuest={isGuest}
-              onLogout={handleLogout}
-            />
-          )}
         </View>
 
         {/* Barra de navegación inferior */}
