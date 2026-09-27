@@ -39,7 +39,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
       onClose={onClose}
       maxWidth="sm"
       fullWidth
-      PaperProps={{ sx: { borderRadius: 3 } }}
+      slotProps={{ paper: { sx: { borderRadius: 3 } } }}
     >
       {pedido && (
         <>

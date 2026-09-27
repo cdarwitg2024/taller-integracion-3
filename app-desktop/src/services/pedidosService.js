@@ -173,7 +173,7 @@ export const pedidosService = {
       .from('pedidos')
       .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))')
       .or(orClauses.join(','))
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Error al obtener pedido por QR token desde Supabase:', error);
