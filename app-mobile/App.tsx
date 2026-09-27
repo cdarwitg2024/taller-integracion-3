@@ -313,7 +313,9 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'wallet' && <WalletScreen />}
+{activeTab === 'wallet' && (
+            <WalletScreen userId={isGuest ? null : session?.user?.id || null} />
+          )}
 
           {activeTab === 'perfil' && (
             <PerfilScreen
