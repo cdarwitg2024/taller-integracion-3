@@ -14,9 +14,17 @@ const {
   descontarStock,
   reponerStock
 } = require('../../clients/inventario.client');
+const NotificacionesService = require('../notificaciones/notificaciones.service');
 
 const TableName = 'pedidos';
 const DetallesTableName = 'detalles_pedido';
+
+// Transiciones que disparan push al cliente móvil. 'En preparación' avisa que el
+// pedido entró a la cocina y 'Listo' que ya se puede retirar (SRS).
+const EVENTOS_NOTIFICACION = {
+  'En preparación': 'en_preparacion',
+  Listo: 'listo'
+};
 
 // Error operacional de base de datos: debe traducirse a 503 en el controller
 function errorBd(mensaje) {
@@ -546,6 +554,30 @@ const PedidosService = {
             console.error(`No se pudo reponer stock al cancelar: ${e.message}`);
           }
         }
+      }
+    }
+
+    // Notificación push al cliente móvil, solo después de que el estado quedó
+    // guardado con éxito. Es best-effort: si FCM falla se loguea, pero la
+    // transición del pedido nunca falla por culpa de la notificación.
+    const eventoNotificacion = EVENTOS_NOTIFICACION[destino];
+    if (eventoNotificacion) {
+      try {
+        const resumen = await NotificacionesService.notificarPedido(
+          normalizarPedidoDB(data),
+          eventoNotificacion
+        );
+        if (resumen.omitido) {
+          console.log(`[notificaciones] pedido ${id} (${eventoNotificacion}): ${resumen.omitido}`);
+        } else {
+          console.log(
+            `[notificaciones] pedido ${id} (${eventoNotificacion}, modo ${resumen.modo}): ` +
+            `${resumen.enviados} enviado(s), ${resumen.fallidos} fallido(s), ` +
+            `${resumen.tokens_invalidos} token(s) desactivado(s)`
+          );
+        }
+      } catch (notifError) {
+        console.error(`[notificaciones] falló la notificación del pedido ${id}: ${notifError.message}`);
       }
     }
 
