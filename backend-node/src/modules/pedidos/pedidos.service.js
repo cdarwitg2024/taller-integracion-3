@@ -13,7 +13,7 @@ const {
   verificarDisponibilidad,
   descontarStock,
   reponerStock
-} = require('../inventario/stock.service');
+} = require('../../clients/inventario.client');
 
 const TableName = 'pedidos';
 const DetallesTableName = 'detalles_pedido';

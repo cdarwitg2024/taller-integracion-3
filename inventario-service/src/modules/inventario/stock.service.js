@@ -17,8 +17,8 @@ function errorBd(mensaje) {
 
 // Valida que cada producto solicitado exista, esté activo y tenga stock suficiente.
 // Lanza error 409 si algún ítem no puede satisfacerse.
-async function verificarDisponibilidad(Items) {
-  const items = Array.isArray(Items) ? Items : [];
+async function verificarDisponibilidad(itemsRaw) {
+  const items = Array.isArray(itemsRaw) ? itemsRaw : [];
   const ids = [...new Set(items.map(i => String(i.producto_id)))];
   if (ids.length === 0) return;
 
@@ -55,13 +55,13 @@ async function verificarDisponibilidad(Items) {
 }
 
 // Descuenta stock de un producto y registra el movimiento de salida.
-// Usado al confirmar el pedido (el pago ya ocurrió).
+// Invocado por MS-Pedidos al confirmar un pedido.
 async function descontarStock({ producto_id, cantidad, usuario_id, motivo }) {
   return ajustarStock({ producto_id, cantidad: -cantidad, usuario_id, motivo, tipo: 'salida' });
 }
 
 // Repone stock de un producto y registra el movimiento de entrada.
-// Usado al cancelar un pedido.
+// Invocado por MS-Pedidos al cancelar un pedido.
 async function reponerStock({ producto_id, cantidad, usuario_id, motivo }) {
   return ajustarStock({ producto_id, cantidad, usuario_id, motivo, tipo: 'entrada' });
 }
@@ -124,5 +124,6 @@ async function ajustarStock({ producto_id, cantidad, usuario_id, motivo, tipo })
 module.exports = {
   verificarDisponibilidad,
   descontarStock,
-  reponerStock
+  reponerStock,
+  ajustarStock
 };

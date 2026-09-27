@@ -7,7 +7,7 @@ function bajoMinimo(producto) {
 }
 
 const AlertasStockService = {
-  // Productos que alcanzaron o quedaron bajo su stock mínimo (para BOT/notificaciones)
+  // Productos que alcanzaron o quedaron bajo su stock mínimo
   async obtenerAlertasActivas() {
     const { data, error } = await supabase
       .from(ProductosTable)

@@ -13,7 +13,6 @@ const pedidosRoutes = require('./modules/pedidos/pedidos.routes');
 const authRoutes = require('./modules/auth/auth.routes');
 const cafeteriasRoutes = require('./modules/catalogo/cafeterias.routes');
 const pagosRoutes = require('./modules/pagos/pagos.routes');
-const inventarioRoutes = require('./modules/inventario/inventario.routes');
 
 const app = express();
 
@@ -34,7 +33,6 @@ app.use('/api/pedidos', pedidosRoutes);
 app.use('/auth', authRoutes);
 app.use('/cafeterias', cafeteriasRoutes);
 app.use('/api/pagos', pagosRoutes);
-app.use('/api/inventario', inventarioRoutes);
 app.use('/health', healthRoutes);
 
 // Ruta raíz
@@ -48,10 +46,10 @@ app.get('/', (req, res) => {
       auth: '/auth',
       cafeterias: '/cafeterias',
       pagos: '/api/pagos',
-      inventario: '/api/inventario',
       tiempos: '/api/tiempos',
       qr: '/api/qr',
-      pedidos: '/api/pedidos'
+      pedidos: '/api/pedidos',
+      inventario: '(microservicio independiente: inventario-service)'
     }
   });
 });

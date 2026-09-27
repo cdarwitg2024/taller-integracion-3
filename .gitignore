@@ -150,3 +150,15 @@ logs/
 # ============================================
 docsReferencia/
 db_CoffeeFaster/
+
+# ============================================
+# Kubernetes: manifiestos con secretos (crear el Secret via kubectl, no versionar)
+# ============================================
+k8s/secrets/*
+!k8s/secrets/*.example.yaml
+*secret*.local.yaml
+
+# Credenciales de kubectl / cluster
+*.kubeconfig
+kubeconfig
+.kube/

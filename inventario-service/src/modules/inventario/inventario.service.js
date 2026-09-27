@@ -9,7 +9,7 @@ const InventarioService = {
       .select('*, usuarios(nombre, apellido), productos(nombre)')
       .eq('producto_id', productoId)
       .order('creado_en', { ascending: false });
-    
+
     if (error) throw error;
     return data;
   },
@@ -20,7 +20,7 @@ const InventarioService = {
       .insert(movimiento)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   }

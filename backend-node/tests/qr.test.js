@@ -1,5 +1,10 @@
 const request = require('supertest');
 jest.mock('../src/config/supabase');
+jest.mock('../src/clients/inventario.client', () => ({
+  verificarDisponibilidad: jest.fn().mockResolvedValue(undefined),
+  descontarStock: jest.fn().mockResolvedValue({ ok: true }),
+  reponerStock: jest.fn().mockResolvedValue({ ok: true })
+}));
 const app = require('../src/app');
 const { sembrarProductosBase } = require('./helpers/sembrarProductos');
 

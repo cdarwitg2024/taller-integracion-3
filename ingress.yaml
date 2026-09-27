@@ -9,6 +9,13 @@ spec:
   - host: student-cdarwitg.k8s-estudiantes.dev.censei.cl
     http:
       paths:
+      - path: /api/inventario
+        pathType: Prefix
+        backend:
+          service:
+            name: inventario-service
+            port:
+              number: 80
       - path: /
         pathType: Prefix
         backend:
