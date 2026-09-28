@@ -452,7 +452,7 @@ DO $$
 DECLARE
   t TEXT;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['pedidos', 'detalles_pedido', 'wallets'] LOOP
+  FOREACH t IN ARRAY ARRAY['pedidos', 'detalles_pedido', 'wallets', 'productos'] LOOP
     IF NOT EXISTS (
       SELECT 1 FROM pg_publication_tables
       WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = t

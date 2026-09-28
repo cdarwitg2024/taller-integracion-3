@@ -11,6 +11,7 @@ import {
 
 import ProductCard from '../components/ProductCard';
 import { supabase } from '../lib/supabase';
+import { useDisponibilidadProductos } from '../hooks/useDisponibilidadProductos';
 
 /**
  * Pantalla de Menú de una cafetería — FR-06
@@ -101,6 +102,42 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
   const [error, setError] = useState(null);
 
   const cafeteriaId = cafeteria?.id ?? null;
+
+  // FR-10: escucha cambios de stock/activo de los productos de esta cafetería.
+  // El hook se suscribe, se desuscribe solo y no duplica canales.
+  const { connected, cambios } = useDisponibilidadProductos(cafeteriaId);
+
+  // Aplicamos el cambio en el producto afectado sin volver a traer la lista
+  // entera. Es lo que hace que la UI se vea instantánea.
+  useEffect(() => {
+    if (!cambios.length) return;
+    const pendiente = cambios[0];
+
+    // Producto nuevo o eliminado en cascada: recargamos la lista
+    if (pendiente.recargar || pendiente.eliminadoId) {
+      fetchProducts({ silent: true });
+      return;
+    }
+
+    if (Number.isFinite(pendiente.id)) {
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.id !== pendiente.id) return p;
+
+          const stock = pendiente.stock;
+          const activo = pendiente.activo;
+          const eliminado = Boolean(pendiente.eliminadoEn);
+
+          // Si lo dejaron inactivo o lo borraron, sale de la lista
+          if (!activo || eliminado) {
+            return prev.filter((x) => x.id !== pendiente.id);
+          }
+
+          return { ...p, stock, available: stock > 0 };
+        })
+      );
+    }
+  }, [cambios]);
 
   const fetchProducts = useCallback(
     async ({ silent = false } = {}) => {
@@ -250,11 +287,12 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
         </View>
 
         <View style={styles.infoCard}>
+          <View style={[styles.liveDot, connected ? styles.liveDotOn : styles.liveDotOff]} />
           <Text style={styles.infoCafeteria} numberOfLines={1}>
             {cafeteria?.nombre || 'la cafetería seleccionada'}
           </Text>
           <Text style={styles.infoCount}>
-            {productosSummary(disponibles, products.length)}
+            {connected ? productosSummary(disponibles, products.length) : 'Conectando…'}
           </Text>
         </View>
       </View>
@@ -332,6 +370,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     alignItems: 'center',
+  },
+
+  // Indicador de que la suscripción en vivo está activa (FR-10)
+  liveDot: {
+    position: 'absolute',
+    top: 8,
+    right: 12,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+
+  liveDotOn: {
+    backgroundColor: '#5B8C5A',
+  },
+
+  liveDotOff: {
+    backgroundColor: '#C9A227',
   },
 
   infoCafeteria: {
