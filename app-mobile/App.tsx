@@ -42,6 +42,24 @@ type CartItem = {
 
 type AppTab = 'cafeterias' | 'pedidos' | 'carrito' | 'wallet' | 'perfil';
 
+/**
+ * Respuesta de la RPC `procesar_pago` (ver database/fixes/crear_rpc_pagos.sql).
+ * Modela los dos caminos: aprobado y rechazado, con los campos que la app
+ * necesita mostrarle al usuario.
+ */
+type PagoResult = {
+  ok: boolean;
+  motivo?: string;
+  mensaje?: string;
+  saldo_disponible?: number;
+  total?: number;
+  faltante?: number;
+  pedido_id?: number;
+  saldo_restante?: number;
+  estado?: string;
+  pago_estado?: string;
+};
+
 const TABS: { key: AppTab; label: string }[] = [
   { key: 'cafeterias', label: 'Cafeterías' },
   { key: 'pedidos', label: 'Pedidos' },
@@ -63,6 +81,7 @@ export default function App() {
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -174,10 +193,9 @@ export default function App() {
   };
 
   const handleCheckout = async () => {
-    const user = session?.user;
     const cafeteriaId = selectedCafeteria?.id;
 
-    if (!user) {
+    if (!session?.user) {
       Alert.alert('Inicia sesión', 'Necesitas una cuenta para confirmar tu pedido.');
       return;
     }
@@ -187,60 +205,68 @@ export default function App() {
       return;
     }
 
-    const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const pedidoPayload: Record<string, unknown> = {
-      cafeteria_id: cafeteriaId,
-      total,
-      estado: 'pendiente',
-    };
+    // Guardia de reentrada: dos toques antes de que resuelva la RPC intentarian
+    // cobrar dos veces. El UNIQUE en pagos.pedido_id es la red real, pero esto
+    // evita siquiera intentarlo.
+    if (paying) return;
+    setPaying(true);
 
-    const insertPedido = async (
-      payload: Record<string, unknown>
-    ): Promise<{ id: number } | null> => {
-      const { data, error } = await supabase
-        .from('pedidos')
-        .insert(payload)
-        .select()
-        .single();
-      if (error) return null;
-      return data as { id: number };
-    };
+    const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
 
-    let pedido = await insertPedido({ ...pedidoPayload, auth_user_id: user.id });
-    if (!pedido) {
-      pedido = await insertPedido(pedidoPayload);
-    }
+    try {
+      // El total NO se manda. La RPC lo recalcula desde productos.precio: si
+      // se enviara, un cliente podria pagar $100 un sándwich de $2.000.
+      const { data, error } = await supabase.rpc('procesar_pago', {
+        p_cafeteria_id: cafeteriaId,
+        p_items: cart.map((item) => ({
+          producto_id: item.id,
+          cantidad: item.quantity,
+        })),
+      });
 
-    if (!pedido) {
+      if (error) {
+        Alert.alert(
+          'No se pudo procesar el pago',
+          'Revisa tu conexión e inténtalo nuevamente.'
+        );
+        return;
+      }
+
+      const resultado = data as PagoResult | null;
+
+      if (!resultado || !resultado.ok) {
+        if (resultado?.motivo === 'saldo_insuficiente') {
+          // Carrito intacto a proposito: el usuario recarga y reintenta.
+          Alert.alert(
+            'Saldo insuficiente en la Wallet',
+            `Tu pedido cuesta ${formatCLP(resultado.total ?? 0)} y te ` +
+              `faltan ${formatCLP(resultado.faltante ?? 0)}.\n` +
+              `Saldo actual: ${formatCLP(resultado.saldo_disponible ?? 0)}.`
+          );
+        } else {
+          Alert.alert(
+            'Pago rechazado',
+            resultado?.mensaje || 'No fue posible procesar el pago.'
+          );
+        }
+        return;
+      }
+
+      // Solo aca se vacia el carrito: el pago se aprobo y el saldo se debito.
+      setCart([]);
       Alert.alert(
-        'No se pudo crear el pedido',
-        'Revisa tu conexión e inténtalo nuevamente.'
+        'Pago aprobado',
+        `Tu pedido fue pagado con Wallet.\n` +
+          `Saldo restante: ${formatCLP(Number(resultado.saldo_restante ?? 0))}.`
       );
-      return;
+    } catch (e) {
+      Alert.alert(
+        'No se pudo procesar el pago',
+        'Ocurrio un error inesperado. Intentalo nuevamente.'
+      );
+    } finally {
+      setPaying(false);
     }
-
-    const detalles = cart.map((item) => ({
-      pedido_id: pedido!.id,
-      producto_id: item.id,
-      cantidad: item.quantity,
-      precio_unitario: item.price,
-      subtotal: item.price * item.quantity,
-    }));
-
-    const { error: detalleError } = await supabase
-      .from('detalles_pedido')
-      .insert(detalles);
-
-    if (detalleError) {
-      Alert.alert('Aviso', 'El pedido se registró, pero el detalle no pudo guardarse.');
-      return;
-    }
-
-    setCart([]);
-    Alert.alert(
-      'Pedido creado',
-      `Tu pedido fue registrado. Retira en ${selectedCafeteria?.nombre || 'la cafetería seleccionada'} cuando esté listo.`
-    );
   };
 
   const totalProducts = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -338,9 +364,10 @@ export default function App() {
               cafeteriaName={selectedCafeteria?.nombre || 'Cafetería Central'}
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
-              onRemove={removeFromCart}
-              onCheckout={handleCheckout}
-            />
+            onRemove={removeFromCart}
+            onCheckout={handleCheckout}
+            paying={paying}
+          />
           )}
 
 {activeTab === 'wallet' && (
