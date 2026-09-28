@@ -32,8 +32,13 @@ export const useDisponibilidadProductos = (cafeteriaId) => {
   const cafeteriaRef = useRef(cafeteriaId);
   cafeteriaRef.current = cafeteriaId;
 
+  // false apenas se desmonta: el callback del canal deja de tocar el estado
+  const vivo = useRef(true);
+
   useEffect(() => {
     if (!cafeteriaId) return undefined;
+
+    vivo.current = true;
 
     // Por si el efecto se re-ejecuta, cerramos el canal anterior ANTES de abrir
     // uno nuevo. Sin esto se acumularían suscripciones y cada cambio dispararía
@@ -96,10 +101,16 @@ export const useDisponibilidadProductos = (cafeteriaId) => {
           ])
       )
       .subscribe((status) => {
+        if (!vivo.current) return;
+
         const ok = status === 'SUBSCRIBED';
         setConnected(ok);
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          console.warn(`[FR-10] Canal de productos en estado: ${status}`);
+
+        // Solo se avisa de los fallos REALES. `CLOSED` es lo que emite
+        // removeChannel en la limpieza: es esperado, no es un error, y
+        // loguearlo ensuciaba la consola en cada cambio de pantalla.
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`[FR-10] Suscripción de productos: ${status}`);
         }
       });
 
@@ -107,10 +118,14 @@ export const useDisponibilidadProductos = (cafeteriaId) => {
 
     // Limpieza al salir de la pantalla: sin esto la suscripción sigue viva y
     // la app queda escuchando cambios para siempre.
+    //
+    // `vivo` evita que el callback del canal dispare setState DESPUÉS del
+    // desmontaje. `removeChannel` provoca un estado CLOSED que, si se reportara,
+    // generaría un setState sobre un componente ya desmontado.
     return () => {
+      vivo.current = false;
       supabase.removeChannel(canal);
       canalRef.current = null;
-      setConnected(false);
     };
   }, [cafeteriaId]);
 
