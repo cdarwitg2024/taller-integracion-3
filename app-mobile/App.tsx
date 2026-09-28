@@ -329,32 +329,34 @@ export default function App() {
                 activeOpacity={0.7}
                 onPress={() => handleTabPress(tab.key)}
               >
-                <Text
-                  style={[
-                    styles.navIcon,
-                    isActive && styles.activeNavIcon,
-                  ]}
-                >
-                  {tab.key === 'cafeterias' && '🏪'}
-                  {tab.key === 'pedidos' && '📋'}
-                  {tab.key === 'carrito' && '🛒'}
-                  {tab.key === 'wallet' && '💳'}
-                  {tab.key === 'perfil' && '👤'}
-                </Text>
-                <Text
-                  style={[
-                    styles.navText,
-                    isActive && styles.activeNavText,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {tab.label}
-                </Text>
-                {tab.key === 'carrito' && totalProducts > 0 && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{totalProducts}</Text>
-                  </View>
-                )}
+                <View>
+                  <Text
+                    style={[
+                      styles.navIcon,
+                      isActive && styles.activeNavIcon,
+                    ]}
+                  >
+                    {tab.key === 'cafeterias' && '🏪'}
+                    {tab.key === 'pedidos' && '📋'}
+                    {tab.key === 'carrito' && '🛒'}
+                    {tab.key === 'wallet' && '💳'}
+                    {tab.key === 'perfil' && '👤'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.navText,
+                      isActive && styles.activeNavText,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {tab.label}
+                  </Text>
+                  {tab.key === 'carrito' && totalProducts > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{totalProducts}</Text>
+                    </View>
+                  )}
+                </View>
                 <View
                   style={[
                     styles.navIndicator,
@@ -433,6 +435,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  navIcon: {
+    fontSize: 20,
+  },
+  activeNavIcon: {
+    opacity: 1,
   },
   navText: {
     fontSize: 11,
