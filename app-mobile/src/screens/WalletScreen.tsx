@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
   Platform,
   Alert,
   RefreshControl,
+  Animated,
+  Easing,
 } from 'react-native';
 
 import { supabase } from '../lib/supabase';
@@ -106,6 +108,62 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
   const [recargaVisible, setRecargaVisible] = useState(false);
   const [montoRecarga, setMontoRecarga] = useState('');
   const [procesandoRecarga, setProcesandoRecarga] = useState(false);
+
+  // ─── Animaciones ─────────────────────────────────────────────────
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const saldoAnim = useRef(new Animated.Value(0)).current;
+  const recargaScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!loading) {
+      // Animación de entrada: fade + slide + scale
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 600,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 600,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 500,
+          easing: Easing.out(Easing.back(1.5)),
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // Animación del saldo (contador)
+      Animated.timing(saldoAnim, {
+        toValue: 1,
+        duration: 800,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [loading]);
+
+  const animarRecarga = () => {
+    Animated.sequence([
+      Animated.timing(recargaScale, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(recargaScale, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   // ─── Obtener ID interno del usuario ────────────────────────────
   const obtenerUsuarioId = useCallback(async (): Promise<string | null> => {
@@ -341,14 +399,42 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           />
         }
       >
-        {/* ─── Tarjeta de Saldo ─────────────────────────────── */}
-        <View style={styles.balanceCard}>
+        {/* ─── Tarjeta de Saldo (animada) ───────────────────── */}
+        <Animated.View
+          style={[
+            styles.balanceCard,
+            {
+              opacity: fadeAnim,
+              transform: [
+                { translateY: slideAnim },
+                { scale: scaleAnim },
+              ],
+            },
+          ]}
+        >
           <View style={styles.balanceCardInner}>
             <View style={styles.balanceDecor1} />
             <View style={styles.balanceDecor2} />
             <View style={styles.balanceContent}>
               <Text style={styles.balanceLabel}>SALDO DISPONIBLE</Text>
-              <Text style={styles.balanceValue}>{formatCLP(saldo)}</Text>
+              <Animated.Text
+                style={[
+                  styles.balanceValue,
+                  {
+                    opacity: saldoAnim,
+                    transform: [
+                      {
+                        scale: saldoAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.8, 1],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                {formatCLP(saldo)}
+              </Animated.Text>
               <Text style={styles.balanceHint}>
                 {esSaldoCero
                   ? 'Tu saldo está en $0. Recarga para pedir.'
@@ -358,29 +444,46 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
               </Text>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
-        {/* ─── Botones de Acción ────────────────────────────── */}
-        <View style={styles.actionsRow}>
+        {/* ─── Botones de Acción (animados) ─────────────────── */}
+        <Animated.View
+          style={[
+            styles.actionsRow,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
           <TouchableOpacity
             style={styles.actionButton}
+            onPressIn={animarRecarga}
             onPress={() => setRecargaVisible(true)}
+            activeOpacity={0.8}
           >
-            <View style={styles.actionIconContainer}>
+            <Animated.View
+              style={[
+                styles.actionIconContainer,
+                { transform: [{ scale: recargaScale }] },
+              ]}
+            >
               <Text style={styles.actionIcon}>+</Text>
-            </View>
+            </Animated.View>
             <Text style={styles.actionText}>Recargar</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={onRefresh}>
+          <TouchableOpacity style={styles.actionButton} onPress={onRefresh} activeOpacity={0.8}>
             <View style={[styles.actionIconContainer, styles.actionIconAlt]}>
               <Text style={styles.actionIcon}>↻</Text>
             </View>
             <Text style={styles.actionText}>Actualizar</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
-        {/* ─── Estadísticas Rápidas ─────────────────────────── */}
-        <View style={styles.statsRow}>
+        {/* ─── Estadísticas Rápidas (animadas) ─────────────── */}
+        <Animated.View
+          style={[
+            styles.statsRow,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{movimientos.length}</Text>
             <Text style={styles.statLabel}>Movimientos</Text>
@@ -397,10 +500,15 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
             </Text>
             <Text style={styles.statLabel}>Recargas</Text>
           </View>
-        </View>
+        </Animated.View>
 
-        {/* ─── Historial de Movimientos ──────────────────────── */}
-        <View style={styles.section}>
+        {/* ─── Historial de Movimientos (animado) ──────────── */}
+        <Animated.View
+          style={[
+            styles.section,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
           <Text style={styles.sectionTitle}>Últimos movimientos</Text>
 
           {movimientos.length === 0 ? (
@@ -412,8 +520,24 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
               </Text>
             </View>
           ) : (
-            movimientos.map((mov) => (
-              <View key={mov.id} style={styles.movimientoCard}>
+            movimientos.map((mov, index) => (
+              <Animated.View
+                key={mov.id}
+                style={[
+                  styles.movimientoCard,
+                  {
+                    opacity: fadeAnim,
+                    transform: [
+                      {
+                        translateY: slideAnim.interpolate({
+                          inputRange: [0, 50],
+                          outputRange: [0, 50 + index * 10],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
                 <View
                   style={[
                     styles.movimientoIcon,
@@ -443,14 +567,14 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
                   {mov.tipo === 'compra' ? '−' : '+'}
                   {formatCLP(mov.monto)}
                 </Text>
-              </View>
+              </Animated.View>
             ))
           )}
 
           <Text style={styles.footerText}>
             Las recargas y movimientos se sincronizan con tu cuenta Supabase.
           </Text>
-        </View>
+        </Animated.View>
       </ScrollView>
 
       {/* ─── Modal de Recarga ───────────────────────────────── */}

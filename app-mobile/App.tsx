@@ -316,14 +316,6 @@ export default function App() {
 {activeTab === 'wallet' && (
             <WalletScreen userId={isGuest ? null : session?.user?.id || null} />
           )}
-
-          {activeTab === 'perfil' && (
-            <PerfilScreen
-              session={session}
-              isGuest={isGuest}
-              onLogout={handleLogout}
-            />
-          )}
         </View>
 
         {/* Barra de navegación inferior (única) */}
@@ -336,6 +328,42 @@ export default function App() {
                 style={styles.navItem}
                 activeOpacity={0.7}
                 onPress={() => handleTabPress(tab.key)}
+              >
+                <Text
+                  style={[
+                    styles.navIcon,
+                    isActive && styles.activeNavIcon,
+                  ]}
+                >
+                  {tab.key === 'cafeterias' && '🏪'}
+                  {tab.key === 'pedidos' && '📋'}
+                  {tab.key === 'carrito' && '🛒'}
+                  {tab.key === 'wallet' && '💳'}
+                  {tab.key === 'perfil' && '👤'}
+                </Text>
+                <Text
+                  style={[
+                    styles.navText,
+                    isActive && styles.activeNavText,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {tab.label}
+                </Text>
+                {tab.key === 'carrito' && totalProducts > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{totalProducts}</Text>
+                  </View>
+                )}
+                <View
+                  style={[
+                    styles.navIndicator,
+                    isActive && styles.activeNavIndicator,
+                  ]}
+                />
+              </TouchableOpacity>
+            );
+          })}
               >
                 <View>
                   <Text
