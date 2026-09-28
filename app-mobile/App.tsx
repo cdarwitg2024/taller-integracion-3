@@ -364,32 +364,6 @@ export default function App() {
               </TouchableOpacity>
             );
           })}
-              >
-                <View>
-                  <Text
-                    style={[
-                      styles.navText,
-                      isActive && styles.activeNavText,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {tab.label}
-                  </Text>
-                  {tab.key === 'carrito' && totalProducts > 0 && (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{totalProducts}</Text>
-                    </View>
-                  )}
-                </View>
-                <View
-                  style={[
-                    styles.navIndicator,
-                    isActive && styles.activeNavIndicator,
-                  ]}
-                />
-              </TouchableOpacity>
-            );
-          })}
         </View>
       </View>
     </SafeAreaProvider>
