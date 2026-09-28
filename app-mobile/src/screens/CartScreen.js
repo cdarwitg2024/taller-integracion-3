@@ -16,6 +16,7 @@ const CartScreen = ({
   onDecrease,
   onRemove,
   onCheckout,
+  paying = false,
 }) => {
   const cafeName = cafeteriaName || 'Cafetería Central';
   const totalProducts = cart.reduce(
@@ -139,9 +140,16 @@ const CartScreen = ({
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.paymentButton} onPress={onCheckout}>
+              <TouchableOpacity
+                style={[
+                  styles.paymentButton,
+                  paying && styles.paymentButtonDisabled,
+                ]}
+                onPress={onCheckout}
+                disabled={paying}
+              >
                 <Text style={styles.paymentText}>
-                  Proceder al Pago
+                  {paying ? 'Procesando pago...' : 'Proceder al Pago'}
                 </Text>
 
                 <Text style={styles.arrow}>→</Text>
@@ -350,6 +358,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  paymentButtonDisabled: {
+    backgroundColor: '#B5A89E',
   },
 
   paymentText: {
