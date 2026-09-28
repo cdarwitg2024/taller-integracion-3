@@ -15,9 +15,7 @@ import { RegisterScreen } from './src/screens/RegisterScreen';
 import { CafeteriaListScreen } from './src/screens/CafeteriaListScreen';
 import MenuScreen from './src/screens/MenuScreen';
 import CartScreen from './src/screens/CartScreen';
-import PedidosScreen from './src/screens/PedidosScreen';
 import WalletScreen from './src/screens/WalletScreen';
-import PerfilScreen from './src/screens/PerfilScreen';
 import { Cafeteria } from './src/types/cafeteria';
 
 type Product = {
@@ -38,7 +36,7 @@ type CartItem = {
   quantity: number;
 };
 
-type AppTab = 'cafeterias' | 'pedidos' | 'carrito' | 'wallet' | 'perfil';
+type AppTab = 'cafeterias' | 'menu' | 'cart' | 'wallet';
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -257,25 +255,22 @@ export default function App() {
 
         {/* Contenido principal según la pestaña activa */}
         <View style={styles.content}>
-          {activeTab === 'cafeterias' && (
+          {activeTab === 'cafeterias' && !selectedCafeteria && (
             <CafeteriaListScreen
-              selectedCafeteriaId={selectedCafeteria?.id}
+              selectedCafeteriaId={selectedCafeteria?.id ?? null}
               onSelectCafeteria={handleSelectCafeteria}
             />
           )}
 
           {activeTab === 'cafeterias' && selectedCafeteria && (
             <MenuScreen
-              cafeteria={selectedCafeteria}
               onAddToCart={addToCart}
-              onBack={() => setSelectedCafeteria(null)}
             />
           )}
 
-          {activeTab === 'carrito' && (
+          {activeTab === 'cart' && (
             <CartScreen
               cart={cart}
-              cafeteriaName={selectedCafeteria?.nombre || 'Cafetería Central'}
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
               onRemove={removeFromCart}
@@ -292,12 +287,15 @@ export default function App() {
         <View style={styles.bottomNavigation}>
           <TouchableOpacity
             style={styles.navItem}
-            onPress={() => setActiveTab('cafeterias')}
+            onPress={() => {
+              setSelectedCafeteria(null);
+              setActiveTab('cafeterias');
+            }}
           >
             <Text
               style={[
                 styles.navIcon,
-                activeTab === 'cafeterias' && styles.activeNavIcon,
+                activeTab === 'cafeterias' && !selectedCafeteria && styles.activeNavIcon,
               ]}
             >
               🏪
@@ -305,7 +303,7 @@ export default function App() {
             <Text
               style={[
                 styles.navText,
-                activeTab === 'cafeterias' && styles.activeNavText,
+                activeTab === 'cafeterias' && !selectedCafeteria && styles.activeNavText,
               ]}
             >
               Cafeterías
@@ -314,35 +312,35 @@ export default function App() {
 
           <TouchableOpacity
             style={styles.navItem}
-            onPress={() => setActiveTab('pedidos')}
+            onPress={() => setActiveTab('menu')}
           >
             <Text
               style={[
                 styles.navIcon,
-                activeTab === 'pedidos' && styles.activeNavIcon,
+                activeTab === 'menu' && styles.activeNavIcon,
               ]}
             >
-              📋
+              ☕
             </Text>
             <Text
               style={[
                 styles.navText,
-                activeTab === 'pedidos' && styles.activeNavText,
+                activeTab === 'menu' && styles.activeNavText,
               ]}
             >
-              Pedidos
+              Menú
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.navItem}
-            onPress={() => setActiveTab('carrito')}
+            onPress={() => setActiveTab('cart')}
           >
             <View>
               <Text
                 style={[
                   styles.navIcon,
-                  activeTab === 'carrito' && styles.activeNavIcon,
+                  activeTab === 'cart' && styles.activeNavIcon,
                 ]}
               >
                 🛒
@@ -356,7 +354,7 @@ export default function App() {
             <Text
               style={[
                 styles.navText,
-                activeTab === 'carrito' && styles.activeNavText,
+                activeTab === 'cart' && styles.activeNavText,
               ]}
             >
               Carrito
@@ -382,28 +380,6 @@ export default function App() {
               ]}
             >
               Wallet
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => setActiveTab('perfil')}
-          >
-            <Text
-              style={[
-                styles.navIcon,
-                activeTab === 'perfil' && styles.activeNavIcon,
-              ]}
-            >
-              👤
-            </Text>
-            <Text
-              style={[
-                styles.navText,
-                activeTab === 'perfil' && styles.activeNavText,
-              ]}
-            >
-              Perfil
             </Text>
           </TouchableOpacity>
         </View>
