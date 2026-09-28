@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 
 import ProductCard from '../components/ProductCard';
+import ProductDetail from '../components/ProductDetail';
+import CategoryFilter from '../components/CategoryFilter';
 import { supabase } from '../lib/supabase';
 import { useDisponibilidadProductos } from '../hooks/useDisponibilidadProductos';
 
@@ -74,6 +76,8 @@ export const mapProduct = (raw) => {
     stockMin: Number.isFinite(Number(raw.stock_minimo)) ? Number(raw.stock_minimo) : 0,
     // `available` es el contrato que ya usan ProductCard y App.tsx
     available: activo && !eliminado && stock > 0,
+    // FR-07: el filtro trabaja por id, no por nombre. Guardamos ambos.
+    categoryId: Number.isFinite(Number(raw.categoria_id)) ? Number(raw.categoria_id) : null,
     category: raw.categorias?.nombre || 'General',
     emoji: getEmoji({
       name: raw.nombre || '',
@@ -100,6 +104,12 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+
+  // FR-07: categoría activa. 'todos' = sin filtro
+  const [categoriaActiva, setCategoriaActiva] = useState('todos');
+  // FR-08: producto abierto en detalle. La cafetería NO se pasa: el detalle se
+  // muestra encima del menú, así que el contexto se mantiene solo.
+  const [productoDetalle, setProductoDetalle] = useState(null);
 
   const cafeteriaId = cafeteria?.id ?? null;
 
@@ -189,9 +199,38 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     fetchProducts();
   }, [fetchProducts]);
 
-  const categories = useMemo(() => groupByCategory(products), [products]);
+  // FR-07: categorías que TIENEN productos. Armadas por id, no por nombre,
+  // porque en la base hay 'Repostería' y 'Reposteria' como filas distintas.
+  const categories = useMemo(() => {
+    const porId = new Map();
+    products.forEach((p) => {
+      const id = p.categoryId ?? 'sin-categoria';
+      const actual = porId.get(id);
+      if (actual) {
+        actual.count += 1;
+      } else {
+        porId.set(id, { id, nombre: p.category, count: 1 });
+      }
+    });
+    return [...porId.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  }, [products]);
 
-  const disponibles = products.filter((p) => p.available).length;
+  // Filtrado por categoría
+  const productosFiltrados = useMemo(() => {
+    if (categoriaActiva === 'todos') return products;
+    return products.filter((p) => String(p.categoryId ?? 'sin-categoria') === String(categoriaActiva));
+  }, [products, categoriaActiva]);
+
+  // Agrupado por categoría, ya sobre la lista filtrada
+  const categoriasAgrupadas = useMemo(() => groupByCategory(productosFiltrados), [productosFiltrados]);
+
+  const disponibles = productosFiltrados.filter((p) => p.available).length;
+
+  // Al cambiar de cafetería, el filtro y el detalle se reinician
+  useEffect(() => {
+    setCategoriaActiva('todos');
+    setProductoDetalle(null);
+  }, [cafeteriaId]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -204,6 +243,8 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     if (!product?.available) return;
     if (Number(product.cafeteriaId) !== Number(cafeteriaId)) return;
     onAddToCart?.(product);
+    // Si venía desde el detalle, se cierra para volver al menú
+    setProductoDetalle(null);
   };
 
   const renderBody = () => {
@@ -240,9 +281,30 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
       );
     }
 
+    if (productosFiltrados.length === 0) {
+      // El menú tiene productos pero el filtro elegido no
+      const catNombre = categories.find((c) => String(c.id) === String(categoriaActiva))?.nombre;
+      return (
+        <View style={styles.stateContainer}>
+          <Text style={styles.stateEmoji}>🔍</Text>
+          <Text style={styles.stateTitle}>Sin productos en esta categoría</Text>
+          <Text style={styles.stateText}>
+            No hay productos disponibles en {catNombre || 'la categoría seleccionada'}.
+          </Text>
+          <TouchableOpacity
+            style={styles.stateButton}
+            onPress={() => setCategoriaActiva('todos')}
+          >
+            <Text style={styles.stateButtonText}>Ver todas las categorías</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     return (
       <FlatList
-        data={categories}
+        style={styles.listFlex}
+        data={categoriasAgrupadas}
         keyExtractor={(item) => item.name}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.list}
@@ -258,7 +320,12 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
           <View style={styles.categorySection}>
             <Text style={styles.categoryTitle}>{category.name}</Text>
             {category.data.map((product) => (
-              <ProductCard key={product.id} product={product} onAdd={handleAdd} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                onAdd={handleAdd}
+                onPress={setProductoDetalle}
+              />
             ))}
           </View>
         )}
@@ -292,12 +359,37 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
             {cafeteria?.nombre || 'la cafetería seleccionada'}
           </Text>
           <Text style={styles.infoCount}>
-            {connected ? productosSummary(disponibles, products.length) : 'Conectando…'}
+            {connected
+              ? productosSummary(disponibles, productosFiltrados.length)
+              : 'Conectando…'}
           </Text>
         </View>
       </View>
 
+      {/* FR-07: filtro por categoría, solo si hay más de una categoría */}
+      {categories.length > 1 && (
+        <CategoryFilter
+          categories={categories}
+          selected={categoriaActiva}
+          onSelect={setCategoriaActiva}
+          totalProducts={products.length}
+        />
+      )}
+
       {renderBody()}
+
+      {/* FR-08: el detalle se superpone al menú, así que la cafetería
+          seleccionada y el filtro de categoría se mantienen al cerrarlo. */}
+      {productoDetalle && (
+        <View style={styles.detailOverlay}>
+          <ProductDetail
+            product={productoDetalle}
+            cafeteriaName={cafeteria?.nombre}
+            onAdd={handleAdd}
+            onClose={() => setProductoDetalle(null)}
+          />
+        </View>
+      )}
     </View>
   );
 };
@@ -311,6 +403,13 @@ const productosSummary = (disponibles, total) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F8F6F4',
+  },
+
+  // Capa del detalle: cubre el menú sin desmontarlo, por eso la cafetería
+  // seleccionada y el filtro se conservan al cerrar.
+  detailOverlay: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: '#F8F6F4',
   },
 
@@ -406,6 +505,13 @@ const styles = StyleSheet.create({
 
   loader: {
     marginTop: 48,
+  },
+
+  // El FlatList necesita flex:1 explícito. Cuando el filtro de categorías se
+  // agregó como hermano dentro del contenedor, sin esto la lista quedaba con
+  // altura 0 y no se veían los productos.
+  listFlex: {
+    flex: 1,
   },
 
   list: {

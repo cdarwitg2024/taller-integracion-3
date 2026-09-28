@@ -17,10 +17,13 @@ import {
  * Contrato que espera del producto:
  *   id, name, description, price, emoji, imageUrl, stock, stockMin, available
  *
+ * `onPress` es opcional (FR-08): si viene, la tarjeta completa se vuelve
+ * clickeable para abrir el detalle del producto.
+ *
  * `onAdd` se dispara únicamente si el producto está disponible. Quien lo use
  * (hoy el carrito, mañana el checkout) no tiene que volver a validar nada.
  */
-const ProductCard = ({ product, onAdd }) => {
+const ProductCard = ({ product, onAdd, onPress }) => {
   const { available, stock, stockMin = 0 } = product;
 
   const handleAdd = () => {
@@ -32,7 +35,16 @@ const ProductCard = ({ product, onAdd }) => {
   const quedanPocas = available && stock <= stockMin;
 
   return (
-    <View style={[styles.container, !available && styles.containerDisabled]}>
+    <TouchableOpacity
+      style={[styles.container, !available && styles.containerDisabled]}
+      onPress={onPress ? () => onPress(product) : undefined}
+      activeOpacity={onPress ? 0.85 : 1}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={
+        onPress ? `Ver detalle de ${product.name}` : `${product.name}, ${product.price} pesos`
+      }
+    >
       <View style={styles.imagePlaceholder}>
         {product.imageUrl ? (
           <Image
@@ -98,7 +110,7 @@ const ProductCard = ({ product, onAdd }) => {
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
