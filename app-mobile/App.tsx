@@ -90,7 +90,7 @@ export default function App() {
 
   const handleSelectCafeteria = (cafeteria: Cafeteria) => {
     setSelectedCafeteria(cafeteria);
-    setActiveTab('cafeterias');
+    setActiveTab('menu');
   };
 
   const addToCart = (product: Product) => {
@@ -262,7 +262,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'cafeterias' && selectedCafeteria && (
+          {activeTab === 'menu' && selectedCafeteria && (
             <MenuScreen
               onAddToCart={addToCart}
             />
