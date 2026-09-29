@@ -73,8 +73,8 @@ export const usuarios = {
     if (isSupabaseConfigured) {
       try {
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+          email: String(email).trim(),
+          password: String(password).trim(),
         });
 
         if (!authError && authData?.user) {
@@ -130,8 +130,8 @@ export const usuarios = {
     if (isSupabaseConfigured) {
       try {
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+          email: String(email).trim(),
+          password: String(password).trim(),
         });
 
         if (!authError && authData?.user) {

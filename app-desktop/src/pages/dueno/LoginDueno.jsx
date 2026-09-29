@@ -242,8 +242,11 @@ function LoginDueno({ onLogin, onBack }) {
               <TextField
                 size="small"
                 fullWidth
-                placeholder="ejemplo@dominio.com"
-                value={email}
+            placeholder="ejemplo@dominio.com"
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoComplete="email"
+            value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 sx={{
                   '& .MuiOutlinedInput-root': {
@@ -283,9 +286,12 @@ function LoginDueno({ onLogin, onBack }) {
               <TextField
                 size="small"
                 fullWidth
-                type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={password}
+            type={showPassword ? 'text' : 'password'}
+            placeholder="••••••••"
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoComplete="current-password"
+            value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 slotProps={{
                   input: {

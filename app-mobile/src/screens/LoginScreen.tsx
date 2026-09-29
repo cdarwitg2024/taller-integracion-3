@@ -47,7 +47,7 @@ export const LoginScreen = ({
 
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
-      password,
+      password: password.trim(),
     });
 
     setLoading(false);
@@ -139,6 +139,10 @@ export const LoginScreen = ({
                   placeholder="••••••••"
                   placeholderTextColor="#BBB3A8"
                   secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="off"
+                  textContentType="password"
                   value={password}
                   onChangeText={setPassword}
                 />

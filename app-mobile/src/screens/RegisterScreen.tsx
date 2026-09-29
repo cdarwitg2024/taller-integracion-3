@@ -201,6 +201,10 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              textContentType="password"
             />
             <TouchableOpacity
               onPress={() => setShowPassword(!showPassword)}
@@ -222,6 +226,10 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry={!showConfirmPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              textContentType="password"
             />
             <TouchableOpacity
               onPress={() => setShowConfirmPassword(!showConfirmPassword)}

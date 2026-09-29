@@ -259,8 +259,11 @@ function LoginEmpleado({ onLogin, onBack }) {
               <TextField
                 size="small"
                 fullWidth
-                placeholder="empleado@coffeefaster.cl"
-                value={email}
+              placeholder="cocina.central@cafeteria.com"
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="email"
+              value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 sx={{
                   '& .MuiOutlinedInput-root': {
@@ -300,9 +303,12 @@ function LoginEmpleado({ onLogin, onBack }) {
               <TextField
                 size="small"
                 fullWidth
-                type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={password}
+              type={showPassword ? 'text' : 'password'}
+              placeholder="••••••••"
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="current-password"
+              value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 slotProps={{
                   input: {
