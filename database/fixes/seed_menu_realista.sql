@@ -62,13 +62,13 @@ UPDATE public.productos SET categoria_id = (SELECT id FROM public.categorias WHE
 
 -- ---------- CAFETERÍA CENTRAL (comedor principal, más variedad) ----------
 INSERT INTO public.productos
-  (cafeteria_id, categoria_id, nombre, descripcion, precio, stock, stock_minimo, imagen_url, activo, unidad)
+  (cafeteria_id, categoria_id, nombre, descripcion, precio, stock, stock_minimo, imagen_url, activo)
 SELECT
   (SELECT id FROM public.cafeterias WHERE nombre = 'Cafetería Central'),
   (SELECT id FROM public.categorias WHERE nombre = v.categoria),
   v.nombre, v.descripcion, v.precio, v.stock, v.stock_minimo,
   'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=300',
-  true, 'un'
+  true
 FROM (VALUES
   -- Café y Té
   ('Café y Té','Café Americano',      'Café de grano 100% arábica, colado a la gota.',            1800, 60, 12),
