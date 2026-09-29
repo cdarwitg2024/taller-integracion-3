@@ -189,10 +189,6 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <View style={styles.iconCircle}>
-              <Text style={styles.icon}>📬</Text>
-            </View>
-
             <Text style={styles.title}>Ingresa tu código</Text>
 
             <Text style={styles.subtitle}>
@@ -203,7 +199,7 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
             {/* Ayuda para desarrollo local: el correo no sale a Gmail, queda en Mailpit */}
             {__DEV__ && (
               <View style={styles.devBox}>
-                <Text style={styles.devTitle}>🧪 Entorno local</Text>
+                <Text style={styles.devTitle}>Entorno local</Text>
                 <Text style={styles.devText}>
                   El correo no llega a Gmail. Queda en Mailpit:{'\n'}
                   http://127.0.0.1:54324{'\n\n'}
@@ -215,7 +211,6 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
 
             {errorMessage && (
               <View style={styles.errorBox}>
-                <Text style={styles.errorIcon}>⚠</Text>
                 <Text style={styles.errorText}>{errorMessage}</Text>
               </View>
             )}
@@ -257,7 +252,7 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
             </TouchableOpacity>
 
             <View style={styles.infoBox}>
-              <Text style={styles.infoTitle}>🔒 Tu contraseña está segura</Text>
+              <Text style={styles.infoTitle}>Tu contraseña está segura</Text>
               <Text style={styles.infoText}>
                 Nunca te enviamos tu contraseña. Solo un código temporal de{' '}
                 {LARGO_CODIGO} dígitos que vence en una hora y sirve una sola vez. La app no
@@ -286,10 +281,6 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
             <Text style={styles.backText}>‹ Volver</Text>
           </TouchableOpacity>
 
-          <View style={styles.iconCircle}>
-            <Text style={styles.icon}>🔑</Text>
-          </View>
-
           <Text style={styles.title}>¿Olvidaste tu contraseña?</Text>
 
           <Text style={styles.subtitle}>
@@ -299,7 +290,6 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
 
           {errorMessage && (
             <View style={styles.errorBox}>
-              <Text style={styles.errorIcon}>⚠</Text>
               <Text style={styles.errorText}>{errorMessage}</Text>
             </View>
           )}
@@ -309,7 +299,6 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.inputIcon}>✉️</Text>
             <TextInput
               style={styles.input}
               placeholder="tunombre@alu.uct.cl"
@@ -361,18 +350,6 @@ const styles = StyleSheet.create({
   backButton: { alignSelf: 'flex-start', marginBottom: 18, paddingVertical: 4 },
   backText: { fontSize: 14, fontWeight: '600', color: '#6B5B52' },
 
-  iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#EFE6DE',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: 18,
-  },
-  icon: { fontSize: 30 },
-
   title: {
     fontSize: 22,
     fontWeight: '800',
@@ -402,7 +379,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginBottom: 16,
   },
-  inputIcon: { fontSize: 15, marginRight: 9 },
   input: { flex: 1, paddingVertical: 13, fontSize: 14, color: '#2E2521' },
 
   codigoInput: {
@@ -428,7 +404,6 @@ const styles = StyleSheet.create({
     padding: 11,
     marginBottom: 14,
   },
-  errorIcon: { fontSize: 13, marginRight: 8 },
   errorText: { flex: 1, fontSize: 12, color: '#A33A2A', lineHeight: 17, fontWeight: '600' },
 
   infoBox: {

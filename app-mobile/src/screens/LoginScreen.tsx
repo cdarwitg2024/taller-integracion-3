@@ -8,10 +8,13 @@ import {
   ActivityIndicator,
   ScrollView,
   KeyboardAvoidingView,
+  Image,
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+
+const logo = require('../../assets/icon.png');
 
 interface LoginScreenProps {
   onNavigateToRegister: () => void;
@@ -73,15 +76,13 @@ export const LoginScreen = ({
           {/* Badge Superior */}
           <View style={styles.badgeContainer}>
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>🎓 PORTAL ESTUDIANTES • UCT</Text>
+              <Text style={styles.badgeText}>PORTAL ESTUDIANTES • UCT</Text>
             </View>
           </View>
 
           {/* Logo e Identidad */}
           <View style={styles.header}>
-            <View style={styles.logoBox}>
-              <Text style={styles.logoIcon}>☕</Text>
-            </View>
+            <Image source={logo} style={styles.logoImage} accessibilityIgnoresInvertColors />
             <Text style={styles.brandName}>CoffeeFast</Text>
             <Text style={styles.title}>Iniciar Sesión</Text>
             <Text style={styles.subtitle}>
@@ -92,7 +93,6 @@ export const LoginScreen = ({
           {/* Alerta de Error */}
           {errorMessage && (
             <View style={styles.errorContainer}>
-              <Text style={styles.errorIcon}>⚠️</Text>
               <Text style={styles.errorText}>{errorMessage}</Text>
             </View>
           )}
@@ -106,7 +106,6 @@ export const LoginScreen = ({
                 <Text style={styles.domainHint}>alu.uct.cl</Text>
               </View>
               <View style={styles.inputContainer}>
-                <Text style={styles.inputIcon}>✉️</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="tunombre@alu.uct.cl"
@@ -135,7 +134,6 @@ export const LoginScreen = ({
                 </TouchableOpacity>
               </View>
               <View style={styles.inputContainer}>
-                <Text style={styles.inputIcon}>🔒</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="••••••••"
@@ -147,12 +145,17 @@ export const LoginScreen = ({
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   style={styles.eyeIcon}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'
+                  }
                 >
-                  <Text>{showPassword ? '🙈' : '👁️'}</Text>
+                  <Text style={styles.eyeIconText}>
+                    {showPassword ? 'Ocultar' : 'Ver'}
+                  </Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.hintRow}>
-                <Text style={styles.hintIcon}>ⓘ</Text>
                 <Text style={styles.hintText}>Mínimo 8 caracteres</Text>
               </View>
             </View>
@@ -162,6 +165,8 @@ export const LoginScreen = ({
               style={styles.checkboxContainer}
               onPress={() => setRememberMe(!rememberMe)}
               activeOpacity={0.8}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: rememberMe }}
             >
               <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
                 {rememberMe && <Text style={styles.checkmark}>✓</Text>}
@@ -179,7 +184,7 @@ export const LoginScreen = ({
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.submitButtonText}>Entrar y Pedir Café ⚡</Text>
+                <Text style={styles.submitButtonText}>Iniciar sesión</Text>
               )}
             </TouchableOpacity>
 
@@ -196,13 +201,13 @@ export const LoginScreen = ({
               onPress={onExploreAsGuest}
               activeOpacity={0.8}
             >
-              <Text style={styles.guestButtonText}>☕ Explorar Carta como Invitado</Text>
+              <Text style={styles.guestButtonText}>Explorar Carta como Invitado</Text>
             </TouchableOpacity>
           </View>
 
           {/* Footer de Registro */}
           <View style={styles.footerNav}>
-            <Text style={styles.footerText}>¿Primer semestre en campus? </Text>
+            <Text style={styles.footerText}>¿No tienes cuenta? </Text>
             <TouchableOpacity onPress={onNavigateToRegister}>
               <Text style={styles.footerLink}>Regístrate aquí</Text>
             </TouchableOpacity>
@@ -211,7 +216,7 @@ export const LoginScreen = ({
           {/* Footer Seguridad */}
           <View style={styles.securityFooter}>
             <Text style={styles.securityText}>
-              🔒 Conexión segura vía Red Campus UCT
+              Conexión segura vía Red Campus UCT
             </Text>
           </View>
         </ScrollView>
@@ -253,17 +258,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  logoBox: {
-    width: 56,
-    height: 56,
-    backgroundColor: '#3C2A21',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
     marginBottom: 8,
-  },
-  logoIcon: {
-    fontSize: 28,
   },
   brandName: {
     fontSize: 13,
@@ -294,10 +293,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     marginBottom: 16,
-    gap: 8,
-  },
-  errorIcon: {
-    fontSize: 16,
   },
   errorText: {
     color: '#D93025',
@@ -346,27 +341,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 48,
   },
-  inputIcon: {
-    fontSize: 14,
-    marginRight: 10,
-  },
   input: {
     flex: 1,
     fontSize: 14,
     color: '#2C1E16',
   },
   eyeIcon: {
-    padding: 4,
+    paddingVertical: 6,
+    paddingLeft: 8,
+  },
+  eyeIconText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#E07A5F',
   },
   hintRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 6,
-    gap: 4,
-  },
-  hintIcon: {
-    fontSize: 12,
-    color: '#9C8E85',
   },
   hintText: {
     fontSize: 11,

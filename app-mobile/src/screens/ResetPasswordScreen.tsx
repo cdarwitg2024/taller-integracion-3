@@ -22,7 +22,12 @@ import { supabase } from '../lib/supabase';
  * `supabase.auth.updateUser({ password })` guarda la contraseña ya cifrada en
  * Supabase. La app nunca ve ni guarda el valor en disco.
  */
-const ResetPasswordScreen = ({ onDone }) => {
+type Props = {
+  /** Vuelve al inicio de sesión cuando la contraseña ya quedó guardada. */
+  onDone: () => void;
+};
+
+const ResetPasswordScreen = ({ onDone }: Props) => {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
@@ -70,8 +75,8 @@ const ResetPasswordScreen = ({ onDone }) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <View style={styles.iconCircle}>
-            <Text style={styles.icon}>✅</Text>
+          <View style={styles.successCircle}>
+            <Text style={styles.successMark}>✓</Text>
           </View>
           <Text style={styles.title}>Contraseña actualizada</Text>
           <Text style={styles.subtitle}>
@@ -96,10 +101,6 @@ const ResetPasswordScreen = ({ onDone }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.iconCircle}>
-            <Text style={styles.icon}>🔒</Text>
-          </View>
-
           <Text style={styles.title}>Crea tu contraseña nueva</Text>
 
           <Text style={styles.subtitle}>
@@ -108,7 +109,6 @@ const ResetPasswordScreen = ({ onDone }) => {
 
           {errorMessage && (
             <View style={styles.errorBox}>
-              <Text style={styles.errorIcon}>⚠</Text>
               <Text style={styles.errorText}>{errorMessage}</Text>
             </View>
           )}
@@ -117,7 +117,6 @@ const ResetPasswordScreen = ({ onDone }) => {
             <Text style={styles.label}>Nueva contraseña</Text>
           </View>
           <View style={styles.inputContainer}>
-            <Text style={styles.inputIcon}>🔑</Text>
             <TextInput
               style={styles.input}
               placeholder="••••••••"
@@ -132,8 +131,13 @@ const ResetPasswordScreen = ({ onDone }) => {
               editable={!loading}
               accessibilityLabel="Nueva contraseña"
             />
-            <TouchableOpacity onPress={() => setShow(!show)} style={styles.eyeIcon}>
-              <Text>{show ? '🙈' : '👁️'}</Text>
+            <TouchableOpacity
+              onPress={() => setShow(!show)}
+              style={styles.eyeIcon}
+              accessibilityRole="button"
+              accessibilityLabel={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            >
+              <Text style={styles.eyeIconText}>{show ? 'Ocultar' : 'Ver'}</Text>
             </TouchableOpacity>
           </View>
 
@@ -141,7 +145,6 @@ const ResetPasswordScreen = ({ onDone }) => {
             <Text style={styles.label}>Repetir contraseña</Text>
           </View>
           <View style={styles.inputContainer}>
-            <Text style={styles.inputIcon}>🔑</Text>
             <TextInput
               style={styles.input}
               placeholder="••••••••"
@@ -203,17 +206,22 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   scroll: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 28, justifyContent: 'center' },
 
-  iconCircle: {
+  successCircle: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#EFE6DE',
+    backgroundColor: '#E4EFE3',
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
     marginBottom: 18,
   },
-  icon: { fontSize: 30 },
+  successMark: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#4A7A47',
+    lineHeight: 34,
+  },
 
   title: {
     fontSize: 22,
@@ -243,9 +251,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginBottom: 16,
   },
-  inputIcon: { fontSize: 15, marginRight: 9 },
   input: { flex: 1, paddingVertical: 13, fontSize: 14, color: '#2E2521' },
-  eyeIcon: { paddingHorizontal: 4 },
+  eyeIcon: { paddingLeft: 8 },
+  eyeIconText: { fontSize: 11, fontWeight: '700', color: '#E07A5F' },
 
   errorBox: {
     flexDirection: 'row',
@@ -255,7 +263,6 @@ const styles = StyleSheet.create({
     padding: 11,
     marginBottom: 14,
   },
-  errorIcon: { fontSize: 13, marginRight: 8 },
   errorText: { flex: 1, fontSize: 12, color: '#A33A2A', lineHeight: 17, fontWeight: '600' },
 
   rulesBox: {
