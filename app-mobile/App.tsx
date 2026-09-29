@@ -11,6 +11,8 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from './src/lib/supabase';
 import { LoginScreen } from './src/screens/LoginScreen';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
 import { CafeteriaListScreen } from './src/screens/CafeteriaListScreen';
 import MenuScreen from './src/screens/MenuScreen';
@@ -69,7 +71,11 @@ const TABS: { key: AppTab; label: string }[] = [
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
+  // FR-04: 'forgot' pide el código de recuperación,
+  // 'reset' define la contraseña nueva una vez validado el código
+  const [authScreen, setAuthScreen] = useState<
+    'login' | 'register' | 'forgot' | 'reset'
+  >('login');
   const [isGuest, setIsGuest] = useState(false);
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
@@ -85,7 +91,16 @@ export default function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // FR-04: Supabase emite PASSWORD_RECOVERY cuando el código del correo
+      // es canjeado. Ese momento es el único en que hay una sesión temporal
+      // válida para guardar la contraseña nueva. La pantalla de código
+      // también avisa por prop, así que esto es el respaldo por si el evento
+      // no llega.
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthScreen('reset');
+      }
+
       setSession(session);
       setLoading(false);
     });
@@ -268,13 +283,33 @@ export default function App() {
 
   const isUserAllowed = Boolean((session && session.user) || isGuest);
 
-  if (!isUserAllowed) {
+  // FR-04: la pantalla de contraseña nueva se muestra ANTES del guard de
+  // sesión. Al validar el código el usuario YA tiene una sesión temporal, así
+  // que si esperáramos a `isUserAllowed` la pantalla quedaría inalcanzable.
+  const mostrarReset = authScreen === 'reset';
+
+  if (mostrarReset || !isUserAllowed) {
     return (
       <SafeAreaProvider>
         {authScreen === 'login' ? (
           <LoginScreen
             onNavigateToRegister={() => setAuthScreen('register')}
             onExploreAsGuest={() => setIsGuest(true)}
+            onForgotPassword={() => setAuthScreen('forgot')}
+          />
+        ) : authScreen === 'forgot' ? (
+          <ForgotPasswordScreen
+            onBack={() => setAuthScreen('login')}
+            onCodeVerified={() => setAuthScreen('reset')}
+          />
+        ) : mostrarReset ? (
+          <ResetPasswordScreen
+            onDone={async () => {
+              // Cerramos la sesión temporal de recuperación antes de volver
+              // al login, para que entre con la contraseña nueva.
+              await supabase.auth.signOut();
+              setAuthScreen('login');
+            }}
           />
         ) : (
           <RegisterScreen onNavigateToLogin={() => setAuthScreen('login')} />

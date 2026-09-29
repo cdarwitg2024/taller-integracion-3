@@ -16,11 +16,14 @@ import { supabase } from '../lib/supabase';
 interface LoginScreenProps {
   onNavigateToRegister: () => void;
   onExploreAsGuest?: () => void;
+  // FR-04: abre la pantalla de recuperación de contraseña
+  onForgotPassword?: () => void;
 }
 
 export const LoginScreen = ({
   onNavigateToRegister,
   onExploreAsGuest,
+  onForgotPassword,
 }: LoginScreenProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -121,7 +124,13 @@ export const LoginScreen = ({
             <View style={styles.inputGroup}>
               <View style={styles.labelRow}>
                 <Text style={styles.label}>Contraseña</Text>
-                <TouchableOpacity>
+                {/* FR-04: antes era un TouchableOpacity sin onPress */}
+                <TouchableOpacity
+                  onPress={onForgotPassword}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="¿Olvidaste tu contraseña?"
+                >
                   <Text style={styles.forgotPassword}>¿La olvidaste?</Text>
                 </TouchableOpacity>
               </View>
