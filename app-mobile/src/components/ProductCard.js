@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,16 @@ import {
 const ProductCard = ({ product, onAdd, onPress }) => {
   const { available, stock, stockMin = 0 } = product;
 
+  // Si la URL de la imagen existe pero no carga (404, host caído), caemos al
+  // emoji en vez de dejar un cuadro gris vacío sin explicación.
+  const [imagenCaida, setImagenCaida] = useState(false);
+
+  // Si cambia de producto (reutilización del componente en la lista), hay que
+  // volver a intentar la imagen nueva.
+  useEffect(() => {
+    setImagenCaida(false);
+  }, [product.imageUrl]);
+
   const handleAdd = () => {
     if (!available) return;
     onAdd?.(product);
@@ -46,12 +56,13 @@ const ProductCard = ({ product, onAdd, onPress }) => {
       }
     >
       <View style={styles.imagePlaceholder}>
-        {product.imageUrl ? (
+        {product.imageUrl && !imagenCaida ? (
           <Image
             source={{ uri: product.imageUrl }}
             style={styles.image}
             resizeMode="cover"
             accessibilityIgnoresInvertColors
+            onError={() => setImagenCaida(true)}
           />
         ) : (
           <Text style={styles.imageEmoji}>{product.emoji}</Text>

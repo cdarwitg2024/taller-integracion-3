@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   View,
   StyleSheet,
   Text,
@@ -38,6 +39,12 @@ type CartItem = {
   price: number;
   emoji: string;
   quantity: number;
+  /**
+   * De qué cafetería es el ítem. El pedido se hace contra UNA cafetería, así
+   * que esto es lo que impide mezclar productos de dos menus distintos.
+   */
+  cafeteriaId: number;
+  cafeteriaNombre: string;
 };
 
 type AppTab = 'cafeterias' | 'pedidos' | 'carrito' | 'wallet' | 'perfil';
@@ -108,6 +115,50 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  /**
+   * Botón físico / gesto de atrás de Android.
+   *
+   * La navegación es manual con useState, así que sin esto el gesto cerraba la
+   * app desde cualquier nivel. Ahora se desciende un nivel por pulsación, en
+   * orden inverso al de entrada:
+   *
+   *   Login/Registro/Recuperación  →  Login
+   *   Menú de una cafetería         →  Listado de cafeterías
+   *   Pestaña secundaria            →  Cafeterías
+   *
+   * Los handlers de los hijos (por ejemplo el detalle de producto, que es un
+   * overlay dentro del menú) se registran después, y React Native invoca
+   * primero el último registrado, así que el nivel más profundo gana.
+   */
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      // 1. Desde una pantalla de autenticación, volver al login.
+      if (authScreen !== 'login') {
+        setAuthScreen('login');
+        return true;
+      }
+
+      // 2. Dentro del menú de una cafetería, volver al listado.
+      //    Ojo: solo si estamos en la pestaña de cafeterías. Si el usuario
+      //    está en carrito con una cafetería seleccionada, la conserva.
+      if (activeTab === 'cafeterias' && selectedCafeteria) {
+        setSelectedCafeteria(null);
+        return true;
+      }
+
+      // 3. Desde cualquier otra pestaña, volver a cafeterías.
+      if (activeTab !== 'cafeterias') {
+        setActiveTab('cafeterias');
+        return true;
+      }
+
+      // 4. Ya estamos en la raíz: dejamos que Android cierre la app.
+      return false;
+    });
+
+    return () => subscription.remove();
+  }, [authScreen, activeTab, selectedCafeteria]);
+
   const handleLogout = () => {
     Alert.alert(
       isGuest ? 'Salir de Invitado' : 'Cerrar Sesión',
@@ -138,16 +189,37 @@ export default function App() {
   };
 
   const handleTabPress = (tab: AppTab) => {
-    if (tab === 'cafeterias') {
-      setSelectedCafeteria(null);
+    // Tocar la pestaña que ya está activa no debe hacer nada. Antes, tocar
+    // "Cafeterías" estando dentro del menú de una cafetería ejecutaba el
+    // setSelectedCafeteria(null) y te expulsaba al listado sin avisar.
+    if (tab === activeTab) {
+      return;
     }
+
+    // Cambiar de pestaña NO borra la cafetería seleccionada: si el usuario
+    // estaba leyendo el menú de una cafetería, vuelve exactamente donde
+    // estaba. Para salir del menú está el botón "‹" y el gesto de atrás.
     setActiveTab(tab);
   };
 
-  const addToCart = (product: Product) => {
-    if (!product.available) {
-      return;
-    }
+  /**
+   * El carrito pertenece a UNA sola cafetería.
+   *
+   * La RPC `procesar_pago` recibe un único `p_cafeteria_id`, así que mezclar
+   * productos de dos cafeterías en el mismo pedido guardaba los precios bien
+   * pero mandaba los productos de A con el id de B. Antes esto pasaba en
+   * silencio: el usuario podía recorrer A, agregar, volver al listado, entrar
+   * a B y agregar, y el carrito aceptaba todo junto.
+   *
+   * Cada ítem guarda de qué cafetería es, y `cartCafeteria` define a cuál
+   * pertenece el pedido.
+   */
+  const cartCafeteria: { id: number; nombre: string } | null =
+    cart.length > 0 ? { id: cart[0].cafeteriaId, nombre: cart[0].cafeteriaNombre } : null;
+
+  /** Agrega un producto al carrito. Sin preguntas: la cafetería ya coincide. */
+  const agregarProducto = (product: Product, cafeteria: Cafeteria) => {
+    const cafeteriaId = Number(cafeteria.id);
 
     setCart((currentCart: CartItem[]) => {
       const existing = currentCart.find((item) => item.id === product.id);
@@ -165,9 +237,47 @@ export default function App() {
           price: product.price,
           emoji: product.emoji,
           quantity: 1,
+          cafeteriaId,
+          cafeteriaNombre: cafeteria.nombre,
         },
       ];
     });
+  };
+
+  const addToCart = (product: Product, cafeteria: Cafeteria) => {
+    if (!product.available) {
+      return;
+    }
+
+    const cafeteriaId = Number(cafeteria.id);
+
+    // El carrito ya tiene productos de otra cafetería: no se mezclan.
+    // La RPC recibe un único `p_cafeteria_id`, así que mezclar guardaba los
+    // precios bien pero mandaba los productos de A con el id de B. Antes pasaba
+    // en silencio. Ahora se le explica al usuario y se le da la opción de
+    // cambiar de cafetería.
+    if (cartCafeteria && cartCafeteria.id !== cafeteriaId) {
+      Alert.alert(
+        'Tu carrito es de otra cafetería',
+        `Ya tenés productos de ${cartCafeteria.nombre}. Un pedido es de una sola cafetería. Si querés pedir en ${cafeteria.nombre}, vaciá el carrito.`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Vaciar y agregar',
+            style: 'destructive',
+            // Se vacía y se agrega en el mismo toque: si solo se vaciaba, el
+            // botón prometía algo que no pasaba.
+            onPress: () => {
+              setCart([]);
+              agregarProducto(product, cafeteria);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    agregarProducto(product, cafeteria);
   };
 
   const increaseQuantity = (id: number) => {
@@ -195,15 +305,27 @@ export default function App() {
   };
 
   const handleCheckout = async (franjaRetiro?: { franja: string }) => {
-    const cafeteriaId = selectedCafeteria?.id;
+    // La cafetería del pedido sale de los propios ítems del carrito, no de
+    // `selectedCafeteria`. Antes se leía de ahí, y como perder la cafetería
+    // seleccionada era fácil (basta con cambiar de pestaña), el pago se
+    // bloqueaba con un "Carrito vacío" que mentía: el carrito tenía productos.
+    const cafeteriaId = cartCafeteria?.id;
 
     if (!session?.user) {
       Alert.alert('Inicia sesión', 'Necesitas una cuenta para confirmar tu pedido.');
       return;
     }
 
-    if (!cafeteriaId || cart.length === 0) {
+    if (cart.length === 0) {
       Alert.alert('Carrito vacío', 'Agrega productos desde el menú de una cafetería.');
+      return;
+    }
+
+    if (!cafeteriaId) {
+      Alert.alert(
+        'No pudimos identificar la cafetería',
+        'Vuelve al menú y agrega los productos otra vez.'
+      );
       return;
     }
 
@@ -372,17 +494,26 @@ export default function App() {
           {activeTab === 'carrito' && (
             <CartScreen
               cart={cart}
-              cafeteriaName={selectedCafeteria?.nombre || 'Cafetería Central'}
+              cafeteriaName={cartCafeteria?.nombre}
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
             onRemove={removeFromCart}
             onCheckout={handleCheckout}
+            onBack={() => handleTabPress('cafeterias')}
             paying={paying}
           />
           )}
 
 {activeTab === 'wallet' && (
             <WalletScreen userId={isGuest ? null : session?.user?.id || null} />
+          )}
+
+          {activeTab === 'perfil' && (
+            <PerfilScreen
+              session={session}
+              isGuest={isGuest}
+              onLogout={handleLogout}
+            />
           )}
         </View>
 
