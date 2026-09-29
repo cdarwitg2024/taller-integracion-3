@@ -29,27 +29,45 @@ const getRedirectBase = () => {
   }
 };
 
+/** Largo del código que manda Supabase (ver auth.email.otp_length). */
+const LARGO_CODIGO = 6;
+
+type Props = {
+  /** Vuelve a la pantalla de inicio de sesión. */
+  onBack: () => void;
+  /** Se llama cuando el código fue validado y ya hay sesión de recuperación. */
+  onCodeVerified?: () => void;
+};
+
 /**
  * Recuperación de contraseña — FR-04
  *
- * El mecanismo es `supabase.auth.resetPasswordForEmail`, que es el que pide
- * el requerimiento. La app NO guarda, hashea ni compara contraseñas: eso es
- * trabajo de Supabase Auth.
+ * El flujo son tres pasos, todos supported por Supabase Auth:
  *
- * La contraseña nueva se define más adelante, en la pantalla de
- * "definir contraseña", que se abre sola cuando el usuario vuelve desde el
- * correo y Supabase emite el evento PASSWORD_RECOVERY.
+ *   1. `resetPasswordForEmail(correo)`  → Supabase genera un código de 6
+ *      dígitos y lo manda al correo. La app no genera ni guarda el código.
+ *   2. `verifyOtp({ email, token, type: 'recovery' })` → canjea el código por
+ *      una sesión temporal.
+ *   3. `updateUser({ password })` (en ResetPasswordScreen) → Supabase cifra y
+ *      guarda la contraseña nueva.
+ *
+ * La app NO guarda, hashea ni compara contraseñas: eso es trabajo de Supabase
+ * Auth. Tampoco guarda el código: solo lo manda a la API y lo descarta.
  */
-const ForgotPasswordScreen = ({ onBack, onSent }) => {
+const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
-  // Paso 2: el link que llego al navegador
-  const [enlace, setEnlace] = useState('');
+  // Paso 2: el código de 6 dígitos que llegó al correo
+  const [codigo, setCodigo] = useState('');
 
   const correoValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const codigoCompleto = codigo.length === LARGO_CODIGO;
+
+  /** Normaliza a mayúsculas, quita espacios y deja solo dígitos. */
+  const limpiarCodigo = (texto: string) => texto.replace(/\D/g, '').slice(0, LARGO_CODIGO);
 
   const handleSend = async () => {
     setErrorMessage(null);
@@ -69,9 +87,13 @@ const ForgotPasswordScreen = ({ onBack, onSent }) => {
     // redirectTo debe ser una URL http(s) registrada en la lista blanca del
     // proyecto. Los esquemas propios (coffeefast://) los rechaza GoTrue, asi
     // que en desarrollo apunta al servidor de Metro y en produccion al
-    // dominio real de la app.
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: `${getRedirectBase()}/auth/callback`,
+    // dominio real de la app. Solo se usa si alguien abre el enlace del
+    // correo; el flujo normal es solo el código.
+    const correo = email.trim().toLowerCase();
+    const destino = `${getRedirectBase()}/auth/callback`;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(correo, {
+      redirectTo: destino,
     });
 
     setLoading(false);
@@ -84,7 +106,7 @@ const ForgotPasswordScreen = ({ onBack, onSent }) => {
       } else if (/failed to fetch|Network/i.test(msg)) {
         setErrorMessage('No pudimos conectarnos. Revisa tu conexión.');
       } else {
-        setErrorMessage('No se pudo enviar el correo. Intenta de nuevo.');
+        setErrorMessage('No se pudo enviar el código. Intenta de nuevo.');
       }
       return;
     }
@@ -92,108 +114,158 @@ const ForgotPasswordScreen = ({ onBack, onSent }) => {
     // Éxito. Supabase responde igual (200) tanto si el correo existe como si
     // no, para no revelar qué cuentas están registradas. Por eso el mensaje
     // es genérico a propósito.
+    setCodigo('');
     setSent(true);
-    onSent?.(email.trim().toLowerCase());
   };
 
   /**
-   * Canjea el enlace de recuperación por una sesión.
+   * Canjea el código de 6 dígitos por una sesión de recuperación.
    *
-   * El enlace del correo es una URL de Supabase que redirige con el
-   * `access_token` en el fragmento. `getSessionFromUrl` es el método de
-   * supabase-js para ese caso: sigue la redirección, lee el fragmento y deja
-   * la sesión lista. Después Supabase dispara PASSWORD_RECOVERY y App.tsx
-   * abre la pantalla de contraseña nueva.
+   * `verifyOtp` con `type: 'recovery'` es el método de supabase-js para este
+   * caso: el código se manda a la API de Auth y, si es válido, Supabase
+   * devuelve una sesión. No hay que abrir el navegador ni seguir ninguna
+   * redirección, que es lo que hacía fallar el flujo con enlace.
    */
-  const handleVerifyLink = async () => {
+  const handleVerifyCode = async () => {
     setErrorMessage(null);
 
-    const limpio = enlace.trim();
-    if (!limpio) {
-      setErrorMessage('Pega el enlace que abriste en el navegador.');
+    if (!codigoCompleto) {
+      setErrorMessage(`El código tiene ${LARGO_CODIGO} dígitos.`);
       return;
     }
 
     setVerifying(true);
 
-    const { error } = await supabase.auth.getSessionFromUrl(limpio, {
-      skipBrowserRedirect: true,
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: codigo,
+      type: 'recovery',
     });
 
     setVerifying(false);
 
     if (error) {
-      if (/expired|invalid|Token/i.test(error.message)) {
-        setErrorMessage('Ese enlace ya no sirve. Pedí uno nuevo.');
+      const msg = error.message || '';
+      if (/expired|invalid|venció|vencio/i.test(msg)) {
+        setErrorMessage('Ese código ya venció. Pedí uno nuevo.');
+      } else if (/rate|too many|demasiad/i.test(msg)) {
+        setErrorMessage('Demasiados intentos. Espera un momento y vuelve a intentar.');
       } else {
-        setErrorMessage('No pudimos leer el enlace. Copiá la dirección completa.');
+        setErrorMessage('El código no es correcto. Revisa los números e intenta de nuevo.');
       }
       return;
     }
 
-    // Éxito: App.tsx reacciona al evento y muestra la pantalla de contraseña
+    // Éxito: ya hay una sesión temporal válida para cambiar la contraseña.
+    // Además del evento PASSWORD_RECOVERY que escucha App.tsx, avisamos
+    // explícitamente para no depender del orden de los eventos.
+    onCodeVerified?.();
+  };
+
+  /** Vuelve al formulario para pedir otro correo. */
+  const handleUsarOtroCorreo = () => {
+    setSent(false);
+    setCodigo('');
+    setErrorMessage(null);
+  };
+
+  /** Vuelve al formulario conservando el correo, para reenviar el código. */
+  const handleReenviar = () => {
+    setCodigo('');
+    setErrorMessage(null);
+    setSent(false);
   };
 
   // ------------------------------------------------------------ Confirmación
   if (sent) {
     return (
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <View style={styles.iconCircle}>
-            <Text style={styles.icon}>✉️</Text>
-          </View>
-
-          <Text style={styles.title}>Revisa tu correo</Text>
-
-          <Text style={styles.subtitle}>
-            Si {email.trim()} tiene una cuenta en CoffeeFast, te enviamos un enlace para
-            definir una contraseña nueva.
-          </Text>
-
-          <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>Algunas cosas para revisar</Text>
-            <View style={styles.bulletRow}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.bulletText}>Revisa la carpeta de spam o correo no deseado.</Text>
-            </View>
-            <View style={styles.bulletRow}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.bulletText}>
-                El enlace caduca en unas horas, no loUses después de eso.
-              </Text>
-            </View>
-            <View style={styles.bulletRow}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.bulletText}>
-                Si no llega en unos minutos, revisa que hayas escrito bien tu correo.
-              </Text>
-            </View>
-          </View>
-
-          <TouchableOpacity style={styles.primaryButton} onPress={onBack} activeOpacity={0.9}>
-            <Text style={styles.primaryButtonText}>Volver al inicio de sesión</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => {
-              setSent(false);
-              setEnlace('');
-              setErrorMessage(null);
-            }}
-            activeOpacity={0.9}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.flex}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.secondaryButtonText}>Usar otro correo</Text>
-          </TouchableOpacity>
+            <View style={styles.iconCircle}>
+              <Text style={styles.icon}>📬</Text>
+            </View>
 
-          <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>2. Pega el enlace aquí</Text>
-            <Text style={styles.infoText}>
-              Cuando abras el enlace del correo, copiá la dirección completa de la barra
-            del navegador y pegala más abajo para crear tu contraseña nueva.
-          </Text>
-          </View>
-        </ScrollView>
+            <Text style={styles.title}>Ingresa tu código</Text>
+
+            <Text style={styles.subtitle}>
+              Mandamos un código de {LARGO_CODIGO} dígitos a {email.trim()}. Ingresalo abajo
+              para crear tu contraseña nueva.
+            </Text>
+
+            {/* Ayuda para desarrollo local: el correo no sale a Gmail, queda en Mailpit */}
+            {__DEV__ && (
+              <View style={styles.devBox}>
+                <Text style={styles.devTitle}>🧪 Entorno local</Text>
+                <Text style={styles.devText}>
+                  El correo no llega a Gmail. Queda en Mailpit:{'\n'}
+                  http://127.0.0.1:54324{'\n\n'}
+                  Solo se envían códigos a cuentas que existen. Probá con{'\n'}
+                  estudiante@alu.uct.cl
+                </Text>
+              </View>
+            )}
+
+            {errorMessage && (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorIcon}>⚠</Text>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            )}
+
+            <TextInput
+              style={[styles.input, styles.codigoInput]}
+              placeholder={'0'.repeat(LARGO_CODIGO)}
+              placeholderTextColor="#D6CCC2"
+              value={codigo}
+              onChangeText={(t) => {
+                setCodigo(limpiarCodigo(t));
+                setErrorMessage(null);
+              }}
+              keyboardType="number-pad"
+              maxLength={LARGO_CODIGO}
+              editable={!verifying}
+              accessibilityLabel={`Código de ${LARGO_CODIGO} dígitos`}
+            />
+
+            <TouchableOpacity
+              style={[styles.primaryButton, (!codigoCompleto || verifying) && styles.buttonDisabled]}
+              onPress={handleVerifyCode}
+              disabled={!codigoCompleto || verifying}
+              activeOpacity={0.9}
+            >
+              {verifying ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Continuar con la recuperación</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.secondaryButton} onPress={handleReenviar} activeOpacity={0.9}>
+              <Text style={styles.secondaryButtonText}>No lo recibí · Enviar de nuevo</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.secondaryButton} onPress={handleUsarOtroCorreo} activeOpacity={0.9}>
+              <Text style={styles.secondaryButtonText}>Usar otro correo</Text>
+            </TouchableOpacity>
+
+            <View style={styles.infoBox}>
+              <Text style={styles.infoTitle}>🔒 Tu contraseña está segura</Text>
+              <Text style={styles.infoText}>
+                Nunca te enviamos tu contraseña. Solo un código temporal de{' '}
+                {LARGO_CODIGO} dígitos que vence en una hora y sirve una sola vez. La app no
+                lo guarda: lo manda a Supabase y lo borra.
+              </Text>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
@@ -221,7 +293,7 @@ const ForgotPasswordScreen = ({ onBack, onSent }) => {
           <Text style={styles.title}>¿Olvidaste tu contraseña?</Text>
 
           <Text style={styles.subtitle}>
-            Ingresa tu correo institucional y te enviaremos un enlace para crear una
+            Ingresa tu correo institucional y te enviaremos un código para crear una
             contraseña nueva.
           </Text>
 
@@ -264,60 +336,17 @@ const ForgotPasswordScreen = ({ onBack, onSent }) => {
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.primaryButtonText}>Enviar enlace de recuperación</Text>
+              <Text style={styles.primaryButtonText}>Enviar código de recuperación</Text>
             )}
           </TouchableOpacity>
 
           <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>🔒 Tu contraseña está segura</Text>
+            <Text style={styles.infoTitle}>Cómo funciona</Text>
             <Text style={styles.infoText}>
-              No guardamos tu contraseña en el teléfono. El enlace abre una sesión
-              temporal y la nueva contraseña se guarda directamente en Supabase, que
-              es quien la cifra.
+              Te llega un código de {LARGO_CODIGO} dígitos al correo. Lo ingresas en la app
+              y ahí definís tu contraseña nueva. No hace falta abrir ningún enlace.
             </Text>
           </View>
-
-          {/* Paso 2: pegar el enlace que llegó al navegador */}
-          {sent && (
-            <View style={styles.step2}>
-              <View style={styles.divider} />
-              <Text style={styles.step2Title}>¿Ya abriste el enlace?</Text>
-              <Text style={styles.step2Text}>
-                Abrí el enlace del correo en el navegador y copiá la dirección completa
-                de la barra. Pegala acá para que la app tome la sesión y puedas
-                escribir tu contraseña nueva.
-              </Text>
-
-              <TextInput
-                style={[styles.input, styles.inputMultiline]}
-                placeholder="http://127.0.0.1:8081/#access_token=..."
-                placeholderTextColor="#BBB3A8"
-                value={enlace}
-                onChangeText={(t) => {
-                  setEnlace(t);
-                  setErrorMessage(null);
-                }}
-                multiline
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!verifying}
-                accessibilityLabel="Enlace de recuperación"
-              />
-
-              <TouchableOpacity
-                style={[styles.primaryButton, (!enlace.trim() || verifying) && styles.buttonDisabled]}
-                onPress={handleVerifyLink}
-                disabled={!enlace.trim() || verifying}
-                activeOpacity={0.9}
-              >
-                {verifying ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>Continuar</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -376,6 +405,21 @@ const styles = StyleSheet.create({
   inputIcon: { fontSize: 15, marginRight: 9 },
   input: { flex: 1, paddingVertical: 13, fontSize: 14, color: '#2E2521' },
 
+  codigoInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E4DAD2',
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: 14,
+    textAlign: 'center',
+    color: '#2E2521',
+    marginBottom: 16,
+  },
+
   errorBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -396,10 +440,6 @@ const styles = StyleSheet.create({
   infoTitle: { fontSize: 12, fontWeight: '800', color: '#4A3C34', marginBottom: 7 },
   infoText: { fontSize: 11, color: '#6B5B52', lineHeight: 17 },
 
-  bulletRow: { flexDirection: 'row', marginBottom: 4 },
-  bullet: { color: '#8A7568', fontSize: 12, marginRight: 7 },
-  bulletText: { flex: 1, fontSize: 11, color: '#6B5B52', lineHeight: 16 },
-
   primaryButton: {
     backgroundColor: '#4A3C34',
     borderRadius: 16,
@@ -412,16 +452,16 @@ const styles = StyleSheet.create({
   secondaryButton: { marginTop: 12, paddingVertical: 12, alignItems: 'center' },
   secondaryButtonText: { color: '#6B5B52', fontSize: 13, fontWeight: '600' },
 
-  step2: { marginTop: 18 },
-  divider: { height: 1, backgroundColor: '#DDD3CA', marginBottom: 18 },
-  step2Title: { fontSize: 15, fontWeight: '800', color: '#2E2521', marginBottom: 6 },
-  step2Text: { fontSize: 12, color: '#7A6A61', lineHeight: 18, marginBottom: 14 },
-  inputMultiline: {
-    minHeight: 78,
-    textAlignVertical: 'top',
-    fontSize: 11,
-    marginBottom: 14,
+  devBox: {
+    backgroundColor: '#FFF8E1',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F0DFA8',
   },
+  devTitle: { fontSize: 12, fontWeight: '800', color: '#8A6D1F', marginBottom: 5 },
+  devText: { fontSize: 11, color: '#7A6A45', lineHeight: 17 },
 });
 
 export default ForgotPasswordScreen;

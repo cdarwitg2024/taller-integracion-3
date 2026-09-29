@@ -71,8 +71,8 @@ const TABS: { key: AppTab; label: string }[] = [
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  // FR-04: 'forgot' pide el enlace de recuperación,
-  // 'reset' define la contraseña nueva tras volver del correo
+  // FR-04: 'forgot' pide el código de recuperación,
+  // 'reset' define la contraseña nueva una vez validado el código
   const [authScreen, setAuthScreen] = useState<
     'login' | 'register' | 'forgot' | 'reset'
   >('login');
@@ -92,9 +92,11 @@ export default function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      // FR-04: Supabase emite PASSWORD_RECOVERY cuando el usuario vuelve
-      // desde el enlace del correo. Ese momento es el único en que hay una
-      // sesión temporal válida para guardar la contraseña nueva.
+      // FR-04: Supabase emite PASSWORD_RECOVERY cuando el código del correo
+      // es canjeado. Ese momento es el único en que hay una sesión temporal
+      // válida para guardar la contraseña nueva. La pantalla de código
+      // también avisa por prop, así que esto es el respaldo por si el evento
+      // no llega.
       if (event === 'PASSWORD_RECOVERY') {
         setAuthScreen('reset');
       }
@@ -282,7 +284,7 @@ export default function App() {
   const isUserAllowed = Boolean((session && session.user) || isGuest);
 
   // FR-04: la pantalla de contraseña nueva se muestra ANTES del guard de
-  // sesión. Al volver del correo el usuario YA tiene una sesión temporal, así
+  // sesión. Al validar el código el usuario YA tiene una sesión temporal, así
   // que si esperáramos a `isUserAllowed` la pantalla quedaría inalcanzable.
   const mostrarReset = authScreen === 'reset';
 
@@ -296,7 +298,10 @@ export default function App() {
             onForgotPassword={() => setAuthScreen('forgot')}
           />
         ) : authScreen === 'forgot' ? (
-          <ForgotPasswordScreen onBack={() => setAuthScreen('login')} />
+          <ForgotPasswordScreen
+            onBack={() => setAuthScreen('login')}
+            onCodeVerified={() => setAuthScreen('reset')}
+          />
         ) : mostrarReset ? (
           <ResetPasswordScreen
             onDone={async () => {
