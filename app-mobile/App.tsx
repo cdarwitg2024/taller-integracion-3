@@ -304,7 +304,7 @@ export default function App() {
     );
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (franjaRetiro?: { franja: string }) => {
     // La cafetería del pedido sale de los propios ítems del carrito, no de
     // `selectedCafeteria`. Antes se leía de ahí, y como perder la cafetería
     // seleccionada era fácil (basta con cambiar de pestaña), el pago se
@@ -329,6 +329,11 @@ export default function App() {
       return;
     }
 
+    if (!franjaRetiro?.franja) {
+      Alert.alert('Selecciona una franja', 'Debes seleccionar un horario de retiro.');
+      return;
+    }
+
     // Guardia de reentrada: dos toques antes de que resuelva la RPC intentarian
     // cobrar dos veces. El UNIQUE en pagos.pedido_id es la red real, pero esto
     // evita siquiera intentarlo.
@@ -346,6 +351,7 @@ export default function App() {
           producto_id: item.id,
           cantidad: item.quantity,
         })),
+        p_franja_retiro: franjaRetiro.franja,
       });
 
       if (error) {
