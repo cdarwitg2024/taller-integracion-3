@@ -1,13 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
   TouchableOpacity,
+  ScrollView,
 } from 'react-native';
 
 import CartItem from '../components/CartItem';
+
+const FRANJAS = [
+  { id: '12:00-12:15', label: '12:00 - 12:15' },
+  { id: '12:15-12:30', label: '12:15 - 12:30' },
+  { id: '12:30-12:45', label: '12:30 - 12:45' },
+  { id: '12:45-13:00', label: '12:45 - 13:00' },
+  { id: '13:00-13:15', label: '13:00 - 13:15' },
+  { id: '13:15-13:30', label: '13:15 - 13:30' },
+];
 
 const CartScreen = ({
   cart,
@@ -18,6 +28,7 @@ const CartScreen = ({
   onCheckout,
   paying = false,
 }) => {
+  const [franjaSeleccionada, setFranjaSeleccionada] = useState(null);
   const cafeName = cafeteriaName || 'Cafetería Central';
   const totalProducts = cart.reduce(
     (sum, item) => sum + item.quantity,
@@ -30,6 +41,14 @@ const CartScreen = ({
   );
 
   const total = subtotal;
+
+  const handleCheckout = () => {
+    if (!franjaSeleccionada) {
+      alert('Por favor selecciona una franja horaria para el retiro.');
+      return;
+    }
+    onCheckout({ franja: franjaSeleccionada });
+  };
 
   return (
     <View style={styles.container}>
@@ -64,27 +83,64 @@ const CartScreen = ({
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.list}
           ListHeaderComponent={
-            <View style={styles.pickupCard}>
-              <View style={styles.locationCircle}>
-                <Text>●</Text>
+            <>
+              <View style={styles.pickupCard}>
+                <View style={styles.locationCircle}>
+                  <Text>●</Text>
+                </View>
+
+                <View style={styles.pickupInfo}>
+                  <Text style={styles.pickupLabel}>
+                    PUNTO DE RETIRO
+                  </Text>
+
+                  <Text style={styles.pickupName}>
+                    {cafeName}
+                  </Text>
+                </View>
+
+                <View style={styles.campusBadge}>
+                  <Text style={styles.campusText}>
+                    • UCT
+                  </Text>
+                </View>
               </View>
 
-              <View style={styles.pickupInfo}>
-                <Text style={styles.pickupLabel}>
-                  PUNTO DE RETIRO
+              {/* Sección de Selección de Franja Horaria */}
+              <View style={styles.franjaSection}>
+                <Text style={styles.franjaTitle}>
+                  Selecciona tu horario de retiro
                 </Text>
-
-                <Text style={styles.pickupName}>
-                  {cafeName}
-                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.franjaContainer}
+                >
+                  {FRANJAS.map((item) => {
+                    const isSelected = franjaSeleccionada === item.id;
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[
+                          styles.franjaChip,
+                          isSelected && styles.franjaChipSelected,
+                        ]}
+                        onPress={() => setFranjaSeleccionada(item.id)}
+                      >
+                        <Text
+                          style={[
+                            styles.franjaText,
+                            isSelected && styles.franjaTextSelected,
+                          ]}
+                        >
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
-
-              <View style={styles.campusBadge}>
-                <Text style={styles.campusText}>
-                  • UCT
-                </Text>
-              </View>
-            </View>
+            </>
           }
           renderItem={({ item }) => (
             <CartItem
@@ -143,9 +199,9 @@ const CartScreen = ({
               <TouchableOpacity
                 style={[
                   styles.paymentButton,
-                  paying && styles.paymentButtonDisabled,
+                  (paying || !franjaSeleccionada) && styles.paymentButtonDisabled,
                 ]}
-                onPress={onCheckout}
+                onPress={handleCheckout}
                 disabled={paying}
               >
                 <Text style={styles.paymentText}>
@@ -265,6 +321,45 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     color: '#554640',
+  },
+
+  franjaSection: {
+    marginBottom: 16,
+  },
+
+  franjaTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4A332C',
+    marginBottom: 8,
+  },
+
+  franjaContainer: {
+    gap: 8,
+  },
+
+  franjaChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EEE9E6',
+  },
+
+  franjaChipSelected: {
+    backgroundColor: '#4A332C',
+    borderColor: '#4A332C',
+  },
+
+  franjaText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#4A332C',
+  },
+
+  franjaTextSelected: {
+    color: '#FFFFFF',
   },
 
   readyCard: {

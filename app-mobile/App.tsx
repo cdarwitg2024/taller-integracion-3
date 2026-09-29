@@ -194,7 +194,7 @@ export default function App() {
     );
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (franjaRetiro?: { franja: string }) => {
     const cafeteriaId = selectedCafeteria?.id;
 
     if (!session?.user) {
@@ -204,6 +204,11 @@ export default function App() {
 
     if (!cafeteriaId || cart.length === 0) {
       Alert.alert('Carrito vacío', 'Agrega productos desde el menú de una cafetería.');
+      return;
+    }
+
+    if (!franjaRetiro?.franja) {
+      Alert.alert('Selecciona una franja', 'Debes seleccionar un horario de retiro.');
       return;
     }
 
@@ -224,6 +229,7 @@ export default function App() {
           producto_id: item.id,
           cantidad: item.quantity,
         })),
+        p_franja_retiro: franjaRetiro.franja,
       });
 
       if (error) {
