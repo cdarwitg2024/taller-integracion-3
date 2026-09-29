@@ -56,9 +56,17 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
     >
       <CardContent sx={{ p: 2.5 }}>
         <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between', alignItems: 'center'}}>
-          <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.5rem' }}>
-            #{pedido.id}
-          </Typography>
+          <Box>
+            <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.5rem' }}>
+              {pedido.codigo_pedido || `#${pedido.rawId ?? pedido.id}`}
+            </Typography>
+            {/* El KDS muestra todas las cafeterias, asi que la comanda lleva el
+                nombre de donde salio para no entregar un pedido en la otra. */}
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              {pedido.cafeteria_nombre || pedido.ubicacion || ''}
+              {pedido.franja_retiro ? ` · Retiro ${pedido.franja_retiro}` : ''}
+            </Typography>
+          </Box>
           <TimeAgo pedido={pedido} sx={{ fontSize: '1.05rem' }} />
         </Stack>
 

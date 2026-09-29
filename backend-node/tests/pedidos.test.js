@@ -87,7 +87,11 @@ describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
       // Validar campos requeridos por el SRS
       expect(pedido).toHaveProperty('id');
       expect(pedido).toHaveProperty('codigo_legible');
-      expect(pedido.codigo_legible).toMatch(/^#CF-/);
+      // `codigo_legible` es el token de contingencia real (FR-23): 8 caracteres
+      // sin I, L, O ni U, guardados en `pedidos.codigo_retiro_diario`. Antes
+      // era un "#CF-####" decorativo que el KDS no podia validar para retirar.
+      expect(pedido.codigo_legible).toMatch(/^[0-9A-HJ-KM-NP-TV-Z]{8}$/);
+
       expect(pedido.cafeteria_id).toBe('cafe-central-01');
       expect(pedido.usuario_id).toBe(2);
       expect(pedido.franja_retiro).toBe('10:15 - 10:25');
@@ -98,11 +102,14 @@ describe('Pruebas del Módulo de Pedidos (SRS CoffeeFast)', () => {
 
       // Identificadores de retiro requeridos por el SRS
       expect(pedido).toHaveProperty('qr_token');
-      expect(pedido.qr_token).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+      // `CF-` + 20 caracteres, el mismo formato que genera la RPC `procesar_pago`.
+      expect(pedido.qr_token).toMatch(/^CF-[0-9A-HJ-KM-NP-TV-Z]{20}$/);
       expect(pedido).toHaveProperty('qr_image');
       expect(pedido.qr_image).toMatch(/^data:image\/png;base64,/);
       expect(pedido).toHaveProperty('token_contingencia');
-      expect(pedido.token_contingencia).toMatch(/^CF-[A-Z0-9]{6}$/);
+      // El token de contingencia son 8 caracteres sin prefijo: se persiste en
+      // `codigo_retiro_diario` y es lo que el estudiante dicta si no puede escanear.
+      expect(pedido.token_contingencia).toMatch(/^[0-9A-HJ-KM-NP-TV-Z]{8}$/);
 
       // Desglose de productos
       expect(pedido.productos).toHaveLength(2);

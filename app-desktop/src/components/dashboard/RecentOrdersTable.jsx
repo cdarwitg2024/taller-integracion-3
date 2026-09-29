@@ -171,7 +171,8 @@ function RecentOrdersTable({ pedidos }) {
                     }}
                   >
                     <TableCell sx={{ fontWeight: 700, color: '#4A3728', fontSize: '0.85rem' }}>
-                      #{p.codigo_retiro_diario || p.id}
+                        {p.codigo_pedido || `#${p.id}`}
+
                     </TableCell>
                     <TableCell sx={{ color: '#3B291D', fontSize: '0.85rem', fontWeight: 500 }}>
                       {clienteNombre}

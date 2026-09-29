@@ -4,6 +4,21 @@ import { parsearFecha, formatearHora, formatearHoraBucket } from '../utils/dateU
 
 export function normalizarTokenQR(texto) {
   let token = String(texto || '').trim().replace(/^["']+|["']+$/g, '');
+
+  // El QR que genera el backend no es texto plano: es un JSON
+  // ({ pedido_id, qr_token, franja_retiro, ... }). Sin sacar el qr_token de ahí
+  // la busqueda comparaba el JSON entero contra `qr_token` y nunca encontraba
+  // el pedido.
+  if (token.startsWith('{')) {
+    try {
+      const payload = JSON.parse(token);
+      const interno = payload.qr_token || payload.token || payload.codigo_retiro_diario;
+      if (interno) token = String(interno).trim();
+    } catch (e) {
+      // JSON malformado: se sigue con el texto tal cual.
+    }
+  }
+
   if (/^https?:\/\//i.test(token)) {
     const partes = token.split('/').filter(Boolean);
     token = partes[partes.length - 1] || token;
@@ -44,16 +59,20 @@ export function normalizarPedido(fila) {
   const cafeObj = fila.cafeterias || fila.CAFETERIAS;
   const ubicacionNombre = fila.ubicacion || (cafeObj?.nombre ? cafeObj.nombre : 'Campus Central');
 
-  const idStr = String(fila.codigo_retiro_diario || fila.id);
+  // La identidad del pedido es su `id` de base de datos, nunca el token: el
+  // token de contingencia es una credencial y no debe viajar en la tarjeta.
+  const idStr = String(fila.id);
 
   return {
     ...fila,
     id: idStr,
     rawId: fila.id,
-    codigo_retiro_diario: fila.codigo_retiro_diario || idStr,
-    qr_token: fila.qr_token || idStr,
+    codigo_pedido: fila.codigo_pedido || `#${fila.id}`,
+    codigo_retiro_diario: fila.codigo_retiro_diario || null,
+    qr_token: fila.qr_token || null,
     cliente: clienteNombre,
     ubicacion: ubicacionNombre,
+    cafeteria_nombre: cafeObj?.nombre || 'Cafetería',
     hora: fila.hora || (fila.creado_en ? formatearHora(fila.creado_en) : undefined),
     hora_retiro: formatearHora(fila.hora_retiro),
     creado_en: fila.creado_en,

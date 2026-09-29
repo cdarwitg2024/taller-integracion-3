@@ -290,27 +290,34 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
 
     setProcesandoRecarga(true);
     try {
-      // Insertar movimiento
-      const { error: movError } = await supabase.from('movimientos_wallet').insert({
-        wallet_id: wallet.id,
-        tipo: 'recarga',
-        monto: monto,
-        descripcion: `Recarga de saldo`,
+      // El saldo NO se actualiza con un UPDATE desde el cliente: la politica
+      // `wallets_update_own` no existe a proposito, para que nadie se ponga un
+      // saldo arbitrario. Ese UPDATE fallaba en silencio (RLS -> 0 filas ->
+      // HTTP 204), la app sumaba en pantalla y al refrescar volvia el saldo
+      // viejo. La recarga va por la RPC `recargar_saldo`, que suma, deja el
+      // movimiento y devuelve el saldo real leido de la base.
+      const { data, error } = await supabase.rpc('recargar_saldo', {
+        p_monto: monto,
       });
 
-      if (movError) throw movError;
+      if (error) throw error;
 
-      // Actualizar saldo
-      const nuevoSaldo = wallet.saldo_actual + monto;
-      const { error: updateError } = await supabase
-        .from('wallets')
-        .update({ saldo_actual: nuevoSaldo })
-        .eq('id', wallet.id);
+      const res = data as {
+        ok: boolean;
+        motivo?: string;
+        mensaje?: string;
+        saldo_nuevo?: number;
+      } | null;
 
-      if (updateError) throw updateError;
+      if (!res?.ok) {
+        Alert.alert('No se pudo recargar', res?.mensaje || 'Intenta nuevamente.');
+        return;
+      }
 
-      // Actualizar estado local inmediatamente
-      setWallet((prev) => (prev ? { ...prev, saldo_actual: nuevoSaldo } : prev));
+      // El saldo se toma del servidor, no se calcula aqui.
+      setWallet((prev) =>
+        prev ? { ...prev, saldo_actual: res.saldo_nuevo ?? prev.saldo_actual } : prev
+      );
       setMovimientos((prev) => [
         {
           id: `temp-${Date.now()}`,

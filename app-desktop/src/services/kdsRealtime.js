@@ -1,6 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { normalizarPedido } from './pedidosService';
-import { CAFETERIA_ID } from './backendApi';
 
 export const ESTADO_CONECTADO = 'conectado';
 export const ESTADO_RECONECTANDO = 'reconectando';
@@ -17,8 +16,12 @@ async function construirComanda(nuevoPedido) {
 
     return normalizarPedido({
       id: nuevoPedido.id,
+      codigo_pedido: nuevoPedido.codigo_pedido,
       codigo_retiro_diario: nuevoPedido.codigo_retiro_diario,
       qr_token: nuevoPedido.qr_token,
+      cafeteria_id: nuevoPedido.cafeteria_id,
+      cafeterias: nuevoPedido.cafeterias,
+      franja_retiro: nuevoPedido.franja_retiro,
       estado: nuevoPedido.estado,
       total: nuevoPedido.total,
       creado_en: nuevoPedido.creado_en,
@@ -32,7 +35,6 @@ async function construirComanda(nuevoPedido) {
 
 export const kdsRealtime = {
   suscribir({
-    cafeteriaId = CAFETERIA_ID,
     onComanda,
     onActualizar,
     onEstadoCanal,
@@ -45,13 +47,16 @@ export const kdsRealtime = {
     const vistos = new Set();
     const canal = supabase.channel('kds-pedidos');
 
+    // Sin filtro por cafeteria: hay un unico KDS y el estudiante puede pedir en
+    // cualquiera de ellas. Filtrar dejaba pedidos pagados pero invisibles, que es
+    // justo el fallo de "hice un pedido y no aparece en el KDS". Cada tarjeta
+    // muestra el nombre de la cafeteria para no confundirlos.
     canal.on(
       'postgres_changes',
       {
         event: 'INSERT',
         schema: 'public',
         table: 'pedidos',
-        filter: `cafeteria_id=eq.${cafeteriaId}`,
       },
       async (payload) => {
         const nuevo = payload?.new;
@@ -59,7 +64,13 @@ export const kdsRealtime = {
         if (vistos.has(String(nuevo.id))) return;
         vistos.add(String(nuevo.id));
 
-        const comanda = await construirComanda(nuevo);
+        const { data: cafe } = await supabase
+          .from('cafeterias')
+          .select('nombre')
+          .eq('id', nuevo.cafeteria_id)
+          .maybeSingle();
+
+        const comanda = await construirComanda({ ...nuevo, cafeterias: cafe || null });
         if (comanda) onComanda?.(comanda);
       }
     );
@@ -70,7 +81,6 @@ export const kdsRealtime = {
         event: 'UPDATE',
         schema: 'public',
         table: 'pedidos',
-        filter: `cafeteria_id=eq.${cafeteriaId}`,
       },
       async (payload) => {
         const fila = payload?.new;
