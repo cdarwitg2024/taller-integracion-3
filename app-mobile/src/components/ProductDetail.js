@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,15 @@ import {
  *   available, category, cafeteriaName, modifications (array de strings)
  */
 const ProductDetail = ({ product, onAdd, onClose, cafeteriaName }) => {
+  // Si la URL de la imagen existe pero no carga (404, host caído), caemos al
+  // emoji en vez de dejar el hueco vacío sin explicación. El hook va antes
+  // del `return null` de abajo para respetar el orden de los hooks.
+  const [imagenCaida, setImagenCaida] = useState(false);
+
+  useEffect(() => {
+    setImagenCaida(false);
+  }, [product?.imageUrl]);
+
   if (!product) return null;
 
   const { available, stock, stockMin = 0 } = product;
@@ -31,12 +40,13 @@ const ProductDetail = ({ product, onAdd, onClose, cafeteriaName }) => {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Imagen grande */}
         <View style={styles.hero}>
-          {product.imageUrl ? (
+          {product.imageUrl && !imagenCaida ? (
             <Image
               source={{ uri: product.imageUrl }}
               style={styles.heroImage}
               resizeMode="cover"
               accessibilityIgnoresInvertColors
+              onError={() => setImagenCaida(true)}
             />
           ) : (
             <Text style={styles.heroEmoji}>{product.emoji}</Text>

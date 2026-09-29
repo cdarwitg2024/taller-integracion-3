@@ -16,9 +16,14 @@ const CartScreen = ({
   onDecrease,
   onRemove,
   onCheckout,
+  onBack,
   paying = false,
 }) => {
-  const cafeName = cafeteriaName || 'Cafetería Central';
+  // Antes caía a 'Cafetería Central', un nombre inventado: si el usuario
+  // perdía la cafetería seleccionada, el carrito mostraba un punto de retiro
+  // falso. Ahora el nombre sale de los ítems del carrito y, si no hay, se
+  // dice que no se pudo determinar.
+  const cafeName = cafeteriaName || 'la cafetería de tu pedido';
   const totalProducts = cart.reduce(
     (sum, item) => sum + item.quantity,
     0
@@ -34,7 +39,12 @@ const CartScreen = ({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={onBack}
+          disabled={!onBack}
+          accessibilityLabel="Volver a cafeterías"
+        >
           <Text style={styles.backText}>‹</Text>
         </TouchableOpacity>
 

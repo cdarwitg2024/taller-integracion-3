@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  BackHandler,
   RefreshControl,
 } from 'react-native';
 
@@ -232,6 +233,22 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     setProductoDetalle(null);
   }, [cafeteriaId]);
 
+  // El detalle de producto es un overlay sobre el menú, no una pantalla
+  // montada aparte. Por eso hay que hacerlo cerrar a mano con el botón
+  // físico de atrás de Android. Este handler se registra después del de
+  // App.tsx, y React Native invoca primero el último registrado, así que
+  // el overlay gana y el usuario nunca sale de la app por error.
+  useEffect(() => {
+    if (!productoDetalle) return undefined;
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      setProductoDetalle(null);
+      return true;
+    });
+
+    return () => subscription.remove();
+  }, [productoDetalle]);
+
   const handleRefresh = () => {
     setRefreshing(true);
     fetchProducts({ silent: true });
@@ -242,7 +259,9 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     // un producto que no sea de esta cafetería o que esté agotado.
     if (!product?.available) return;
     if (Number(product.cafeteriaId) !== Number(cafeteriaId)) return;
-    onAddToCart?.(product);
+    // Se pasa la cafetería para que el carrito sepa a qué pedido pertenece
+    // cada ítem y no mezcle productos de dos menus distintos.
+    onAddToCart?.(product, cafeteria);
     // Si venía desde el detalle, se cierra para volver al menú
     setProductoDetalle(null);
   };
