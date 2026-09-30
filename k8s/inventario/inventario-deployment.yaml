@@ -1,3 +1,6 @@
+# El conteo de replicas lo controla este Deployment. No volver a agregar un
+# HPA: el namespace no tiene metrics-server, asi que el HPA se quedaba en
+# "cpu: <unknown>" y su minReplicas pisaba el valor de replicas de aqui.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,7 +10,7 @@ metadata:
     app: inventario-service
     ms: inventario
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: inventario-service

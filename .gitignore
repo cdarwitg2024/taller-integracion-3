@@ -154,9 +154,14 @@ db_CoffeeFaster/
 # ============================================
 # Kubernetes: manifiestos con secretos (crear el Secret via kubectl, no versionar)
 # ============================================
-k8s/secrets/*
-!k8s/secrets/*.example.yaml
+# IMPORTANTE: dentro de k8s/ NO hay ningun manifiesto de Secret. Un
+# "kubectl apply -f k8s/ --recursive" no debe poder pisar coffeesecret-supabase.
+# La plantilla de referencia vive en docs/secrets/ (fuera del arbol que se aplica).
+k8s/secrets/
+docs/secrets/*
+!docs/secrets/*.example.yaml
 *secret*.local.yaml
+*secrets*.local.yaml
 
 # Credenciales de kubectl / cluster
 *.kubeconfig

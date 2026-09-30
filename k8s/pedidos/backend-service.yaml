@@ -1,0 +1,24 @@
+# Service del MS-Pedidos (backend-node). Expone el puerto 3000 del contenedor
+# en el puerto 80 del Service, que es el que consume el Ingress y el
+# MS-Inventario (INVENTARIO_SERVICE_URL).
+#
+# Este manifiesto faltaba en el repo: el Service existia en el cluster desde
+# hacia 11 dias pero solo se habia creado a mano, sin manifiesto. Sin este
+# archivo, una reconstruccion del cluster desde el repo dejaba el Ingress
+# apuntando a un Service inexistente.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: student-cdarwitg
+  labels:
+    app: backend-node
+    ms: pedidos
+spec:
+  type: ClusterIP
+  selector:
+    app: backend-node
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP

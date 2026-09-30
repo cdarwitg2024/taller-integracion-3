@@ -21,6 +21,51 @@ Aplicación full stack para pedidos por adelantado en cafeterías universitarias
   cómo levantar el entorno, orden de migraciones, cuentas de prueba, endpoints
   y qué se corrigió para que el flujo pago → preparación → retiro por QR funcione
   de punta a punta.
+- **[Despliegue en Kubernetes](docs/despliegue_kubernetes_backend.md)** — build,
+  push y aplicación de `backend-node` e `inventario-service` en el clúster
+  `student-cdarwitg`.
+- **[Arquitectura de microservicios](docs/arquitectura-microservicios.md)** —
+  Ingress, Secrets, réplicas y comunicación interna entre servicios.
+
+## ⚠️ Advertencia: seguridad al aplicar manifiestos
+
+**Nunca uses `kubectl apply -R` (ni `--recursive`) sobre carpetas que puedan
+contener Secrets.** Un `apply` recursivo no distingue una plantilla de un Secret
+real: aplica **todo** lo que encuentra, y en este proyecto ya pasó — un
+`kubectl apply -f k8s/ --recursive` sobrescribió el Secret
+`coffeesecret-supabase` del clúster con los placeholders de una plantilla.
+
+Reglas al aplicar manifiestos:
+
+1. **Aplica archivo por archivo** o **por subcarpeta cerrada**, nunca por el árbol
+   completo:
+   ```powershell
+   # correcto: archivos o subcarpetas explícitas
+   kubectl apply -f k8s/ingress.yaml
+   kubectl apply -f k8s/pedidos/
+   kubectl apply -f k8s/inventario/
+
+   # PROHIBIDO: recorre todo el árbol, incluidos Secrets
+   kubectl apply -f k8s/ --recursive
+   ```
+2. **Dentro de `k8s/` no hay ningún manifiesto de Secret.** Es intencional: así
+   un `apply` recursivo no tiene nada que pisar. La plantilla de referencia vive
+   fuera, en [`docs/secrets/supabase-secret.example.yaml`](docs/secrets/supabase-secret.example.yaml),
+   que solo contiene placeholders (`<TU_SUPABASE_URL>`).
+3. **El Secret real se crea a mano, una vez, y no se versiona:**
+   ```powershell
+   kubectl create secret generic coffeesecret-supabase `
+     --from-literal=SUPABASE_URL="https://<proyecto>.supabase.co" `
+     --from-literal=SUPABASE_SERVICE_KEY="<service key>" `
+     -n student-cdarwitg
+   ```
+4. **Nunca pegues credenciales reales en el repo.** Ni en manifiestos, ni en
+   `.env` versionado, ni en documentación. Para revisar o corregir un Secret
+   existente, recrea el objeto con `kubectl create secret`; **no** lo apliques
+   desde un archivo del repo.
+
+Las claves que espera el Secret son `SUPABASE_URL` y `SUPABASE_SERVICE_KEY`, las
+mismas que inyectan los Deployments por `envFrom.secretRef`.
 
 ## 👥 Integrantes
 - **Int 1**: App Móvil (Kotlin)

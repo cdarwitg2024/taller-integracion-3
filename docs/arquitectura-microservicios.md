@@ -28,7 +28,7 @@ dentro del clúster** usando el nombre del Service como hostname.
 | **Health** | `GET /health` | `GET /health` |
 | **Tests** | 36 tests (`npm test`) | 11 tests (`npm test`) |
 
-Ambiente: namespace `student-cdarwitg` del clúster `k8s-estudiantes.dev.censei.cl`.
+Ambiente: namespace `student-cdarwitg` del clúster `dev.censei.cl`.
 Base de datos: Supabase (PostgreSQL) **compartida** por ambos servicios.
 
 ---
@@ -62,31 +62,27 @@ Consecuencias del diseño:
 
 ```mermaid
 flowchart TB
-    Internet(("🌐 Cliente<br/>(app / profesor)")) --> Ingress["Ingress: backend-ingress<br/>host: student-cdarwitg.k8s-estudiantes.dev.censei.cl"]
+    Internet(("🌐 Cliente<br/>(app / profesor)")) --> Ingress["Ingress: backend-ingress<br/>host: api-cdarwitg.dev.censei.cl<br/>solo ruta / (exigido por la plataforma)"]
 
     Ingress -->|"/"| SvcPedidos["Service: backend-service<br/>ClusterIP 80 → 3000"]
-    Ingress -->|"/api/inventario"| SvcInv["Service: inventario-service<br/>ClusterIP 80 → 3001"]
 
     subgraph NS["Namespace: student-cdarwitg"]
         SvcPedidos --> PodP1["Pod backend-node-1<br/>Node.js :3000"]
-        SvcPedidos --> PodP2["Pod backend-node-2<br/>Node.js :3000"]
-        SvcInv --> PodI1["Pod inventario-service-1<br/>Node.js :3001"]
-        SvcInv --> PodI2["Pod inventario-service-2<br/>Node.js :3001"]
+        SvcInv["Service: inventario-service<br/>ClusterIP 80 → 3001<br/>(solo interno)"] --> PodI1["Pod inventario-service-1<br/>Node.js :3001"]
 
-        SvcInv -.->|"HTTP interno"| PodI1
-        PodP1 & PodP2 -->|"HTTP: http://inventario-service"| SvcInv
+        PodP1 -->|"HTTP: http://inventario-service/api/inventario"| SvcInv
 
-        HPA["HPA: inventario-service-hpa<br/>2 → 5 réplicas (CPU > 70%)"] -.-> PodI1
         Secret["Secret: coffeesecret-supabase<br/>SUPABASE_URL · SUPABASE_SERVICE_KEY"] -.-> PodP1
         Secret -.-> PodI1
     end
 
-    PodP1 & PodP2 & PodI1 & PodI2 --> DB[("☁️ Supabase (PostgreSQL)<br/>compartido por ambos servicios")]
+    PodP1 & PodI1 --> DB[("☁️ Supabase (PostgreSQL)<br/>compartido por ambos servicios")]
 ```
 
 Lectura del diagrama:
 
-- El **Ingress** es la única puerta de entrada y decide por **ruta**, no por carga.
+- El **Ingress** es la única puerta de entrada y expone **una sola ruta** (`/`), la
+  única que admite la `ValidatingAdmissionPolicy` de la plataforma.
 - El **Service** es una IP virtual estable: los pods pueden recrearse sin romper nada.
 - La flecha punteada entre servicios es la **comunicación HTTP interna**.
 - El **Secret** inyecta las credenciales de Supabase en ambos contenedores sin
@@ -207,36 +203,35 @@ consume el KDS/pantalla de inventario, no el bot.
 | **Deployment** | Mantiene N copias vivas de cada servicio. Si un pod muere, lo reemplaza. |
 | **ReplicaSet** | Submódulo del Deployment que materializa las réplicas. |
 | **Service** | IP/DNS estable que reparte el tráfico entre los pods del mismo servicio. |
-| **Ingress** | Punto de entrada público; enruta por ruta hacia el Service correspondiente. |
+| **Ingress** | Punto de entrada público. La plataforma solo admite el path `/`, así que enruta a un único Service (`backend-service`). |
 | **Secret** | Inyecta `SUPABASE_URL` y `SUPABASE_SERVICE_KEY` sin exponerlas en el repo. |
-| **HPA** | Escala las réplicas de Inventario según uso de CPU (objetivo 70%, rango 2–5). |
+| **HPA** | **Retirado.** El namespace no tiene `metrics-server`, así que el HPA se quedaba en `cpu: <unknown>` y su `minReplicas: 2` pisaba el `replicas` del Deployment. |
 | **Probes** | `readiness` decide si el pod recibe tráfico; `liveness` reinicia el pod si se cuelga. Sin probes, un pod con errores seguiría recibiendo solicitudes. |
 
 ---
 
 ## 7. Escalado
 
-### 7.1 Automático (HPA)
+### 7.1 Automático (HPA) — retirado
+
+El HPA de Inventario **ya no se aplica**: el manifiesto
+`k8s/inventario/inventario-hpa.yaml` se eliminó del repo y el objeto
+`inventario-service-hpa` se borró del clúster.
 
 ```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: inventario-service-hpa
-spec:
-  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: inventario-service }
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-  - type: Resource
-    resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+# RETIRADO: k8s/inventario/inventario-hpa.yaml
+# minReplicas: 2  ->  mantenía 2 pods vivos sin importar el Deployment
+# metrics: cpu    ->  <unknown> porque no hay metrics-server
 ```
+
+El escalado quedó como **replicación fija de 1 pod por servicio**, fijada en los
+manifiestos `inventario-deployment.yaml` y `backend-deployment.yaml`.
 
 ### 7.2 Manual (para demostraciones)
 
 ```powershell
 kubectl scale deployment/inventario-service --replicas=4 -n student-cdarwitg
-kubectl get hpa -n student-cdarwitg
+kubectl scale deployment/inventario-service --replicas=1 -n student-cdarwitg   # volver
 ```
 
 ### 7.3 Cupo de recursos del namespace
@@ -247,8 +242,8 @@ Como el cupo se calcula sobre los **límites** (`limits.cpu`), cada pod reserva
 
 | Escenario | Cálculo | Total |
 |---|---|---|
-| Estado normal | 2 Pedidos + 2 Inventario | 1000m / 2000m (50%) |
-| Escalado máximo del HPA | 2 Pedidos + 5 Inventario | 1750m / 2000m (87%) |
+| Estado normal | 1 Pedidos + 1 Inventario | 500m / 2000m (25%) |
+| Escalado manual a 4 | 1 Pedidos + 4 Inventario | 1250m / 2000m (63%) |
 
 Ambos escenarios caben. Si se superara el cupo, el síntoma es explícito:
 
@@ -362,10 +357,10 @@ Si el cambio es en MS-Pedidos, mismo procedimiento con `backend-node`.
 | Práctica | Dónde |
 |---|---|
 | Credenciales fuera del repo | Secret `coffeesecret-supabase` creado con `kubectl create secret` |
-| Plantilla documentada | `k8s/secrets/supabase-secret.example.yaml` (sin valores reales) |
+| Plantilla documentada | `docs/secrets/supabase-secret.example.yaml` (sin valores reales) |
 | `.env` ignorado por Git | `.gitignore` con `**/.env` |
 | Imagen sin secretos ni dependencias del host | `backend-node/.dockerignore` e `inventario-service/.dockerignore` excluyen `.env` y `node_modules` |
-| Manifests de secretos ignorados | `.gitignore` ignora `k8s/secrets/*` salvo los `.example.yaml` |
+| Manifests de secretos ignorados | `.gitignore` ignora `docs/secrets/*` salvo los `.example.yaml`, y **no hay ningún manifiesto de Secret dentro de `k8s/`** |
 
 ---
 
