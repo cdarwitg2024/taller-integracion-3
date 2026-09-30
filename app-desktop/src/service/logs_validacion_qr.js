@@ -9,7 +9,7 @@ export const logsValidacionQr = {
         const { data, error } = await supabase
           .from(TABLE)
           .select('*, cafeterias(*), usuarios(*), pedidos(*)')
-          .order('validado_en', { ascending: false });
+          .order('creado_en', { ascending: false });
         if (!error && data) return data;
       } catch (err) {
         console.warn('Error al obtener logs_validacion_qr:', err);
@@ -40,8 +40,8 @@ export const logsValidacionQr = {
         const { data, error } = await supabase
           .from(TABLE)
           .select('*, usuarios(*), pedidos(*)')
-          .eq('cafeteria_id', cafeteriaId)
-          .order('validado_en', { ascending: false });
+        .eq('cafeteria_id', cafeteriaId)
+        .order('creado_en', { ascending: false });
         if (!error && data) return data;
       } catch (err) {
         console.warn('Error al obtener logs por cafeteria:', err);
@@ -56,8 +56,8 @@ export const logsValidacionQr = {
         const { data, error } = await supabase
           .from(TABLE)
           .select('*, cafeterias(*), usuarios(*)')
-          .eq('pedido_id', pedidoId)
-          .order('validado_en', { ascending: false });
+        .eq('pedido_id', pedidoId)
+        .order('creado_en', { ascending: false });
         if (!error && data) return data;
       } catch (err) {
         console.warn('Error al obtener logs por pedido:', err);

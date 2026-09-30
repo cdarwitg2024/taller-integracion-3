@@ -55,6 +55,11 @@ const formatDate = (iso) => {
   });
 };
 
+// Suma las unidades pedidas, no la cantidad de filas: 2 lineas de 3 cafe y
+// 1 linea de 1 agua son 4 unidades y no 3.
+const totalItems = (detalles = []) =>
+  (detalles || []).reduce((suma, d) => suma + (Number(d.cantidad) || 0), 0);
+
 const mapPedido = (p) => ({
   id: String(p.id),
   qr_token: p.qr_token || null,
@@ -68,6 +73,9 @@ const mapPedido = (p) => ({
   total: Number(p.total) || 0,
   estado: p.estado === 'preparando' ? 'en_preparacion' : p.estado || 'pendiente',
   creado_en: p.creado_en,
+  // Se usa para el recibo: si el pedido ya fue retirado, el QR deja de tener
+  // sentido y en su lugar se muestra el detalle de lo que se compro y cuando.
+  entregado_en: p.entregado_en || null,
   detalles: (p.detalles_pedido || []).map((d) => ({
     nombre: d.productos?.nombre || 'Producto',
     cantidad: Number(d.cantidad) || 1,
@@ -116,11 +124,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias }) => {
 
   // Al abrir un pedido se pide su QR al backend. `qrBackend` es null mientras
   // carga, y queda null si la API no respondió (se usa el QR local).
+  // Un pedido ya entregado no pide QR: se muestra el recibo en su lugar.
   const abrirPedido = useCallback(async (item) => {
     pedidoAbierto.current = item.id;
     setSelected(item);
     setQrBackend(null);
-    if (!item.qr_token) return;
+    if (!item.qr_token || item.estado === 'entregado') return;
     const data = await obtenerQrDesdeBackend(item.id);
     if (pedidoAbierto.current !== item.id) return;
     setQrBackend(data);
@@ -305,7 +314,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias }) => {
           ListHeaderComponent={
             <View style={styles.infoBanner}>
               <Text style={styles.infoBannerText}>
-                Acá verás el estado de tus pedidos en tiempo real. Toca un pedido para ver su detalle y el QR de retiro.
+                Acá verás el estado de tus pedidos en tiempo real. Toca un pedido para ver su detalle y, si sigue disponible, el QR de retiro.
               </Text>
             </View>
           }
@@ -373,42 +382,88 @@ const PedidosScreen = ({ userId, onGoToCafeterias }) => {
                   </View>
                 </View>
 
-                <View style={styles.qrContainer}>
-                  {selected.qr_token ? (
-                    <>
-                      {/* El backend genera la imagen y el contenido va en JSON;
-                          si la API no responde se cae al QR local con el token
-                          crudo, que el KDS también acepta. */}
-                      {qrBackend?.qr_image ? (
-                        <Image
-                          source={{ uri: qrBackend.qr_image }}
-                          style={styles.qrImagen}
-                          resizeMode="contain"
-                        />
-                      ) : (
-                        <QrCode value={selected.qr_token} size={190} />
-                      )}
-                      <Text style={styles.qrHint}>
-                        Presenta este QR al llegar a la cafetería para retirar tu pedido.
+                {selected.estado === 'entregado' ? (
+                  /* Pedido ya retirado: el QR y el token de contingencia ya no
+                     sirven para nada y ademas son una credencial que conviene
+                     dejar de exponer. En su lugar se muestra el recibo. */
+                  <View style={styles.reciboBox}>
+                    <Text style={styles.reciboTitulo}>✓ Pedido entregado</Text>
+                    <Text style={styles.reciboSubtitulo}>
+                      {selected.entregado_en
+                        ? `Retirado el ${formatDate(selected.entregado_en)}.`
+                        : 'Este pedido ya fue retirado de la cafetería.'}
+                    </Text>
+
+                    <View style={styles.reciboDivider} />
+
+                    <View style={styles.detalleRow}>
+                      <Text style={styles.reciboLabel}>Pedido</Text>
+                      <Text style={styles.reciboValor}>{selected.codigo_pedido}</Text>
+                    </View>
+                    <View style={styles.detalleRow}>
+                      <Text style={styles.reciboLabel}>Fecha del pedido</Text>
+                      <Text style={styles.reciboValor}>
+                        {formatDate(selected.creado_en)}
                       </Text>
-                      {selected.estado !== 'entregado' ? (
+                    </View>
+                    <View style={styles.detalleRow}>
+                      <Text style={styles.reciboLabel}>Productos</Text>
+                      <Text style={styles.reciboValor}>
+                        {totalItems(selected.detalles)}{' '}
+                        {totalItems(selected.detalles) === 1 ? 'producto' : 'productos'}
+                      </Text>
+                    </View>
+                    <View style={styles.detalleRow}>
+                      <Text style={styles.reciboLabel}>Retiro</Text>
+                      <Text style={styles.reciboValor}>
+                        {selected.franja_retiro || 'sin franja'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.reciboDivider} />
+
+                    <View style={styles.detalleRow}>
+                      <Text style={styles.detalleTotal}>Total pagado</Text>
+                      <Text style={styles.detalleTotal}>
+                        ${selected.total.toLocaleString('es-CL')}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.qrContainer}>
+                    {selected.qr_token ? (
+                      <>
+                        {/* El backend genera la imagen y el contenido va en JSON;
+                            si la API no responde se cae al QR local con el token
+                            crudo, que el KDS también acepta. */}
+                        {qrBackend?.qr_image ? (
+                          <Image
+                            source={{ uri: qrBackend.qr_image }}
+                            style={styles.qrImagen}
+                            resizeMode="contain"
+                          />
+                        ) : (
+                          <QrCode value={selected.qr_token} size={190} />
+                        )}
+                        <Text style={styles.qrHint}>
+                          Presenta este QR al llegar a la cafetería para retirar tu pedido.
+                        </Text>
                         <View style={styles.contingenciaBox}>
                           <Text style={styles.contingenciaTitulo}>
                             ¿No puedes escanear? Di este código
                           </Text>
                           <Text style={styles.contingenciaCodigo}>
-                            {qrBackend?.codigo_legible
-                              || selected.codigo_retiro_diario}
+                            {qrBackend?.codigo_legible || selected.codigo_retiro_diario}
                           </Text>
                         </View>
-                      ) : null}
-                    </>
-                  ) : (
-                    <Text style={styles.qrHint}>
-                      El QR de retiro aparecerá aquí una vez confirmado el pago de tu pedido.
-                    </Text>
-                  )}
-                </View>
+                      </>
+                    ) : (
+                      <Text style={styles.qrHint}>
+                        El QR de retiro aparecerá aquí una vez confirmado el pago de tu pedido.
+                      </Text>
+                    )}
+                  </View>
+                )}
               </>
             )}
           </View>
@@ -586,6 +641,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#5B8C51',
     fontWeight: '600',
+  },
+  reciboBox: {
+    marginTop: 20,
+    backgroundColor: '#F3F7F1',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#DDE8D6',
+  },
+  reciboTitulo: { fontSize: 15, fontWeight: '800', color: '#4A7A3F' },
+  reciboSubtitulo: {
+    fontSize: 12,
+    color: '#6B7F63',
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  reciboDivider: {
+    height: 1,
+    backgroundColor: '#DDE8D6',
+    marginVertical: 11,
+  },
+  reciboLabel: { fontSize: 12, color: '#6B7F63', flex: 1 },
+  reciboValor: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4A332C',
+    textAlign: 'right',
   },
 });
 

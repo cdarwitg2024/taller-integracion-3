@@ -82,7 +82,7 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
             first_name: firstName,
             last_name: lastName,
             full_name: nombreCompleto.trim(),
-            role: 'student',
+            rol: 'estudiante',
           },
         },
       });

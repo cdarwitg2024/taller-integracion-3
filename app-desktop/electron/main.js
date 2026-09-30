@@ -1,8 +1,33 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 app.disableHardwareAcceleration();
+
+// Sin este manejador, Chromium le pide permiso de camara a Electron y Electron
+// no lo responde: getUserMedia queda bloqueado y el lector de QR nunca enciende
+// la camara. Solo se concede 'media'; el resto sigue denegado.
+const PERMISOS_CONCEDIDOS = new Set(['media']);
+
+app.whenReady().then(() => {
+  const sesion = session.defaultSession;
+
+  sesion.setPermissionRequestHandler((_contenido, permiso, callback) => {
+    callback(PERMISOS_CONCEDIDOS.has(permiso));
+  });
+
+  sesion.setPermissionCheckHandler((_contenido, permiso) => {
+    return PERMISOS_CONCEDIDOS.has(permiso);
+  });
+
+  createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 
@@ -33,16 +58,6 @@ function createWindow() {
     });
   }
 }
-
-app.whenReady().then(() => {
-  createWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
-});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
