@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase.js';
 
 const TABLE = 'alertas_stock';
 

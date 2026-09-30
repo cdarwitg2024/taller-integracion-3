@@ -27,10 +27,13 @@ import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+import { useNavigate } from 'react-router-dom';
 
 import { telegramDuenoService } from '../../service/telegram_dueno';
 
 function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
+  const navigate = useNavigate();
   const [chatId, setChatId] = useState('');
   const [showChatId, setShowChatId] = useState(false);
   const [notificacionesActivas, setNotificacionesActivas] = useState(true);
@@ -494,7 +497,28 @@ function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
             <Divider sx={{ borderColor: '#EFEAE6' }} />
 
             {/* Acciones del Modal */}
-            <Stack direction="row" spacing={1.5} justifyContent="flex-end" alignItems="center">
+            <Stack direction="row" spacing={1.5} justifyContent="space-between" alignItems="center">
+              <Button
+                variant="text"
+                size="small"
+                startIcon={<SmartToyOutlinedIcon sx={{ fontSize: 18 }} />}
+                onClick={() => {
+                  onClose();
+                  navigate('/dueno/bot');
+                }}
+                sx={{
+                  color: '#C86237',
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  '&:hover': {
+                    backgroundColor: '#FFF3E0',
+                  },
+                }}
+              >
+                Abrir Interfaz del Bot
+              </Button>
+
               <Stack direction="row" spacing={1.2}>
                 {isConectado && (
                   <Button

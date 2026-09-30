@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from "./supabase";
+import { supabase, isSupabaseConfigured } from "./supabase.js";
 
 const TABLE = "configuracion_telegram_dueno";
 const STORAGE_KEY_PREFIX = "coffeefaster_telegram_dueno_";

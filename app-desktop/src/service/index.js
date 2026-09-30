@@ -17,6 +17,7 @@ import dispositivos from './dispositivos';
 import logsValidacionQr from './logs_validacion_qr';
 import vistas from './vistas';
 import telegramDuenoService from './telegram_dueno';
+import botService from './botService';
 
 export {
   supabase,
@@ -41,6 +42,7 @@ export {
   logsValidacionQr,
   vistas,
   telegramDuenoService,
+  botService,
 };
 
 export default {
@@ -66,5 +68,6 @@ export default {
   logsValidacionQr,
   vistas,
   telegramDuenoService,
+  botService,
 };
 
