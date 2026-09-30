@@ -15,6 +15,7 @@ import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 
 import pedidosService from '../services/pedidosService';
 
@@ -66,6 +67,11 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
       id: 'inventario',
       label: 'Inventario',
       icon: <Inventory2OutlinedIcon fontSize="small" />,
+    },
+    {
+      id: 'bot',
+      label: 'Asistente Bot',
+      icon: <SmartToyOutlinedIcon fontSize="small" />,
     },
   ];
 

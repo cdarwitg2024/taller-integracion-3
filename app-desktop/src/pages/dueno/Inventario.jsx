@@ -43,6 +43,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import DownloadIcon from '@mui/icons-material/Download';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import TelegramIcon from '@mui/icons-material/Telegram';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
@@ -52,6 +53,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
 import SortIcon from '@mui/icons-material/Sort';
+import { useNavigate } from 'react-router-dom';
 
 import { productos as productosService } from '../../service/productos';
 import { alertasStock as alertasService } from '../../service/alertas_stock';
@@ -61,6 +63,7 @@ import TelegramConfigModal from '../../components/telegram/TelegramConfigModal';
 import ModificarStockDialog from '../../components/productos/ModificarStockDialog';
 
 function StockInventario({ currentUser }) {
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [alertas, setAlertas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -414,6 +417,29 @@ function StockInventario({ currentUser }) {
         <Stack direction="row" spacing={1.5}>
           <Button
             variant="outlined"
+            startIcon={<SmartToyOutlinedIcon sx={{ color: '#433225' }} />}
+            onClick={() => navigate('/dueno/bot')}
+            sx={{
+              borderColor: '#D7CCC8',
+              backgroundColor: '#FFFFFF',
+              color: '#4A3728',
+              borderRadius: '10px',
+              textTransform: 'none',
+              px: 2,
+              py: 1,
+              fontWeight: 700,
+              boxShadow: '0 1px 4px rgba(67, 50, 37, 0.05)',
+              '&:hover': {
+                borderColor: '#8D6E63',
+                backgroundColor: '#FAF7F5',
+              },
+            }}
+          >
+            Asistente Bot
+          </Button>
+
+          <Button
+            variant="outlined"
             startIcon={<TelegramIcon sx={{ color: telegramConfig?.telegram_chat_id ? '#2E7D32' : '#B45309' }} />}
             endIcon={telegramConfig?.telegram_chat_id ? <KeyboardArrowDownIcon /> : null}
             onClick={(e) => {
@@ -457,6 +483,23 @@ function StockInventario({ currentUser }) {
               },
             }}
           >
+            <MenuItem
+              onClick={() => {
+                setTelegramMenuAnchor(null);
+                navigate('/dueno/bot');
+              }}
+              sx={{ py: 1.2 }}
+            >
+              <ListItemIcon sx={{ color: '#C86237' }}>
+                <SmartToyOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText
+                primary="Abrir Interfaz del Bot"
+                secondary="Consola interactiva y consultas"
+                secondaryTypographyProps={{ fontSize: '0.72rem' }}
+              />
+            </MenuItem>
+
             <MenuItem
               onClick={() => {
                 setTelegramMenuAnchor(null);
