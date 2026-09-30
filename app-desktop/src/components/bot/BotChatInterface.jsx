@@ -7,16 +7,12 @@ import {
   Button,
   Chip,
   Stack,
-  Alert,
   CircularProgress,
-  Tooltip,
   Paper,
   Divider,
 } from '@mui/material';
 
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
-import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
-import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
 import WifiOutlinedIcon from '@mui/icons-material/WifiOutlined';
@@ -28,10 +24,10 @@ import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsAc
 import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
-import TelegramIcon from '@mui/icons-material/Telegram';
 import ScienceOutlinedIcon from '@mui/icons-material/ScienceOutlined';
 
 import { botService } from '../../service/botService';
+import { telegramDuenoService } from '../../service/telegram_dueno';
 
 const CONSULTAS_RAPIDAS = [
   {
@@ -100,25 +96,64 @@ const CONSULTAS_RAPIDAS = [
   },
 ];
 
-function BotChatInterface({ currentUser, onOpenConfigModal }) {
-  const [messages, setMessages] = useState(() => [
-    {
-      id: 1,
-      sender: 'bot',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      texto: `👋 <b>¡Hola ${currentUser?.nombre || 'Dueño'}!</b>\n\n` +
-        `Soy el <b>Asistente Virtual de CoffeeFaster</b>. Desde este panel puedes interactuar con el bot, ` +
-        `comprobar la salud de los servicios, supervisar existencias críticas y probar consultas operativas en tiempo real.\n\n` +
-        `💡 <i>Haz clic en los accesos rápidos superiores o escribe un comando abajo para comenzar.</i>`,
-      tipo: 'bienvenida',
-    },
-  ]);
-
+function BotChatInterface({ currentUser, serviceHealth, telegramConfig }) {
+  const [messages, setMessages] = useState([]);
   const [inputVal, setInputVal] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [serviceStatus, setServiceStatus] = useState(null);
+  const [serviceStatus, setServiceStatus] = useState(serviceHealth || null);
+  const [tgConfig, setTgConfig] = useState(telegramConfig ?? null);
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
-  const [connectionError, setConnectionError] = useState(null);
+
+  useEffect(() => {
+    if (serviceHealth !== undefined) {
+      setServiceStatus(serviceHealth);
+    }
+  }, [serviceHealth]);
+
+  useEffect(() => {
+    if (telegramConfig !== undefined) {
+      setTgConfig(telegramConfig);
+    }
+  }, [telegramConfig]);
+
+  useEffect(() => {
+    if (telegramConfig === undefined && currentUser?.id) {
+      telegramDuenoService.getConfiguracion(currentUser.id).then((res) => {
+        setTgConfig(res);
+      }).catch(() => {});
+    }
+  }, [telegramConfig, currentUser]);
+
+  const isTgLinked = Boolean(tgConfig?.telegram_chat_id);
+  const isServiceOnline = Boolean(serviceStatus?.ok);
+  // El bot solo se considera activo si el servicio responde Y el chat de Telegram está vinculado
+  const isConectado = isServiceOnline && isTgLinked;
+  const botBaseUrl = botService.getBaseUrl();
+
+  // Solo mostrar el mensaje de bienvenida del bot si el servicio está activo y funcionando
+  useEffect(() => {
+    if (isConectado) {
+      setMessages((prev) => {
+        if (prev.some((m) => m.tipo === 'bienvenida')) return prev;
+        return [
+          {
+            id: 'bienvenida',
+            sender: 'bot',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            texto: `👋 <b>¡Hola ${currentUser?.nombre || 'Dueño'}!</b>\n\n` +
+              `Soy el <b>Asistente Virtual de CoffeeFaster</b>. Desde este panel puedes interactuar con el bot, ` +
+              `comprobar la salud de los servicios, supervisar existencias críticas y probar consultas operativas en tiempo real.\n\n` +
+              `💡 <i>Haz clic en los accesos rápidos superiores o escribe un comando abajo para comenzar.</i>`,
+            tipo: 'bienvenida',
+          },
+          ...prev,
+        ];
+      });
+    } else {
+      // Si el bot se encuentra apagado o no responde, no debe mostrarse el mensaje de bienvenida
+      setMessages((prev) => prev.filter((m) => m.tipo !== 'bienvenida'));
+    }
+  }, [isConectado, currentUser]);
 
   const messagesEndRef = useRef(null);
 
@@ -136,24 +171,21 @@ function BotChatInterface({ currentUser, onOpenConfigModal }) {
     try {
       const res = await botService.checkHealth(3500);
       setServiceStatus(res);
-      if (!res.ok) {
-        setConnectionError(res.error || 'No se pudo conectar con el servicio del Bot.');
-      } else {
-        setConnectionError(null);
-      }
     } catch (err) {
       setServiceStatus({ ok: false, status: 'error', error: err.message, url: botService.getBaseUrl() });
-      setConnectionError(err.message || 'Error de conexión.');
     } finally {
       setIsCheckingHealth(false);
     }
   };
 
   useEffect(() => {
-    verificarConexion();
-  }, []);
+    if (serviceHealth === undefined) {
+      verificarConexion();
+    }
+  }, [serviceHealth]);
 
   const handleEnviarConsulta = async (cmdTexto) => {
+    if (!isConectado) return;
     const textoFinal = (cmdTexto || inputVal).trim();
     if (!textoFinal || isProcessing) return;
 
@@ -178,10 +210,8 @@ function BotChatInterface({ currentUser, onOpenConfigModal }) {
 
       // Si la respuesta indica un fallo de conexión con el servicio
       if (!resp.ok && resp.isConnectionError) {
-        setConnectionError(resp.texto || resp.error);
         setServiceStatus({ ok: false, status: 'disconnected', error: resp.error, url: botService.getBaseUrl() });
       } else if (resp.ok && resp.tipo === 'estado') {
-        setConnectionError(null);
         setServiceStatus({ ok: true, status: 'healthy', data: resp.serviceStatus, url: botService.getBaseUrl() });
       }
 
@@ -215,24 +245,11 @@ function BotChatInterface({ currentUser, onOpenConfigModal }) {
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleEnviarConsulta();
+      if (isConectado) {
+        handleEnviarConsulta();
+      }
     }
   };
-
-  const handleLimpiarChat = () => {
-    setMessages([
-      {
-        id: Date.now(),
-        sender: 'bot',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        texto: `🧹 <i>Historial de conversación reiniciado.</i>\n\nPuedes ejecutar nuevas consultas básicas o diagnósticos del bot.`,
-        tipo: 'info',
-      },
-    ]);
-  };
-
-  const isConectado = Boolean(serviceStatus?.ok);
-  const botBaseUrl = botService.getBaseUrl();
 
   return (
     <Box
@@ -293,7 +310,15 @@ function BotChatInterface({ currentUser, onOpenConfigModal }) {
                     <WifiOffOutlinedIcon sx={{ fontSize: '14px !important' }} />
                   )
                 }
-                label={isCheckingHealth ? 'Verificando...' : isConectado ? 'Servicio Conectado' : 'Servicio Desconectado'}
+                label={
+                  isCheckingHealth
+                    ? 'Verificando...'
+                    : isConectado
+                    ? 'Servicio Conectado'
+                    : !isTgLinked
+                    ? 'Bot Desvinculado (Apagado)'
+                    : 'Servicio Apagado'
+                }
                 size="small"
                 sx={{
                   backgroundColor: isConectado ? '#C8E6C9' : '#FFCDD2',
@@ -304,114 +329,11 @@ function BotChatInterface({ currentUser, onOpenConfigModal }) {
                 }}
               />
             </Stack>
-            <Typography variant="caption" sx={{ color: '#8C7A6F', display: 'block', mt: 0.2 }}>
-              Servicio FastAPI: <code>{botBaseUrl}</code> • Panel de administración y consultas del dueño
-            </Typography>
           </Box>
-        </Stack>
-
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Tooltip title="Comprobar conexión con el servicio del Bot">
-            <span>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={
-                  isCheckingHealth ? (
-                    <CircularProgress size={14} color="inherit" />
-                  ) : (
-                    <RefreshOutlinedIcon sx={{ fontSize: 16 }} />
-                  )
-                }
-                onClick={verificarConexion}
-                disabled={isCheckingHealth}
-                sx={{
-                  borderColor: '#E0D6CE',
-                  color: '#5C4535',
-                  borderRadius: '9px',
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  fontSize: '0.78rem',
-                  py: 0.6,
-                  px: 1.4,
-                  '&:hover': {
-                    backgroundColor: '#F3EBE6',
-                    borderColor: '#C8B6A6',
-                  },
-                }}
-              >
-                Comprobar Conexión
-              </Button>
-            </span>
-          </Tooltip>
-
-          {onOpenConfigModal && (
-            <Tooltip title="Configurar Telegram Chat ID y Alertas">
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<TelegramIcon sx={{ fontSize: 18 }} />}
-                onClick={onOpenConfigModal}
-                sx={{
-                  backgroundColor: '#0088CC',
-                  color: '#FFFFFF',
-                  borderRadius: '9px',
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  fontSize: '0.78rem',
-                  py: 0.6,
-                  px: 1.6,
-                  boxShadow: 'none',
-                  '&:hover': {
-                    backgroundColor: '#0077B5',
-                    boxShadow: 'none',
-                  },
-                }}
-              >
-                Configurar Bot
-              </Button>
-            </Tooltip>
-          )}
-
-          <Tooltip title="Limpiar historial">
-            <IconButton size="small" onClick={handleLimpiarChat} sx={{ color: '#8C7A6F' }}>
-              <DeleteOutlineOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
         </Stack>
       </Box>
 
-      {/* 2. ALERTA DE ERROR DE CONEXIÓN (SI CORRESPONDE) */}
-      {connectionError && (
-        <Alert
-          severity="error"
-          variant="filled"
-          action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={verificarConexion}
-              sx={{ fontWeight: 700, textTransform: 'none' }}
-            >
-              Reintentar
-            </Button>
-          }
-          sx={{
-            borderRadius: 0,
-            py: 0.8,
-            px: 3,
-            fontSize: '0.82rem',
-            fontWeight: 600,
-            backgroundColor: '#D32F2F',
-            alignItems: 'center',
-          }}
-        >
-          <b>Error de Conexión:</b> No se pudo conectar con el servicio del Bot en <code>{botBaseUrl}</code>.
-          Asegúrate de que el servidor FastAPI esté iniciado (<code>python bot_server.py</code>).
-        </Alert>
-      )}
-
-      {/* 3. BARRA DE ACCESOS RÁPIDOS (PROBAR CONSULTAS BÁSICAS) */}
+      {/* 2. BARRA DE ACCESOS RÁPIDOS (PROBAR CONSULTAS BÁSICAS) */}
       <Box
         sx={{
           px: 3,
@@ -443,11 +365,11 @@ function BotChatInterface({ currentUser, onOpenConfigModal }) {
               size="small"
               startIcon={c.icon}
               onClick={() => handleEnviarConsulta(c.comando)}
-              disabled={isProcessing}
+              disabled={!isConectado || isProcessing}
               sx={{
-                borderColor: c.color + '40',
-                backgroundColor: c.bg,
-                color: c.color,
+                borderColor: !isConectado ? '#E0E0E0' : c.color + '40',
+                backgroundColor: !isConectado ? '#F5F5F5' : c.bg,
+                color: !isConectado ? '#9E9E9E' : c.color,
                 borderRadius: '8px',
                 textTransform: 'none',
                 fontWeight: 700,
@@ -455,6 +377,12 @@ function BotChatInterface({ currentUser, onOpenConfigModal }) {
                 py: 0.4,
                 px: 1.2,
                 boxShadow: 'none',
+                '&.Mui-disabled': {
+                  backgroundColor: '#F5F5F5',
+                  borderColor: '#E0E0E0',
+                  color: '#BDBDBD',
+                  opacity: 0.7,
+                },
                 '&:hover': {
                   backgroundColor: c.bg,
                   borderColor: c.color,
@@ -666,19 +594,29 @@ function BotChatInterface({ currentUser, onOpenConfigModal }) {
           <TextField
             fullWidth
             size="small"
-            placeholder="Escribe un comando (/stock, /stock_bajo, /agotados, /alertas, /estado, /ayuda)..."
+            placeholder={
+              !isConectado
+                ? !isTgLinked
+                  ? 'El bot está desvinculado (apagado). Vincula tu Telegram para activarlo.'
+                  : 'El bot está apagado. Inicia el servicio para enviar consultas.'
+                : 'Escribe un comando (/stock, /stock_bajo, /agotados, /alertas, /estado, /ayuda)...'
+            }
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={isProcessing}
+            disabled={!isConectado || isProcessing}
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: '12px',
-                backgroundColor: '#FAF7F5',
+                backgroundColor: !isConectado ? '#F5F5F5' : '#FAF7F5',
                 fontSize: '0.88rem',
                 '& fieldset': { borderColor: '#E8E1DA' },
                 '&:hover fieldset': { borderColor: '#C8B2A1' },
                 '&.Mui-focused fieldset': { borderColor: '#C86237' },
+                '&.Mui-disabled': {
+                  backgroundColor: '#F5F5F5',
+                  color: '#9E9E9E',
+                },
               },
             }}
           />
@@ -686,7 +624,7 @@ function BotChatInterface({ currentUser, onOpenConfigModal }) {
           <Button
             variant="contained"
             onClick={() => handleEnviarConsulta()}
-            disabled={!inputVal.trim() || isProcessing}
+            disabled={!isConectado || !inputVal.trim() || isProcessing}
             startIcon={isProcessing ? <CircularProgress size={16} color="inherit" /> : <SendOutlinedIcon />}
             sx={{
               backgroundColor: '#C86237',
@@ -701,6 +639,10 @@ function BotChatInterface({ currentUser, onOpenConfigModal }) {
               '&:hover': {
                 backgroundColor: '#B2522B',
                 boxShadow: 'none',
+              },
+              '&.Mui-disabled': {
+                backgroundColor: '#E0D6CE',
+                color: '#A89A90',
               },
             }}
           >

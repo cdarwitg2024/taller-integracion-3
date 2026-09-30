@@ -23,24 +23,19 @@ import CloseIcon from '@mui/icons-material/Close';
 import TelegramIcon from '@mui/icons-material/Telegram';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';
-import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
-import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
-import { useNavigate } from 'react-router-dom';
 
 import { telegramDuenoService } from '../../service/telegram_dueno';
 
 function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
-  const navigate = useNavigate();
   const [chatId, setChatId] = useState('');
   const [showChatId, setShowChatId] = useState(false);
   const [notificacionesActivas, setNotificacionesActivas] = useState(true);
   const [configActual, setConfigActual] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
   const [confirmUnlinkOpen, setConfirmUnlinkOpen] = useState(false);
   const [feedback, setFeedback] = useState({ type: '', message: '' });
 
@@ -113,31 +108,6 @@ function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
     }
   };
 
-  const handleTest = async () => {
-    if (!configActual?.telegram_chat_id) return;
-    setTesting(true);
-    setFeedback({ type: '', message: '' });
-    try {
-      const res = await telegramDuenoService.enviarAlertaPrueba({
-        usuarioId: duenoId,
-        usuarioNombre: currentUser?.nombre || 'Carlos',
-        cafeteriaId: cafeteriaId,
-        telegramChatId: configActual.telegram_chat_id,
-      });
-      setFeedback({
-        type: 'success',
-        message: res.message || 'Alerta de prueba enviada a tu Telegram.',
-      });
-    } catch (err) {
-      setFeedback({
-        type: 'error',
-        message: 'No se pudo enviar la alerta de prueba. Verifica la conexión con el bot.',
-      });
-    } finally {
-      setTesting(false);
-    }
-  };
-
   const handleDesvincular = async () => {
     setSaving(true);
     setFeedback({ type: '', message: '' });
@@ -161,6 +131,15 @@ function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
   };
 
   const isConectado = Boolean(configActual?.telegram_chat_id);
+  const currentChatId = chatId.trim();
+  const savedChatId = String(configActual?.telegram_chat_id || '').trim();
+
+  // El botón guardar solo aparece al momento de agregar o editar el ID
+  const isEditingId = Boolean(configActual?.telegram_chat_id) && currentChatId !== savedChatId && currentChatId !== '';
+  const isEditingNotifications = Boolean(configActual?.telegram_chat_id) && notificacionesActivas !== (configActual.notificaciones_activas !== false);
+  const isAddingId = !configActual?.telegram_chat_id && currentChatId !== '';
+
+  const showSave = isAddingId || isEditingId || isEditingNotifications;
 
   return (
     <Dialog
@@ -494,77 +473,36 @@ function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
 
 
 
-            <Divider sx={{ borderColor: '#EFEAE6' }} />
-
-            {/* Acciones del Modal */}
-            <Stack direction="row" spacing={1.5} justifyContent="space-between" alignItems="center">
-              <Button
-                variant="text"
-                size="small"
-                startIcon={<SmartToyOutlinedIcon sx={{ fontSize: 18 }} />}
-                onClick={() => {
-                  onClose();
-                  navigate('/dueno/bot');
-                }}
-                sx={{
-                  color: '#C86237',
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  fontSize: '0.82rem',
-                  '&:hover': {
-                    backgroundColor: '#FFF3E0',
-                  },
-                }}
-              >
-                Abrir Interfaz del Bot
-              </Button>
-              <Stack direction="row" spacing={1.2}>
-                {isConectado && (
+            {/* Botón Guardar (Solo visible al agregar o editar el ID) */}
+            {showSave && (
+              <>
+                <Divider sx={{ borderColor: '#EFEAE6' }} />
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
                   <Button
-                    variant="outlined"
+                    variant="contained"
                     size="small"
-                    startIcon={<SendOutlinedIcon />}
-                    onClick={handleTest}
-                    disabled={testing || saving}
+                    onClick={handleSave}
+                    disabled={saving}
                     sx={{
-                      borderColor: '#C8B2A1',
-                      color: '#4A3728',
+                      backgroundColor: '#C86237',
+                      color: '#FFFFFF',
                       borderRadius: '10px',
                       textTransform: 'none',
-                      fontWeight: 600,
+                      fontWeight: 700,
+                      px: 2.5,
+                      py: 0.8,
+                      boxShadow: 'none',
                       '&:hover': {
-                        borderColor: '#4A3728',
-                        backgroundColor: '#FAF7F4',
+                        backgroundColor: '#B2522B',
+                        boxShadow: 'none',
                       },
                     }}
                   >
-                    {testing ? 'Enviando...' : 'Enviar Prueba'}
+                    {saving ? 'Guardando...' : (isConectado ? 'Guardar Cambios' : 'Guardar Vinculación')}
                   </Button>
-                )}
-
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={handleSave}
-                  disabled={saving}
-                  sx={{
-                    backgroundColor: '#C86237',
-                    color: '#FFFFFF',
-                    borderRadius: '10px',
-                    textTransform: 'none',
-                    fontWeight: 700,
-                    px: 2.5,
-                    boxShadow: 'none',
-                    '&:hover': {
-                      backgroundColor: '#B2522B',
-                      boxShadow: 'none',
-                    },
-                  }}
-                >
-                  {saving ? 'Guardando...' : (isConectado ? 'Guardar Cambios' : 'Guardar Vinculación')}
-                </Button>
-              </Stack>
-            </Stack>
+                </Box>
+              </>
+            )}
           </Stack>
         )}
       </DialogContent>
