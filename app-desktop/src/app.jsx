@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Box, CssBaseline } from '@mui/material';
 
@@ -21,6 +21,7 @@ import GestorPrecioStock from './pages/dueno/GestorPrecioStock';
 import LogsValidacion from './pages/dueno/LogsValidacion';
 import LoginEmpleado from './pages/empleado/LoginEmpleado';
 import Comandas from './pages/empleado/Comandas';
+import { supabase } from './service/supabase';
 
 const drawerWidth = 260;
 
@@ -145,48 +146,65 @@ function App() {
     return Boolean(localStorage.getItem('coffeefaster_authenticated') === 'true');
   });
 
+  // Sincronización de sesión con Supabase Auth en el arranque
+  useEffect(() => {
+    let isMounted = true;
+    const syncSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session && isMounted) {
+          // Si Supabase no tiene sesión activa válida, limpiar estado
+          const storedAuth = localStorage.getItem('coffeefaster_authenticated');
+          if (storedAuth === 'true') {
+            setIsAuthenticated(false);
+            setCurrentUser(null);
+            localStorage.removeItem('coffeefaster_authenticated');
+            localStorage.removeItem('coffeefaster_user');
+          }
+        }
+      } catch (err) {
+        console.warn('Error al verificar sesión activa en Supabase:', err);
+      }
+    };
+    syncSession();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const userRole = useMemo(() => {
     const rol = currentUser?.roles?.nombre || currentUser?.rol || 'dueño';
     return String(rol).toLowerCase();
   }, [currentUser]);
 
   const handleLoginDueno = (user) => {
-    const activeUser = user || {
-      id: 1,
-      nombre: 'Carlos',
-      apellido: 'Dueño',
-      email: 'dueno@coffeefaster.cl',
-      roles: { nombre: 'dueño' },
-      cafeteria_id: 1,
-    };
-    setCurrentUser(activeUser);
+    if (!user) return;
+    setCurrentUser(user);
     setIsAuthenticated(true);
     try {
       localStorage.setItem('coffeefaster_authenticated', 'true');
-      localStorage.setItem('coffeefaster_user', JSON.stringify(activeUser));
+      localStorage.setItem('coffeefaster_user', JSON.stringify(user));
     } catch {}
     navigate('/dueno/dashboard');
   };
 
   const handleLoginEmpleado = (user) => {
-    const activeUser = user || {
-      id: 2,
-      nombre: 'Juan',
-      apellido: 'Empleado',
-      email: 'empleado@coffeefaster.cl',
-      roles: { nombre: 'empleado' },
-      cafeteria_id: 1,
-    };
-    setCurrentUser(activeUser);
+    if (!user) return;
+    setCurrentUser(user);
     setIsAuthenticated(true);
     try {
       localStorage.setItem('coffeefaster_authenticated', 'true');
-      localStorage.setItem('coffeefaster_user', JSON.stringify(activeUser));
+      localStorage.setItem('coffeefaster_user', JSON.stringify(user));
     } catch {}
     navigate('/empleado/comandas');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Error cerrando sesión en Supabase:', err);
+    }
     setIsAuthenticated(false);
     setCurrentUser(null);
     try {
