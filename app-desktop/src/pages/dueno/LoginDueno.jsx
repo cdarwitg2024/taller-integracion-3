@@ -9,6 +9,10 @@ import {
   IconButton,
   InputAdornment,
   Link,
+  CircularProgress,
+  Alert,
+  AlertTitle,
+  Collapse,
 } from '@mui/material';
 
 import { useNavigate } from 'react-router-dom';
@@ -18,9 +22,81 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import { usuarios } from '../../service/usuarios';
 
+const formatAuthError = (msg) => {
+  if (!msg) return null;
+  const raw = String(msg).trim();
+  const lower = raw.toLowerCase();
+
+  if (
+    lower.includes('failed to fetch') ||
+    lower.includes('conexión') ||
+    lower.includes('conexion') ||
+    lower.includes('servidor') ||
+    lower.includes('network') ||
+    lower.includes('fetch') ||
+    lower.includes('timeout')
+  ) {
+    return {
+      title: 'Error de conexión con el servidor',
+      message: 'No fue posible establecer comunicación con el servidor. Comprueba tu conexión a internet o intenta nuevamente en unos momentos.',
+    };
+  }
+
+  if (
+    lower.includes('credenciales') ||
+    lower.includes('contraseña incorrecta') ||
+    lower.includes('invalid')
+  ) {
+    return {
+      title: 'Credenciales inválidas',
+      message: 'El correo electrónico o la contraseña ingresados no son correctos. Por favor verifica tus datos de acceso.',
+    };
+  }
+
+  if (lower.includes('desactivada') || lower.includes('inactiva') || lower.includes('suspendida')) {
+    return {
+      title: 'Cuenta inactiva',
+      message: 'Esta cuenta se encuentra desactivada. Por favor contacta al administrador del sistema.',
+    };
+  }
+
+  if (lower.includes('permisos') || lower.includes('denegado') || lower.includes('exclusiv')) {
+    return {
+      title: 'Acceso no autorizado',
+      message: raw,
+    };
+  }
+
+  if (lower.includes('demasiados intentos') || lower.includes('429') || lower.includes('rate limit')) {
+    return {
+      title: 'Demasiados intentos fallidos',
+      message: 'Por motivos de seguridad, el acceso se ha pausado temporalmente. Espera unos minutos antes de reintentar.',
+    };
+  }
+
+  if (lower.includes('verificado') || lower.includes('confirmado')) {
+    return {
+      title: 'Cuenta pendiente de verificación',
+      message: 'El correo electrónico aún no ha sido verificado. Por favor revisa tu bandeja de entrada.',
+    };
+  }
+
+  if (lower.includes('ingresa') || lower.includes('formato') || lower.includes('al menos 6')) {
+    return {
+      title: 'Información incompleta',
+      message: raw,
+    };
+  }
+
+  return {
+    title: 'Error al iniciar sesión',
+    message: raw || 'Ocurrió un problema inesperado. Por favor intenta de nuevo.',
+  };
+};
+
 function LoginDueno({ onLogin, onBack }) {
   const navigate = useNavigate();
-  const [email, setEmail] = useState(import.meta.env?.VITE_DEV_ADMIN_EMAIL || '');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -34,9 +110,32 @@ function LoginDueno({ onLogin, onBack }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setErrorMsg('Por favor ingresa tu correo electrónico.');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      setErrorMsg('Por favor ingresa un formato de correo electrónico válido.');
+      return;
+    }
+
+    if (!password) {
+      setErrorMsg('Por favor ingresa tu contraseña.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMsg('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await usuarios.loginDueno(email, password);
+      const res = await usuarios.loginDueno(cleanEmail, password);
       if (res.success) {
         if (onLogin) onLogin(res.user);
       } else {
@@ -44,7 +143,7 @@ function LoginDueno({ onLogin, onBack }) {
       }
     } catch (err) {
       console.error('Error en login de dueño:', err);
-      setErrorMsg('Error de conexión con el servicio de autenticación.');
+      setErrorMsg('Error de conexión con el servidor. Inténtalo nuevamente.');
     } finally {
       setLoading(false);
     }
@@ -204,8 +303,8 @@ function LoginDueno({ onLogin, onBack }) {
             fontWeight={800}
             sx={{
               color: '#3E2D22',
-              mb: 0.5,
               fontSize: '1.3rem',
+              mb: 0.5,
             }}
           >
             Iniciar Sesión
@@ -219,11 +318,11 @@ function LoginDueno({ onLogin, onBack }) {
               fontSize: '0.82rem',
             }}
           >
-            Ingresa tus credenciales de Dueño o Administrador
+            Ingresa tus credenciales para acceder como Dueño
           </Typography>
 
           <Stack spacing={2.5}>
-            {/* Campo Correo o Teléfono */}
+            {/* Campo Correo */}
             <Box>
               <Typography
                 variant="caption"
@@ -237,16 +336,17 @@ function LoginDueno({ onLogin, onBack }) {
                   mb: 0.8,
                 }}
               >
-                Correo o número de teléfono
+                Correo electrónico
               </Typography>
               <TextField
                 size="small"
                 fullWidth
-            placeholder="ejemplo@dominio.com"
-            autoCapitalize="none"
-            autoCorrect="off"
-            autoComplete="email"
-            value={email}
+                disabled={loading}
+                placeholder="ejemplo@coffeefaster.cl"
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="email"
+                value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 sx={{
                   '& .MuiOutlinedInput-root': {
@@ -286,12 +386,13 @@ function LoginDueno({ onLogin, onBack }) {
               <TextField
                 size="small"
                 fullWidth
-            type={showPassword ? 'text' : 'password'}
-            placeholder="••••••••"
-            autoCapitalize="none"
-            autoCorrect="off"
-            autoComplete="current-password"
-            value={password}
+                disabled={loading}
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="current-password"
+                value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 slotProps={{
                   input: {
@@ -301,6 +402,7 @@ function LoginDueno({ onLogin, onBack }) {
                           size="small"
                           onClick={() => setShowPassword(!showPassword)}
                           edge="end"
+                          disabled={loading}
                           sx={{ color: '#8C7A6F' }}
                         >
                           {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
@@ -344,21 +446,46 @@ function LoginDueno({ onLogin, onBack }) {
               </Link>
             </Box>
 
-            {errorMsg && (
-              <Typography
-                variant="caption"
-                sx={{
-                  color: '#D32F2F',
-                  fontWeight: 600,
-                  backgroundColor: '#FFEBEE',
-                  p: 1,
-                  borderRadius: '6px',
-                  textAlign: 'center',
-                }}
-              >
-                {errorMsg}
-              </Typography>
-            )}
+            <Collapse in={Boolean(errorMsg)}>
+              {errorMsg && (() => {
+                const err = formatAuthError(errorMsg);
+                return (
+                  <Alert
+                    severity="error"
+                    onClose={() => setErrorMsg('')}
+                    sx={{
+                      borderRadius: '12px',
+                      backgroundColor: '#FFF5F5',
+                      border: '1px solid #FED7D7',
+                      color: '#9B1C1C',
+                      py: 1.2,
+                      px: 2,
+                      boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)',
+                      '& .MuiAlert-icon': {
+                        color: '#E53E3E',
+                        mt: 0.25,
+                        fontSize: '1.35rem',
+                      },
+                      '& .MuiAlert-action': {
+                        pt: 0,
+                        alignItems: 'flex-start',
+                      },
+                      '& .MuiAlert-message': {
+                        width: '100%',
+                        overflow: 'hidden',
+                      },
+                    }}
+                  >
+                    <AlertTitle sx={{ fontWeight: 700, fontSize: '0.88rem', color: '#9B1C1C', mb: 0.3, lineHeight: 1.25 }}>
+                      {err.title}
+                    </AlertTitle>
+                    <Typography variant="body2" sx={{ fontSize: '0.81rem', color: '#742A2A', lineHeight: 1.45 }}>
+                      {err.message}
+                    </Typography>
+                  </Alert>
+                );
+              })()}
+            </Collapse>
 
             {/* Botón Ingresar al Panel */}
             <Button
@@ -382,7 +509,14 @@ function LoginDueno({ onLogin, onBack }) {
                 },
               }}
             >
-              {loading ? 'Verificando...' : 'Ingresar al Panel'}
+              {loading ? (
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <CircularProgress size={18} color="inherit" />
+                  <span>Iniciando sesión...</span>
+                </Stack>
+              ) : (
+                'Ingresar al Panel'
+              )}
             </Button>
           </Stack>
         </Box>
