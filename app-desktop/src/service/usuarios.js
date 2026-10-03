@@ -103,8 +103,9 @@ export const usuarios = {
       }
     }
 
-    // Fallback de desarrollo: activo ÚNICAMENTE en entorno de desarrollo (import.meta.env.DEV)
-    if (import.meta.env.DEV) {
+    // Fallback de desarrollo: solo sin Supabase configurado (ver nota en
+    // loginEmpleado: un atajo con Auth configurado rompe lo que usa JWT).
+    if (import.meta.env.DEV && !isSupabaseConfigured) {
       const devEmail = import.meta.env?.VITE_DEV_ADMIN_EMAIL || 'dueno@coffeefaster.cl';
       const devPass = import.meta.env?.VITE_DEV_ADMIN_PASSWORD || '123456';
 
@@ -160,8 +161,14 @@ export const usuarios = {
       }
     }
 
-    // Fallback de desarrollo: activo ÚNICAMENTE en entorno de desarrollo (import.meta.env.DEV)
-    if (import.meta.env.DEV) {
+    // Fallback de desarrollo: activo ÚNICAMENTE en entorno de desarrollo
+    // (import.meta.env.DEV) Y solo si Supabase no está configurado.
+    //
+    // Importante: si Supabase sí está configurado este atajo NO debe
+    // existir. Deja entrar al usuario sin sesión de Auth, y entonces
+    // todo lo que dependa de un JWT (los avisos de voz, entre otros)
+    // falla en silencio aunque la pantalla parezca correcta.
+    if (import.meta.env.DEV && !isSupabaseConfigured) {
       const devEmail = import.meta.env?.VITE_DEV_EMPLEADO_EMAIL || 'empleado@coffeefaster.cl';
       const devPass = import.meta.env?.VITE_DEV_EMPLEADO_PASSWORD || '123456';
 

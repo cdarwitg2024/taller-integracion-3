@@ -21,7 +21,10 @@ import { usuarios } from '../../service/usuarios';
 
 function LoginEmpleado({ onLogin, onBack }) {
   const navigate = useNavigate();
-  const [email, setEmail] = useState(import.meta.env?.VITE_DEV_EMPLEADO_EMAIL || 'empleado@coffeefaster.cl');
+  // Cuenta real de la cafetería. La de ejemplo anterior
+  // (empleado@coffeefaster.cl) no existe en Auth: entraba con un atajo
+  // de desarrollo que no crea sesión, y por eso la voz no funcionaba.
+  const [email, setEmail] = useState(import.meta.env?.VITE_DEV_EMPLEADO_EMAIL || 'empleado@coffeefast.cl');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -259,7 +262,7 @@ function LoginEmpleado({ onLogin, onBack }) {
               <TextField
                 size="small"
                 fullWidth
-                placeholder="empleado@coffeefaster.cl"
+                placeholder="empleado@coffeefast.cl"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 sx={{

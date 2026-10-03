@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prueba de aviso de voz del KDS (T16)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #F2ECE7; color: #4A3B32; margin: 0; padding: 24px; }
+    .card { background: #fff; border-radius: 12px; padding: 24px; max-width: 760px; margin: 0 auto 16px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    p.sub { margin: 0 0 20px; color: #78665B; font-size: 14px; }
+    .acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    button { font: inherit; font-weight: 800; border: 0; border-radius: 10px; padding: 14px 22px; color: #fff; cursor: pointer; text-transform: none; }
+    button:disabled { opacity: .55; cursor: progress; }
+    .play { background: #C86237; }
+    .ráfaga { background: #6D4C41; }
+    .limpiar { background: #8C7A6F; }
+    .estado { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+    .log { font-family: ui-monospace, monospace; font-size: 12px; background: #F7F4F1; border-radius: 8px; padding: 12px; max-height: 260px; overflow: auto; white-space: pre-wrap; }
+    ol { padding-left: 20px; font-size: 14px; line-height: 1.6; }
+    code { background: #F2ECE7; padding: 1px 5px; border-radius: 4px; }
+    .aviso { background: #FFF3E0; border-left: 4px solid #C86237; padding: 12px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>▶ Prueba del aviso de voz del KDS</h1>
+    <p class="sub">Crea pedidos reales en la base local para probar el aviso sonoro del KDS.</p>
+
+    <div class="aviso">
+      <strong>Antes de apretar:</strong> deja el KDS abierto en otra pestaña
+      (<code>http://localhost:5173/#/empleado/comandas</code>) con la sesión de
+      <code>empleado@coffeefast.cl</code> iniciada y el botón <strong>Activar voz</strong> apretado.
+      Esta página inserta el pedido: el KDS lo recibe por Realtime y lo anuncia.
+      <br>
+      <strong>Si no suena nada</strong>, el aviso lo dispara el navegador del KDS, no esta
+      página. El panel lo verifica: si al crear la comanda no aparece una fila en
+      <code>anuncios_pedido</code>, el problema está en la pestaña del KDS (pestaña cerrada,
+      sesión caída o voz sin activar), no acá.
+    </div>
+
+    <div class="acciones">
+      <button id="btnUna" class="play">▶ Crear 1 comanda</button>
+      <button id="btnRafa" class="ráfaga">⚡ Crear 3 de golpe</button>
+      <button id="btnLimpiar" class="limpiar">🧹 Borrar comandas de prueba</button>
+    </div>
+
+    <div class="estado" id="estado">Listo.</div>
+    <div class="log" id="log">— sin movimientos —</div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:16px">Qué se está probando</h2>
+    <ol>
+      <li>El <strong>INSERT</strong> en <code>pedidos</code> dispara el Realtime del KDS.</li>
+      <li>El KDS pinta la tarjeta y llama a <code>vozKds.anunciar()</code>.</li>
+      <li>La Edge Function <code>voz-pedido</code> valida la sesión y genera el audio (una sola vez por pedido).</li>
+      <li>Si ElevenLabs no responde, cae a la voz del sistema y el pedido <strong>igual</strong> aparece en pantalla.</li>
+    </ol>
+  </div>
+
+  <script>
+    // Guarda contra la forma más común de abrirla mal. Si el archivo se
+    // abre con doble clic (file://), el import de arriba no se puede
+    // resolver, el módulo nunca corre y los botones quedan muertos sin
+    // explicar por qué. Este script es clásico, no módulo, así que sí se
+    // ejecuta en ese caso y puede avisar.
+    (function () {
+      function apagar(titulo, detalle) {
+        var e = document.getElementById('estado');
+        if (e) { e.textContent = titulo; e.style.color = '#b45309'; }
+        var l = document.getElementById('log');
+        if (l) l.textContent = detalle;
+        Array.prototype.forEach.call(
+          document.querySelectorAll('.acciones button'),
+          function (b) { b.disabled = true; b.style.opacity = '0.4'; },
+        );
+      }
+
+      if (location.protocol === 'file:') {
+        apagar(
+          'Esta página necesita el servidor de desarrollo.',
+          'Abrila en http://localhost:5173/prueba-voz.html — con doble clic no funciona.',
+        );
+        return;
+      }
+
+      // Si a los 2,5 s el módulo no dejó su mensaje de arranque, es que
+      // falló al cargar.
+      setTimeout(function () {
+        var e = document.getElementById('estado');
+        if (e && e.textContent.trim() === 'Listo.') {
+          apagar('No se pudo cargar el módulo de la página.', 'Mirá la consola del navegador (F12) para ver el error.');
+        }
+      }, 2500);
+    })();
+  </script>
+
+  <script type="module">
+    import { supabase, isSupabaseConfigured } from '/src/service/supabase.js';
+
+    const CAFETERIA_ID = Number(import.meta.env.VITE_CAFETERIA_ID || 1);
+    const PREFIJO = 'PRUEBA';
+
+    const btnUna = document.getElementById('btnUna');
+    const btnRafa = document.getElementById('btnRafa');
+    const btnLimpiar = document.getElementById('btnLimpiar');
+    const estado = document.getElementById('estado');
+    const log = document.getElementById('log');
+
+    let lineas = [];
+
+    function escribir(txt) {
+      const hora = new Date().toLocaleTimeString('es-CL');
+      lineas.unshift(`[${hora}] ${txt}`);
+      lineas = lineas.slice(0, 60);
+      log.textContent = lineas.join('\n');
+    }
+
+    function decir(txt) {
+      estado.textContent = txt;
+    }
+
+    function codigoLibre() {
+      const n = Math.floor(Math.random() * 900) + 100;
+      return String(n);
+    }
+
+    async function productosReales() {
+      const { data, error } = await supabase
+        .from('productos')
+        .select('id, nombre, precio')
+        .eq('cafeteria_id', CAFETERIA_ID)
+        .eq('activo', true)
+        .limit(6);
+      if (error) throw error;
+      return data || [];
+    }
+
+    async function crearComanda() {
+      const productos = await productosReales();
+      if (!productos.length) throw new Error('No hay productos activos en la cafetería ' + CAFETERIA_ID);
+
+      const elegidos = [productos[0], productos[1] || productos[0], productos[2] || productos[0]]
+        .slice(0, 2 + Math.floor(Math.random() * 2));
+
+      const codigo = codigoLibre();
+      const token = `${PREFIJO}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
+      const { data: pedido, error: errPedido } = await supabase
+        .from('pedidos')
+        .insert({
+          cafeteria_id: CAFETERIA_ID,
+          codigo_retiro_diario: codigo,
+          estado: 'pendiente',
+          qr_token: token,
+          total: elegidos.reduce((s, p) => s + (Number(p.precio) || 0), 0),
+          hora_retiro: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        })
+        .select('id, codigo_retiro_diario, qr_token')
+        .single();
+
+      if (errPedido) throw errPedido;
+
+      const filas = elegidos.map(p => ({
+        pedido_id: pedido.id,
+        producto_id: p.id,
+        cantidad: 1 + Math.floor(Math.random() * 2),
+        precio_unitario: Number(p.precio) || 0,
+      }));
+
+      const { error: errDet } = await supabase.from('detalles_pedido').insert(filas);
+      if (errDet) throw errDet;
+
+      const resumen = elegidos.map(p => `${p.nombre}`).join(', ');
+      escribir(`Pedido #${pedido.id} (código ${codigo}) creado: ${resumen}`);
+      escribir(`   token: ${token}`);
+      return pedido;
+    }
+
+    async function acciones(fn, texto) {
+      btnUna.disabled = true;
+      btnRafa.disabled = true;
+      btnLimpiar.disabled = true;
+      decir(texto);
+      try {
+        await fn();
+      } catch (e) {
+        escribir(`ERROR: ${e.message || e}`);
+        decir(`Error: ${e.message || e}`);
+      } finally {
+        btnUna.disabled = false;
+        btnRafa.disabled = false;
+        btnLimpiar.disabled = false;
+      }
+    }
+
+    /**
+     * El aviso lo dispara el NAVEGADOR del KDS, no la base: si no hay una
+     * pestaña del KDS con la voz activada, el pedido se crea igual pero
+     * nadie lo anuncia y no hay forma de saber por qué. Esta espera revisa
+     * si apareció la fila en anuncios_pedido y, si no, dice qué revisar.
+     */
+    async function esperarAnuncio(pedido, segundos = 12) {
+      for (let i = 0; i < segundos; i++) {
+        const { data } = await supabase
+          .from('anuncios_pedido')
+          .select('estado, voz, detalle')
+          .eq('pedido_id', pedido.id)
+          .maybeSingle();
+
+        if (data) {
+          if (data.estado === 'emitido') {
+            escribir(`✓ El KDS lo anunció con la voz ${data.voz}.`);
+            decir(`Anunciado con la voz ${data.voz}.`);
+          } else {
+            escribir(`El KDS lo intentó pero quedó en ${data.estado}: ${data.detalle || '(sin detalle)'}`);
+            decir(`El KDS no lo pudo anunciar: ${data.detalle || data.estado}`);
+          }
+          return true;
+        }
+        await new Promise(r => setTimeout(r, 1000));
+      }
+
+      escribir('El pedido se creó pero NADIE lo anunció en 12 s.');
+      decir('El pedido existe pero no se anunció. Revisá el KDS.');
+      return false;
+    }
+
+    btnUna.addEventListener('click', () => acciones(async () => {
+      const p = await crearComanda();
+      decir(`Comanda ${p.codigo_retiro_diario} creada. Esperando a que el KDS la anuncie…`);
+      await esperarAnuncio(p);
+    }, 'Creando comanda…'));
+
+    // Varios pedidos en el mismo tick: el KDS debe agruparlos en un
+    // solo aviso ("Entraron 3 comandas nuevas") y no superponer audios.
+    btnRafa.addEventListener('click', () => acciones(async () => {
+      escribir('Creando 3 comandas seguidas…');
+      const ps = [];
+      ps.push(await crearComanda());
+      ps.push(await crearComanda());
+      ps.push(await crearComanda());
+      decir('3 comandas creadas. Esperando el aviso agrupado…');
+      await esperarAnuncio(ps[0]);
+    }, 'Creando 3 comandas…'));
+
+    btnLimpiar.addEventListener('click', () => acciones(async () => {
+      const { data, error } = await supabase
+        .from('pedidos')
+        .select('id')
+        .like('qr_token', `${PREFIJO}-%`);
+      if (error) throw error;
+      const ids = (data || []).map(p => p.id);
+      if (!ids.length) {
+        escribir('No hay comandas de prueba que borrar.');
+        return;
+      }
+      await supabase.from('detalles_pedido').delete().in('pedido_id', ids);
+      const { error: errDel } = await supabase.from('pedidos').delete().in('id', ids);
+      if (errDel) throw errDel;
+      escribir(`${ids.length} comanda(s) de prueba borradas.`);
+      decir('Comandas de prueba borradas.');
+    }, 'Borrando comandas de prueba…'));
+
+    if (!isSupabaseConfigured) {
+      decir('Supabase NO está configurado: revisa app-desktop/.env');
+    } else {
+      decir('Listo. Supabase configurado. Cafetería ' + CAFETERIA_ID + '.');
+    }
+  </script>
+</body>
+</html>

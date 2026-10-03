@@ -370,6 +370,11 @@ authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
 allow_dynamic_registration = false
 
+[functions.voz-pedido]
+# Exige un JWT válido (el gateway lo rechaza antes de llegar a la función).
+# La función además valida el token y el rol del usuario.
+verify_jwt = true
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

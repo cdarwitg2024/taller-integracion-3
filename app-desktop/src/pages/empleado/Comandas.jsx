@@ -12,6 +12,7 @@ import kdsRealtime, {
   ESTADO_CONECTADO,
   ESTADO_RECONECTANDO,
 } from '../../services/kdsRealtime';
+import vozKds, { VOZ_APAGADA, VOZ_SILENCIADA } from '../../services/vozKdsService';
 import { CAFETERIA_ID } from '../../services/backendApi';
 
 const COLUMNAS = [
@@ -26,8 +27,34 @@ function Comandas({ currentUser }) {
   const [escaneando, setEscaneando] = useState(false);
   const [loading, setLoading] = useState(true);
   const [conexion, setConexion] = useState(ESTADO_RECONECTANDO);
+  const [estadoVoz, setEstadoVoz] = useState(vozKds.obtenerEstado());
+  const [diagnosticoVoz, setDiagnosticoVoz] = useState(vozKds.obtenerDiagnostico());
+  const [avisoVoz, setAvisoVoz] = useState(null);
 
   const pedidosRealtime = useRef(new Map());
+
+  // T16 · Avisos de voz: la UI refleja el estado del servicio de voz.
+  useEffect(() => vozKds.suscribir((estado, diagnostico) => {
+    setEstadoVoz(estado);
+    setDiagnosticoVoz(diagnostico);
+  }), []);
+
+  // Con la voz apagada o silenciada se explica por qué; con la voz
+  // activa se muestra el motivo si ElevenLabs no respondió y hubo que
+  // usar la voz del sistema.
+  useEffect(() => {
+    // El diagnóstico del servicio manda: es más específico (por ejemplo
+    // "3 pedidos sin anunciar"). Si no hay ninguno, se explica el estado.
+    if (diagnosticoVoz) {
+      setAvisoVoz(diagnosticoVoz);
+    } else if (estadoVoz === VOZ_APAGADA) {
+      setAvisoVoz('Avisos de voz desactivados: los pedidos solo se ven en pantalla.');
+    } else if (estadoVoz === VOZ_SILENCIADA) {
+      setAvisoVoz('Avisos de voz silenciados.');
+    } else {
+      setAvisoVoz(null);
+    }
+  }, [estadoVoz, diagnosticoVoz]);
 
   const mergeConSnapshot = useCallback((snapshot) => {
     setPedidos(prev => {
@@ -36,7 +63,9 @@ function Comandas({ currentUser }) {
       pedidosRealtime.current.forEach((comanda, id) => {
         if (!idsSnap.has(id) && !prev.some(p => String(p.id) === id)) extra.push(comanda);
       });
-      return [...extra, ...snapshot];
+      // `getAll` viene ordenado de más nuevo a más viejo: sin volver a
+      // ordenar, el poll de respaldo.botaba el orden por hora en cada pasada.
+      return ordenarPedidos([...extra, ...snapshot]);
     });
   }, []);
 
@@ -50,6 +79,9 @@ function Comandas({ currentUser }) {
     const id = String(comanda.id);
     pedidosRealtime.current.set(id, comanda);
     setPedidos(prev => (prev.some(p => String(p.id) === id) ? prev : ordenarPedidos([comanda, ...prev])));
+    // T16 · aviso de voz: solo en ingresos reales por Realtime (nunca en
+    // la carga inicial de la pantalla ni en cambios de estado).
+    vozKds.anunciar(comanda);
   }, []);
 
   const actualizarPedidoRealTime = useCallback((comanda) => {
@@ -118,7 +150,14 @@ function Comandas({ currentUser }) {
       }}
     >
       <Box sx={{ mb: 2, flexShrink: 0 }}>
-        <KdsTopBar conexion={conexion} onEscanear={() => setEscaneando(true)} />
+        <KdsTopBar
+          conexion={conexion}
+          onEscanear={() => setEscaneando(true)}
+          estadoVoz={estadoVoz}
+          onActivarVoz={() => vozKds.activar()}
+          onSilenciarVoz={() => vozKds.silenciar()}
+          avisoVoz={avisoVoz}
+        />
       </Box>
 
       {loading ? (
