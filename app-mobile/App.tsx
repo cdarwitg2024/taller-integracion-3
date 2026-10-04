@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
+  Image,
   View,
   StyleSheet,
   Text,
@@ -22,6 +23,8 @@ import PedidosScreen from './src/screens/PedidosScreen';
 import WalletScreen from './src/screens/WalletScreen';
 import PerfilScreen from './src/screens/PerfilScreen';
 import { Cafeteria } from './src/types/cafeteria';
+
+const logo = require('./assets/icon.png');
 
 type Product = {
   id: number;
@@ -496,9 +499,12 @@ export default function App() {
         {/* Barra superior con opción de salir */}
         <SafeAreaView edges={['top']} style={styles.topBar}>
           <View style={styles.topBarBrand}>
-            <Text style={styles.topBarTitle}>
-              ☕ CoffeeFast{isGuest ? ' (Invitado)' : ''}
-            </Text>
+            <View style={styles.topBarLogoRow}>
+              <Image source={logo} style={styles.topBarLogo} accessibilityIgnoresInvertColors />
+              <Text style={styles.topBarTitle}>
+                CoffeeFast{isGuest ? ' (Invitado)' : ''}
+              </Text>
+            </View>
             <Text style={styles.topBarGreeting}>{userName}</Text>
           </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
@@ -634,6 +640,16 @@ const styles = StyleSheet.create({
   },
   topBarBrand: {
     flexDirection: 'column',
+  },
+  topBarLogoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  topBarLogo: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
   },
   topBarTitle: {
     fontSize: 17,

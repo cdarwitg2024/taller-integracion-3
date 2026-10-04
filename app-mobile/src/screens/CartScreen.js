@@ -9,6 +9,12 @@ import {
 } from 'react-native';
 
 import CartItem from '../components/CartItem';
+import Button from '../components/Button';
+import Card from '../components/Card';
+import Header from '../components/Header';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 const FRANJAS = [
   { id: '12:00-12:15', label: '12:00 - 12:15' },
@@ -59,25 +65,18 @@ const CartScreen = ({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={onBack}
-          disabled={!onBack}
-          accessibilityLabel="Volver a cafeterías"
-        >
-          <Text style={styles.backText}>‹</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>Tu Pedido</Text>
-
-        <View style={styles.headerIcon}>
-          <Text style={styles.headerIconText}>▣</Text>
-        </View>
-      </View>
+      <Header
+        title="Tu Pedido"
+        onBack={onBack}
+        rightElement={
+          <View style={styles.headerIcon}>
+            <Text style={styles.headerIconText}>▣</Text>
+          </View>
+        }
+      />
 
       {cart.length === 0 ? (
-        <View style={styles.emptyContainer}>
+        <Card padding="lg" style={styles.emptyCard}>
           <Text style={styles.emptyEmoji}>🛒</Text>
 
           <Text style={styles.emptyTitle}>
@@ -87,7 +86,7 @@ const CartScreen = ({
           <Text style={styles.emptyDescription}>
             Agrega productos desde el menú para comenzar tu pedido.
           </Text>
-        </View>
+        </Card>
       ) : (
         <FlatList
           data={cart}
@@ -96,7 +95,7 @@ const CartScreen = ({
           contentContainerStyle={styles.list}
           ListHeaderComponent={
             <>
-              <View style={styles.pickupCard}>
+              <Card padding="sm" style={styles.pickupCard}>
                 <View style={styles.locationCircle}>
                   <Text>●</Text>
                 </View>
@@ -116,7 +115,7 @@ const CartScreen = ({
                     • UCT
                   </Text>
                 </View>
-              </View>
+              </Card>
 
               {/* Sección de Selección de Franja Horaria */}
               <View style={styles.franjaSection}>
@@ -164,7 +163,7 @@ const CartScreen = ({
           )}
           ListFooterComponent={
             <>
-              <View style={styles.readyCard}>
+              <Card padding="md" style={styles.readyCard}>
                 <Text style={styles.bolt}>ϟ</Text>
 
                 <View>
@@ -176,9 +175,9 @@ const CartScreen = ({
                     Sin espera en caja al retirar
                   </Text>
                 </View>
-              </View>
+              </Card>
 
-              <View style={styles.summaryCard}>
+              <Card padding="lg" style={styles.summaryCard}>
                 <View style={styles.summaryRow}>
                   <Text style={styles.subtotalLabel}>
                     Subtotal ({totalProducts} productos)
@@ -206,22 +205,13 @@ const CartScreen = ({
                     ${total.toLocaleString('es-CL')}
                   </Text>
                 </View>
-              </View>
+              </Card>
 
-              <TouchableOpacity
-                style={[
-                  styles.paymentButton,
-                  (paying || !franjaSeleccionada) && styles.paymentButtonDisabled,
-                ]}
+              <Button
+                title={paying ? 'Procesando pago...' : 'Proceder al Pago'}
                 onPress={handleCheckout}
-                disabled={paying}
-              >
-                <Text style={styles.paymentText}>
-                  {paying ? 'Procesando pago...' : 'Proceder al Pago'}
-                </Text>
-
-                <Text style={styles.arrow}>→</Text>
-              </TouchableOpacity>
+                disabled={paying || !franjaSeleccionada}
+              />
 
               <Text style={styles.footerText}>
                 Retiro sin filas en Barra de {cafeName} • Campus UCT
@@ -237,58 +227,30 @@ const CartScreen = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F6F4',
-  },
-
-  header: {
-    height: 72,
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-  },
-
-  backButton: {
-    width: 35,
-    height: 35,
-    justifyContent: 'center',
-  },
-
-  backText: {
-    fontSize: 32,
-    color: '#4A332C',
-    lineHeight: 32,
-  },
-
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4A332C',
+    backgroundColor: colors.fondo,
   },
 
   headerIcon: {
     width: 35,
     height: 35,
     borderRadius: 8,
-    backgroundColor: '#4A332C',
+    backgroundColor: colors.cafeOscuro,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   headerIconText: {
-    color: '#FFFFFF',
+    color: colors.blanco,
   },
 
   list: {
-    padding: 16,
+    padding: spacing.lg,
     paddingBottom: 25,
   },
 
   pickupCard: {
-    backgroundColor: '#F2F0EE',
+    backgroundColor: colors.crema,
     borderRadius: 14,
-    padding: 10,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 14,
@@ -298,7 +260,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#FBE9E2',
+    backgroundColor: colors.rojoBg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -309,105 +271,101 @@ const styles = StyleSheet.create({
   },
 
   pickupLabel: {
-    fontSize: 8,
-    fontWeight: '700',
-    color: '#938681',
+    fontSize: typography.micro,
+    fontWeight: typography.pesoBold,
+    color: colors.textoSecundario,
     letterSpacing: 0.5,
   },
 
   pickupName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4A332C',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
     marginTop: 2,
   },
 
   campusBadge: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.blanco,
     borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
 
   campusText: {
     fontSize: 9,
-    fontWeight: '700',
-    color: '#554640',
+    fontWeight: typography.pesoBold,
+    color: colors.cafeMedio,
   },
 
   franjaSection: {
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
 
   franjaTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#4A332C',
-    marginBottom: 8,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+    marginBottom: spacing.sm,
   },
 
   franjaContainer: {
-    gap: 8,
+    gap: spacing.sm,
   },
 
   franjaChip: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: spacing.sm,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.blanco,
     borderWidth: 1,
-    borderColor: '#EEE9E6',
+    borderColor: colors.borde,
   },
 
   franjaChipSelected: {
-    backgroundColor: '#4A332C',
-    borderColor: '#4A332C',
+    backgroundColor: colors.cafeOscuro,
+    borderColor: colors.cafeOscuro,
   },
 
   franjaText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#4A332C',
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
   },
 
   franjaTextSelected: {
-    color: '#FFFFFF',
+    color: colors.blanco,
   },
 
   readyCard: {
-    backgroundColor: '#FCEAE3',
+    backgroundColor: colors.rojoBg,
     borderRadius: 14,
-    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: spacing.xs,
     marginBottom: 14,
   },
 
   bolt: {
     fontSize: 23,
     fontWeight: 'bold',
-    color: '#6D554C',
+    color: colors.cafeMedio,
     marginRight: 10,
   },
 
   readyTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4A332C',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
   },
 
   readyDescription: {
     fontSize: 9,
-    color: '#8D7D77',
+    color: colors.textoSecundario,
     marginTop: 2,
   },
 
   summaryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
 
   summaryRow: {
@@ -417,20 +375,20 @@ const styles = StyleSheet.create({
   },
 
   subtotalLabel: {
-    fontSize: 10,
-    color: '#958781',
+    fontSize: typography.etiqueta,
+    color: colors.textoSecundario,
   },
 
   subtotal: {
-    fontSize: 10,
-    color: '#4A332C',
-    fontWeight: '600',
+    fontSize: typography.etiqueta,
+    color: colors.cafeOscuro,
+    fontWeight: typography.pesoMedio,
   },
 
   divider: {
     height: 1,
-    backgroundColor: '#EEE9E6',
-    marginVertical: 12,
+    backgroundColor: colors.borde,
+    marginVertical: spacing.md,
   },
 
   totalRow: {
@@ -440,79 +398,55 @@ const styles = StyleSheet.create({
   },
 
   totalLabel: {
-    fontFamily: 'serif',
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#4A332C',
+    fontFamily: typography.familia,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
   },
 
   iva: {
-    fontSize: 8,
-    color: '#A09590',
+    fontSize: typography.micro,
+    color: colors.textoDeshabilitado,
     marginTop: 2,
   },
 
   total: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#4A332C',
-  },
-
-  paymentButton: {
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#4A332C',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  paymentButtonDisabled: {
-    backgroundColor: '#B5A89E',
-  },
-
-  paymentText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  arrow: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    marginLeft: 8,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.cafeOscuro,
   },
 
   footerText: {
     textAlign: 'center',
-    fontSize: 8,
-    color: '#9B908B',
-    marginTop: 8,
+    fontSize: typography.micro,
+    color: colors.textoSecundario,
+    marginTop: spacing.sm,
   },
 
-  emptyContainer: {
+  emptyCard: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
+    margin: spacing.lg,
   },
 
   emptyEmoji: {
     fontSize: 48,
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
 
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#4A332C',
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
   },
 
   emptyDescription: {
-    fontSize: 12,
-    color: '#958781',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
     lineHeight: 18,
   },
 });
