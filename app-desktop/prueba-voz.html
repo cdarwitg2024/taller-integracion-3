@@ -270,11 +270,27 @@
     async function esperarAnuncio(pedido, segundos = 40) {
       habilitarBotones();
       for (let i = 0; i < segundos; i++) {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('anuncios_pedido')
           .select('estado, voz, detalle')
           .eq('pedido_id', pedido.id)
           .maybeSingle();
+
+        // La clave anon no tiene SELECT sobre anuncios_pedido (RLS), así que
+        // esta consulta puede estar siempre denied. Antes el error se
+        // ignoraba y, como data venía en null, el panel concluded "nadie lo
+        // anunció" aunque el aviso hubiera sonado. Un permiso que falta no
+        // es lo mismo que un aviso que no salió: se dice cuál de los dos es.
+        if (error) {
+          escribir(
+            `No pude verificar el aviso: la consulta a anuncios_pedido fue rechazada (${error.message || error.code}).`,
+          );
+          escribir(
+            'Eso dice que el panel no tiene permiso para leer los anuncios, no que el KDS haya guardado callado.',
+          );
+          decir('No pude verificar el aviso por permisos. Revisá el log.');
+          return null;
+        }
 
         if (data) {
           if (data.estado === 'emitido') {
@@ -293,7 +309,7 @@
       // iba a sonar un par de segundos después: en ventana visible, o con
       // ElevenLabs lento, la cola tarda más. Ahora se espera bastante más y
       // el mensaje dice lo que se sabe en realidad, que es "todavía no".
-      escribir(`El pedido se creó y todavía no aparece en anuncios_pedido después de ${segundos} s.`);
+      escribir(`El pedido se creó y sigue sin aparecer en anuncios_pedido después de ${segundos} s.`);
       decir('Todavía no se anuncia. Revisá que el KDS tenga Voz on y la pestaña abierta.');
       return false;
     }
