@@ -72,17 +72,24 @@ export function normalizarPedido(fila) {
     ? fila.detalles_pedido
     : (Array.isArray(fila.DETALLES_PEDIDO)
       ? fila.DETALLES_PEDIDO
-      : (Array.isArray(fila.productos) ? fila.productos : []));
+      : (Array.isArray(fila.productos)
+        ? fila.productos
+        : (Array.isArray(fila.items)
+          ? fila.items
+          : (Array.isArray(fila.detalles) ? fila.detalles : []))));
 
   const productos = rawDetalles.map((d) => {
-    const p = d.productos || d.PRODUCTOS;
-    const nombre = (Array.isArray(p) ? p[0]?.nombre : p?.nombre) || d.nombre || 'Producto';
+    const p = d.productos || d.PRODUCTOS || {};
+    const nombre = (Array.isArray(p) ? p[0]?.nombre : p?.nombre) || d.nombre || d.producto_nombre || 'Producto';
+    const precio = Number(d.precio_unitario ?? d.precio ?? p?.precio ?? 0);
+    const cantidad = Number(d.cantidad) || 1;
     return {
-      id: d.id || d.producto_id,
+      id: d.id || d.producto_id || p?.id,
+      producto_id: d.producto_id || d.id || p?.id,
       nombre,
-      cantidad: Number(d.cantidad) || 1,
+      cantidad,
       detalle: d.nota || d.modificaciones || d.detalle || 'Sin modificaciones',
-      precio: Number(d.precio_unitario || d.precio || 0),
+      precio,
     };
   });
 
@@ -91,7 +98,7 @@ export function normalizarPedido(fila) {
     fila.cliente ||
     (userObj ? `${userObj.nombre || ''} ${userObj.apellido || ''}`.trim() : 'Cliente General');
 
-  const cafeObj = fila.cafeterias || fila.CAFETERIAS;
+  const cafeObj = fila.cafeterias || fila.CAFETERIAS || {};
   const ubicacionNombre = fila.ubicacion || (cafeObj?.nombre ? cafeObj.nombre : 'Campus Central');
 
   // La identidad del pedido es su `id` de base de datos, nunca el token: el
@@ -108,6 +115,7 @@ export function normalizarPedido(fila) {
     cliente: clienteNombre,
     ubicacion: ubicacionNombre,
     cafeteria_nombre: cafeObj?.nombre || 'Cafetería',
+    cafeterias: cafeObj,
     hora: fila.hora || (fila.creado_en ? formatearHora(fila.creado_en) : undefined),
     hora_retiro: formatearHora(fila.hora_retiro),
     creado_en: fila.creado_en,
@@ -184,7 +192,7 @@ export const pedidosService = {
     }
     let query = supabase
       .from('pedidos')
-      .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))');
+      .select('*, usuarios(nombre, apellido), cafeterias(*), detalles_pedido(*, productos(*))');
 
     if (cafeteriaId) query = query.eq('cafeteria_id', cafeteriaId);
 
@@ -203,7 +211,7 @@ export const pedidosService = {
     }
     const { data, error } = await supabase
       .from('pedidos')
-      .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))')
+      .select('*, usuarios(nombre, apellido), cafeterias(*), detalles_pedido(*, productos(*))')
       .eq('id', id)
       .single();
 
@@ -237,7 +245,7 @@ export const pedidosService = {
     if (/^\d+$/.test(cleanToken)) orClauses.push(`id.eq.${cleanToken}`);
     const { data, error } = await supabase
       .from('pedidos')
-      .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))')
+      .select('*, usuarios(nombre, apellido), cafeterias(*), detalles_pedido(*, productos(*))')
       .or(orClauses.join(','))
       .maybeSingle();
 
@@ -285,7 +293,7 @@ export const pedidosService = {
       .from('pedidos')
       .update(updates)
       .eq('id', id)
-      .select('*, usuarios(nombre, apellido), cafeterias(nombre), detalles_pedido(*, productos(nombre, precio))')
+      .select('*, usuarios(nombre, apellido), cafeterias(*), detalles_pedido(*, productos(*))')
       .single();
 
     if (error) {
