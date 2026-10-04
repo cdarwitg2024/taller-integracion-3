@@ -233,6 +233,19 @@
       return pedido;
     }
 
+    /**
+     * Devuelve los botones a su estado normal. Se llama en cuanto la
+     * comanda ya está creada: esperar a que el KDS la anuncie es pasivo,
+     * y dejar "Crear 1 comanda" apagado durante esa espera hace que el
+     * panel parezca colgado (y rompe cualquier prueba que quiera crear
+     * otra comanda mientras esta se anuncia).
+     */
+    function habilitarBotones() {
+      btnUna.disabled = false;
+      btnRafa.disabled = false;
+      btnLimpiar.disabled = false;
+    }
+
     async function acciones(fn, texto) {
       btnUna.disabled = true;
       btnRafa.disabled = true;
@@ -244,9 +257,7 @@
         escribir(`ERROR: ${e.message || e}`);
         decir(`Error: ${e.message || e}`);
       } finally {
-        btnUna.disabled = false;
-        btnRafa.disabled = false;
-        btnLimpiar.disabled = false;
+        habilitarBotones();
       }
     }
 
@@ -256,7 +267,8 @@
      * nadie lo anuncia y no hay forma de saber por qué. Esta espera revisa
      * si apareció la fila en anuncios_pedido y, si no, dice qué revisar.
      */
-    async function esperarAnuncio(pedido, segundos = 12) {
+    async function esperarAnuncio(pedido, segundos = 40) {
+      habilitarBotones();
       for (let i = 0; i < segundos; i++) {
         const { data } = await supabase
           .from('anuncios_pedido')
@@ -277,8 +289,12 @@
         await new Promise(r => setTimeout(r, 1000));
       }
 
-      escribir('El pedido se creó pero NADIE lo anunció en 12 s.');
-      decir('El pedido existe pero no se anunció. Revisá el KDS.');
+      // Con 12 s la respuesta era casi siempre "NADIE lo anunció" cuando el aviso sí
+      // iba a sonar un par de segundos después: en ventana visible, o con
+      // ElevenLabs lento, la cola tarda más. Ahora se espera bastante más y
+      // el mensaje dice lo que se sabe en realidad, que es "todavía no".
+      escribir(`El pedido se creó y todavía no aparece en anuncios_pedido después de ${segundos} s.`);
+      decir('Todavía no se anuncia. Revisá que el KDS tenga Voz on y la pestaña abierta.');
       return false;
     }
 
