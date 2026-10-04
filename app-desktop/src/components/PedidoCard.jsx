@@ -3,13 +3,17 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Divider,
   Stack,
+  Tooltip,
   Typography,
 } from '@mui/material';
 
+import PrintIcon from '@mui/icons-material/Print';
 import TimeAgo from './TimeAgo';
 import { parsearFecha, formatearHora } from '../utils/dateUtils';
+import impresionService from '../services/impresionService';
 
 const etiquetaPorEstado = {
   pendiente: { fondo: '#F2ECE7', texto: '#4A3B32', label: 'PENDIENTE' },
@@ -39,6 +43,7 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
   const etiqueta = etiquetaPorEstado[pedido.estado];
   const boton = botonPorEstado[pedido.estado];
   const horaRetiro = getHoraRetiro(pedido);
+  const estadoImpresion = impresionService.getEstadoImpresion(pedido.rawId ?? pedido.id);
 
   return (
     <Card
@@ -56,9 +61,41 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
     >
       <CardContent sx={{ p: 2.5 }}>
         <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between', alignItems: 'center'}}>
-          <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.5rem' }}>
-            #{pedido.id}
-          </Typography>
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.5rem' }}>
+                {pedido.codigo_pedido || `#${pedido.rawId ?? pedido.id}`}
+              </Typography>
+              {estadoImpresion.veces > 0 && (
+                <Tooltip
+                  title={
+                    estadoImpresion.veces > 1
+                      ? `Comanda reimpresa (${estadoImpresion.veces} veces)`
+                      : 'Comanda impresa para cocina'
+                  }
+                >
+                  <Chip
+                    size="small"
+                    icon={<PrintIcon sx={{ fontSize: '13px !important' }} />}
+                    label={estadoImpresion.veces > 1 ? `×${estadoImpresion.veces}` : 'Impresa'}
+                    sx={{
+                      height: 22,
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      backgroundColor: estadoImpresion.veces > 1 ? '#FFF3E0' : '#EFEBE9',
+                      color: estadoImpresion.veces > 1 ? '#E65100' : '#5D4037',
+                    }}
+                  />
+                </Tooltip>
+              )}
+            </Stack>
+            {/* El KDS muestra todas las cafeterias, asi que la comanda lleva el
+                nombre de donde salio para no entregar un pedido en la otra. */}
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              {pedido.cafeteria_nombre || pedido.ubicacion || ''}
+              {pedido.franja_retiro ? ` · Retiro ${pedido.franja_retiro}` : ''}
+            </Typography>
+          </Box>
           <TimeAgo pedido={pedido} sx={{ fontSize: '1.05rem' }} />
         </Stack>
 

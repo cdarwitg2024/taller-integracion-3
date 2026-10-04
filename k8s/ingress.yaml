@@ -1,0 +1,35 @@
+# Ingress del namespace student-cdarwitg.
+#
+# La anotacion external-dns.alpha.kubernetes.io/target es la que hace que el
+# host quede publicado en el DNS publico de la plataforma. Sin ella el Ingress
+# existe pero el dominio no resuelve.
+#
+# Solo se declara el path "/". La ValidatingAdmissionPolicy del cluster
+# (rke2-edu-ingress-hostname) rechaza cualquier otro path con
+# "Cada hostname debe usar exclusivamente el path /", y mientras el syncer no
+# pueda crear el Ingress en el cluster host tampoco se crea el registro DNS.
+#
+# El MS-Inventario NO se expone por aqui a proposito: es una dependencia
+# interna de Pedidos, que lo consume por HTTP con INVENTARIO_SERVICE_URL
+# (ver backend-node/src/clients/inventario.client.js). Dentro del cluster se
+# llega como http://inventario-service/api/inventario.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend-ingress
+  namespace: student-cdarwitg
+  annotations:
+    external-dns.alpha.kubernetes.io/target: proxy.inf.uct.cl
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api-cdarwitg.dev.censei.cl
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 80

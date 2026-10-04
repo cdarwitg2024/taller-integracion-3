@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   View,
   StyleSheet,
   Text,
@@ -11,6 +12,8 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from './src/lib/supabase';
 import { LoginScreen } from './src/screens/LoginScreen';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
 import { CafeteriaListScreen } from './src/screens/CafeteriaListScreen';
 import MenuScreen from './src/screens/MenuScreen';
@@ -36,9 +39,47 @@ type CartItem = {
   price: number;
   emoji: string;
   quantity: number;
+  /**
+   * De qué cafetería es el ítem. El pedido se hace contra UNA cafetería, así
+   * que esto es lo que impide mezclar productos de dos menus distintos.
+   */
+  cafeteriaId: number;
+  cafeteriaNombre: string;
 };
 
 type AppTab = 'cafeterias' | 'pedidos' | 'carrito' | 'wallet' | 'perfil';
+
+/**
+ * Respuesta de la RPC `procesar_pago` (ver database/fixes/crear_rpc_pagos.sql).
+ * Modela los dos caminos: aprobado y rechazado, con los campos que la app
+ * necesita mostrarle al usuario.
+ */
+type PagoResult = {
+  ok: boolean;
+  motivo?: string;
+  mensaje?: string;
+  saldo_disponible?: number;
+  total?: number;
+  faltante?: number;
+  pedido_id?: number;
+  saldo_restante?: number;
+  estado?: string;
+  pago_estado?: string;
+  franja_retiro?: string;
+  qr_token?: string;
+  codigo_retiro?: string;
+};
+
+type PedidoConfirmado = {
+  pedido_id: number;
+  total: number;
+  saldo_restante: number;
+  franja_retiro?: string;
+  estado?: string;
+  pago_estado?: string;
+  qr_token?: string;
+  codigo_retiro?: string;
+};
 
 const TABS: { key: AppTab; label: string }[] = [
   { key: 'cafeterias', label: 'Cafeterías' },
@@ -51,12 +92,18 @@ const TABS: { key: AppTab; label: string }[] = [
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
+  // FR-04: 'forgot' pide el código de recuperación,
+  // 'reset' define la contraseña nueva una vez validado el código
+  const [authScreen, setAuthScreen] = useState<
+    'login' | 'register' | 'forgot' | 'reset'
+  >('login');
   const [isGuest, setIsGuest] = useState(false);
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [paying, setPaying] = useState(false);
+  const [pedidoConfirmado, setPedidoConfirmado] = useState<PedidoConfirmado | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -66,13 +113,66 @@ export default function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // FR-04: Supabase emite PASSWORD_RECOVERY cuando el código del correo
+      // es canjeado. Ese momento es el único en que hay una sesión temporal
+      // válida para guardar la contraseña nueva. La pantalla de código
+      // también avisa por prop, así que esto es el respaldo por si el evento
+      // no llega.
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthScreen('reset');
+      }
+
       setSession(session);
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  /**
+   * Botón físico / gesto de atrás de Android.
+   *
+   * La navegación es manual con useState, así que sin esto el gesto cerraba la
+   * app desde cualquier nivel. Ahora se desciende un nivel por pulsación, en
+   * orden inverso al de entrada:
+   *
+   *   Login/Registro/Recuperación  →  Login
+   *   Menú de una cafetería         →  Listado de cafeterías
+   *   Pestaña secundaria            →  Cafeterías
+   *
+   * Los handlers de los hijos (por ejemplo el detalle de producto, que es un
+   * overlay dentro del menú) se registran después, y React Native invoca
+   * primero el último registrado, así que el nivel más profundo gana.
+   */
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      // 1. Desde una pantalla de autenticación, volver al login.
+      if (authScreen !== 'login') {
+        setAuthScreen('login');
+        return true;
+      }
+
+      // 2. Dentro del menú de una cafetería, volver al listado.
+      //    Ojo: solo si estamos en la pestaña de cafeterías. Si el usuario
+      //    está en carrito con una cafetería seleccionada, la conserva.
+      if (activeTab === 'cafeterias' && selectedCafeteria) {
+        setSelectedCafeteria(null);
+        return true;
+      }
+
+      // 3. Desde cualquier otra pestaña, volver a cafeterías.
+      if (activeTab !== 'cafeterias') {
+        setActiveTab('cafeterias');
+        return true;
+      }
+
+      // 4. Ya estamos en la raíz: dejamos que Android cierre la app.
+      return false;
+    });
+
+    return () => subscription.remove();
+  }, [authScreen, activeTab, selectedCafeteria]);
 
   const handleLogout = () => {
     Alert.alert(
@@ -104,16 +204,37 @@ export default function App() {
   };
 
   const handleTabPress = (tab: AppTab) => {
-    if (tab === 'cafeterias') {
-      setSelectedCafeteria(null);
+    // Tocar la pestaña que ya está activa no debe hacer nada. Antes, tocar
+    // "Cafeterías" estando dentro del menú de una cafetería ejecutaba el
+    // setSelectedCafeteria(null) y te expulsaba al listado sin avisar.
+    if (tab === activeTab) {
+      return;
     }
+
+    // Cambiar de pestaña NO borra la cafetería seleccionada: si el usuario
+    // estaba leyendo el menú de una cafetería, vuelve exactamente donde
+    // estaba. Para salir del menú está el botón "‹" y el gesto de atrás.
     setActiveTab(tab);
   };
 
-  const addToCart = (product: Product) => {
-    if (!product.available) {
-      return;
-    }
+  /**
+   * El carrito pertenece a UNA sola cafetería.
+   *
+   * La RPC `procesar_pago` recibe un único `p_cafeteria_id`, así que mezclar
+   * productos de dos cafeterías en el mismo pedido guardaba los precios bien
+   * pero mandaba los productos de A con el id de B. Antes esto pasaba en
+   * silencio: el usuario podía recorrer A, agregar, volver al listado, entrar
+   * a B y agregar, y el carrito aceptaba todo junto.
+   *
+   * Cada ítem guarda de qué cafetería es, y `cartCafeteria` define a cuál
+   * pertenece el pedido.
+   */
+  const cartCafeteria: { id: number; nombre: string } | null =
+    cart.length > 0 ? { id: cart[0].cafeteriaId, nombre: cart[0].cafeteriaNombre } : null;
+
+  /** Agrega un producto al carrito. Sin preguntas: la cafetería ya coincide. */
+  const agregarProducto = (product: Product, cafeteria: Cafeteria) => {
+    const cafeteriaId = Number(cafeteria.id);
 
     setCart((currentCart: CartItem[]) => {
       const existing = currentCart.find((item) => item.id === product.id);
@@ -131,9 +252,47 @@ export default function App() {
           price: product.price,
           emoji: product.emoji,
           quantity: 1,
+          cafeteriaId,
+          cafeteriaNombre: cafeteria.nombre,
         },
       ];
     });
+  };
+
+  const addToCart = (product: Product, cafeteria: Cafeteria) => {
+    if (!product.available) {
+      return;
+    }
+
+    const cafeteriaId = Number(cafeteria.id);
+
+    // El carrito ya tiene productos de otra cafetería: no se mezclan.
+    // La RPC recibe un único `p_cafeteria_id`, así que mezclar guardaba los
+    // precios bien pero mandaba los productos de A con el id de B. Antes pasaba
+    // en silencio. Ahora se le explica al usuario y se le da la opción de
+    // cambiar de cafetería.
+    if (cartCafeteria && cartCafeteria.id !== cafeteriaId) {
+      Alert.alert(
+        'Tu carrito es de otra cafetería',
+        `Ya tenés productos de ${cartCafeteria.nombre}. Un pedido es de una sola cafetería. Si querés pedir en ${cafeteria.nombre}, vaciá el carrito.`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Vaciar y agregar',
+            style: 'destructive',
+            // Se vacía y se agrega en el mismo toque: si solo se vaciaba, el
+            // botón prometía algo que no pasaba.
+            onPress: () => {
+              setCart([]);
+              agregarProducto(product, cafeteria);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    agregarProducto(product, cafeteria);
   };
 
   const increaseQuantity = (id: number) => {
@@ -160,74 +319,122 @@ export default function App() {
     );
   };
 
-  const handleCheckout = async () => {
-    const user = session?.user;
-    const cafeteriaId = selectedCafeteria?.id;
+  const handleCheckout = async (franjaRetiro?: { franja: string }) => {
+    // La cafetería del pedido sale de los propios ítems del carrito, no de
+    // `selectedCafeteria`. Antes se leía de ahí, y como perder la cafetería
+    // seleccionada era fácil (basta con cambiar de pestaña), el pago se
+    // bloqueaba con un "Carrito vacío" que mentía: el carrito tenía productos.
+    const cafeteriaId = cartCafeteria?.id;
 
-    if (!user) {
+    if (!session?.user) {
       Alert.alert('Inicia sesión', 'Necesitas una cuenta para confirmar tu pedido.');
       return;
     }
 
-    if (!cafeteriaId || cart.length === 0) {
+    if (cart.length === 0) {
       Alert.alert('Carrito vacío', 'Agrega productos desde el menú de una cafetería.');
       return;
     }
 
-    const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const pedidoPayload: Record<string, unknown> = {
-      cafeteria_id: cafeteriaId,
-      total,
-      estado: 'pendiente',
-    };
-
-    const insertPedido = async (
-      payload: Record<string, unknown>
-    ): Promise<{ id: number } | null> => {
-      const { data, error } = await supabase
-        .from('pedidos')
-        .insert(payload)
-        .select()
-        .single();
-      if (error) return null;
-      return data as { id: number };
-    };
-
-    let pedido = await insertPedido({ ...pedidoPayload, auth_user_id: user.id });
-    if (!pedido) {
-      pedido = await insertPedido(pedidoPayload);
-    }
-
-    if (!pedido) {
+    if (!cafeteriaId) {
       Alert.alert(
-        'No se pudo crear el pedido',
-        'Revisa tu conexión e inténtalo nuevamente.'
+        'No pudimos identificar la cafetería',
+        'Vuelve al menú y agrega los productos otra vez.'
       );
       return;
     }
 
-    const detalles = cart.map((item) => ({
-      pedido_id: pedido!.id,
-      producto_id: item.id,
-      cantidad: item.quantity,
-      precio_unitario: item.price,
-      subtotal: item.price * item.quantity,
-    }));
-
-    const { error: detalleError } = await supabase
-      .from('detalles_pedido')
-      .insert(detalles);
-
-    if (detalleError) {
-      Alert.alert('Aviso', 'El pedido se registró, pero el detalle no pudo guardarse.');
+    if (!franjaRetiro?.franja) {
+      Alert.alert('Selecciona una franja', 'Debes seleccionar un horario de retiro.');
       return;
     }
 
-    setCart([]);
-    Alert.alert(
-      'Pedido creado',
-      `Tu pedido fue registrado. Retira en ${selectedCafeteria?.nombre || 'la cafetería seleccionada'} cuando esté listo.`
-    );
+    // Guardia de reentrada: dos toques antes de que resuelva la RPC intentarian
+    // cobrar dos veces. El UNIQUE en pagos.pedido_id es la red real, pero esto
+    // evita siquiera intentarlo.
+    if (paying) return;
+    setPaying(true);
+
+    const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
+
+    try {
+      // El total NO se manda. La RPC lo recalcula desde productos.precio: si
+      // se enviara, un cliente podria pagar $100 un sándwich de $2.000.
+      const { data, error } = await supabase.rpc('procesar_pago', {
+        p_cafeteria_id: cafeteriaId,
+        p_items: cart.map((item) => ({
+          producto_id: item.id,
+          cantidad: item.quantity,
+        })),
+        p_franja_retiro: franjaRetiro.franja,
+      });
+
+      console.log('=== DEBUG procesar_pago ===');
+      console.log('Parámetros enviados:', {
+        p_cafeteria_id: cafeteriaId,
+        p_items: cart.map((item) => ({
+          producto_id: item.id,
+          cantidad: item.quantity,
+        })),
+        p_franja_retiro: franjaRetiro.franja,
+      });
+      console.log('Error:', error);
+      console.log('Data:', data);
+      console.log('=== FIN DEBUG ===');
+
+      if (error) {
+        Alert.alert(
+          'No se pudo procesar el pago',
+          'Revisa tu conexión e inténtalo nuevamente.'
+        );
+        return;
+      }
+
+      const resultado = data as PagoResult | null;
+
+      if (!resultado || !resultado.ok) {
+        if (resultado?.motivo === 'saldo_insuficiente') {
+          // Carrito intacto a proposito: el usuario recarga y reintenta.
+          Alert.alert(
+            'Saldo insuficiente en la Wallet',
+            `Tu pedido cuesta ${formatCLP(resultado.total ?? 0)} y te ` +
+              `faltan ${formatCLP(resultado.faltante ?? 0)}.\n` +
+              `Saldo actual: ${formatCLP(resultado.saldo_disponible ?? 0)}.`
+          );
+        } else {
+          Alert.alert(
+            'Pago rechazado',
+            resultado?.mensaje || 'No fue posible procesar el pago.'
+          );
+        }
+        return;
+      }
+
+      // Solo aca se vacia el carrito: el pago se aprobo y el saldo se debito.
+      setCart([]);
+      setPedidoConfirmado({
+        pedido_id: resultado.pedido_id ?? 0,
+        total: resultado.total ?? 0,
+        saldo_restante: resultado.saldo_restante ?? 0,
+        franja_retiro: resultado.franja_retiro,
+        estado: resultado.estado,
+        pago_estado: resultado.pago_estado,
+        qr_token: resultado.qr_token,
+        codigo_retiro: resultado.codigo_retiro,
+      });
+      Alert.alert(
+        'Pago aprobado',
+        `Tu pedido fue pagado con Wallet.\n` +
+          `Saldo restante: ${formatCLP(Number(resultado.saldo_restante ?? 0))}.`
+      );
+    } catch (e) {
+      Alert.alert(
+        'No se pudo procesar el pago',
+        'Ocurrio un error inesperado. Intentalo nuevamente.'
+      );
+    } finally {
+      setPaying(false);
+    }
   };
 
   const totalProducts = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -242,13 +449,33 @@ export default function App() {
 
   const isUserAllowed = Boolean((session && session.user) || isGuest);
 
-  if (!isUserAllowed) {
+  // FR-04: la pantalla de contraseña nueva se muestra ANTES del guard de
+  // sesión. Al validar el código el usuario YA tiene una sesión temporal, así
+  // que si esperáramos a `isUserAllowed` la pantalla quedaría inalcanzable.
+  const mostrarReset = authScreen === 'reset';
+
+  if (mostrarReset || !isUserAllowed) {
     return (
       <SafeAreaProvider>
         {authScreen === 'login' ? (
           <LoginScreen
             onNavigateToRegister={() => setAuthScreen('register')}
             onExploreAsGuest={() => setIsGuest(true)}
+            onForgotPassword={() => setAuthScreen('forgot')}
+          />
+        ) : authScreen === 'forgot' ? (
+          <ForgotPasswordScreen
+            onBack={() => setAuthScreen('login')}
+            onCodeVerified={() => setAuthScreen('reset')}
+          />
+        ) : mostrarReset ? (
+          <ResetPasswordScreen
+            onDone={async () => {
+              // Cerramos la sesión temporal de recuperación antes de volver
+              // al login, para que entre con la contraseña nueva.
+              await supabase.auth.signOut();
+              setAuthScreen('login');
+            }}
           />
         ) : (
           <RegisterScreen onNavigateToLogin={() => setAuthScreen('login')} />
@@ -299,21 +526,27 @@ export default function App() {
             <PedidosScreen
               userId={isGuest ? null : session?.user?.id}
               onGoToCafeterias={() => handleTabPress('cafeterias')}
+              pedidoConfirmado={pedidoConfirmado}
+              onConfirmacionVista={() => setPedidoConfirmado(null)}
             />
           )}
 
           {activeTab === 'carrito' && (
             <CartScreen
               cart={cart}
-              cafeteriaName={selectedCafeteria?.nombre || 'Cafetería Central'}
+              cafeteriaName={cartCafeteria?.nombre}
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
-              onRemove={removeFromCart}
-              onCheckout={handleCheckout}
-            />
+            onRemove={removeFromCart}
+            onCheckout={handleCheckout}
+            onBack={() => handleTabPress('cafeterias')}
+            paying={paying}
+          />
           )}
 
-          {activeTab === 'wallet' && <WalletScreen />}
+{activeTab === 'wallet' && (
+            <WalletScreen userId={isGuest ? null : session?.user?.id || null} />
+          )}
 
           {activeTab === 'perfil' && (
             <PerfilScreen
@@ -336,6 +569,18 @@ export default function App() {
                 onPress={() => handleTabPress(tab.key)}
               >
                 <View>
+                  <Text
+                    style={[
+                      styles.navIcon,
+                      isActive && styles.activeNavIcon,
+                    ]}
+                  >
+                    {tab.key === 'cafeterias' && '🏪'}
+                    {tab.key === 'pedidos' && '📋'}
+                    {tab.key === 'carrito' && '🛒'}
+                    {tab.key === 'wallet' && '💳'}
+                    {tab.key === 'perfil' && '👤'}
+                  </Text>
                   <Text
                     style={[
                       styles.navText,
@@ -429,6 +674,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  navIcon: {
+    fontSize: 20,
+  },
+  activeNavIcon: {
+    opacity: 1,
   },
   navText: {
     fontSize: 11,

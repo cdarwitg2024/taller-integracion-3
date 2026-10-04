@@ -46,6 +46,28 @@ function transicionesDe(estado) {
   return MATRIZ[canonico];
 }
 
+// Traduccion de las etiquetas legibles de la maquina de estados a los slugs
+// que guarda la columna `estado` en la base de datos. El movil y el KDS
+// comparan contra estos valores en minusculas; guardar la etiqueta dejaba los
+// pedidos pagados y entregados fuera de las columnas del KDS.
+const ESTADO_DB = {
+  Creado: 'pendiente',
+  Pagado: 'pendiente',
+  'En preparación': 'en_preparacion',
+  Listo: 'listo',
+  Retirado: 'entregado',
+  Cancelado: 'cancelado'
+};
+
+// Traduccion inversa: slug de la BD -> etiqueta publica de la API.
+const ETIQUETA_ESTADO = {
+  pendiente: 'Pagado',
+  en_preparacion: 'En preparación',
+  listo: 'Listo',
+  entregado: 'Retirado',
+  cancelado: 'Cancelado'
+};
+
 function esEstadoTerminal(estado) {
   const canonico = normalizarEstado(estado);
   return !!canonico && MATRIZ[canonico].length === 0;
@@ -55,6 +77,8 @@ module.exports = {
   ESTADOS,
   MATRIZ,
   ESTADO_INICIAL,
+  ESTADO_DB,
+  ETIQUETA_ESTADO,
   normalizarEstado,
   puedeTransicionar,
   transicionesDe,

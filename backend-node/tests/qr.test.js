@@ -62,9 +62,11 @@ describe('FR-22 - Generación de QR dinámico', () => {
     expect(qr2.status).toBe(200);
     expect(qr1.body.data.qr_token).not.toBe(qr2.body.data.qr_token);
 
-    // El formato corresponde a un token UUID no predecible
+    // Formato `CF-` + 20 caracteres del alfabeto sin I, L, O ni U: es el
+    // mismo que genera la RPC `procesar_pago`, para que un pedido creado por
+    // el movil y otro creado por el API sean indistinguibles.
     expect(qr1.body.data.qr_token).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      /^CF-[0-9A-HJ-KM-NP-TV-Z]{20}$/
     );
   });
 

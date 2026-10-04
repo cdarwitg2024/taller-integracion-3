@@ -108,8 +108,11 @@ function Comandas({ currentUser }) {
   }, [agregarComandaRealTime, actualizarPedidoRealTime]);
 
   useEffect(() => {
+    // Sin `cafeteriaId`: el KDS muestra los pedidos de todas las cafeterias, cada
+    // uno con el nombre de la suya en la tarjeta. Filtrar aqui hacia que un
+    // pedido pagado no apareciera hasta recargar a mano.
     const poll = setInterval(() => {
-      pedidosService.getAll({ cafeteriaId: CAFETERIA_ID }).then(mergeConSnapshot);
+      pedidosService.getAll().then(mergeConSnapshot);
     }, 10000);
     return () => clearInterval(poll);
   }, [mergeConSnapshot]);

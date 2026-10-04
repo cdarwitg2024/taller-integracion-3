@@ -3,7 +3,13 @@ import { createClient } from '@supabase/supabase-js';
 // Lectura estricta y segura desde variables de entorno (.env)
 // Vite expone al frontend únicamente las variables con prefijo VITE_
 const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || '';
+// El .env centralizado declara la clave con el naming nuevo de Supabase
+// (VITE_SUPABASE_PUBLISHABLE_KEY). Se aceptan ambos nombres, igual que
+// backend-node/src/config/supabase.js, para no romper si se renombra.
+const supabaseAnonKey =
+  import.meta.env?.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  '';
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl &&

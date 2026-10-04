@@ -1,60 +1,36 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
   View,
-  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   Image,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 
 interface Cafeteria {
-  id: string;
+  /**
+   * En la base `cafeterias.id` es un bigint. Antes este tipo decía `string` y
+   * el catálogo de demostración usaba ids de texto ('mock-1'), que al pasarse
+   * a la consulta del menú noaban contra la columna numérica.
+   */
+  id: number;
   nombre: string;
-  ubicacion: string;
-  demora?: string;
-  rating?: string;
+  descripcion?: string;
+  hora_apertura?: string;
+  hora_cierre?: string;
   imagen_url?: string;
+  /** Minutos de preparación base. Es el dato real de demora en la base. */
+  tiempo_base_min?: number;
 }
 
-const FALLBACK_CAFETERIAS: Cafeteria[] = [
-  {
-    id: 'mock-1',
-    nombre: 'Cafetería Central',
-    ubicacion: 'Edificio de Ingeniería • Campus Central',
-    demora: '1 - 3m',
-    rating: '4.5/5.0',
-    imagen_url: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500',
-  },
-  {
-    id: 'mock-2',
-    nombre: 'Cafetería Biblioteca',
-    ubicacion: 'Biblioteca General • Campus Central',
-    demora: '2 - 4m',
-    rating: '4.7/5.0',
-    imagen_url: 'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=500',
-  },
-  {
-    id: 'mock-3',
-    nombre: 'Cafetería Medicina',
-    ubicacion: 'Facultad de Medicina',
-    demora: '3 - 5m',
-    rating: '4.2/5.0',
-    imagen_url: 'https://images.unsplash.com/photo-1498804103079-a6351b050096?w=500',
-  },
-  {
-    id: 'mock-4',
-    nombre: 'Cafetería Economía',
-    ubicacion: 'Edificio de Economía',
-    demora: '1 - 2m',
-    rating: '4.6/5.0',
-    imagen_url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=500',
-  },
-];
+/** Imagen de relleno cuando la cafetería no tiene foto o la URL está caída. */
+const IMAGEN_DEFAULT =
+  'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500';
 
 export const CafeteriaListScreen = ({
   serverUserName,
@@ -65,49 +41,98 @@ export const CafeteriaListScreen = ({
 }) => {
   const [cafeterias, setCafeterias] = useState<Cafeteria[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  /** Ids cuya imagen falló, para no reintentar la misma URL rota. */
+  const [imagenesCaidas, setImagenesCaidas] = useState<Record<number, boolean>>({});
 
-  const fetchCafeterias = async () => {
-    setLoading(true);
+  /**
+   * Traduce el error de Supabase a un mensaje que el usuario pueda entender.
+   * No mostramos el texto crudo porque puede ser un código de Postgres.
+   */
+  const mensajeDeError = (err: unknown): string => {
+    const texto = err instanceof Error ? err.message : String(err ?? '');
+
+    if (/fetch|network|timeout|ENOTFOUND|ECONN/i.test(texto)) {
+      return 'No pudimos conectarnos con el servidor. Revisa tu conexión a internet.';
+    }
+    if (/timeout/i.test(texto)) {
+      return 'El servidor tardó demasiado en responder. Intenta de nuevo.';
+    }
+    if (/JWT|auth|RLS|row-level|permission/i.test(texto)) {
+      return 'Tu sesión no tiene permiso para ver el catálogo. Cierra sesión e intenta otra vez.';
+    }
+    return 'No pudimos cargar las cafeterías. Intenta de nuevo en un momento.';
+  };
+
+  const fetchCafeterias = useCallback(async (esRefresh = false) => {
+    if (esRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setErrorMessage(null);
+
     try {
       const { data, error } = await supabase
         .from('cafeterias')
         .select('*')
         .eq('activa', true);
-if (error) throw error;
-        // Si no hay cafeterías registradas o no se pueden leer (ej. política RLS),
-        // se muestra el catálogo de demostración
-        setCafeterias(data && data.length > 0 ? data : FALLBACK_CAFETERIAS);
-      } catch (err) {
-        console.warn('No se pudieron cargar las cafeterías, usando datos de demostración:', (err as Error).message);
-        setCafeterias(FALLBACK_CAFETERIAS);
-      } finally {
+
+      if (error) throw error;
+
+      setCafeterias((data as Cafeteria[]) ?? []);
+    } catch (err) {
+      // No inventamos datos: mostrar cafeterías falsas hacía que el usuario
+      // tocara una cafetería que no existe y el menú nunca cargaba.
+      setCafeterias([]);
+      setErrorMessage(mensajeDeError(err));
+    } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchCafeterias();
-  }, []);
+  }, [fetchCafeterias]);
 
   const renderCafeteriaCard = ({ item }: { item: Cafeteria }) => (
     <View style={styles.card}>
-      <Image
-        source={{
-          uri: item.imagen_url || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500',
-        }}
-        style={styles.cardImage}
-      />
+      {imagenesCaidas[item.id] || !item.imagen_url ? (
+        <View style={[styles.cardImage, styles.cardImageFallback]}>
+          <Text style={styles.cardImageFallbackIcon}>☕</Text>
+        </View>
+      ) : (
+        <Image
+          source={{ uri: item.imagen_url }}
+          style={styles.cardImage}
+          // Una URL caída dejaba un hueco gris sin explicación.
+          onError={() => setImagenesCaidas((prev) => ({ ...prev, [item.id]: true }))}
+        />
+      )}
       <View style={styles.cardContent}>
         <Text style={styles.cardTitle}>{item.nombre}</Text>
-        <Text style={styles.cardSubtitle}>{item.ubicacion}</Text>
-        <Text style={[styles.cardDelay, getDelayStyle(item.demora)]}>
-          {item.demora || 'Demora de 1 - 3m'}
+        <Text style={styles.cardSubtitle} numberOfLines={2}>
+          {item.descripcion || 'Sin descripción'}
         </Text>
-        <Text style={styles.cardRating}>{item.rating || '4.5/5.0'}</Text>
+        {/*
+          Antes la tarjeta imprimía "Demora de 1 - 3m" y "4.5/5.0" fijos.
+          Ninguna de las dos columnas existe en la tabla `cafeterias`, así que
+          eran datos inventados. Ahora sale de `tiempo_base_min` y
+          `hora_cierre`, que sí están.
+        */}
+        <Text style={[styles.cardDelay, getDelayStyle(item.tiempo_base_min)]}>
+          {formatearDemora(item.tiempo_base_min)}
+        </Text>
+        <Text style={styles.cardRating}>
+          {item.hora_cierre ? `Cierra ${recortarHora(item.hora_cierre)}` : 'Sin horario'}
+        </Text>
       </View>
       <TouchableOpacity
         style={styles.menuButton}
         onPress={() => onSelectCafeteria?.(item)}
+        accessibilityLabel={`Ver el menú de ${item.nombre}`}
       >
         <Text style={styles.menuButtonText}>Ver Menu</Text>
       </TouchableOpacity>
@@ -125,7 +150,18 @@ if (error) throw error;
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchCafeterias(true)}
+            tintColor="#4A2E2B"
+            colors={['#4A2E2B']}
+          />
+        }
+      >
         {/* Banner Informativo Superior */}
         <View style={styles.infoBanner}>
           <Text style={styles.infoBannerText}>
@@ -135,14 +171,39 @@ if (error) throw error;
 
         {/* Lista de Cafeterías */}
         {loading ? (
-          <ActivityIndicator size="large" color="#4A2E2B" style={{ marginTop: 40 }} />
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="large" color="#4A2E2B" />
+            <Text style={styles.loadingText}>Cargando cafeterías…</Text>
+          </View>
+        ) : errorMessage ? (
+          <View style={styles.errorState}>
+            <Text style={styles.errorStateIcon}>📡</Text>
+            <Text style={styles.errorStateTitle}>Sin conexión con el servidor</Text>
+            <Text style={styles.errorStateText}>{errorMessage}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => fetchCafeterias()}
+              activeOpacity={0.85}
+              accessibilityLabel="Reintentar la carga de cafeterías"
+            >
+              <Text style={styles.retryButtonText}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
         ) : cafeterias.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateIcon}>☕</Text>
             <Text style={styles.emptyStateTitle}>Aún no hay cafeterías disponibles</Text>
             <Text style={styles.emptyStateText}>
-              Por ahora no hay cafeterías activas. Vuelve más tarde para ver el menú del campus.
+              No hay cafeterías activas registradas en este momento. Vuelve más tarde para ver
+              el menú del campus.
             </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => fetchCafeterias()}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.retryButtonText}>Actualizar</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.listContainer}>
@@ -166,11 +227,25 @@ if (error) throw error;
   );
 };
 
-const getDelayStyle = (demora?: string) => {
-  if (!demora) return { color: '#B58A29' };
-  if (demora.includes('0 - 1') || demora.includes('1 - 2')) return { color: '#B58A29' };
-  if (demora.includes('7 - 10')) return { color: '#A92A2A' };
-  return { color: '#5B8C51' };
+/**
+ * `tiempo_base_min` viene de la base. Si no está, no inventamos un rango:
+ * mostramos que no hay dato.
+ */
+const formatearDemora = (minutos?: number) => {
+  if (typeof minutos !== 'number' || Number.isNaN(minutos)) {
+    return 'Sin tiempo estimado';
+  }
+  return `Listo en ~${minutos} min`;
+};
+
+/** Postgres devuelve la hora como 'HH:MM:SS'. Nos interesa HH:MM. */
+const recortarHora = (hora: string) => hora.slice(0, 5);
+
+const getDelayStyle = (minutos?: number) => {
+  if (typeof minutos !== 'number' || Number.isNaN(minutos)) return { color: '#8C7A70' };
+  if (minutos <= 5) return { color: '#5B8C51' };
+  if (minutos <= 15) return { color: '#B58A29' };
+  return { color: '#A92A2A' };
 };
 
 const styles = StyleSheet.create({
@@ -238,6 +313,14 @@ const styles = StyleSheet.create({
     height: 90,
     borderRadius: 20,
     backgroundColor: '#EAEAEA',
+  },
+  cardImageFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5ECE5',
+  },
+  cardImageFallbackIcon: {
+    fontSize: 32,
   },
   cardContent: {
     flex: 1,
@@ -314,5 +397,55 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     marginTop: 8,
+  },
+  loadingState: {
+    marginTop: 40,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 13,
+    color: '#8C7A70',
+    fontWeight: '600',
+  },
+  errorState: {
+    marginTop: 40,
+    marginHorizontal: 20,
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    backgroundColor: '#FCEEEE',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#F2D4D4',
+  },
+  errorStateIcon: {
+    fontSize: 40,
+    marginBottom: 12,
+  },
+  errorStateTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#8A2F2F',
+    textAlign: 'center',
+  },
+  errorStateText: {
+    fontSize: 12,
+    color: '#7A4A4A',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  retryButton: {
+    marginTop: 20,
+    backgroundColor: '#4A2E2B',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 16,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

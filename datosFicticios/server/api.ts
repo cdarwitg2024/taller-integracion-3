@@ -212,3 +212,53 @@ apiApp.post('/api/reponer-producto', async (req: Request, res: Response) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// 10. Descargar documento de datos simulados desde el servidor (CSV o JSON)
+apiApp.post('/api/exportar-simulacion', async (req: Request, res: Response) => {
+  try {
+    const { cafeteria_id, formato = 'csv', pedidos = [] } = req.body;
+    const cafeteriaId = parseInt(cafeteria_id, 10) || 1;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+
+    if (formato === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="datos_simulados_${cafeteriaId}_${timestamp}.json"`);
+      return res.json({
+        cafeteria_id: cafeteriaId,
+        fecha_exportacion: new Date().toISOString(),
+        total_pedidos: pedidos.length,
+        pedidos,
+      });
+    }
+
+    // Por defecto exportar CSV compatible con Excel
+    const lineas: string[] = [
+      '\uFEFFID Pedido;Codigo Retiro;Fecha Creacion;Cliente;Items Comprados;Total Pedido CLP;Metodo de Pago;Estado Final',
+    ];
+
+    for (const ped of pedidos) {
+      const itemsStr = ped.items && Array.isArray(ped.items)
+        ? ped.items.map((i: any) => `${i.cantidad}x ${i.nombre}`).join(' + ')
+        : '1x Compra';
+
+      lineas.push([
+        ped.id,
+        `"${ped.codigo_retiro_diario || ''}"`,
+        `"${ped.creado_en || ''}"`,
+        `"${(ped.cliente || ped.usuario_nombre || 'Estudiante').replace(/"/g, '""')}"`,
+        `"${itemsStr.replace(/"/g, '""')}"`,
+        Number(ped.total) || 0,
+        `"${(ped.metodo_pago || 'Webpay').replace(/"/g, '""')}"`,
+        `"${(ped.estado || 'pendiente').toUpperCase()}"`,
+      ].join(';'));
+    }
+
+    const csvContent = lineas.join('\r\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="reporte_simulacion_${cafeteriaId}_${timestamp}.csv"`);
+    res.send(csvContent);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+

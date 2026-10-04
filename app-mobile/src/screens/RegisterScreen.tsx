@@ -8,9 +8,12 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+
+const logo = require('../../assets/icon.png');
 
 interface RegisterScreenProps {
   onNavigateToLogin?: () => void;
@@ -79,7 +82,7 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
             first_name: firstName,
             last_name: lastName,
             full_name: nombreCompleto.trim(),
-            role: 'student',
+            rol: 'estudiante',
           },
         },
       });
@@ -126,16 +129,14 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        
+
         {/* Encabezado Superior / Brand */}
         <View style={styles.topHeader}>
           <TouchableOpacity style={styles.backButton} onPress={onNavigateToLogin}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
           <View style={styles.brandContainer}>
-            <View style={styles.logoBadge}>
-              <Text style={styles.logoIcon}>☕</Text>
-            </View>
+            <Image source={logo} style={styles.logoBadge} accessibilityIgnoresInvertColors />
             <Text style={styles.brandName}>CoffeeFast</Text>
           </View>
         </View>
@@ -143,7 +144,6 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
         {/* Badge Institucional */}
         <View style={styles.badgeContainer}>
           <View style={styles.badge}>
-            <Text style={styles.badgeIcon}>🎓</Text>
             <Text style={styles.badgeText}>ACCESO ESTUDIANTIL UCT</Text>
           </View>
         </View>
@@ -157,7 +157,6 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
         {/* Caja de Error */}
         {errorMessage && (
           <View style={styles.errorBox}>
-            <Text style={styles.errorIcon}>⚠️</Text>
             <Text style={styles.errorText}>{errorMessage}</Text>
           </View>
         )}
@@ -167,7 +166,6 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
           {/* Nombre Completo */}
           <Text style={styles.label}>NOMBRE COMPLETO</Text>
           <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>👤</Text>
             <TextInput
               style={styles.input}
               placeholder="Ej. Francisca Morales"
@@ -181,7 +179,6 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
           {/* Correo Institucional */}
           <Text style={styles.label}>CORREO INSTITUCIONAL</Text>
           <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>✉️</Text>
             <TextInput
               style={styles.input}
               placeholder="tu.usuario@alu.uct.cl"
@@ -192,12 +189,11 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
               autoCapitalize="none"
             />
           </View>
-          <Text style={styles.helperText}>🎯 Solo correos @alu.uct.cl</Text>
+          <Text style={styles.helperText}>Solo correos @alu.uct.cl</Text>
 
           {/* Contraseña */}
           <Text style={styles.label}>CONTRASEÑA</Text>
           <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>🔒</Text>
             <TextInput
               style={styles.input}
               placeholder="Mínimo 8 caracteres"
@@ -205,16 +201,24 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              textContentType="password"
             />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '🙈'}</Text>
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              style={styles.eyeIcon}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            >
+              <Text style={styles.eyeIconText}>{showPassword ? 'Ocultar' : 'Ver'}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Confirmar Contraseña */}
           <Text style={styles.label}>CONFIRMAR CONTRASEÑA</Text>
           <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>➕</Text>
             <TextInput
               style={styles.input}
               placeholder="Repite tu contraseña"
@@ -222,9 +226,22 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry={!showConfirmPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              textContentType="password"
             />
-            <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-              <Text style={styles.eyeIcon}>{showConfirmPassword ? '👁️' : '🙈'}</Text>
+            <TouchableOpacity
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              style={styles.eyeIcon}
+              accessibilityRole="button"
+              accessibilityLabel={
+                showConfirmPassword ? 'Ocultar confirmación' : 'Mostrar confirmación'
+              }
+            >
+              <Text style={styles.eyeIconText}>
+                {showConfirmPassword ? 'Ocultar' : 'Ver'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -233,6 +250,8 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
             style={styles.checkboxContainer}
             onPress={() => setAcceptedTerms(!acceptedTerms)}
             activeOpacity={0.8}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: acceptedTerms }}
           >
             <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
               {acceptedTerms && <Text style={styles.checkmark}>✓</Text>}
@@ -302,15 +321,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   logoBadge: {
-    backgroundColor: '#3C2A21',
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoIcon: {
-    fontSize: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 7,
   },
   brandName: {
     fontSize: 18,
@@ -329,10 +342,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    gap: 6,
-  },
-  badgeIcon: {
-    fontSize: 12,
   },
   badgeText: {
     fontSize: 11,
@@ -362,10 +371,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
-    gap: 8,
-  },
-  errorIcon: {
-    fontSize: 16,
   },
   errorText: {
     color: '#A94442',
@@ -392,20 +397,18 @@ const styles = StyleSheet.create({
     height: 52,
     marginBottom: 6,
   },
-  inputIcon: {
-    fontSize: 16,
-    marginRight: 10,
-    opacity: 0.6,
-  },
   input: {
     flex: 1,
     fontSize: 14,
     color: '#2C1E16',
   },
   eyeIcon: {
-    fontSize: 16,
-    padding: 4,
-    opacity: 0.6,
+    paddingLeft: 8,
+  },
+  eyeIconText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#E07A5F',
   },
   helperText: {
     fontSize: 12,

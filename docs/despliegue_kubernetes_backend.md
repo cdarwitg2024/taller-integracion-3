@@ -17,7 +17,7 @@ Documento técnico que detalla el proceso de empaquetado (Docker), publicación 
 - **Imágenes en Docker Hub**:
   - `cdarwitg2024/backend-node:v1.0.4` (MS-Pedidos)
   - `cdarwitg2024/inventario-service:v1.0.1` (MS-Inventario)
-- **Host / Dominio Ingress**: `student-cdarwitg.k8s-estudiantes.dev.censei.cl`
+- **Host / Dominio Ingress**: `api-cdarwitg.dev.censei.cl` (publicado vía la anotación `external-dns.alpha.kubernetes.io/target: proxy.inf.uct.cl`)
 - **Cupo de recursos del namespace**: 2 cores de CPU (se aplica sobre `limits.cpu`).
 
 ### Configuración de `kubectl`
@@ -118,16 +118,25 @@ docker push cdarwitg2024/inventario-service:v1.0.1
 
 ## 2. Manifiestos de Kubernetes Aplicados
 
-Los manifiestos versionados están en [`k8s/`](../k8s) y el Ingress en
-[`ingress.yaml`](../ingress.yaml):
+Los manifiestos versionados están en [`k8s/`](../k8s). El Ingress también vive
+dentro de `k8s/`, en [`k8s/ingress.yaml`](../k8s/ingress.yaml):
 
 | Archivo | Recurso | Aplicar con |
 |---|---|---|
 | `k8s/pedidos/backend-deployment.yaml` | Deployment `backend-node` | `kubectl apply -f ...` |
+| `k8s/pedidos/backend-service.yaml` | Service `backend-service` | `kubectl apply -f ...` |
 | `k8s/inventario/inventario-deployment.yaml` | Deployment `inventario-service` | `kubectl apply -f ...` |
 | `k8s/inventario/inventario-service.yaml` | Service `inventario-service` | `kubectl apply -f ...` |
-| `k8s/inventario/inventario-hpa.yaml` | HPA `inventario-service-hpa` | `kubectl apply -f ...` |
-| `ingress.yaml` | Ingress `backend-ingress` (2 rutas) | `kubectl apply -f ...` |
+| `k8s/ingress.yaml` | Ingress `backend-ingress` (1 ruta) | `kubectl apply -f ...` |
+
+> **No uses `kubectl apply -f k8s/ --recursive`.** Aplica archivo por archivo o
+> por subcarpeta (`k8s/pedidos`, `k8s/inventario`). Ver la advertencia de
+> seguridad en el [README](../README.md).
+
+> **No hay manifiesto de Secret en `k8s/`.** La plantilla de referencia está en
+> [`docs/secrets/supabase-secret.example.yaml`](../docs/secrets/supabase-secret.example.yaml),
+> fuera del árbol que se aplica, justamente para que un `apply` recursivo no
+> pueda sobrescribir el Secret real del clúster.
 
 ### A. Despliegues (`Deployment`)
 Controlan la ejecución de los contenedores y simmerán el número de réplicas:
@@ -135,7 +144,7 @@ Controlan la ejecución de los contenedores y simmerán el número de réplicas:
 ```yaml
 # backend-node (k8s/pedidos/backend-deployment.yaml)
 spec:
-  replicas: 2
+  replicas: 1
   template:
     spec:
       containers:
@@ -161,7 +170,7 @@ spec:
 ```yaml
 # inventario-service (k8s/inventario/inventario-deployment.yaml)
 spec:
-  replicas: 2
+  replicas: 1
   template:
     spec:
       containers:
@@ -203,7 +212,8 @@ spec:
 
 ### C. Secret de credenciales
 Las credenciales de Supabase **no** se versionan. Se crean una vez en el clúster
-(la plantilla está en `k8s/secrets/supabase-secret.example.yaml`):
+(la plantilla está en
+[`docs/secrets/supabase-secret.example.yaml`](../docs/secrets/supabase-secret.example.yaml)):
 
 ```powershell
 kubectl create secret generic coffeesecret-supabase `
@@ -212,21 +222,34 @@ kubectl create secret generic coffeesecret-supabase `
   -n student-cdarwitg
 ```
 
-### D. Escalado automático (`HPA`)
+### D. Escalado automático (`HPA`) — eliminado
+
+El HPA de inventario **ya no se aplica**. El namespace no tiene `metrics-server`,
+así que el HPA se quedaba en `cpu: <unknown>` y su `minReplicas: 2` pisaba el
+`replicas` del Deployment. Las réplicas las controla `inventario-deployment.yaml`.
 
 ```yaml
-spec:
-  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: inventario-service }
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-  - type: Resource
-    resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+# RETIRADO: k8s/inventario/inventario-hpa.yaml
+# minReplicas: 2  ->  mantenía 2 pods vivos sin importar el Deployment
+# metrics: cpu    ->  <unknown> porque no hay metrics-server
 ```
 
 ### E. Enrutador Externo (`Ingress`)
-Asigna el subdominio institucional y enruta **por ruta**: las peticiones de
-inventario van a su propio servicio y el resto a Pedidos.
+Asigna el subdominio institucional y publica **una sola ruta** (`/`) hacia
+Pedidos. La anotación `external-dns.alpha.kubernetes.io/target` es la que publica
+el host en el DNS público de la plataforma; sin ella el Ingress existe pero el
+dominio no resuelve.
+
+> **Por qué una sola ruta:** la `ValidatingAdmissionPolicy` `rke2-edu-ingress-hostname`
+> de la plataforma rechaza cualquier path distinto de `/`
+> (*"Cada hostname debe usar exclusivamente el path /"*). Mientras el syncer no
+> pueda crear el Ingress en el clúster host, tampoco se crea el registro DNS, así
+> que declarar `/api/inventario` dejaba el dominio sin resolver.
+
+> **Inventario no se expone por el Ingress a propósito:** es una dependencia
+> interna de Pedidos, que lo consume por HTTP con `INVENTARIO_SERVICE_URL`
+> (ver [`backend-node/src/clients/inventario.client.js`](../backend-node/src/clients/inventario.client.js)).
+> Dentro del clúster se llega como `http://inventario-service/api/inventario`.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -234,16 +257,14 @@ kind: Ingress
 metadata:
   name: backend-ingress
   namespace: student-cdarwitg
+  annotations:
+    external-dns.alpha.kubernetes.io/target: proxy.inf.uct.cl
 spec:
   ingressClassName: nginx
   rules:
-  - host: student-cdarwitg.k8s-estudiantes.dev.censei.cl
+  - host: api-cdarwitg.dev.censei.cl
     http:
       paths:
-      - path: /api/inventario
-        pathType: Prefix
-        backend:
-          service: { name: inventario-service, port: { number: 80 } }
       - path: /
         pathType: Prefix
         backend:
@@ -263,11 +284,21 @@ kubectl get pods -n student-cdarwitg
 ```
 
 Salida confirmada:
-- **Deployments**: `backend-node 2/2` y `inventario-service 2/2`, ambos `Available`.
-- **Pods**: 4 pods en estado **`Running`**, sin reinicios.
+- **Deployments**: `backend-node 1/1` y `inventario-service 1/1`, ambos `Available`.
+- **Pods**: 1 pod `Running` por servicio (réplicas fijadas en 1).
 - **Services**: `backend-service` (80 ➔ 3000) e `inventario-service` (80 ➔ 3001).
-- **Ingress**: 2 rutas configuradas hacia el host institucional.
-- **HPA**: `minReplicas 2`, `maxReplicas 5`.
+- **Ingress**: 1 ruta (`/`) hacia `api-cdarwitg.dev.censei.cl`.
+- **HPA**: eliminado (sin `metrics-server` en el namespace).
+
+> **Pendiente con el profesor:** el DNS público de `api-cdarwitg.dev.censei.cl`
+> todavía no resuelve. El Ingress está aplicado y correcto, pero el syncer de la
+> plataforma lo reintenta cada ~13-16 min; hay que confirmar con el profesor si el
+> registro ya se propagó o si hay que pedirlo.
+>
+> **Pendiente con el profesor:** el `Secret` apunta a un proyecto Supabase cloud
+> que devuelve `NXDOMAIN`, así que todo endpoint que consulte la base de datos
+> responde `500` (`/health` funciona porque no toca la BD). Hay que decidir a qué
+> proyecto apunta el clúster.
 
 ### Prueba de Conectividad Local (`port-forward`):
 Para consultar cada servicio desde el computador, sin depender del DNS público:

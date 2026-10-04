@@ -16,15 +16,7 @@ import {
   Button,
   Stack,
   LinearProgress,
-  Menu,
   MenuItem,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Snackbar,
   Alert,
   TextField,
@@ -42,11 +34,6 @@ import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import DownloadIcon from '@mui/icons-material/Download';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import TelegramIcon from '@mui/icons-material/Telegram';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
-import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
-import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
@@ -55,9 +42,7 @@ import SortIcon from '@mui/icons-material/Sort';
 
 import { productos as productosService } from '../../service/productos';
 import { alertasStock as alertasService } from '../../service/alertas_stock';
-import { telegramDuenoService } from '../../service/telegram_dueno';
 import { supabase, isSupabaseConfigured } from '../../service/supabase';
-import TelegramConfigModal from '../../components/telegram/TelegramConfigModal';
 import ModificarStockDialog from '../../components/productos/ModificarStockDialog';
 
 function StockInventario({ currentUser }) {
@@ -66,13 +51,6 @@ function StockInventario({ currentUser }) {
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState('');
-  const [realtimeStatus, setRealtimeStatus] = useState(
-    isSupabaseConfigured ? 'conectado' : 'indisponible'
-  );
-  const [telegramConfig, setTelegramConfig] = useState(null);
-  const [telegramModalOpen, setTelegramModalOpen] = useState(false);
-  const [telegramMenuAnchor, setTelegramMenuAnchor] = useState(null);
-  const [confirmUnlinkDialogOpen, setConfirmUnlinkDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   // Diálogo para Modificar Stock (FR-47)
@@ -109,18 +87,15 @@ function StockInventario({ currentUser }) {
     await loadData(false);
   };
 
-  const duenoId = currentUser?.id || 1;
   const cafeteriaId = currentUser?.cafeteria_id || 1;
 
   const loadData = async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
-      const [prodsData, alertasData, tgConfig] = await Promise.all([
+      const [prodsData, alertasData] = await Promise.all([
         productosService.getAll(),
         alertasService.getNoLeidas(cafeteriaId),
-        telegramDuenoService.getConfiguracion(duenoId),
       ]);
-      setTelegramConfig(tgConfig);
 
       const formatted = prodsData.map((p) => {
         const actual = Number(p.stock || 0);
@@ -156,7 +131,6 @@ function StockInventario({ currentUser }) {
       console.error('Error cargando inventario desde Supabase:', err);
       setDbError(err.message || 'Sin conexión con la base de datos Supabase.');
       setItems([]);
-      setRealtimeStatus('indisponible');
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -167,7 +141,6 @@ function StockInventario({ currentUser }) {
     loadData(true);
 
     if (!isSupabaseConfigured) {
-      setRealtimeStatus('indisponible');
       return;
     }
 
@@ -216,13 +189,7 @@ function StockInventario({ currentUser }) {
           loadData(false);
         }
       )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          setRealtimeStatus('conectado');
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          setRealtimeStatus('reconectando');
-        }
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(canalInventario);
@@ -345,180 +312,19 @@ function StockInventario({ currentUser }) {
         }}
       >
         <Box>
-          <Stack direction="row" spacing={1.5} sx={{alignItems: 'center'}}>
-            <Typography
-              variant="h5"
-              fontWeight={800}
-              sx={{ color: '#4A3728', letterSpacing: '-0.5px' }}
-            >
-              Control de Stock e Inventario
-            </Typography>
-
-            <Chip
-              icon={
-                <Box
-                  sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    bgcolor:
-                      realtimeStatus === 'conectado'
-                        ? '#2E7D32'
-                        : realtimeStatus === 'reconectando'
-                        ? '#E65100'
-                        : '#9E9E9E',
-                    boxShadow:
-                      realtimeStatus === 'conectado'
-                        ? '0 0 0 0 rgba(46, 125, 50, 0.7)'
-                        : 'none',
-                    animation:
-                      realtimeStatus === 'conectado'
-                        ? 'pulse-dot-inv 1.8s infinite'
-                        : 'none',
-                    '@keyframes pulse-dot-inv': {
-                      '0%': { boxShadow: '0 0 0 0 rgba(46, 125, 50, 0.7)' },
-                      '70%': { boxShadow: '0 0 0 6px rgba(46, 125, 50, 0)' },
-                      '100%': { boxShadow: '0 0 0 0 rgba(46, 125, 50, 0)' },
-                    },
-                  }}
-                />
-              }
-              label={
-                realtimeStatus === 'conectado'
-                  ? 'En Vivo (Realtime)'
-                  : realtimeStatus === 'reconectando'
-                  ? 'Reconectando…'
-                  : 'Modo Estático'
-              }
-              size="small"
-              sx={{
-                backgroundColor:
-                  realtimeStatus === 'conectado' ? '#E8F5E9' : '#FFF3E0',
-                color:
-                  realtimeStatus === 'conectado' ? '#2E7D32' : '#E65100',
-                fontWeight: 700,
-                fontSize: '0.72rem',
-                borderRadius: '16px',
-                border:
-                  realtimeStatus === 'conectado'
-                    ? '1px solid #A5D6A7'
-                    : '1px solid #FFE0B2',
-              }}
-            />
-          </Stack>
+          <Typography
+            variant="h5"
+            fontWeight={800}
+            sx={{ color: '#4A3728', letterSpacing: '-0.5px' }}
+          >
+            Control de Stock e Inventario
+          </Typography>
           <Typography variant="caption" sx={{ color: '#8C7A6F' }}>
             Supervisión directa de umbrales mínimos y balances de reposición {lastUpdated ? `• Sincronizado: ${lastUpdated}` : ''}
           </Typography>
         </Box>
 
         <Stack direction="row" spacing={1.5}>
-          <Button
-            variant="outlined"
-            startIcon={<TelegramIcon sx={{ color: telegramConfig?.telegram_chat_id ? '#2E7D32' : '#B45309' }} />}
-            endIcon={telegramConfig?.telegram_chat_id ? <KeyboardArrowDownIcon /> : null}
-            onClick={(e) => {
-              if (telegramConfig?.telegram_chat_id) {
-                setTelegramMenuAnchor(e.currentTarget);
-              } else {
-                setTelegramModalOpen(true);
-              }
-            }}
-            sx={{
-              borderColor: telegramConfig?.telegram_chat_id ? '#81C784' : '#F59E0B',
-              backgroundColor: telegramConfig?.telegram_chat_id ? '#F1F8E9' : '#FEF3C7',
-              color: telegramConfig?.telegram_chat_id ? '#2E7D32' : '#92400E',
-              borderRadius: '10px',
-              textTransform: 'none',
-              px: 2,
-              py: 1,
-              fontWeight: 700,
-              boxShadow: telegramConfig?.telegram_chat_id ? 'none' : '0 1px 4px rgba(245, 158, 11, 0.15)',
-              '&:hover': {
-                borderColor: telegramConfig?.telegram_chat_id ? '#4CAF50' : '#D97706',
-                backgroundColor: telegramConfig?.telegram_chat_id ? '#E8F5E9' : '#FDE68A',
-              },
-            }}
-          >
-            {telegramConfig?.telegram_chat_id ? 'Telegram: Conectado' : 'Vincular Telegram'}
-          </Button>
-
-          {/* Menú de Opciones del Botón de Telegram */}
-          <Menu
-            anchorEl={telegramMenuAnchor}
-            open={Boolean(telegramMenuAnchor)}
-            onClose={() => setTelegramMenuAnchor(null)}
-            PaperProps={{
-              sx: {
-                borderRadius: '14px',
-                minWidth: 230,
-                boxShadow: '0 10px 28px rgba(67, 50, 37, 0.12)',
-                border: '1px solid #EFEAE6',
-                mt: 0.8,
-              },
-            }}
-          >
-            <MenuItem
-              onClick={() => {
-                setTelegramMenuAnchor(null);
-                setTelegramModalOpen(true);
-              }}
-              sx={{ py: 1.2 }}
-            >
-              <ListItemIcon sx={{ color: '#4A3728' }}>
-                <SettingsOutlinedIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText
-                primary="Ver Estado y Ajustes"
-                secondary={`Chat ID: ${telegramConfig?.telegram_chat_id}`}
-                secondaryTypographyProps={{ fontSize: '0.72rem' }}
-              />
-            </MenuItem>
-
-            <MenuItem
-              onClick={async () => {
-                setTelegramMenuAnchor(null);
-                try {
-                  const res = await telegramDuenoService.enviarAlertaPrueba({
-                    usuarioId: duenoId,
-                    cafeteriaId: cafeteriaId,
-                    telegramChatId: telegramConfig.telegram_chat_id,
-                  });
-                  setSnackbar({
-                    open: true,
-                    message: res.message || 'Alerta de prueba enviada a Telegram.',
-                    severity: 'success',
-                  });
-                } catch {
-                  setSnackbar({
-                    open: true,
-                    message: 'No se pudo enviar la alerta de prueba.',
-                    severity: 'error',
-                  });
-                }
-              }}
-              sx={{ py: 1.2 }}
-            >
-              <ListItemIcon sx={{ color: '#2E7D32' }}>
-                <SendOutlinedIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText primary="Enviar Alerta de Prueba" />
-            </MenuItem>
-
-            <Divider sx={{ my: 0.5 }} />
-
-            <MenuItem
-              onClick={() => {
-                setTelegramMenuAnchor(null);
-                setConfirmUnlinkDialogOpen(true);
-              }}
-              sx={{ color: '#D32F2F', py: 1.2 }}
-            >
-              <ListItemIcon sx={{ color: '#D32F2F' }}>
-                <DeleteOutlineOutlinedIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText primary="Desvincular Chat" />
-            </MenuItem>
-          </Menu>
 
 
           <Button
@@ -1208,84 +1014,6 @@ function StockInventario({ currentUser }) {
         </TableContainer>
       </Paper>
 
-      {/* Modal de Configuración del Bot de Telegram (Exclusivo Dueño) */}
-      <TelegramConfigModal
-        open={telegramModalOpen}
-        onClose={() => setTelegramModalOpen(false)}
-        currentUser={currentUser}
-        onConfigUpdated={(cfg) => {
-          setTelegramConfig(cfg);
-          if (cfg?.telegram_chat_id) {
-            setSnackbar({
-              open: true,
-              message: `¡Bot de Telegram vinculado exitosamente! (Chat ID: ${cfg.telegram_chat_id})`,
-              severity: 'success',
-            });
-          }
-        }}
-      />
-
-      {/* Diálogo de Confirmación para Desvincular desde el Menú del Botón */}
-      <Dialog
-        open={confirmUnlinkDialogOpen}
-        onClose={() => setConfirmUnlinkDialogOpen(false)}
-        PaperProps={{
-          sx: {
-            borderRadius: '16px',
-            p: 1,
-            maxWidth: 420,
-            boxShadow: '0 12px 36px rgba(0,0,0,0.18)',
-          },
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 800, color: '#C62828', pb: 1 }}>
-          ¿Desvincular Chat de Telegram?
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ color: '#5C4535', lineHeight: 1.6 }}>
-            Se desvinculará tu dispositivo (Chat ID: <b>••••••••••••</b>). Ya no recibirás alertas automáticas de inventario en tu celular.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => setConfirmUnlinkDialogOpen(false)}
-            sx={{ color: '#78665B', textTransform: 'none', fontWeight: 600 }}
-          >
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={async () => {
-              setConfirmUnlinkDialogOpen(false);
-              try {
-                await telegramDuenoService.desvincular(duenoId);
-                setTelegramConfig(null);
-                setSnackbar({
-                  open: true,
-                  message: 'Chat de Telegram desvinculado exitosamente.',
-                  severity: 'info',
-                });
-              } catch (err) {
-                setSnackbar({
-                  open: true,
-                  message: err.message || 'Error al desvincular el chat.',
-                  severity: 'error',
-                });
-              }
-            }}
-            sx={{
-              borderRadius: '8px',
-              textTransform: 'none',
-              fontWeight: 700,
-              boxShadow: 'none',
-            }}
-          >
-            Sí, Desvincular
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       {/* Diálogo para Modificar Stock del Insumo */}
       <ModificarStockDialog
         open={stockDialogOpen}
@@ -1297,7 +1025,7 @@ function StockInventario({ currentUser }) {
         onSuccess={handleStockSuccess}
       />
 
-      {/* Snackbar para notificaciones de Telegram y acciones rápidas */}
+      {/* Snackbar para notificaciones de stock y acciones rápidas */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4500}

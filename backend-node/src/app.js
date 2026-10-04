@@ -13,6 +13,7 @@ const pedidosRoutes = require('./modules/pedidos/pedidos.routes');
 const authRoutes = require('./modules/auth/auth.routes');
 const cafeteriasRoutes = require('./modules/catalogo/cafeterias.routes');
 const pagosRoutes = require('./modules/pagos/pagos.routes');
+const notificacionesRoutes = require('./modules/notificaciones/notificaciones.routes');
 
 const app = express();
 
@@ -33,6 +34,7 @@ app.use('/api/pedidos', pedidosRoutes);
 app.use('/auth', authRoutes);
 app.use('/cafeterias', cafeteriasRoutes);
 app.use('/api/pagos', pagosRoutes);
+app.use('/api/notificaciones', notificacionesRoutes);
 app.use('/health', healthRoutes);
 
 // Ruta raíz
@@ -46,6 +48,7 @@ app.get('/', (req, res) => {
       auth: '/auth',
       cafeterias: '/cafeterias',
       pagos: '/api/pagos',
+      notificaciones: '/api/notificaciones',
       tiempos: '/api/tiempos',
       qr: '/api/qr',
       pedidos: '/api/pedidos',

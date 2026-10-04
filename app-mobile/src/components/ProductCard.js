@@ -1,59 +1,127 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
+  Image,
   StyleSheet,
 } from 'react-native';
 
-const ProductCard = ({ product, onAdd }) => {
-  const handleAdd = () => {
-    if (!product.available) {
-      return;
-    }
+/**
+ * Tarjeta de un producto del menú.
+ *
+ * Es un componente presentacional y reutilizable: no consulta nada y no sabe
+ * de cafeterías ni de Supabase. Solo recibe el producto ya normalizado por
+ * `mapProduct` (ver src/screens/MenuScreen.js) y un callback `onAdd`.
+ *
+ * Contrato que espera del producto:
+ *   id, name, description, price, emoji, imageUrl, stock, stockMin, available
+ *
+ * `onPress` es opcional (FR-08): si viene, la tarjeta completa se vuelve
+ * clickeable para abrir el detalle del producto.
+ *
+ * `onAdd` se dispara únicamente si el producto está disponible. Quien lo use
+ * (hoy el carrito, mañana el checkout) no tiene que volver a validar nada.
+ */
+const ProductCard = ({ product, onAdd, onPress }) => {
+  const { available, stock, stockMin = 0 } = product;
 
-    onAdd(product);
+  // Si la URL de la imagen existe pero no carga (404, host caído), caemos al
+  // emoji en vez de dejar un cuadro gris vacío sin explicación.
+  const [imagenCaida, setImagenCaida] = useState(false);
+
+  // Si cambia de producto (reutilización del componente en la lista), hay que
+  // volver a intentar la imagen nueva.
+  useEffect(() => {
+    setImagenCaida(false);
+  }, [product.imageUrl]);
+
+  const handleAdd = () => {
+    if (!available) return;
+    onAdd?.(product);
   };
 
+  // "Últimas unidades" aparece solo cuando queda poco respecto al mínimo
+  const quedanPocas = available && stock <= stockMin;
+
   return (
-    <View style={styles.container}>
+    <TouchableOpacity
+      style={[styles.container, !available && styles.containerDisabled]}
+      onPress={onPress ? () => onPress(product) : undefined}
+      activeOpacity={onPress ? 0.85 : 1}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={
+        onPress ? `Ver detalle de ${product.name}` : `${product.name}, ${product.price} pesos`
+      }
+    >
       <View style={styles.imagePlaceholder}>
-        <Text style={styles.imageEmoji}>
-          {product.emoji}
-        </Text>
+        {product.imageUrl && !imagenCaida ? (
+          <Image
+            source={{ uri: product.imageUrl }}
+            style={styles.image}
+            resizeMode="cover"
+            accessibilityIgnoresInvertColors
+            onError={() => setImagenCaida(true)}
+          />
+        ) : (
+          <Text style={styles.imageEmoji}>{product.emoji}</Text>
+        )}
+
+        {!available && (
+          <View style={styles.soldOutOverlay}>
+            <Text style={styles.soldOutText}>AGOTADO</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.name}>
+        <Text style={styles.name} numberOfLines={1}>
           {product.name}
         </Text>
 
-        <Text style={styles.description}>
-          {product.description}
-        </Text>
+        {!!product.description && (
+          <Text style={styles.description} numberOfLines={2}>
+            {product.description}
+          </Text>
+        )}
+
+        <View style={styles.stockRow}>
+          {available ? (
+            <>
+              <View style={[styles.dot, quedanPocas && styles.dotLow]} />
+              <Text style={[styles.stockText, quedanPocas && styles.stockTextLow]}>
+                {quedanPocas ? `Quedan ${stock}` : 'Disponible'}
+              </Text>
+            </>
+          ) : (
+            <>
+              <View style={[styles.dot, styles.dotOut]} />
+              <Text style={styles.stockText}>No disponible</Text>
+            </>
+          )}
+        </View>
 
         <View style={styles.bottomRow}>
-          <Text style={styles.price}>
-            ${product.price.toLocaleString('es-CL')}
-          </Text>
+          <Text style={styles.price}>${product.price.toLocaleString('es-CL')}</Text>
 
           <TouchableOpacity
-            style={[
-              styles.addButton,
-              !product.available && styles.disabledButton,
-            ]}
+            style={[styles.addButton, !available && styles.disabledButton]}
             onPress={handleAdd}
-            disabled={!product.available}
+            disabled={!available}
+            accessibilityRole="button"
+            accessibilityLabel={
+              available ? `Agregar ${product.name} al carrito` : `${product.name} no disponible`
+            }
+            accessibilityState={{ disabled: !available }}
           >
             <Text style={styles.addButtonText}>
-              {product.available
-                ? 'Añadir al carrito'
-                : 'No disponible'}
+              {available ? 'Añadir al carrito' : 'No disponible'}
             </Text>
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -76,6 +144,11 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
   },
 
+  // Apagado visualmente cuando no hay stock
+  containerDisabled: {
+    opacity: 0.62,
+  },
+
   imagePlaceholder: {
     width: 72,
     height: 72,
@@ -83,10 +156,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3E7DD',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+
+  image: {
+    width: '100%',
+    height: '100%',
   },
 
   imageEmoji: {
     fontSize: 34,
+  },
+
+  soldOutOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(74, 51, 44, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  soldOutText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 
   content: {
@@ -105,6 +198,38 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#8A7B76',
     marginTop: 2,
+  },
+
+  stockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#5B8C5A',
+    marginRight: 5,
+  },
+
+  dotLow: {
+    backgroundColor: '#B8860B',
+  },
+
+  dotOut: {
+    backgroundColor: '#B05A4E',
+  },
+
+  stockText: {
+    fontSize: 10,
+    color: '#5B8C5A',
+    fontWeight: '600',
+  },
+
+  stockTextLow: {
+    color: '#B8860B',
   },
 
   bottomRow: {

@@ -7,16 +7,26 @@ const {
   puedeTransicionar,
   transicionesDe,
   esEstadoTerminal,
-  ESTADO_INICIAL
+  ESTADO_INICIAL,
+  ESTADO_DB,
+  ETIQUETA_ESTADO
 } = require('./pedidos.maquina-estados');
 const {
   verificarDisponibilidad,
   descontarStock,
   reponerStock
 } = require('../../clients/inventario.client');
+const NotificacionesService = require('../notificaciones/notificaciones.service');
 
 const TableName = 'pedidos';
 const DetallesTableName = 'detalles_pedido';
+
+// Transiciones que disparan push al cliente móvil. 'En preparación' avisa que el
+// pedido entró a la cocina y 'Listo' que ya se puede retirar (SRS).
+const EVENTOS_NOTIFICACION = {
+  'En preparación': 'en_preparacion',
+  Listo: 'listo'
+};
 
 // Error operacional de base de datos: debe traducirse a 503 en el controller
 function errorBd(mensaje) {
@@ -35,7 +45,10 @@ function normalizarPedidoDB(row) {
     ...row,
     codigo_legible: row.codigo_retiro_diario ?? row.codigo_legible ?? null,
     franja_retiro: row.franja_retiro ?? null,
-    token_contingencia: row.token_contingencia ?? null
+    token_contingencia: row.token_contingencia ?? row.codigo_retiro_diario ?? null,
+    // La BD guarda slugs en minusculas; la API expone la etiqueta legible,
+    // que es su contrato público.
+    estado: ETIQUETA_ESTADO[row.estado] || row.estado
   };
 }
 
@@ -50,27 +63,44 @@ let memoryPedidos = [...pedidosMock].map((p, idx) => ({
   creado_en: p.creado_en || new Date().toISOString()
 }));
 
-// Generador de Token de Contingencia alfanumérico (ej: CF-7A9B2)
+// Generador de Token de contingencia. Mismo formato que la RPC
+// `procesar_pago`: 8 caracteres sin prefijo y con el alfabeto sin I, L, O ni U
+// para que el estudiante pueda dictarlo sin ambiguedad. Cualquier divergencia
+// aqui haria que un pedido creado por el API y otro creado por el movil tuvieran
+// codigos de formato distinto.
+const ALFABETO_TOKEN = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
+
 function generarTokenContingencia() {
-  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-  let token = 'CF-';
-  for (let i = 0; i < 6; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  let token = '';
+  for (let i = 0; i < 8; i++) {
+    token += ALFABETO_TOKEN.charAt(Math.floor(Math.random() * ALFABETO_TOKEN.length));
   }
   return token;
 }
 
 async function generarTokenContingenciaUnico() {
   let token = generarTokenContingencia();
-  while (await existeTokenContingencia(token)) {
+  // La comprobacion va contra la BD, no solo contra la memoria: el token se
+  // persiste en `codigo_retiro_diario` y los pedidos del movil ya estan ahi.
+  for (let intento = 0; intento < 10 && await existeTokenContingencia(token); intento++) {
     token = generarTokenContingencia();
   }
   return token;
 }
 
-// El esquema real NO tiene columna token_contingencia: el token de contingencia
-// (FR-23) se genera y se mantiene en la caché en memoria del backend.
+// El esquema real NO tiene columna `token_contingencia`: el token de
+// contingencia (FR-23) vive en `pedidos.codigo_retiro_diario`.
 async function existeTokenContingencia(token) {
+  try {
+    const { data, error } = await supabase
+      .from(TableName)
+      .select('id')
+      .eq('codigo_retiro_diario', token)
+      .limit(1);
+    if (!error && data && data.length > 0) return true;
+  } catch (e) {
+    console.error(`No se pudo verificar el token de contingencia: ${e.message}`);
+  }
   return memoryPedidos.some(p => p.token_contingencia === token);
 }
 
@@ -88,10 +118,14 @@ function construirPayloadQR(pedido) {
 
 
 async function generarTokenQRUnico() {
-  let token = uuidv4();
-  while (await existeTokenQR(token)) {
-    token = uuidv4();
-  }
+  // Mismo formato que la RPC: prefijo `CF-` + 20 caracteres.
+  let token;
+  do {
+    token = 'CF-';
+    for (let i = 0; i < 20; i++) {
+      token += ALFABETO_TOKEN.charAt(Math.floor(Math.random() * ALFABETO_TOKEN.length));
+    }
+  } while (await existeTokenQR(token));
   return token;
 }
 
@@ -160,7 +194,10 @@ const PedidosService = {
     const pedidoId = uuidv4();
     const qrToken = await generarTokenQRUnico();
     const tokenContingencia = await generarTokenContingenciaUnico();
-    const codigoLegible = `#CF-${Math.floor(1000 + Math.random() * 9000)}`;
+    // `codigo_retiro_diario` es la columna real: guarda el token de contingencia
+  // (8 caracteres), no un "#CF-1234" decorativo que el KDS nunca podria validar.
+  const codigoLegible = tokenContingencia;
+
     const fechaCreacion = new Date().toISOString();
 
     // 3. Generar imagen QR dinámica en formato Base64 Data URI.
@@ -201,9 +238,10 @@ const PedidosService = {
     // 4. Persistir en Supabase (obligatorio). Si el INSERT real falla, NO se
     //    responde como pedido creado: se lanza error claro (503) y no queda
     //    ningún pedido fantasma en memoria.
-    //    IMPORTANTE: el esquema real NO tiene las columnas id (autogenerada),
-    //    creado_en (default), franja_retiro, token_contingencia ni qr_image;
-    //    la única columna de código es codigo_retiro_diario y las notas van a "nota".
+    //    IMPORTANTE: la única columna de código es `codigo_retiro_diario`, las
+    //    notas van a "nota" y el esquema no tiene `token_contingencia` ni
+    //    `qr_image` (se derivan). `franja_retiro` sí existe: la agregó la
+    //    migración de la RPC y sin ella el pedido se guardaba sin franja.
     let dbPedido;
     try {
       const { data, error } = await supabase
@@ -213,8 +251,11 @@ const PedidosService = {
           usuario_id: nuevoPedido.usuario_id,
           cafeteria_id: nuevoPedido.cafeteria_id,
           total: nuevoPedido.total,
-          estado: nuevoPedido.estado,
+          // Se guarda el slug ('pendiente'), no la etiqueta 'Pagado': el KDS y
+          // el móvil filtran por el slug.
+          estado: ESTADO_DB[nuevoPedido.estado] || nuevoPedido.estado,
           qr_token: nuevoPedido.qr_token,
+          franja_retiro: nuevoPedido.franja_retiro ?? null,
           nota: nuevoPedido.notas_generales
         })
         .select()
@@ -233,6 +274,9 @@ const PedidosService = {
       id: dbPedido.id,
       creado_en: dbPedido.creado_en
     };
+    // La API expone la etiqueta legible ('Pagado'); en la BD queda el slug
+    // 'pendiente', que es el que filtran el KDS y el movil.
+    pedidoPersistido.estado = ETIQUETA_ESTADO[pedidoPersistido.estado] || pedidoPersistido.estado;
 
     // Insertar detalles (obligatorio, sin fallback). Si falla, el pedido no
     // se considera creado de forma completa.
@@ -482,7 +526,11 @@ const PedidosService = {
       throw new Error(mensaje);
     }
 
-    const updates = { estado: destino };
+    // La maquina de estados trabaja con etiquetas legibles ("En preparacion",
+    // "Listo", "Retirado") pero la columna `estado` guarda slugs en minusculas
+    // (`en_preparacion`, `listo`, `entregado`). Sin esta traduccion se guardaba
+    // "Retirado" y el KDS seguia mostrando el pedido como activo.
+    const updates = { estado: ESTADO_DB[destino] || destino.toLowerCase() };
     const ahora = new Date().toISOString();
 
     // Columnas reales del esquema: inicio_preparacion_en, listo_en, entregado_en, cancelado_en
@@ -549,6 +597,30 @@ const PedidosService = {
       }
     }
 
+    // Notificación push al cliente móvil, solo después de que el estado quedó
+    // guardado con éxito. Es best-effort: si FCM falla se loguea, pero la
+    // transición del pedido nunca falla por culpa de la notificación.
+    const eventoNotificacion = EVENTOS_NOTIFICACION[destino];
+    if (eventoNotificacion) {
+      try {
+        const resumen = await NotificacionesService.notificarPedido(
+          normalizarPedidoDB(data),
+          eventoNotificacion
+        );
+        if (resumen.omitido) {
+          console.log(`[notificaciones] pedido ${id} (${eventoNotificacion}): ${resumen.omitido}`);
+        } else {
+          console.log(
+            `[notificaciones] pedido ${id} (${eventoNotificacion}, modo ${resumen.modo}): ` +
+            `${resumen.enviados} enviado(s), ${resumen.fallidos} fallido(s), ` +
+            `${resumen.tokens_invalidos} token(s) desactivado(s)`
+          );
+        }
+      } catch (notifError) {
+        console.error(`[notificaciones] falló la notificación del pedido ${id}: ${notifError.message}`);
+      }
+    }
+
     return normalizarPedidoDB(data);
   },
 
@@ -557,50 +629,119 @@ const PedidosService = {
    * el Token de contingencia es de un solo uso; al validar la entrega queda
    * marcado como utilizado (el pedido pasa a 'Retirado' y no puede reutilizarse).
    */
-  async validarEntrega(tokenString) {
+async validarEntrega(tokenString) {
     if (!tokenString) throw new Error('Token o código QR no proporcionado');
-    const tokenLimpio = tokenString.trim();
+    let tokenLimpio = tokenString.trim();
 
-    // Buscar por qr_token o por token_contingencia (FR-23: validación del token)
-    let pedido = memoryPedidos.find(p => 
-      p.qr_token === tokenLimpio || 
+    // El QR que devuelve este backend es un JSON ({ pedido_id, qr_token, ... }),
+    // no texto plano. Sin extraer el token, el KDS no podria validar esos QRs.
+    if (tokenLimpio.startsWith('{')) {
+      try {
+        const payload = JSON.parse(tokenLimpio);
+        tokenLimpio = String(payload.qr_token || payload.token || '').trim();
+      } catch (e) {
+        // No es JSON valido: se sigue con el texto plano.
+      }
+    }
+
+    if (!tokenLimpio) {
+      const razon = 'Código QR o Token no proporcionado';
+      // Un QR con JSON sin `qr_token` es un escaneo fallido: también auditable.
+      await this.registrarLogValidacion({
+        pedido: {}, token: tokenString, resultado: 'rechazado', motivoRechazo: razon
+      });
+      return { valido: false, razon };
+    }
+
+    // Buscar por qr_token o por token de contingencia (FR-23).
+    // El `id` del pedido NO se acepta como token: el numero de pedido es
+    // visible para el estudiante y es correlativo, asi que usarlo como
+    // credencial permitiria retirar el pedido de cualquiera que lo viera.
+    let pedido = memoryPedidos.find(p =>
+      p.qr_token === tokenLimpio ||
       p.token_contingencia === tokenLimpio ||
-      p.id === tokenLimpio ||
       p.codigo_legible === tokenLimpio
     );
     let metodoValidacion = 'desconocido';
 
-if (!pedido) {
+    if (!pedido) {
+      // Se consulta con filtros separados en vez de un unico `.or()` con
+      // interpolacion: un token alfanumerico contra la columna BIGINT `id`
+      // hacia fallar el parseo de PostgREST y la busqueda completa devolvia
+      // "no encontrado" aunque el codigo existiera.
       try {
-const { data, error } = await supabase
-        .from(TableName)
-        .select('*, detalles_pedido(*)')
-        .or(`qr_token.eq.${tokenLimpio},codigo_retiro_diario.eq.${tokenLimpio},id.eq.${tokenLimpio}`)
-        .single();
-        if (!error && data) pedido = normalizarPedidoDB(data);
+        const porQrToken = await supabase
+          .from(TableName)
+          .select('*, detalles_pedido(*)')
+          .eq('qr_token', tokenLimpio)
+          .maybeSingle();
+        if (!porQrToken.error && porQrToken.data) {
+          pedido = normalizarPedidoDB(porQrToken.data);
+        }
+
+        if (!pedido) {
+          const porCodigo = await supabase
+            .from(TableName)
+            .select('*, detalles_pedido(*)')
+            .eq('codigo_retiro_diario', tokenLimpio)
+            .maybeSingle();
+          if (!porCodigo.error && porCodigo.data) {
+            pedido = normalizarPedidoDB(porCodigo.data);
+          }
+        }
+
+        // Fallar a proposito si no hubo match: buscar por `id` permitiria
+        // retirar un pedido con solo conocer su numero correlativo.
       } catch (e) {
+        console.error(`Error buscando el pedido por token: ${e.message}`);
         // fallback
       }
     }
 
     if (!pedido) {
+      // Sin pedido no hay ni cafeteria_id ni usuario_id, pero el intento de
+      // retiro queda registrado: es justo el caso que se quiere auditar.
+      await this.registrarLogValidacion({
+        pedido: {}, token: tokenLimpio, resultado: 'rechazado',
+        motivoRechazo: 'Código QR o Token no encontrado'
+      });
       return { valido: false, razon: 'Código QR o Token no encontrado' };
     }
 
-    // Determina si se validó con el Token de contingencia
-    if (pedido.token_contingencia === tokenLimpio) {
+    // Determina si se valido con el token de contingencia (que se persiste en
+    // codigo_retiro_diario) o con el QR.
+    if (pedido.token_contingencia === tokenLimpio || pedido.codigo_retiro_diario === tokenLimpio) {
       metodoValidacion = 'contingencia';
     } else if (pedido.qr_token === tokenLimpio) {
       metodoValidacion = 'qr';
     }
 
+
     if (esEstadoTerminal(pedido.estado)) {
-      return { valido: false, razon: 'El pedido ya fue entregado previamente (token de un solo uso)', pedido };
+      const razon = 'El pedido ya fue entregado previamente (token de un solo uso)';
+      await this.registrarLogValidacion({
+        pedido, token: tokenLimpio, resultado: 'rechazado', motivoRechazo: razon
+      });
+      return { valido: false, razon, pedido };
     }
 
     if (normalizarEstado(pedido.estado) !== 'Listo') {
-      return { valido: false, razon: 'El pedido aún no está listo para retiro', pedido };
+      const razon = 'El pedido aún no está listo para retiro';
+      await this.registrarLogValidacion({
+        pedido, token: tokenLimpio, resultado: 'rechazado', motivoRechazo: razon
+      });
+      return { valido: false, razon, pedido };
     }
+
+    // Auditoría (FR-22/FR-24): toda validación, exitosa o rechazada, queda
+    // registrada. Antes solo se auditaba desde el fallback de Supabase del
+    // escritorio, así que un retiro validado por el backend no dejaba rastro.
+    await this.registrarLogValidacion({
+      pedido,
+      token: tokenLimpio,
+      resultado: 'aprobado',
+      motivoRechazo: null
+    });
 
     // Marcar como entregado/retirado. El token consumido no puede reutilizarse.
     const pedidoActualizado = await this.updateEstado(pedido.id, 'Retirado');
@@ -612,6 +753,33 @@ const { data, error } = await supabase
       token_utilizado: tokenLimpio,
       pedido: pedidoActualizado || { ...pedido, estado: 'Retirado' }
     };
+  },
+
+  // Inserta un registro en `logs_validacion_qr`. Un fallo de auditoría nunca
+  // debe impedir la entrega: se avisa por consola y se sigue.
+  async registrarLogValidacion({ pedido, token, resultado, motivoRechazo }) {
+    try {
+      const ahora = new Date().toISOString();
+      const { error } = await supabase
+        .from('logs_validacion_qr')
+        .insert({
+          cafeteria_id: pedido.cafeteria_id ?? null,
+          usuario_id: pedido.usuario_id ?? null,
+          pedido_id: pedido.id ?? null,
+          qr_token: pedido.qr_token ?? null,
+          qr_token_leido: token,
+          resultado,
+          motivo_rechazo: motivoRechazo ?? null,
+          detalle: `Metodo: ${resultado === 'aprobado' ? 'QR/contingencia' : 'rechazado'}`,
+          validado_en: ahora,
+          creado_en: ahora
+        });
+      if (error) throw error;
+      return true;
+    } catch (e) {
+      console.error(`No se pudo registrar el log de validación: ${e.message}`);
+      return false;
+    }
   }
 };
 
