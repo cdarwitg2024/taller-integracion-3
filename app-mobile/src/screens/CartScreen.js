@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 
 import CartItem from '../components/CartItem';
+import { useCartTotals } from '../hooks/useCartTotals';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import Header from '../components/Header';
@@ -41,19 +42,11 @@ const CartScreen = ({
   // dice que no se pudo determinar.
   const cafeName = cafeteriaName || 'la cafetería de tu pedido';
   // Franja de retiro elegida (T3, de tu compañero). Se manda a la RPC
-  // `procesar_pago` como p_franja_retiro.
+  // `procesar_pago` como p_franja_retiro. NO se persiste en AsyncStorage:
+  // es un dato de ESTE pedido, y una franja vieja guardada podría estar
+  // obsoleta (ya pasó la hora o el carrito cambió). Se elige en cada pedido.
   const [franjaSeleccionada, setFranjaSeleccionada] = useState(null);
-  const totalProducts = cart.reduce(
-    (sum, item) => sum + item.quantity,
-    0
-  );
-
-  const subtotal = cart.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
-
-  const total = subtotal;
+  const { totalProducts, subtotal, total } = useCartTotals(cart);
 
   const handleCheckout = () => {
     if (!franjaSeleccionada) {
