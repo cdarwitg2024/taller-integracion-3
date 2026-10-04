@@ -102,3 +102,36 @@ export interface Estadisticas {
     total_unidades: string | number;
   };
 }
+
+export interface ProductoVendidoResumen {
+  nombre: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+}
+
+export interface ResumenSimulacionSesion {
+  cafeteriaId: number;
+  cafeteriaNombre: string;
+  sedeNombre?: string;
+  ciudad?: string;
+  intervaloSegundos: number;
+  fechaInicio: string;
+  fechaFin: string;
+  duracionSegundos: number;
+  totalPedidos: number;
+  totalVentas: number;
+  totalUnidades: number;
+  ticketPromedio: number;
+  porEstado: {
+    pendiente: number;
+    preparando: number;
+    listo: number;
+    entregado: number;
+    [key: string]: number;
+  };
+  porMetodoPago: Record<string, number>;
+  productosMasVendidos: ProductoVendidoResumen[];
+  pedidos: Pedido[];
+}
+
