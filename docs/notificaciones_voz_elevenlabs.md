@@ -153,9 +153,37 @@ Tres reglas que hacen que esto sea robusto:
 | Secreto de la Edge Function | `ELEVENLABS_API_KEY` | **No.** Es justamente lo que se quiere evitar. |
 | Secreto/config de la función | `ELEVEN_MODELO` (por defecto `eleven_flash_v2_5`) | No |
 | `localStorage` del navegador | `kds_voz_prefs_v1` (solo `silenciada`) | Sí, en su propio equipo |
-| Secreto/config de la función | `ELEVEN_VOZ` (por defecto Sarah, `EXAVITQu4vr4xnSDxMaL`; con plan gratis solo funcionan Sarah, George y Arnold) | No |
+| Secreto/config de la función | `ELEVEN_VOZ` (por defecto George, `JBFqnCBsd6RMkjVDRZzb`; con plan gratis solo funcionan Sarah, George y Arnold) | No |
+| Secreto/config de la función | `ELEVEN_IDIOMA` (por defecto `es`) | No |
+| Secreto/config de la función | `ELEVEN_VELOCIDAD` (por defecto `0.95`; la API acepta entre `0.7` y `1.2`) | No |
 
 La key **nunca** se escribe en `app-desktop/.env`: toda variable `VITE_*` se compila dentro del bundle y es legible por cualquiera que abra el navegador.
+
+### El idioma: forzarlo en vez de elegirlo
+
+Con la clave disponible **no hay una voz nativa en español**: `GET /v1/voices` responde `401 missing_permissions`, o sea que la clave tiene permiso de TTS pero no de listado. Así que la idea de filtrar la biblioteca por `es` no es realizable hoy, y no se puede pedir una voz española concreta.
+
+Lo que se hace es **forzar el idioma en la request** con `language_code: 'es'`, que hace que la locución salga con fonética española en vez del acento inglés por defecto de la voz. Es una solución honesta con lo que hay, no una voz española de verdad: cuando exista una, basta cambiar `ELEVEN_VOZ` y el resto del código sigue igual.
+
+`language_code` solo existe en los modelos `v2_5` (`eleven_flash_v2_5`, `eleven_turbo_v2_5` y sus variantes `_turbo`). En `eleven_multilingual_v2` la API responde 422 y se pierde el audio, así que la función mira el modelo antes de mandar el campo.
+
+Para comparar acentos sin esperar que el KDS anuncie algo, el banco de pruebas (`prueba-voz.html`) tiene una caja de texto libre con idioma y velocidad.
+
+### Lectura de los códigos de retiro
+
+El `codigo_retiro_diario` se locuta **de dos en dos desde la izquierda**, no dígito a dígito ni como número completo:
+
+| Código | Se lee |
+|---|---|
+| `727` | siete veintisiete |
+| `1234` | doce treinta y cuatro |
+| `12345` | uno veintitrés cuarenta y cinco |
+| `100` | uno cero |
+| `1000` | diez cero |
+
+El grupo va de a dos por posición, no por valor: con cantidad impar de dígitos el primero va de uno solo (`727` → `7` + `27`, `100` → `1` + `00`). Los números de treinta a noventa llevan "y" (`34` → treinta y cuatro), menos las decenas redondas (`40` → cuarenta), y de 21 a 29 van con "veinti-" (`27` → veintisiete).
+
+Hay dos copias de esta lógica, `numeros.ts` en la Edge Function y `vozNumeros.js` en el navegador, porque el cliente no puede leer dentro de `supabase/functions/` y en un aviso agrupado el texto lo arma el KDS. `docs_local/probar-numeros.mjs` compara las dos sobre más de mil códigos para que no se separen sin que nadie se entere.
 
 ### Modelos disponibles
 | Modelo | Latencia | Precio API | Idiomas | Límite por request |
@@ -375,14 +403,44 @@ sistema"), para que nadie piense que el aviso salió con la voz buena.
 | Una comanda | 1 llamada, `200 audio/mpeg`, 87 815 B, 5,5 s, reproducido hasta el final |
 | Tres comandas juntas | 1 llamada agrupada, 179 348 B, 11,2 s, texto con los tres códigos |
 | Sin tocar la voz del sistema | `speechSynthesis.speak()` no se invocó en ningún caso |
-| Auditoría | `estado=emitido`, `canal=elevenlabs`, `voz=EXAVITQu4vr4xnSDxMaL`, `detalle` limpio |
+| Auditoría | `estado=emitido`, `canal=elevenlabs`, `voz=JBFqnCBsd6RMkjVDRZzb`, `detalle` limpio |
+| Idioma | `X-Voz-Idioma: es`, `X-Voz-Velocidad: 0.95` sobre `eleven_flash_v2_5` |
+| Texto generado | "Nueva comanda, número dos noventa y cinco. 1 Café Americano, 2 Capuchino." |
 
-### Un detalle del login local
+### La sesión es obligatoria para que suene
 
-El usuario de prueba es `empleado@coffeefast.cl` (**con doble "ee"**, tal como
-está en la base), pero el placeholder del formulario dice
-`empleado@coffeefaster.cl`. No es un problema de código de esta historia, pero
-confunde al probar.
+El aviso lo dispara el navegador del KDS, no la base: si no hay una pestaña del
+KDS con sesión iniciada y la voz activada, el pedido se crea igual y nadie lo
+anuncia. `docs_local/probar-sesion.mjs` cubre justo ese caso, incluida la
+comprobación de que el login no entre sin sesión real.
+
+El usuario de prueba es `empleado@coffeefast.cl` y el placeholder del formulario
+dice lo mismo (antes decía `coffeefaster.cl`, un dominio que no existe en Auth,
+as que el error de credenciales no se entendía).
+
+### La suite de pruebas
+
+Está en `docs_local/` y no se versiona porque depende de Firefox de Playwright
+instalado en el equipo de cada uno. Con el dev server, la Edge Function y la base
+levantadas:
+
+| Prueba | Qué cubre | Resultado esperado |
+|---|---|---|
+| `probar-numeros.mjs` | Lectura de códigos y que las dos copias coincidan | `NÚMEROS OK` |
+| `probar-sesion.mjs` | Login real, aviso con sesión y sin ella | `SESIÓN CORRECTA` |
+| `probar-voz.mjs` | MP3 de ElevenLabs reproducido entero | `TODO OK` |
+| `probar-cola-viva.mjs` | Avisos seguidos, con voz silenciada y tras recargar | `COLA SIEMPRE VIVA` |
+| `probar-sin-voces.mjs` | Fallback honesto cuando el equipo no tiene voces | `FALLBACK HONESTO` |
+| `probar-idioma.mjs` | Que a ElevenLabs le llegue `language_code: 'es'` y la velocidad | `IDIOMA OK` |
+
+`probar-idioma.mjs` intercepta la llamada a la Edge Function y lee las cabeceras
+`X-Voz-Idioma` y `X-Voz-Velocidad` en vez de creerle al navegador: son el único
+lugar donde se ve lo que realmente llegó a ElevenLabs.
+
+Una advertencia sobre los warnings: React registra como error de consola los
+props que llegan a un elemento del DOM. El markup del login que escribió otra
+persona produce uno (`alignItems` dentro de un `Button`) y `probar-voz.mjs` lo
+muestra aparte para que no tape el resultado real del audio.
 
 ---
 
