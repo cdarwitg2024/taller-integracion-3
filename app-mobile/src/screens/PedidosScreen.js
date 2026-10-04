@@ -107,7 +107,7 @@ const obtenerQrDesdeBackend = async (pedidoId) => {
   }
 };
 
-const PedidosScreen = ({ userId, onGoToCafeterias }) => {
+const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -333,6 +333,92 @@ const PedidosScreen = ({ userId, onGoToCafeterias }) => {
           }
         />
       )}
+
+      {/* Modal de confirmación de pedido pagado (FR-21) */}
+      <Modal
+        visible={Boolean(pedidoConfirmado)}
+        animationType="slide"
+        transparent
+        onRequestClose={onConfirmacionVista}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            {pedidoConfirmado && (
+              <>
+                <View style={styles.confirmacionHeader}>
+                  <View style={styles.confirmacionIcono}>
+                    <Text style={styles.confirmacionIconoTexto}>✓</Text>
+                  </View>
+                  <Text style={styles.confirmacionTitulo}>¡Pedido Confirmado!</Text>
+                  <TouchableOpacity
+                    style={styles.modalClose}
+                    onPress={onConfirmacionVista}
+                  >
+                    <Text style={styles.modalCloseText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.confirmacionInfo}>
+                  <View style={styles.confirmacionFila}>
+                    <Text style={styles.confirmacionLabel}>Pedido</Text>
+                    <Text style={styles.confirmacionValor}>
+                      #{pedidoConfirmado.pedido_id}
+                    </Text>
+                  </View>
+                  <View style={styles.confirmacionFila}>
+                    <Text style={styles.confirmacionLabel}>Total pagado</Text>
+                    <Text style={styles.confirmacionValor}>
+                      ${pedidoConfirmado.total.toLocaleString('es-CL')}
+                    </Text>
+                  </View>
+                  <View style={styles.confirmacionFila}>
+                    <Text style={styles.confirmacionLabel}>Saldo restante</Text>
+                    <Text style={styles.confirmacionValor}>
+                      ${pedidoConfirmado.saldo_restante.toLocaleString('es-CL')}
+                    </Text>
+                  </View>
+                  {pedidoConfirmado.franja_retiro && (
+                    <View style={styles.confirmacionFila}>
+                      <Text style={styles.confirmacionLabel}>Franja de retiro</Text>
+                      <Text style={styles.confirmacionValor}>
+                        {pedidoConfirmado.franja_retiro}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.confirmacionQrSection}>
+                  <Text style={styles.confirmacionQrTitulo}>
+                    Tu QR de retiro
+                  </Text>
+                  <Text style={styles.confirmacionQrHint}>
+                    Presenta este código al llegar a la cafetería
+                  </Text>
+                  <View style={styles.confirmacionQrBox}>
+                    <Text style={styles.confirmacionQrTexto}>
+                      {pedidoConfirmado.qr_token
+                        ? `QR-${pedidoConfirmado.qr_token.substring(0, 8).toUpperCase()}`
+                        : `QR-${pedidoConfirmado.pedido_id.toString().padStart(6, '0')}`}
+                    </Text>
+                  </View>
+                  <Text style={styles.confirmacionTokenTexto}>
+                    Token de contingencia: {pedidoConfirmado.codigo_retiro || `CF-${pedidoConfirmado.pedido_id.toString().padStart(4, '0')}`}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.confirmacionBoton}
+                  onPress={onConfirmacionVista}
+                >
+                  <Text style={styles.confirmacionBotonTexto}>
+                    Ver mis pedidos
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={Boolean(selected)}
@@ -668,6 +754,101 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#4A332C',
     textAlign: 'right',
+  },
+
+  // ─── Confirmación de Pedido (FR-21) ─────────────────────────
+  confirmacionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  confirmacionIcono: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E8F3E4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  confirmacionIconoTexto: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#5B8C51',
+  },
+  confirmacionTitulo: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#4A332C',
+  },
+  confirmacionInfo: {
+    backgroundColor: '#F8F6F4',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+  },
+  confirmacionFila: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  confirmacionLabel: {
+    fontSize: 12,
+    color: '#8A7B76',
+  },
+  confirmacionValor: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4A332C',
+  },
+  confirmacionQrSection: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  confirmacionQrTitulo: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4A332C',
+    marginBottom: 4,
+  },
+  confirmacionQrHint: {
+    fontSize: 11,
+    color: '#8A7B76',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  confirmacionQrBox: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#4A332C',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    marginBottom: 12,
+  },
+  confirmacionQrTexto: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#4A332C',
+    letterSpacing: 2,
+  },
+  confirmacionTokenTexto: {
+    fontSize: 12,
+    color: '#8A7B76',
+    textAlign: 'center',
+  },
+  confirmacionBoton: {
+    backgroundColor: '#4A332C',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  confirmacionBotonTexto: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
 

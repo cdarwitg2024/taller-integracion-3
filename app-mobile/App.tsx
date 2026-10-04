@@ -65,6 +65,20 @@ type PagoResult = {
   saldo_restante?: number;
   estado?: string;
   pago_estado?: string;
+  franja_retiro?: string;
+  qr_token?: string;
+  codigo_retiro?: string;
+};
+
+type PedidoConfirmado = {
+  pedido_id: number;
+  total: number;
+  saldo_restante: number;
+  franja_retiro?: string;
+  estado?: string;
+  pago_estado?: string;
+  qr_token?: string;
+  codigo_retiro?: string;
 };
 
 const TABS: { key: AppTab; label: string }[] = [
@@ -89,6 +103,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paying, setPaying] = useState(false);
+  const [pedidoConfirmado, setPedidoConfirmado] = useState<PedidoConfirmado | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -354,6 +369,19 @@ export default function App() {
         p_franja_retiro: franjaRetiro.franja,
       });
 
+      console.log('=== DEBUG procesar_pago ===');
+      console.log('Parámetros enviados:', {
+        p_cafeteria_id: cafeteriaId,
+        p_items: cart.map((item) => ({
+          producto_id: item.id,
+          cantidad: item.quantity,
+        })),
+        p_franja_retiro: franjaRetiro.franja,
+      });
+      console.log('Error:', error);
+      console.log('Data:', data);
+      console.log('=== FIN DEBUG ===');
+
       if (error) {
         Alert.alert(
           'No se pudo procesar el pago',
@@ -384,6 +412,16 @@ export default function App() {
 
       // Solo aca se vacia el carrito: el pago se aprobo y el saldo se debito.
       setCart([]);
+      setPedidoConfirmado({
+        pedido_id: resultado.pedido_id ?? 0,
+        total: resultado.total ?? 0,
+        saldo_restante: resultado.saldo_restante ?? 0,
+        franja_retiro: resultado.franja_retiro,
+        estado: resultado.estado,
+        pago_estado: resultado.pago_estado,
+        qr_token: resultado.qr_token,
+        codigo_retiro: resultado.codigo_retiro,
+      });
       Alert.alert(
         'Pago aprobado',
         `Tu pedido fue pagado con Wallet.\n` +
@@ -488,6 +526,8 @@ export default function App() {
             <PedidosScreen
               userId={isGuest ? null : session?.user?.id}
               onGoToCafeterias={() => handleTabPress('cafeterias')}
+              pedidoConfirmado={pedidoConfirmado}
+              onConfirmacionVista={() => setPedidoConfirmado(null)}
             />
           )}
 
