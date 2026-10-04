@@ -1,6 +1,8 @@
 import { supabase, isSupabaseConfigured } from '../service/supabase';
 import { CAFETERIA_ID } from './backendApi';
 
+import { codigoEnPalabras } from './vozNumeros.js';
+
 // ============================================================
 // T16 · Avisos de voz del KDS (ElevenLabs TTS)
 // ============================================================
@@ -66,7 +68,7 @@ const AUDIO_MUDO =
  */
 export function armarFrase(pedido) {
   const codigo = Number(pedido?.codigo_retiro_diario);
-  const numero = Number.isFinite(codigo) && codigo > 0 ? String(codigo) : null;
+  const numero = Number.isFinite(codigo) && codigo > 0 ? codigoEnPalabras(codigo) : null;
 
   const partes = [];
   for (const d of pedido?.detalles_pedido || []) {
@@ -102,7 +104,7 @@ export function armarFraseGrupo(pedidos) {
   const codigos = pedidos
     .map((p) => Number(p?.codigo_retiro_diario))
     .filter((c) => Number.isFinite(c) && c > 0)
-    .map(String);
+    .map(codigoEnPalabras);
 
   const encabezado = codigos.length === pedidos.length
     ? `, ${codigos.join(', ')}`

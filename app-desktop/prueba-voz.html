@@ -50,6 +50,42 @@
   </div>
 
   <div class="card">
+    <h2 style="font-size:16px">Escuchar un texto arbitrario</h2>
+    <p class="sub" style="margin:6px 0 14px">
+      Para comparar acentos, vitesse y la lectura de los códigos sin tener que
+      esperar que el KDS anuncie algo. Crea una comanda descartable y le pasa el
+      texto a la Edge Function; el audio se reproduce acá mismo.
+    </p>
+
+    <div class="acciones" style="display:block">
+      <textarea id="txtHablar" rows="2" style="width:100%;padding:10px;border-radius:8px;border:1px solid #D8CCC4;font-family:inherit;font-size:14px"
+        placeholder="Ej: Nueva comanda, número siete veintisiete. 2 cafés, 1 medialuna.">Nueva comanda, número 727. 2 cafés, 1 medialuna.</textarea>
+
+      <div class="acciones" style="margin-top:10px;flex-wrap:wrap">
+        <label style="font-size:13px">Idioma
+          <select id="selIdioma" style="padding:6px;border-radius:6px;border:1px solid #D8CCC4">
+            <option value="es" selected>es (forzado)</option>
+            <option value="en">en</option>
+            <option value="pt">pt</option>
+            <option value="fr">fr</option>
+            <option value="de">de</option>
+            <option value="it">it</option>
+          </select>
+        </label>
+
+        <label style="font-size:13px">Velocidad
+          <input id="rngVelocidad" type="range" min="0.7" max="1.2" step="0.05" value="0.95" style="vertical-align:middle">
+          <span id="lblVelocidad">0.95</span>
+        </label>
+
+        <button id="btnHablar" class="play">🔊 Escuchar</button>
+      </div>
+    </div>
+
+    <div class="log" id="logHablar">— sin reproducciones —</div>
+  </div>
+
+  <div class="card">
     <h2 style="font-size:16px">Qué se está probando</h2>
     <ol>
       <li>El <strong>INSERT</strong> en <code>pedidos</code> dispara el Realtime del KDS.</li>
@@ -101,6 +137,8 @@
 
     const CAFETERIA_ID = Number(import.meta.env.VITE_CAFETERIA_ID || 1);
     const PREFIJO = 'PRUEBA';
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+    const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const btnUna = document.getElementById('btnUna');
     const btnRafa = document.getElementById('btnRafa');
@@ -108,7 +146,24 @@
     const estado = document.getElementById('estado');
     const log = document.getElementById('log');
 
+    // Panel de texto libre: idioma y velocidad para comparar acentos sin
+    // tener que crear comandas de prueba a mano.
+    const btnHablar = document.getElementById('btnHablar');
+    const txtHablar = document.getElementById('txtHablar');
+    const selIdioma = document.getElementById('selIdioma');
+    const rngVelocidad = document.getElementById('rngVelocidad');
+    const lblVelocidad = document.getElementById('lblVelocidad');
+    const logHablar = document.getElementById('logHablar');
+
+    let lineasHablar = [];
     let lineas = [];
+
+    function escribirHablar(txt) {
+      const hora = new Date().toLocaleTimeString('es-CL');
+      lineasHablar.unshift(`[${hora}] ${txt}`);
+      lineasHablar = lineasHablar.slice(0, 40);
+      logHablar.textContent = lineasHablar.join('\n');
+    }
 
     function escribir(txt) {
       const hora = new Date().toLocaleTimeString('es-CL');
@@ -262,6 +317,97 @@
       escribir(`${ids.length} comanda(s) de prueba borradas.`);
       decir('Comandas de prueba borradas.');
     }, 'Borrando comandas de prueba…'));
+
+    rngVelocidad.addEventListener('input', () => {
+      lblVelocidad.textContent = Number(rngVelocidad.value).toFixed(2);
+    });
+
+    /**
+     * Escuchar un texto suelto.
+     *
+     * La Edge Function no es un TTS abierto: para gerar audio exige un
+     * pedido pendiente y reserves el pedido en anuncios_pedido, que es lo
+     * que evita que se repita el mismo aviso. Así que para probar un texto
+     * hay que crear una comanda descartable, pasar el texto y borrarla.
+     * Se avisa de los tres pasos porque si queda una a medias la base se
+     * va llenando de comandas de prueba.
+     */
+    async function hablarTextoLibre() {
+      const texto = (txtHablar.value || '').trim();
+      if (!texto) throw new Error('Escribí algo para escuchar.');
+
+      const idioma = selIdioma.value;
+      const velocidad = Number(rngVelocidad.value);
+
+      const { data: sesion } = await supabase.auth.getSession();
+      if (!sesion?.session?.access_token) {
+        throw new Error('No hay sesión en esta pestaña. Iniciá sesión como empleado o dueño primero.');
+      }
+      const token = sesion.session.access_token;
+
+      btnHablar.disabled = true;
+      escribirHablar(`"${texto}" (${idioma}, ${velocidad.toFixed(2)})`);
+
+      // La función no es un TTS abierto: pide un pedido pendiente y lo
+      // reserva, que es lo que evita repetir el mismo aviso. El problema
+      // es que al crear el pedido, el KDS abierto lo ve por Realtime y
+      // trata de anunciarlo también: si el KDS gana la reserva, esta
+      // llamada vuelve con ya_anunciado y sin audio. Por eso se reintenta
+      // con un pedido nuevo en vez de fingir que sonó algo.
+      for (let intento = 1; intento <= 3; intento++) {
+        escribirHablar(`Intento ${intento}: creando comanda descartable…`);
+        const p = await crearComanda();
+
+        try {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/voz-pedido`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ pedido_id: p.id, texto, idioma, velocidad }),
+          });
+
+          if (!res.ok) {
+            const cuerpo = await res.json().catch(() => ({}));
+            throw new Error(`La función respondió ${res.status}: ${cuerpo.error || 'sin detalle'}`);
+          }
+
+          // El servidor avisa por acá si lo realmente aplicado fue otro.
+          const idiomaAplicado = res.headers.get('X-Voz-Idioma') || '(sin espejo)';
+          const velocidadAplicada = res.headers.get('X-Voz-Velocidad') || '(sin espejo)';
+          escribirHablar(`   idioma aplicado: ${idiomaAplicado} · velocidad: ${velocidadAplicada}`);
+
+          // Si el KDS se adelantó, la respuesta es JSON y no hay audio.
+          if ((res.headers.get('content-type') || '').includes('application/json')) {
+            const cuerpo = await res.json().catch(() => ({}));
+            escribirHablar(`   el KDS se adelantó y ya lo anunció (${cuerpo.motivo || 'reservado'}). Se prueba con otra comanda.`);
+            continue;
+          }
+
+          const audio = await res.arrayBuffer();
+          const blob = new Blob([audio], { type: 'audio/mpeg' });
+          const url = URL.createObjectURL(blob);
+          const el = new Audio(url);
+          await el.play();
+          escribirHablar(`✓ Sonando (${(audio.byteLength / 1024).toFixed(0)} KB, ${texto.length} caracteres).`);
+          return;
+        } finally {
+          await supabase.from('detalles_pedido').delete().eq('pedido_id', p.id);
+          await supabase.from('anuncios_pedido').delete().eq('pedido_id', p.id);
+          await supabase.from('pedidos').delete().eq('id', p.id);
+          escribirHablar(`   comanda #${p.id} descartable borrada.`);
+        }
+      }
+
+      throw new Error('El KDS anunciando se adelantó 3 veces. Cerrá el KDS o apagá la voz y probá de nuevo.');
+    }
+
+    btnHablar.addEventListener('click', () => hablarTextoLibre().catch((e) => {
+      escribirHablar(`ERROR: ${e.message || e}`);
+      btnHablar.disabled = false;
+    }));
 
     if (!isSupabaseConfigured) {
       decir('Supabase NO está configurado: revisa app-desktop/.env');

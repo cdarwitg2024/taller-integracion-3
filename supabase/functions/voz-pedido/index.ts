@@ -20,10 +20,20 @@
 // Variables de entorno requeridas:
 //   ELEVENLABS_API_KEY   (secreto, required)
 //   ELEVEN_MODELO        (opcional, default eleven_flash_v2_5)
-//   ELEVEN_VOZ           (opcional, id de voz; debe soportar español)
+//   ELEVEN_VOZ           (opcional, id de voz)
+//   ELEVEN_IDIOMA        (opcional, default es)
+//   ELEVEN_VELOCIDAD     (opcional, default 0.95; rango 0.7 a 1.2)
+//
+// Sobre el idioma: no hay una voz nativa en español disponible con la
+// clave actual (el endpoint /v1/voices responde 401 missing_permissions,
+// o sea que solo hay permiso de TTS). La salida se fuerza a español con
+// language_code, que es lo que hace que George suene con fonética
+// española. Si algún día hay una voz española de verdad, basta cambiar
+// ELEVEN_VOZ: el resto del código no cambia.
 // ============================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.10';
+import { codigoEnPalabras } from './numeros.ts';
 
 const MODELO_DEFAULT = 'eleven_flash_v2_5';
 // Sarah funciona con el plan gratuito de ElevenLabs. No todas las voces de la
@@ -34,12 +44,20 @@ const VOZ_DEFAULT = 'EXAVITQu4vr4xnSDxMaL'; // Sarah
 const MAX_CARACTERES = 300;
 const TIMEOUT_ELEVEN_MS = 10000;
 const MAX_ITEMS_HABLA = 4;
+const IDIOMA_DEFAULT = 'es';
+const VELOCIDAD_DEFAULT = 0.95;
+// Rango que acepta la API de ElevenLabs para voice_settings.speed.
+const VELOCIDAD_MIN = 0.7;
+const VELOCIDAD_MAX = 1.2;
+// El cliente puede pedir idioma/velocidad (lo usa el panel de pruebas), pero
+// sin control: cualquier otra cosa se cae al valor configurado.
+const IDIOMAS_PERMITIDOS = ['es', 'en', 'pt', 'fr', 'de', 'it'];
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Expose-Headers': 'X-Voz-Texto',
+  'Access-Control-Expose-Headers': 'X-Voz-Texto, X-Voz-Modelo, X-Voz-Idioma, X-Voz-Velocidad',
 };
 
 function json(body, status) {
@@ -55,12 +73,12 @@ function pluralizar(cantidad, singular, plural) {
 }
 
 /**
- * Arma la frase del aviso con datos leídos de la base.
+ * Texto del aviso de un pedido, con el código ya en palabras.
  * Espejo de armarFrase() en app-desktop/src/services/vozKdsService.js
  */
 function armarFrase(pedido, detalles) {
   const codigo = Number(pedido.codigo_retiro_diario);
-  const numero = Number.isFinite(codigo) && codigo > 0 ? String(codigo) : null;
+  const numero = Number.isFinite(codigo) && codigo > 0 ? codigoEnPalabras(codigo) : '';
 
   const partes = [];
   for (const d of detalles) {
@@ -77,6 +95,23 @@ function armarFrase(pedido, detalles) {
 
   if (texto.length > MAX_CARACTERES) texto = texto.slice(0, MAX_CARACTERES - 1) + '…';
   return texto;
+}
+
+/** Lee ELEVEN_VELOCIDAD y la acota al rango que acepta la API. */
+function velocidadConfig() {
+  const crudo = Number(Deno.env.get('ELEVEN_VELOCIDAD'));
+  if (!Number.isFinite(crudo)) return VELOCIDAD_DEFAULT;
+  return Math.min(VELOCIDAD_MAX, Math.max(VELOCIDAD_MIN, crudo));
+}
+
+/**
+ * Idioma pedido por el cliente. Solo se acepta un código corto de la
+ * lista: el panel lo usa para comparar acentos, pero no se le da
+ * control libre sobre la locución.
+ */
+function normalizarIdioma(bruto) {
+  const codigo = String(bruto || '').trim().toLowerCase().slice(0, 5);
+  return IDIOMAS_PERMITIDOS.includes(codigo) ? codigo : null;
 }
 
 Deno.serve(async (req) => {
@@ -130,6 +165,8 @@ Deno.serve(async (req) => {
   // ---------------------------------------------------------------
   let pedidoId;
   let textoDelCliente = null;
+  let idiomaPedido = null;
+  let velocidadPedida = null;
   try {
     const cuerpo = await req.json();
     pedidoId = Number(cuerpo?.pedido_id);
@@ -139,6 +176,11 @@ Deno.serve(async (req) => {
     if (typeof cuerpo?.texto === 'string' && cuerpo.texto.trim()) {
       textoDelCliente = cuerpo.texto.replace(/\s+/g, ' ').trim().slice(0, MAX_CARACTERES);
     }
+    idiomaPedido = normalizarIdioma(cuerpo?.idioma);
+    const v = Number(cuerpo?.velocidad);
+    velocidadPedida = Number.isFinite(v)
+      ? Math.min(VELOCIDAD_MAX, Math.max(VELOCIDAD_MIN, v))
+      : null;
   } catch {
     return json({ error: 'cuerpo_invalido' }, 400);
   }
@@ -215,6 +257,25 @@ Deno.serve(async (req) => {
   // ---------------------------------------------------------------
   const modelo = Deno.env.get('ELEVEN_MODELO') || MODELO_DEFAULT;
   const voz = Deno.env.get('ELEVEN_VOZ') || VOZ_DEFAULT;
+  const idioma = idiomaPedido || Deno.env.get('ELEVEN_IDIOMA') || IDIOMA_DEFAULT;
+  const velocidad = velocidadPedida ?? velocidadConfig();
+
+  // language_code solo existe en los modelos v2_5. Mandarlo en un
+  // multilingual_v2 devuelve 422 y se pierde el audio, así que se
+  // manda solo cuando el modelo lo soporta.
+  const aceptaIdioma = modelo.includes('v2_5');
+  const cuerpo = {
+    text: texto,
+    model_id: modelo,
+    ...(aceptaIdioma ? { language_code: idioma } : {}),
+    voice_settings: {
+      stability: 0.5,
+      similarity_boost: 0.75,
+      style: 0.3,
+      use_speaker_boost: true,
+      speed: velocidad,
+    },
+  };
 
   let res;
   try {
@@ -228,16 +289,7 @@ Deno.serve(async (req) => {
       // Un TTS colgado no puede dejar la función abierta: el KDS
       // espera pocos segundos y después usa la voz del sistema.
       signal: AbortSignal.timeout(TIMEOUT_ELEVEN_MS),
-      body: JSON.stringify({
-        text: texto,
-        model_id: modelo,
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          style: 0.3,
-          use_speaker_boost: true,
-        },
-      }),
+      body: JSON.stringify(cuerpo),
     });
   } catch (e) {
     const esTimeout = e?.name === 'TimeoutError' || e?.name === 'AbortError';
@@ -302,6 +354,12 @@ Deno.serve(async (req) => {
       'Content-Type': 'audio/mpeg',
       'Cache-Control': 'no-store',
       'X-Voz-Texto': encodeURIComponent(texto),
+      // Eco de lo que realmente se le pidió a ElevenLabs. Sirve para
+      // probar el idioma y la velocidad desde el navegador sin tener que
+      // abrir el panel de ElevenLabs, y no expone nada secreto.
+      'X-Voz-Modelo': modelo,
+      'X-Voz-Idioma': aceptaIdioma ? idioma : '(modelo sin language_code)',
+      'X-Voz-Velocidad': String(velocidad),
     },
   });
 });
