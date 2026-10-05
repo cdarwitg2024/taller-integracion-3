@@ -128,7 +128,7 @@ Tres reglas que hacen que esto sea robusto:
 
 | # | Archivo | Responsabilidad |
 |---|---|---|
-| 1 | `supabase/functions/voz-pedido/index.ts` | Edge Function. Valida el JWT del empleado y que el rol sea 2 o 3, valida que el pedido exista y esté `pendiente`, reserva el pedido en `anuncios_pedido` (si ya lo estaba, responde `ya_anunciado` sin llamar a ElevenLabs), pide el audio y lo devuelve como MP3. |
+| 1 | `supabase/functions/voz-pedido/index.ts` | Edge Function. Valida el JWT del empleado y que el rol sea **2** (el dueño recibe 403), valida que el pedido exista y esté `pendiente`, reserva el pedido en `anuncios_pedido` (si ya lo estaba, responde `ya_anunciado` sin llamar a ElevenLabs), pide el audio y lo devuelve como MP3. |
 | 2 | `database/fixes/crear_anuncios_pedido.sql` (+ espejo en `scrips_database/fixes/`) | Tabla `anuncios_pedido` con `pedido_id` **único**: es la garantía de "una vez por pedido". Columnas: `id`, `pedido_id`, `cafeteria_id`, `usuario_id`, `canal`, `modelo`, `voz`, `caracteres`, `estado`, `detalle`, `creado_en`, `emitido_en`. |
 | 3 | `app-desktop/src/services/vozKdsService.js` | Cliente. Arma la frase desde los detalles del pedido, invoca la función, reproduce el audio, maneja la cascada, la cola, el agrupamiento, el silenciar y el desbloqueo de audio. |
 | 4 | Toggle 🔊 en `components/KdsTopBar.jsx` | Interruptor de avisos de voz con estado visible (activo / silenciado / sin permisos). |
