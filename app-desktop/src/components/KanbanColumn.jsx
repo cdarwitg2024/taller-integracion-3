@@ -24,13 +24,13 @@ function KanbanColumn({ titulo, count, backgroundColor, headerColor = '#4A3B32',
           flexShrink: 0,
         }}
       >
-        <Typography variant="h5" fontWeight={700} sx={{ color: headerColor }}>
+        <Typography variant="h4" fontWeight={800} sx={{ color: headerColor, fontSize: { xs: '1.5rem', sm: '1.8rem', md: '2rem' } }}>
           {titulo}
         </Typography>
         <Chip
           label={count}
           size="medium"
-          sx={{ minWidth: 48, minHeight: 48, fontSize: '1.05rem', fontWeight: 800 }}
+          sx={{ minWidth: 52, minHeight: 52, fontSize: '1.25rem', fontWeight: 900 }}
         />
       </Box>
 

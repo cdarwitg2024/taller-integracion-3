@@ -63,7 +63,7 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
         <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between', alignItems: 'center'}}>
           <Box>
             <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.5rem' }}>
+              <Typography variant="h5" fontWeight={800} sx={{ fontSize: { xs: '1.6rem', md: '1.9rem' } }}>
                 {pedido.codigo_pedido || `#${pedido.rawId ?? pedido.id}`}
               </Typography>
               {estadoImpresion.veces > 0 && (
@@ -96,7 +96,7 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
               {pedido.franja_retiro ? ` · Retiro ${pedido.franja_retiro}` : ''}
             </Typography>
           </Box>
-          <TimeAgo pedido={pedido} sx={{ fontSize: '1.05rem' }} />
+            <TimeAgo pedido={pedido} sx={{ fontSize: '1.15rem', fontWeight: 800 }} />
         </Stack>
 
         <Stack direction="row" sx={{ mt: 1.5, justifyContent: 'space-between', alignItems: 'center'}}>
@@ -105,13 +105,14 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
               sx={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                minHeight: 40,
-                px: 2,
+                minHeight: 44,
+                px: 2.5,
                 borderRadius: 2,
                 backgroundColor: etiqueta.fondo,
                 color: etiqueta.texto,
-                fontWeight: 800,
+                fontWeight: 900,
                 letterSpacing: 0.5,
+                fontSize: '1.05rem',
               }}
             >
               {etiqueta.label}
@@ -119,8 +120,8 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
           )}
 
           <Typography
-            fontWeight={800}
-            sx={{ color: '#4A3B32', whiteSpace: 'nowrap', fontSize: '1.05rem' }}
+            fontWeight={900}
+            sx={{ color: '#4A3B32', whiteSpace: 'nowrap', fontSize: '1.15rem' }}
           >
             🕐 {horaRetiro}
           </Typography>
@@ -132,8 +133,8 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
           {pedido.productos?.map((item, idx) => (
             <Typography
               key={idx}
-              fontWeight={700}
-              sx={{ fontSize: '1.1rem', color: '#4A3B32', lineHeight: 1.5 }}
+              fontWeight={800}
+              sx={{ fontSize: '1.2rem', color: '#4A3B32', lineHeight: 1.6 }}
             >
               {item.nombre} × {item.cantidad}
             </Typography>

@@ -159,10 +159,10 @@ function StockEmpleado({ currentUser }) {
     <Box sx={{ p: { xs: 2, sm: 3 } }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, color: '#4A3728' }}>
+        <Typography variant="h4" fontWeight={800} sx={{ color: 'text.primary' }}>
           Stock
         </Typography>
-        <Typography variant="body2" sx={{ color: '#8D7A5C', mt: 0.5 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
           Consulta de stock actual. No se muestran precios (solo empleado).
         </Typography>
       </Box>

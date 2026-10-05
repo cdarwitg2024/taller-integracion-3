@@ -27,6 +27,8 @@ import { supabase } from './service/supabase';
 const drawerWidth = 260;
 
 // Layout compartido con Sidebar adaptado al rol y la ruta activa
+import AppLayout from './layouts/AppLayout';
+
 function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -55,7 +57,7 @@ function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
     {
       id: 'logs',
       path: '/dueno/logs',
-      label: 'Logs Validación',
+      label: 'Logs de Validación',
       icon: <HistoryOutlinedIcon fontSize="small" />,
     },
     {
@@ -82,44 +84,17 @@ function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
   ];
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        minHeight: '100vh',
-        backgroundColor: '#FAF7F5',
-        width: '100%',
-        maxWidth: '100vw',
-        overflowX: 'hidden',
-      }}
+    <AppLayout
+      currentPage={location.pathname}
+      onNavigate={(path) => navigate(path)}
+      onLogout={onLogout}
+      menuItems={isEmpleado ? empleadoMenuItems : duenoMenuItems}
+      subtitle={isEmpleado ? 'Terminal de Cocina' : 'Panel de Administración'}
+      currentUser={currentUser}
     >
       <CssBaseline />
-
-      {/* Menú lateral reactivo a la URL actual */}
-      <Sidebar
-        currentPage={location.pathname}
-        onNavigate={(path) => navigate(path)}
-        onLogout={onLogout}
-        menuItems={isEmpleado ? empleadoMenuItems : duenoMenuItems}
-        subtitle={isEmpleado ? 'Terminal de Cocina' : 'Panel de Administración'}
-        currentUser={currentUser}
-      />
-
-      {/* Contenedor principal de la página */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
-          minWidth: 0,
-          p: { xs: 2.5, md: 4 },
-          backgroundColor: '#FAF7F5',
-          minHeight: '100vh',
-          boxSizing: 'border-box',
-        }}
-      >
-        {children}
-      </Box>
-    </Box>
+      {children}
+    </AppLayout>
   );
 }
 
