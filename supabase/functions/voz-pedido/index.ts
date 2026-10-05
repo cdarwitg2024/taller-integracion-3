@@ -277,35 +277,84 @@ Deno.serve(async (req) => {
     },
   };
 
+  // Reintentos para lo que se va solo si se espera un poco:
+  //
+  //   - errores de red (DNS, conexión cortada): en una cocina con wifi
+  //     esto aparece a diario y el aviso se perdía entero;
+  //   - 429 (límite de requests) y 5xx ( ElevenLabs caído un momento).
+  //
+  // Un 404 NO se reintenta (el id de voz está mal y va a seguir mal) ni
+  // un 4xx de validación (el pedido del texto está mal): ahí reintentar
+  // solo gasta tiempo y cuota.
+  //
+  // El timeout por intento se mantiene corto para que el KDS no espere
+  // de más, pero con tres intentos la probabilidad de perder el aviso
+  // por un tropiezo de red baja muchísimo.
+  const INTENTOS = 3;
+  const ESPERA_ENTRE_INTENTOS_MS = 400;
+  const TIMEOUT_POR_INTENTO_MS = TIMEOUT_ELEVEN_MS;
+
+  const transitorio = (e) => {
+    // Timeout es recuperable: el TTS a veces tarda y el siguiente entra.
+    const nombre = e?.name;
+    return nombre === 'TimeoutError' || nombre === 'AbortError';
+  };
+
   let res;
-  try {
-    res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voz}`, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': apiKey,
-        'Content-Type': 'application/json',
-        Accept: 'audio/mpeg',
-      },
-      // Un TTS colgado no puede dejar la función abierta: el KDS
-      // espera pocos segundos y después usa la voz del sistema.
-      signal: AbortSignal.timeout(TIMEOUT_ELEVEN_MS),
-      body: JSON.stringify(cuerpo),
-    });
-  } catch (e) {
-    const esTimeout = e?.name === 'TimeoutError' || e?.name === 'AbortError';
+  let ultimoError;
+
+  for (let intento = 1; intento <= INTENTOS; intento++) {
+    try {
+      res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voz}`, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': apiKey,
+          'Content-Type': 'application/json',
+          Accept: 'audio/mpeg',
+        },
+        // Un TTS colgado no puede dejar la función abierta: el KDS
+        // espera pocos segundos y después usa la voz del sistema.
+        signal: AbortSignal.timeout(TIMEOUT_POR_INTENTO_MS),
+        body: JSON.stringify(cuerpo),
+      });
+    } catch (e) {
+      ultimoError = e;
+      if (intento < INTENTOS) {
+        await new Promise((r) => setTimeout(r, ESPERA_ENTRE_INTENTOS_MS * intento));
+        continue;
+      }
+      const esTimeout = transitorio(e);
+      await admin
+        .from('anuncios_pedido')
+        .update({
+          estado: 'fallido',
+          detalle: esTimeout
+            ? `timeout ${TIMEOUT_POR_INTENTO_MS}ms esperando a ElevenLabs (${INTENTOS} intentos)`
+            : `red: ${String(e).slice(0, 180)} (${INTENTOS} intentos)`,
+        })
+        .eq('pedido_id', pedido.id);
+      return json(
+        { error: esTimeout ? 'elevenlabs_timeout' : 'elevenlabs_inalcanzable' },
+        502,
+      );
+    }
+
+    if (res.ok) break;
+
+    const seReintenta = res.status === 429 || res.status >= 500;
+    if (!seReintenta || intento === INTENTOS) break;
+
+    await new Promise((r) => setTimeout(r, ESPERA_ENTRE_INTENTOS_MS * intento));
+  }
+
+  if (ultimoError && !res) {
+    // No debería alcanzarse (el catch ya devuelve), pero evita seguir
+    // con un res indefinido si mañana alguien cambia el bucle.
     await admin
       .from('anuncios_pedido')
-      .update({
-        estado: 'fallido',
-        detalle: esTimeout
-          ? `timeout ${TIMEOUT_ELEVEN_MS}ms esperando a ElevenLabs`
-          : `red: ${String(e).slice(0, 180)}`,
-      })
+      .update({ estado: 'fallido', detalle: `red: ${String(ultimoError).slice(0, 180)}` })
       .eq('pedido_id', pedido.id);
-    return json(
-      { error: esTimeout ? 'elevenlabs_timeout' : 'elevenlabs_inalcanzable' },
-      502,
-    );
+    return json({ error: 'elevenlabs_inalcanzable' }, 502);
   }
 
   if (!res.ok) {
@@ -325,7 +374,11 @@ Deno.serve(async (req) => {
 
     await admin
       .from('anuncios_pedido')
-      .update({ estado: 'fallido', detalle: `http ${res.status}: ${cuerpo.slice(0, 180)}` })
+      .update({
+        estado: 'fallido',
+        detalle: `http ${res.status}: ${cuerpo.slice(0, 180)}`
+          + (res.status === 429 || res.status >= 500 ? ` (tras ${INTENTOS} intentos)` : ''),
+      })
       .eq('pedido_id', pedido.id);
     return json({ error: 'elevenlabs_rechazado', status: res.status }, 502);
   }
