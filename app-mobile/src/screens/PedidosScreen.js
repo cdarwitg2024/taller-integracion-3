@@ -12,14 +12,20 @@ import {
 
 import { supabase } from '../lib/supabase';
 import QrCode from '../lib/QrCode';
+import Button from '../components/Button';
+import Card from '../components/Card';
+import Header from '../components/Header';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 const ESTADOS = {
-  pendiente: { label: 'Pendiente', color: '#B58A29', bg: '#FBF3E0' },
-  preparando: { label: 'En preparación', color: '#C96F3B', bg: '#FCEAE3' },
-  en_preparacion: { label: 'En preparación', color: '#C96F3B', bg: '#FCEAE3' },
-  listo: { label: 'Listo para retiro', color: '#5B8C51', bg: '#E8F3E4' },
-  entregado: { label: 'Entregado', color: '#4A332C', bg: '#EFE7DD' },
-  cancelado: { label: 'Cancelado', color: '#A92A2A', bg: '#F7E3E3' },
+  pendiente: { label: 'Pendiente', color: colors.naranja, bg: colors.naranjaBg },
+  preparando: { label: 'En preparación', color: colors.naranja, bg: colors.rojoBg },
+  en_preparacion: { label: 'En preparación', color: colors.naranja, bg: colors.rojoBg },
+  listo: { label: 'Listo para retiro', color: colors.verde, bg: colors.verdeBg },
+  entregado: { label: 'Entregado', color: colors.cafeOscuro, bg: colors.borde },
+  cancelado: { label: 'Cancelado', color: colors.rojo, bg: colors.rojoBg },
 };
 
 const fallbackOrders = [
@@ -107,7 +113,7 @@ const obtenerQrDesdeBackend = async (pedidoId) => {
   }
 };
 
-const PedidosScreen = ({ userId, onGoToCafeterias }) => {
+const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -267,9 +273,10 @@ const PedidosScreen = ({ userId, onGoToCafeterias }) => {
     return (
       <TouchableOpacity
         activeOpacity={0.85}
-        style={styles.card}
-            onPress={() => abrirPedido(item)}
+        style={styles.cardWrapper}
+        onPress={() => abrirPedido(item)}
       >
+        <Card variant="elevated" padding="lg">
         <View style={styles.cardTop}>
           <Text style={styles.cardCodigo}>{item.codigo_pedido}</Text>
           <View style={[styles.badge, { backgroundColor: estado.bg }]}>
@@ -289,22 +296,24 @@ const PedidosScreen = ({ userId, onGoToCafeterias }) => {
             {detalles.map((d) => `${d.cantidad}× ${d.nombre}`).join(' · ')}
           </Text>
         )}
+        </Card>
       </TouchableOpacity>
     );
   };
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={{ width: 36 }} />
-        <Text style={styles.headerTitle}>Mis Pedidos</Text>
-        <View style={styles.headerIcon}>
-          <Text style={styles.headerIconText}>▣</Text>
-        </View>
-      </View>
+      <Header
+        title="Mis Pedidos"
+        rightElement={
+          <View style={styles.headerIcon}>
+            <Text style={styles.headerIconText}>▣</Text>
+          </View>
+        }
+      />
 
       {loading ? (
-        <ActivityIndicator size="large" color="#4A332C" style={{ marginTop: 48 }} />
+        <ActivityIndicator size="large" color={colors.cafeOscuro} style={{ marginTop: 48 }} />
       ) : (
         <FlatList
           data={orders}
@@ -326,13 +335,99 @@ const PedidosScreen = ({ userId, onGoToCafeterias }) => {
               <Text style={styles.emptyDescription}>
                 Cuando hagas tu primer pedido aparecerá aquí con su estado y el código de retiro.
               </Text>
-              <TouchableOpacity style={styles.emptyButton} onPress={onGoToCafeterias}>
-                <Text style={styles.emptyButtonText}>Ver cafeterías</Text>
-              </TouchableOpacity>
+              <Button
+                title="Ver cafeterías"
+                onPress={onGoToCafeterias}
+                size="md"
+                style={{ marginTop: 18 }}
+              />
             </View>
           }
         />
       )}
+
+      {/* Modal de confirmación de pedido pagado (FR-21) */}
+      <Modal
+        visible={Boolean(pedidoConfirmado)}
+        animationType="slide"
+        transparent
+        onRequestClose={onConfirmacionVista}
+      >
+        <View style={styles.modalBackdrop}>
+          <Card variant="elevated" padding="lg" style={styles.modalCard}>
+            {pedidoConfirmado && (
+              <>
+                <View style={styles.confirmacionHeader}>
+                  <View style={styles.confirmacionIcono}>
+                    <Text style={styles.confirmacionIconoTexto}>✓</Text>
+                  </View>
+                  <Text style={styles.confirmacionTitulo}>¡Pedido Confirmado!</Text>
+                  <TouchableOpacity
+                    style={styles.modalClose}
+                    onPress={onConfirmacionVista}
+                  >
+                    <Text style={styles.modalCloseText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.confirmacionInfo}>
+                  <View style={styles.confirmacionFila}>
+                    <Text style={styles.confirmacionLabel}>Pedido</Text>
+                    <Text style={styles.confirmacionValor}>
+                      #{pedidoConfirmado.pedido_id}
+                    </Text>
+                  </View>
+                  <View style={styles.confirmacionFila}>
+                    <Text style={styles.confirmacionLabel}>Total pagado</Text>
+                    <Text style={styles.confirmacionValor}>
+                      ${pedidoConfirmado.total.toLocaleString('es-CL')}
+                    </Text>
+                  </View>
+                  <View style={styles.confirmacionFila}>
+                    <Text style={styles.confirmacionLabel}>Saldo restante</Text>
+                    <Text style={styles.confirmacionValor}>
+                      ${pedidoConfirmado.saldo_restante.toLocaleString('es-CL')}
+                    </Text>
+                  </View>
+                  {pedidoConfirmado.franja_retiro && (
+                    <View style={styles.confirmacionFila}>
+                      <Text style={styles.confirmacionLabel}>Franja de retiro</Text>
+                      <Text style={styles.confirmacionValor}>
+                        {pedidoConfirmado.franja_retiro}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.confirmacionQrSection}>
+                  <Text style={styles.confirmacionQrTitulo}>
+                    Tu QR de retiro
+                  </Text>
+                  <Text style={styles.confirmacionQrHint}>
+                    Presenta este código al llegar a la cafetería
+                  </Text>
+                  <View style={styles.confirmacionQrBox}>
+                    <Text style={styles.confirmacionQrTexto}>
+                      {pedidoConfirmado.qr_token
+                        ? `QR-${pedidoConfirmado.qr_token.substring(0, 8).toUpperCase()}`
+                        : `QR-${pedidoConfirmado.pedido_id.toString().padStart(6, '0')}`}
+                    </Text>
+                  </View>
+                  <Text style={styles.confirmacionTokenTexto}>
+                    Token de contingencia: {pedidoConfirmado.codigo_retiro || `CF-${pedidoConfirmado.pedido_id.toString().padStart(4, '0')}`}
+                  </Text>
+                </View>
+
+                <Button
+                  title="Ver mis pedidos"
+                  onPress={onConfirmacionVista}
+                  size="lg"
+                />
+              </>
+            )}
+          </Card>
+        </View>
+      </Modal>
 
       <Modal
         visible={Boolean(selected)}
@@ -341,7 +436,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias }) => {
         onRequestClose={cerrarPedido}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <Card variant="elevated" padding="lg" style={styles.modalCard}>
             {selected && (
               <>
                 <View style={styles.modalHeader}>
@@ -466,7 +561,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias }) => {
                 )}
               </>
             )}
-          </View>
+          </Card>
         </View>
       </Modal>
     </View>
@@ -474,200 +569,255 @@ const PedidosScreen = ({ userId, onGoToCafeterias }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F6F4' },
-  header: {
-    height: 72,
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-  },
-  headerTitle: { fontSize: 16, fontWeight: '600', color: '#4A332C' },
+  container: { flex: 1, backgroundColor: colors.fondo },
+  cardWrapper: { marginBottom: spacing.md },
   headerIcon: {
     width: 35,
     height: 35,
     borderRadius: 8,
-    backgroundColor: '#4A332C',
+    backgroundColor: colors.cafeOscuro,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerIconText: { color: '#FFFFFF' },
-  list: { padding: 16, paddingBottom: 25 },
+  headerIconText: { color: colors.blanco },
+  list: { padding: spacing.lg, paddingBottom: 25 },
   infoBanner: {
-    backgroundColor: '#F5ECE5',
-    marginBottom: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    backgroundColor: colors.crema,
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderRadius: 16,
   },
   infoBannerText: {
     textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4A332C',
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
   },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardCodigo: { fontSize: 14, fontWeight: '800', color: '#4A332C' },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  badgeText: { fontSize: 10, fontWeight: '700' },
-  cardCafeteria: { fontSize: 12, color: '#8A7B76', marginTop: 6 },
+  cardCodigo: { fontSize: typography.cuerpo, fontWeight: typography.pesoExtraBold, color: colors.cafeOscuro },
+  badge: { paddingHorizontal: 10, paddingVertical: spacing.xs, borderRadius: 12 },
+  badgeText: { fontSize: typography.etiqueta, fontWeight: typography.pesoBold },
+  cardCafeteria: { fontSize: typography.cuerpoPequeno, color: colors.textoSecundario, marginTop: 6 },
   cardBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: spacing.md,
   },
-  cardDate: { fontSize: 10, color: '#A09590' },
-  cardTotal: { fontSize: 15, fontWeight: '800', color: '#4A332C' },
+  cardDate: { fontSize: typography.etiqueta, color: colors.textoDeshabilitado },
+  cardTotal: { fontSize: 15, fontWeight: typography.pesoExtraBold, color: colors.cafeOscuro },
   cardDetalle: {
     fontSize: 11,
-    color: '#8A7B76',
+    color: colors.textoSecundario,
     marginTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F3EFEA',
+    borderTopColor: colors.borde,
     paddingTop: 10,
   },
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: 40,
-    paddingHorizontal: 24,
-    backgroundColor: '#F9F3EC',
+    paddingHorizontal: spacing.xxl,
+    backgroundColor: colors.crema,
     borderRadius: 24,
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
-  emptyEmoji: { fontSize: 40, marginBottom: 12 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#4A332C', textAlign: 'center' },
+  emptyEmoji: { fontSize: 40, marginBottom: spacing.md },
+  emptyTitle: { fontSize: typography.subtitulo, fontWeight: typography.pesoBold, color: colors.cafeOscuro, textAlign: 'center' },
   emptyDescription: {
-    fontSize: 12,
-    color: '#958781',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
     lineHeight: 18,
   },
-  emptyButton: {
-    marginTop: 18,
-    backgroundColor: '#4A332C',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 14,
-  },
-  emptyButtonText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
-    padding: 20,
+    padding: spacing.xl,
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    padding: 20,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  modalCodigo: { fontSize: 17, fontWeight: '800', color: '#4A332C' },
-  modalCafeteria: { fontSize: 12, color: '#8A7B76', marginTop: 2 },
+  modalCodigo: { fontSize: 17, fontWeight: typography.pesoExtraBold, color: colors.cafeOscuro },
+  modalCafeteria: { fontSize: typography.cuerpoPequeno, color: colors.textoSecundario, marginTop: 2 },
   modalClose: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F3EFEA',
+    backgroundColor: colors.borde,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalCloseText: { color: '#4A332C', fontWeight: '800' },
-  detalleLista: { marginTop: 18, backgroundColor: '#FBF8F4', borderRadius: 16, padding: 14 },
+  modalCloseText: { color: colors.cafeOscuro, fontWeight: typography.pesoExtraBold },
+  detalleLista: { marginTop: 18, backgroundColor: colors.fondo, borderRadius: 16, padding: 14 },
   detalleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 5,
   },
-  detalleNombre: { fontSize: 12, color: '#4A332C' },
-  detallePrecio: { fontSize: 12, fontWeight: '600', color: '#4A332C' },
-  detalleDivider: { height: 1, backgroundColor: '#EFE7DD', marginVertical: 7 },
+  detalleNombre: { fontSize: typography.cuerpoPequeno, color: colors.cafeOscuro },
+  detallePrecio: { fontSize: typography.cuerpoPequeno, fontWeight: typography.pesoMedio, color: colors.cafeOscuro },
+  detalleDivider: { height: 1, backgroundColor: colors.borde, marginVertical: 7 },
   detalleTotal: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#4A332C',
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.cafeOscuro,
   },
-  qrContainer: { alignItems: 'center', marginTop: 20 },
+  qrContainer: { alignItems: 'center', marginTop: spacing.xl },
   qrImagen: { width: 200, height: 200 },
   qrHint: {
-    fontSize: 12,
-    color: '#8A7B76',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: spacing.md,
     lineHeight: 18,
   },
   contingenciaBox: {
     marginTop: 18,
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     paddingHorizontal: 18,
     borderRadius: 14,
-    backgroundColor: '#F5ECE5',
+    backgroundColor: colors.crema,
     alignItems: 'center',
     width: '100%',
   },
   contingenciaTitulo: {
-    fontSize: 12,
-    color: '#8A7B76',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
     textAlign: 'center',
   },
   contingenciaCodigo: {
     marginTop: 6,
     fontSize: 24,
-    fontWeight: '700',
-    color: '#4A332C',
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
     letterSpacing: 3,
   },
   modalFranja: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#5B8C51',
-    fontWeight: '600',
+    marginTop: spacing.xs,
+    fontSize: typography.cuerpoPequeno,
+    color: colors.verde,
+    fontWeight: typography.pesoMedio,
   },
   reciboBox: {
-    marginTop: 20,
-    backgroundColor: '#F3F7F1',
+    marginTop: spacing.xl,
+    backgroundColor: colors.verdeBg,
     borderRadius: 16,
-    padding: 16,
+    padding: spacing.lg,
     borderWidth: 1,
-    borderColor: '#DDE8D6',
+    borderColor: colors.bordeOscuro,
   },
-  reciboTitulo: { fontSize: 15, fontWeight: '800', color: '#4A7A3F' },
+  reciboTitulo: { fontSize: 15, fontWeight: typography.pesoExtraBold, color: colors.verde },
   reciboSubtitulo: {
-    fontSize: 12,
-    color: '#6B7F63',
-    marginTop: 4,
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+    marginTop: spacing.xs,
     lineHeight: 17,
   },
   reciboDivider: {
     height: 1,
-    backgroundColor: '#DDE8D6',
+    backgroundColor: colors.bordeOscuro,
     marginVertical: 11,
   },
-  reciboLabel: { fontSize: 12, color: '#6B7F63', flex: 1 },
+  reciboLabel: { fontSize: typography.cuerpoPequeno, color: colors.textoSecundario, flex: 1 },
   reciboValor: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#4A332C',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
     textAlign: 'right',
+  },
+
+  // ─── Confirmación de Pedido (FR-21) ─────────────────────────
+  confirmacionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
+  confirmacionIcono: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.verdeBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  confirmacionIconoTexto: {
+    fontSize: 20,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.verde,
+  },
+  confirmacionTitulo: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.cafeOscuro,
+  },
+  confirmacionInfo: {
+    backgroundColor: colors.fondo,
+    borderRadius: 16,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  confirmacionFila: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  confirmacionLabel: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+  },
+  confirmacionValor: {
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+  },
+  confirmacionQrSection: {
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
+  confirmacionQrTitulo: {
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+    marginBottom: spacing.xs,
+  },
+  confirmacionQrHint: {
+    fontSize: 11,
+    color: colors.textoSecundario,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  confirmacionQrBox: {
+    backgroundColor: colors.blanco,
+    borderWidth: 2,
+    borderColor: colors.cafeOscuro,
+    borderRadius: 16,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.xxl,
+    marginBottom: spacing.md,
+  },
+  confirmacionQrTexto: {
+    fontSize: 24,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.cafeOscuro,
+    letterSpacing: 2,
+  },
+  confirmacionTokenTexto: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+    textAlign: 'center',
   },
 });
 

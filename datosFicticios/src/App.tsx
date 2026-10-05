@@ -9,6 +9,8 @@ import type {
   ProcesoPedidoActivo,
   ProcesosCafeteriaResponse,
 } from './types';
+import { ModalDescargaDocumento } from './components/ModalDescargaDocumento';
+import { construirResumenSesion } from './utils/documentGenerator';
 
 export default function App() {
   // Navegación por pasos (Wizard / Línea de tiempo): 1, 2, 3
@@ -46,13 +48,21 @@ export default function App() {
   const [mostrarMenuVisualizacion, setMostrarMenuVisualizacion] = useState<boolean>(false);
   const [mostrarFlujoPedidos, setMostrarFlujoPedidos] = useState<boolean>(false);
 
-  // 7. Contadores de sesión
+  // 7. Contadores y almacenamiento acumulado de la sesión de simulación
   const [sessionCompras, setSessionCompras] = useState<number>(0);
   const [sessionTotal, setSessionTotal] = useState<number>(0);
   const [sessionItems, setSessionItems] = useState<number>(0);
+  const [pedidosSimuladosSesion, setPedidosSimuladosSesion] = useState<Pedido[]>([]);
+  const [sessionInicio, setSessionInicio] = useState<Date | null>(null);
+  const [sessionFin, setSessionFin] = useState<Date | null>(null);
 
-  // 8. Notificaciones Toast
+  // 8. Control del Modal de Descarga de Documento
+  const [mostrarModalDescarga, setMostrarModalDescarga] = useState<boolean>(false);
+  const [razonParada, setRazonParada] = useState<'usuario' | 'stock' | 'manual'>('usuario');
+
+  // 9. Notificaciones Toast
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'danger' } | null>(null);
+
 
   const toastTimerRef = useRef<any>(null);
   const countdownIntervalRef = useRef<any>(null);
@@ -260,6 +270,29 @@ export default function App() {
     );
   };
 
+  // Mantener actualizado el estado de los pedidos simulados en la sesión conforme avanzan por cocina
+  useEffect(() => {
+    if (procesosCafeteria.length === 0 && _procesosCompletados.length === 0) return;
+
+    setPedidosSimuladosSesion((prev) => {
+      let changed = false;
+      const updated = prev.map((p) => {
+        const procActivo = procesosCafeteria.find((a) => a.pedidoId === Number(p.id));
+        if (procActivo && procActivo.estadoActual !== p.estado) {
+          changed = true;
+          return { ...p, estado: procActivo.estadoActual };
+        }
+        const procComp = _procesosCompletados.find((c) => c.pedidoId === Number(p.id));
+        if (procComp && p.estado !== 'entregado') {
+          changed = true;
+          return { ...p, estado: 'entregado' };
+        }
+        return p;
+      });
+      return changed ? updated : prev;
+    });
+  }, [procesosCafeteria, _procesosCompletados]);
+
   // Insertar compra simulada con flujo completo de cafetería (1 a 10s por etapa)
   const handleInsertarCompra = async (silencioso = false) => {
     if (!selectedCafeteriaId) return;
@@ -282,6 +315,15 @@ export default function App() {
         if (data.inventarioAgotado) {
           showToast('⚠️ ¡Sin inventario! Haz clic en "Reponer Todo el Inventario".', 'warning');
           setSimulando(false);
+          setSessionFin(new Date());
+          setRazonParada('stock');
+          // Al parar por stock, si hay pedidos generados, permitir descargar el documento
+          setPedidosSimuladosSesion((prev) => {
+            if (prev.length > 0) {
+              setMostrarModalDescarga(true);
+            }
+            return prev;
+          });
           return;
         }
         throw new Error(data.error || 'Error al insertar compra');
@@ -292,10 +334,18 @@ export default function App() {
         ? data.pedido.items.reduce((sum: number, it: any) => sum + it.cantidad, 0)
         : 1;
 
+      // Iniciar timestamp de sesión si es el primer pedido
+      if (!sessionInicio) {
+        setSessionInicio(new Date());
+      }
+
       // Actualizar contadores
       setSessionCompras((prev) => prev + 1);
       setSessionTotal((prev) => prev + nuevoTotal);
       setSessionItems((prev) => prev + cantItems);
+
+      // Guardar en la lista histórica completa de la sesión para el documento exportable
+      setPedidosSimuladosSesion((prev) => [data.pedido, ...prev]);
 
       // Efecto visual de nueva inserción
       setUltimoPedidoInsertado(data.pedido);
@@ -323,6 +373,7 @@ export default function App() {
     } catch (err: any) {
       showToast('Error al insertar compra: ' + err.message, 'danger');
       setSimulando(false);
+      setSessionFin(new Date());
     } finally {
       setActionLoading(false);
     }
@@ -350,9 +401,21 @@ export default function App() {
 
       const creados: Pedido[] = data.pedidos || [];
       const totalLote = creados.reduce((acc: number, p: any) => acc + (Number(p.total) || 0), 0);
+      const totalUnits = creados.reduce((acc: number, p: any) => {
+        return acc + (p.items ? p.items.reduce((s: number, i: any) => s + (Number(i.cantidad) || 1), 0) : 1);
+      }, 0);
+
+      // Iniciar timestamp de sesión si es el primer pedido
+      if (!sessionInicio) {
+        setSessionInicio(new Date());
+      }
 
       setSessionCompras((prev) => prev + creados.length);
       setSessionTotal((prev) => prev + totalLote);
+      setSessionItems((prev) => prev + totalUnits);
+
+      // Guardar todos los pedidos de la ráfaga en la sesión acumulada
+      setPedidosSimuladosSesion((prev) => [...creados, ...prev]);
 
       if (creados.length > 0) {
         setUltimoPedidoInsertado(creados[creados.length - 1]);
@@ -398,6 +461,44 @@ export default function App() {
     }
   };
 
+  // Conmutar Simulación Automática (Iniciar / Pausar & Ofrecer Descarga de Documento)
+  const handleToggleSimulacion = () => {
+    if (simulando) {
+      // ⏹️ Al parar la generación de datos:
+      setSimulando(false);
+      const fin = new Date();
+      setSessionFin(fin);
+      setRazonParada('usuario');
+
+      if (pedidosSimuladosSesion.length > 0) {
+        showToast('⏹️ Generación de datos detenida. Ya puedes descargar el documento con los datos simulados.', 'success');
+        setMostrarModalDescarga(true);
+      } else {
+        showToast('⏹️ Generación de datos detenida.', 'warning');
+      }
+    } else {
+      // ▶️ Al iniciar la generación de datos:
+      if (!sessionInicio) {
+        setSessionInicio(new Date());
+      }
+      setSessionFin(null);
+      setSimulando(true);
+      showToast(`▶ Simulación iniciada: generando compras automáticamente cada ${intervaloSegundos}s`, 'success');
+    }
+  };
+
+  // Reiniciar la sesión de simulación actual para comenzar de cero
+  const handleReiniciarSesion = () => {
+    setSimulando(false);
+    setPedidosSimuladosSesion([]);
+    setSessionCompras(0);
+    setSessionTotal(0);
+    setSessionItems(0);
+    setSessionInicio(null);
+    setSessionFin(null);
+    showToast('Sesión de simulación reiniciada. Puedes iniciar una nueva prueba.', 'success');
+  };
+
   // Temporizador de simulación automática
   useEffect(() => {
     if (!simulando || !selectedCafeteriaId || pasoActual !== 3) {
@@ -428,6 +529,7 @@ export default function App() {
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     };
   }, [simulando, intervaloSegundos, selectedCafeteriaId, pasoActual]);
+
 
   // Datos calculados
   const currentCafeteria = cafeterias.find((c) => Number(c.id) === selectedCafeteriaId);
@@ -599,10 +701,10 @@ export default function App() {
                 <span className="hero-digits">{intervaloSegundos}</span>
                 <span className="hero-unit">segundos</span>
               </div>
-              <p className="hero-sub">Se insertará 1 compra simulada cada {intervaloSegundos} segundo(s)</p>
+              <p className="hero-sub">Se insertará 1 compra simulada cada {intervaloSegundos} segundo(s) en la base de datos</p>
 
               <div className="presets-list">
-                {[10, 15, 20, 30, 45, 60].map((s) => (
+                {[5, 10, 15, 20, 30, 45, 60].map((s) => (
                   <button
                     key={s}
                     type="button"
@@ -614,6 +716,31 @@ export default function App() {
                 ))}
               </div>
 
+              {/* Control de intervalo personalizado */}
+              <div className="custom-interval-wrapper">
+                <span className="custom-interval-title">O define un intervalo personalizado:</span>
+                <div className="custom-interval-row">
+                  <input
+                    type="range"
+                    min={2}
+                    max={120}
+                    value={intervaloSegundos}
+                    onChange={(e) => setIntervaloSegundos(Math.max(1, parseInt(e.target.value, 10) || 10))}
+                    className="custom-range-slider"
+                  />
+                  <div className="custom-number-box">
+                    <input
+                      type="number"
+                      min={1}
+                      max={300}
+                      value={intervaloSegundos}
+                      onChange={(e) => setIntervaloSegundos(Math.max(1, Math.min(300, parseInt(e.target.value, 10) || 10)))}
+                      className="custom-seconds-input"
+                    />
+                    <span className="custom-sec-tag">seg</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Barra de navegación inferior */}
@@ -687,16 +814,16 @@ export default function App() {
                 <button
                   type="button"
                   className={`btn-hero-simulation ${simulando ? 'is-running' : 'is-idle'}`}
-                  onClick={() => setSimulando(!simulando)}
+                  onClick={handleToggleSimulacion}
                 >
                   <span className="hero-btn-icon">{simulando ? '⏸' : '▶'}</span>
                   <div className="hero-btn-text">
                     <span className="hero-btn-title">
-                      {simulando ? 'Pausar Simulación Automática' : 'Iniciar Simulación Automática'}
+                      {simulando ? 'Pausar / Detener Simulación' : 'Iniciar Simulación Automática'}
                     </span>
                     <span className="hero-btn-desc">
                       {simulando
-                        ? `Simulación activa: registrando compras cada ${intervaloSegundos}s`
+                        ? `Simulación activa: registrando compras cada ${intervaloSegundos}s (Al parar podrás descargar el informe)`
                         : `Registra automáticamente compras continuas cada ${intervaloSegundos} segundos`}
                     </span>
                   </div>
@@ -705,7 +832,7 @@ export default function App() {
                   </span>
                 </button>
 
-                {/* 2. Fila de 3 Acciones Secundarias & Reposición */}
+                {/* 2. Fila de 4 Acciones Secundarias & Reposición & Descarga */}
                 <div className="aux-buttons-grid">
                   <button
                     type="button"
@@ -748,6 +875,28 @@ export default function App() {
                       <span className="aux-desc">Recarga todo el stock</span>
                     </div>
                   </button>
+
+                  <button
+                    type="button"
+                    className={`btn-aux btn-aux-download ${pedidosSimuladosSesion.length > 0 ? 'has-data' : ''}`}
+                    disabled={pedidosSimuladosSesion.length === 0}
+                    onClick={() => setMostrarModalDescarga(true)}
+                    title={
+                      pedidosSimuladosSesion.length > 0
+                        ? `Descargar documento oficial con los ${pedidosSimuladosSesion.length} pedidos simulados`
+                        : 'Aún no hay compras simuladas en esta sesión'
+                    }
+                  >
+                    <span className="aux-icon">📄</span>
+                    <div className="aux-text">
+                      <span className="aux-title">Descargar Documento</span>
+                      <span className="aux-desc">
+                        {pedidosSimuladosSesion.length > 0
+                          ? `${pedidosSimuladosSesion.length} pedidos (PDF / CSV)`
+                          : 'Esperando compras'}
+                      </span>
+                    </div>
+                  </button>
                 </div>
               </div>
 
@@ -774,6 +923,40 @@ export default function App() {
                   </div>
                   <div className="progress-bar-bg">
                     <div className="progress-bar-fill" style={{ width: `${progresoIntervalo}%` }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Banner cuando la simulación está parada y hay datos simulados acumulados listos para descarga */}
+              {!simulando && pedidosSimuladosSesion.length > 0 && (
+                <div className="simulation-stopped-banner">
+                  <div className="stopped-banner-left">
+                    <span className="stopped-icon">📄</span>
+                    <div className="stopped-info">
+                      <strong className="stopped-title">
+                        Generación de datos finalizada • {pedidosSimuladosSesion.length} pedidos simulados acumulados
+                      </strong>
+                      <p className="stopped-desc">
+                        Al parar la simulación puedes descargar el documento en formato PDF imprimible, planilla Excel (CSV) o archivo JSON.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="stopped-banner-actions">
+                    <button
+                      type="button"
+                      className="btn-download-banner"
+                      onClick={() => setMostrarModalDescarga(true)}
+                    >
+                      <span>📄 Descargar Documento</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-reset-banner"
+                      onClick={handleReiniciarSesion}
+                      title="Limpiar datos acumulados para comenzar una nueva prueba de simulación"
+                    >
+                      <span>🗑️ Nueva Sesión</span>
+                    </button>
                   </div>
                 </div>
               )}
@@ -1322,6 +1505,25 @@ export default function App() {
         )}
       </main>
 
+      {/* Modal para Descargar Documento de Datos Simulados */}
+      <ModalDescargaDocumento
+        isOpen={mostrarModalDescarga}
+        onClose={() => setMostrarModalDescarga(false)}
+        resumen={construirResumenSesion(
+          currentCafeteria,
+          intervaloSegundos,
+          sessionInicio,
+          sessionFin || new Date(),
+          pedidosSimuladosSesion
+        )}
+        onReanudarSimulacion={() => {
+          setSimulando(true);
+          setSessionFin(null);
+        }}
+        onReiniciarSesion={handleReiniciarSesion}
+        razonParada={razonParada}
+      />
+
       {/* Notificaciones Toast flotantes */}
       {toast && (
         <div className={`floating-toast ${toast.type}`}>
@@ -1335,3 +1537,4 @@ export default function App() {
     </div>
   );
 }
+

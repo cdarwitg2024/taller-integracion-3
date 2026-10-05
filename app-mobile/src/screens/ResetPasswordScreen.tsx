@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  ActivityIndicator,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -12,6 +11,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import Button from '../components/Button';
+import Card from '../components/Card';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 /**
  * Definir contraseña nueva — FR-04 (segunda parte)
@@ -82,9 +86,7 @@ const ResetPasswordScreen = ({ onDone }: Props) => {
           <Text style={styles.subtitle}>
             Ya podés entrar con tu contraseña nueva.
           </Text>
-          <TouchableOpacity style={styles.primaryButton} onPress={onDone} activeOpacity={0.9}>
-            <Text style={styles.primaryButtonText}>Ir al inicio de sesión</Text>
-          </TouchableOpacity>
+          <Button title="Ir al inicio de sesión" onPress={onDone} size="lg" />
         </View>
       </SafeAreaView>
     );
@@ -108,9 +110,9 @@ const ResetPasswordScreen = ({ onDone }: Props) => {
           </Text>
 
           {errorMessage && (
-            <View style={styles.errorBox}>
+            <Card variant="default" padding="none" style={styles.errorBox}>
               <Text style={styles.errorText}>{errorMessage}</Text>
-            </View>
+            </Card>
           )}
 
           <View style={styles.labelRow}>
@@ -120,7 +122,7 @@ const ResetPasswordScreen = ({ onDone }: Props) => {
             <TextInput
               style={styles.input}
               placeholder="••••••••"
-              placeholderTextColor="#BBB3A8"
+              placeholderTextColor={colors.textoDeshabilitado}
               value={password}
               onChangeText={(t) => {
                 setPassword(t);
@@ -148,7 +150,7 @@ const ResetPasswordScreen = ({ onDone }: Props) => {
             <TextInput
               style={styles.input}
               placeholder="••••••••"
-              placeholderTextColor="#BBB3A8"
+              placeholderTextColor={colors.textoDeshabilitado}
               value={confirm}
               onChangeText={(t) => {
                 setConfirm(t);
@@ -163,7 +165,7 @@ const ResetPasswordScreen = ({ onDone }: Props) => {
           </View>
 
           {/* Reglas de validación, se muestran en vivo */}
-          <View style={styles.rulesBox}>
+          <Card variant="default" padding="none" style={styles.rulesBox}>
             <View style={styles.ruleRow}>
               <Text style={[styles.ruleMark, cumpleReglas && styles.ruleOk]}>
                 {cumpleReglas ? '✓' : '○'}
@@ -180,20 +182,15 @@ const ResetPasswordScreen = ({ onDone }: Props) => {
                 Las dos contraseñas coinciden
               </Text>
             </View>
-          </View>
+          </Card>
 
-          <TouchableOpacity
-            style={[styles.primaryButton, !puedeEnviar && styles.buttonDisabled]}
+          <Button
+            title="Guardar contraseña"
             onPress={handleSave}
+            loading={loading}
             disabled={!puedeEnviar}
-            activeOpacity={0.9}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Guardar contraseña</Text>
-            )}
-          </TouchableOpacity>
+            size="lg"
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -201,16 +198,16 @@ const ResetPasswordScreen = ({ onDone }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F7F4F1' },
+  container: { flex: 1, backgroundColor: colors.fondo },
   flex: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 28, justifyContent: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl },
+  scroll: { flexGrow: 1, paddingHorizontal: spacing.xxl, paddingVertical: 28, justifyContent: 'center' },
 
   successCircle: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#E4EFE3',
+    backgroundColor: colors.verdeBg,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
@@ -218,73 +215,64 @@ const styles = StyleSheet.create({
   },
   successMark: {
     fontSize: 30,
-    fontWeight: '700',
-    color: '#4A7A47',
+    fontWeight: typography.pesoBold,
+    color: colors.verde,
     lineHeight: 34,
   },
 
   title: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#2E2521',
+    fontWeight: typography.pesoExtraBold,
+    color: colors.cafeOscuro,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   subtitle: {
     fontSize: 13,
-    color: '#7A6A61',
+    color: colors.textoSecundario,
     textAlign: 'center',
     lineHeight: 19,
     marginBottom: 22,
   },
 
   labelRow: { flexDirection: 'row', marginBottom: 6 },
-  label: { fontSize: 11, fontWeight: '700', color: '#7A6A61', textTransform: 'uppercase' },
+  label: { fontSize: 11, fontWeight: typography.pesoBold, color: colors.textoSecundario, textTransform: 'uppercase' },
 
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.blanco,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E4DAD2',
+    borderColor: colors.borde,
     paddingHorizontal: 14,
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
-  input: { flex: 1, paddingVertical: 13, fontSize: 14, color: '#2E2521' },
-  eyeIcon: { paddingLeft: 8 },
-  eyeIconText: { fontSize: 11, fontWeight: '700', color: '#E07A5F' },
+  input: { flex: 1, paddingVertical: 13, fontSize: typography.cuerpo, color: colors.cafeOscuro },
+  eyeIcon: { paddingLeft: spacing.sm },
+  eyeIconText: { fontSize: 11, fontWeight: typography.pesoBold, color: '#E07A5F' },
 
   errorBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#FDECEA',
+    backgroundColor: colors.rojoBg,
     borderRadius: 12,
     padding: 11,
     marginBottom: 14,
   },
-  errorText: { flex: 1, fontSize: 12, color: '#A33A2A', lineHeight: 17, fontWeight: '600' },
+  errorText: { flex: 1, fontSize: typography.cuerpoPequeno, color: colors.rojo, lineHeight: 17, fontWeight: typography.pesoMedio },
 
   rulesBox: {
-    backgroundColor: '#EFEAE5',
+    backgroundColor: colors.crema,
     borderRadius: 14,
     padding: 13,
     marginBottom: 18,
   },
-  ruleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  ruleMark: { fontSize: 13, color: '#A99C94', marginRight: 8, width: 14 },
-  ruleOk: { color: '#4A7A47' },
-  ruleText: { fontSize: 12, color: '#8A7A70' },
-  ruleTextOk: { color: '#4A7A47', fontWeight: '600' },
-
-  primaryButton: {
-    backgroundColor: '#4A3C34',
-    borderRadius: 16,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  buttonDisabled: { backgroundColor: '#B9AEA6' },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  ruleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs },
+  ruleMark: { fontSize: 13, color: colors.textoDeshabilitado, marginRight: spacing.sm, width: 14 },
+  ruleOk: { color: colors.verde },
+  ruleText: { fontSize: typography.cuerpoPequeno, color: colors.textoSecundario },
+  ruleTextOk: { color: colors.verde, fontWeight: typography.pesoMedio },
 });
 
 export default ResetPasswordScreen;

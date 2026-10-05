@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session } = require('electron');
+const { app, BrowserWindow, session, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -26,6 +26,29 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
+  });
+
+  // Manejador para guardar archivos (boletas, tickets, etc.) permitiendo
+  // al usuario elegir la ubicación y nombre en el sistema de archivos nativo.
+  ipcMain.handle('guardar-archivo', async (_event, { nombreSugerido, extension, dataBase64 }) => {
+    const focusedWin = BrowserWindow.getFocusedWindow();
+    const ext = extension || 'pdf';
+    const { canceled, filePath } = await dialog.showSaveDialog(focusedWin, {
+      title: 'Guardar Boleta',
+      defaultPath: nombreSugerido || `boleta.${ext}`,
+      filters: [
+        { name: ext.toUpperCase(), extensions: [ext] },
+        { name: 'Todos los archivos', extensions: ['*'] },
+      ],
+    });
+
+    if (canceled || !filePath) {
+      return { cancelado: true };
+    }
+
+    const buffer = Buffer.from(dataBase64, 'base64');
+    await fs.promises.writeFile(filePath, buffer);
+    return { cancelado: false, filePath };
   });
 });
 

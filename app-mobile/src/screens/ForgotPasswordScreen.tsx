@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  ActivityIndicator,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -12,6 +11,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import Button from '../components/Button';
+import Card from '../components/Card';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 /**
  * Base del redirect de recuperación.
@@ -198,7 +202,7 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
 
             {/* Ayuda para desarrollo local: el correo no sale a Gmail, queda en Mailpit */}
             {__DEV__ && (
-              <View style={styles.devBox}>
+              <Card variant="default" padding="none" style={styles.devBox}>
                 <Text style={styles.devTitle}>Entorno local</Text>
                 <Text style={styles.devText}>
                   El correo no llega a Gmail. Queda en Mailpit:{'\n'}
@@ -206,19 +210,19 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
                   Solo se envían códigos a cuentas que existen. Probá con{'\n'}
                   estudiante@alu.uct.cl
                 </Text>
-              </View>
+              </Card>
             )}
 
             {errorMessage && (
-              <View style={styles.errorBox}>
+              <Card variant="default" padding="none" style={styles.errorBox}>
                 <Text style={styles.errorText}>{errorMessage}</Text>
-              </View>
+              </Card>
             )}
 
             <TextInput
               style={[styles.input, styles.codigoInput]}
               placeholder={'0'.repeat(LARGO_CODIGO)}
-              placeholderTextColor="#D6CCC2"
+              placeholderTextColor={colors.textoDeshabilitado}
               value={codigo}
               onChangeText={(t) => {
                 setCodigo(limpiarCodigo(t));
@@ -230,35 +234,38 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
               accessibilityLabel={`Código de ${LARGO_CODIGO} dígitos`}
             />
 
-            <TouchableOpacity
-              style={[styles.primaryButton, (!codigoCompleto || verifying) && styles.buttonDisabled]}
+            <Button
+              title="Continuar con la recuperación"
               onPress={handleVerifyCode}
+              loading={verifying}
               disabled={!codigoCompleto || verifying}
-              activeOpacity={0.9}
-            >
-              {verifying ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.primaryButtonText}>Continuar con la recuperación</Text>
-              )}
-            </TouchableOpacity>
+              size="lg"
+            />
 
-            <TouchableOpacity style={styles.secondaryButton} onPress={handleReenviar} activeOpacity={0.9}>
-              <Text style={styles.secondaryButtonText}>No lo recibí · Enviar de nuevo</Text>
-            </TouchableOpacity>
+            <Button
+              title="No lo recibí · Enviar de nuevo"
+              onPress={handleReenviar}
+              variant="ghost"
+              size="md"
+              style={{ marginTop: spacing.md }}
+            />
 
-            <TouchableOpacity style={styles.secondaryButton} onPress={handleUsarOtroCorreo} activeOpacity={0.9}>
-              <Text style={styles.secondaryButtonText}>Usar otro correo</Text>
-            </TouchableOpacity>
+            <Button
+              title="Usar otro correo"
+              onPress={handleUsarOtroCorreo}
+              variant="ghost"
+              size="md"
+              style={{ marginTop: spacing.md }}
+            />
 
-            <View style={styles.infoBox}>
+            <Card variant="default" padding="none" style={styles.infoBox}>
               <Text style={styles.infoTitle}>Tu contraseña está segura</Text>
               <Text style={styles.infoText}>
                 Nunca te enviamos tu contraseña. Solo un código temporal de{' '}
                 {LARGO_CODIGO} dígitos que vence en una hora y sirve una sola vez. La app no
                 lo guarda: lo manda a Supabase y lo borra.
               </Text>
-            </View>
+            </Card>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -289,9 +296,9 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
           </Text>
 
           {errorMessage && (
-            <View style={styles.errorBox}>
+            <Card variant="default" padding="none" style={styles.errorBox}>
               <Text style={styles.errorText}>{errorMessage}</Text>
-            </View>
+            </Card>
           )}
 
           <View style={styles.labelRow}>
@@ -302,7 +309,7 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
             <TextInput
               style={styles.input}
               placeholder="tunombre@alu.uct.cl"
-              placeholderTextColor="#BBB3A8"
+              placeholderTextColor={colors.textoDeshabilitado}
               value={email}
               onChangeText={(t) => {
                 setEmail(t);
@@ -316,26 +323,21 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
             />
           </View>
 
-          <TouchableOpacity
-            style={[styles.primaryButton, (!correoValido || loading) && styles.buttonDisabled]}
+          <Button
+            title="Enviar código de recuperación"
             onPress={handleSend}
+            loading={loading}
             disabled={!correoValido || loading}
-            activeOpacity={0.9}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Enviar código de recuperación</Text>
-            )}
-          </TouchableOpacity>
+            size="lg"
+          />
 
-          <View style={styles.infoBox}>
+          <Card variant="default" padding="none" style={styles.infoBox}>
             <Text style={styles.infoTitle}>Cómo funciona</Text>
             <Text style={styles.infoText}>
               Te llega un código de {LARGO_CODIGO} dígitos al correo. Lo ingresas en la app
               y ahí definís tu contraseña nueva. No hace falta abrir ningún enlace.
             </Text>
-          </View>
+          </Card>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -343,100 +345,88 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F7F4F1' },
+  container: { flex: 1, backgroundColor: colors.fondo },
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 28, justifyContent: 'center' },
+  scroll: { flexGrow: 1, paddingHorizontal: spacing.xxl, paddingVertical: 28, justifyContent: 'center' },
 
-  backButton: { alignSelf: 'flex-start', marginBottom: 18, paddingVertical: 4 },
-  backText: { fontSize: 14, fontWeight: '600', color: '#6B5B52' },
+  backButton: { alignSelf: 'flex-start', marginBottom: 18, paddingVertical: spacing.xs },
+  backText: { fontSize: typography.cuerpo, fontWeight: typography.pesoMedio, color: colors.textoSecundario },
 
   title: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#2E2521',
+    fontWeight: typography.pesoExtraBold,
+    color: colors.cafeOscuro,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
 
   subtitle: {
     fontSize: 13,
-    color: '#7A6A61',
+    color: colors.textoSecundario,
     textAlign: 'center',
     lineHeight: 19,
     marginBottom: 22,
   },
 
   labelRow: { flexDirection: 'row', marginBottom: 6 },
-  label: { fontSize: 11, fontWeight: '700', color: '#7A6A61', textTransform: 'uppercase' },
+  label: { fontSize: 11, fontWeight: typography.pesoBold, color: colors.textoSecundario, textTransform: 'uppercase' },
 
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.blanco,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E4DAD2',
+    borderColor: colors.borde,
     paddingHorizontal: 14,
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
-  input: { flex: 1, paddingVertical: 13, fontSize: 14, color: '#2E2521' },
+  input: { flex: 1, paddingVertical: 13, fontSize: typography.cuerpo, color: colors.cafeOscuro },
 
   codigoInput: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.blanco,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E4DAD2',
-    paddingVertical: 16,
+    borderColor: colors.borde,
+    paddingVertical: spacing.lg,
     paddingHorizontal: 14,
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: typography.tituloGrande,
+    fontWeight: typography.pesoBold,
     letterSpacing: 14,
     textAlign: 'center',
-    color: '#2E2521',
-    marginBottom: 16,
+    color: colors.cafeOscuro,
+    marginBottom: spacing.lg,
   },
 
   errorBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#FDECEA',
+    backgroundColor: colors.rojoBg,
     borderRadius: 12,
     padding: 11,
     marginBottom: 14,
   },
-  errorText: { flex: 1, fontSize: 12, color: '#A33A2A', lineHeight: 17, fontWeight: '600' },
+  errorText: { flex: 1, fontSize: typography.cuerpoPequeno, color: colors.rojo, lineHeight: 17, fontWeight: typography.pesoMedio },
 
   infoBox: {
-    backgroundColor: '#EFEAE5',
+    backgroundColor: colors.crema,
     borderRadius: 14,
     padding: 14,
     marginTop: 18,
   },
-  infoTitle: { fontSize: 12, fontWeight: '800', color: '#4A3C34', marginBottom: 7 },
-  infoText: { fontSize: 11, color: '#6B5B52', lineHeight: 17 },
-
-  primaryButton: {
-    backgroundColor: '#4A3C34',
-    borderRadius: 16,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  buttonDisabled: { backgroundColor: '#B9AEA6' },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-
-  secondaryButton: { marginTop: 12, paddingVertical: 12, alignItems: 'center' },
-  secondaryButtonText: { color: '#6B5B52', fontSize: 13, fontWeight: '600' },
+  infoTitle: { fontSize: typography.cuerpoPequeno, fontWeight: typography.pesoExtraBold, color: colors.cafeOscuro, marginBottom: 7 },
+  infoText: { fontSize: 11, color: colors.textoSecundario, lineHeight: 17 },
 
   devBox: {
-    backgroundColor: '#FFF8E1',
+    backgroundColor: colors.doradoBg,
     borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: '#F0DFA8',
+    borderColor: colors.dorado,
   },
-  devTitle: { fontSize: 12, fontWeight: '800', color: '#8A6D1F', marginBottom: 5 },
-  devText: { fontSize: 11, color: '#7A6A45', lineHeight: 17 },
+  devTitle: { fontSize: typography.cuerpoPequeno, fontWeight: typography.pesoExtraBold, color: colors.naranja, marginBottom: 5 },
+  devText: { fontSize: 11, color: colors.naranja, lineHeight: 17 },
 });
 
 export default ForgotPasswordScreen;

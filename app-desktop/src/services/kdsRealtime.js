@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { supabase, isSupabaseConfigured } from './supabaseClient.js';
 import { normalizarPedido } from './pedidosService';
 
 export const ESTADO_CONECTADO = 'conectado';
@@ -7,25 +7,26 @@ export const ESTADO_INDISPONIBLE = 'indisponible';
 
 async function construirComanda(nuevoPedido) {
   try {
-    const { data: detalles, error } = await supabase
+    let { data: detalles, error } = await supabase
       .from('detalles_pedido')
-      .select('cantidad, modificaciones, productos(nombre)')
+      .select('*, productos(*)')
       .eq('pedido_id', nuevoPedido.id);
 
-    if (error) return null;
+    // Si la lectura inicial no encontró ítems (por carrera entre la inserción del pedido y sus detalles),
+    // se realiza un reintento breve para no perder los productos de la comanda
+    if (error || !detalles || detalles.length === 0) {
+      await new Promise((r) => setTimeout(r, 350));
+      const retry = await supabase
+        .from('detalles_pedido')
+        .select('*, productos(*)')
+        .eq('pedido_id', nuevoPedido.id);
+      if (!retry.error && retry.data && retry.data.length > 0) {
+        detalles = retry.data;
+      }
+    }
 
     return normalizarPedido({
-      id: nuevoPedido.id,
-      codigo_pedido: nuevoPedido.codigo_pedido,
-      codigo_retiro_diario: nuevoPedido.codigo_retiro_diario,
-      qr_token: nuevoPedido.qr_token,
-      cafeteria_id: nuevoPedido.cafeteria_id,
-      cafeterias: nuevoPedido.cafeterias,
-      franja_retiro: nuevoPedido.franja_retiro,
-      estado: nuevoPedido.estado,
-      total: nuevoPedido.total,
-      creado_en: nuevoPedido.creado_en,
-      hora_retiro: nuevoPedido.hora_retiro,
+      ...nuevoPedido,
       detalles_pedido: detalles || [],
     });
   } catch {
@@ -48,9 +49,7 @@ export const kdsRealtime = {
     const canal = supabase.channel('kds-pedidos');
 
     // Sin filtro por cafeteria: hay un unico KDS y el estudiante puede pedir en
-    // cualquiera de ellas. Filtrar dejaba pedidos pagados pero invisibles, que es
-    // justo el fallo de "hice un pedido y no aparece en el KDS". Cada tarjeta
-    // muestra el nombre de la cafeteria para no confundirlos.
+    // cualquiera de ellas. Cada tarjeta muestra el nombre de la cafeteria para no confundirlos.
     canal.on(
       'postgres_changes',
       {
@@ -66,7 +65,7 @@ export const kdsRealtime = {
 
         const { data: cafe } = await supabase
           .from('cafeterias')
-          .select('nombre')
+          .select('*')
           .eq('id', nuevo.cafeteria_id)
           .maybeSingle();
 
@@ -85,10 +84,16 @@ export const kdsRealtime = {
       async (payload) => {
         const fila = payload?.new;
         if (!fila) return;
+        const { data: cafe } = await supabase
+          .from('cafeterias')
+          .select('*')
+          .eq('id', fila.cafeteria_id)
+          .maybeSingle();
+
         // Refleja en tiempo real los cambios de estado (pendiente -> en_preparacion -> listo),
-        // enriqueciendo con sus detalles para que la comanda nunca pierda los productos.
-        const comanda = await construirComanda(fila);
-        onActualizar?.(comanda || normalizarPedido(fila));
+        // enriqueciendo con sus detalles para que la comanda nunca pierda los productos ni los precios.
+        const comanda = await construirComanda({ ...fila, cafeterias: cafe || null });
+        onActualizar?.(comanda || normalizarPedido({ ...fila, cafeterias: cafe || null }));
       }
     );
 

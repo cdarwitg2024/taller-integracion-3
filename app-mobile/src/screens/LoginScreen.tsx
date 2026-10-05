@@ -1,25 +1,29 @@
 import React, { useState } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   TextInput,
   TouchableOpacity,
-  ActivityIndicator,
   ScrollView,
   KeyboardAvoidingView,
   Image,
   Platform,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import Button from '../components/Button';
+import Input from '../components/Input';
+import Card from '../components/Card';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 const logo = require('../../assets/icon.png');
 
 interface LoginScreenProps {
   onNavigateToRegister: () => void;
   onExploreAsGuest?: () => void;
-  // FR-04: abre la pantalla de recuperación de contraseña
   onForgotPassword?: () => void;
 }
 
@@ -98,46 +102,38 @@ export const LoginScreen = ({
           )}
 
           {/* Tarjeta del Formulario */}
-          <View style={styles.card}>
+          <Card variant="elevated" padding="lg">
             {/* Campo: Correo Institucional */}
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>Correo Institucional</Text>
-                <Text style={styles.domainHint}>alu.uct.cl</Text>
-              </View>
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="tunombre@alu.uct.cl"
-                  placeholderTextColor="#BBB3A8"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
+            <Input
+              label="Correo Institucional"
+              placeholder="tunombre@alu.uct.cl"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
 
             {/* Campo: Contraseña */}
-            <View style={styles.inputGroup}>
+            <View>
               <View style={styles.labelRow}>
                 <Text style={styles.label}>Contraseña</Text>
-                {/* FR-04: antes era un TouchableOpacity sin onPress */}
-                <TouchableOpacity
-                  onPress={onForgotPassword}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel="¿Olvidaste tu contraseña?"
-                >
-                  <Text style={styles.forgotPassword}>¿La olvidaste?</Text>
-                </TouchableOpacity>
+                {onForgotPassword && (
+                  <TouchableOpacity
+                    onPress={onForgotPassword}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="¿Olvidaste tu contraseña?"
+                  >
+                    <Text style={styles.forgotPassword}>¿La olvidaste?</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.input}
                   placeholder="••••••••"
-                  placeholderTextColor="#BBB3A8"
+                  placeholderTextColor={colors.textoDeshabilitado}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -159,9 +155,7 @@ export const LoginScreen = ({
                   </Text>
                 </TouchableOpacity>
               </View>
-              <View style={styles.hintRow}>
-                <Text style={styles.hintText}>Mínimo 8 caracteres</Text>
-              </View>
+              <Text style={styles.hintText}>Mínimo 8 caracteres</Text>
             </View>
 
             {/* Checkbox: Recordar Sesión */}
@@ -179,18 +173,12 @@ export const LoginScreen = ({
             </TouchableOpacity>
 
             {/* Botón Principal */}
-            <TouchableOpacity
-              style={styles.submitButton}
+            <Button
+              title="Iniciar sesión"
               onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.9}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.submitButtonText}>Iniciar sesión</Text>
-              )}
-            </TouchableOpacity>
+              loading={loading}
+              size="lg"
+            />
 
             {/* Divisor */}
             <View style={styles.dividerContainer}>
@@ -200,14 +188,15 @@ export const LoginScreen = ({
             </View>
 
             {/* Botón Invitado */}
-            <TouchableOpacity
-              style={styles.guestButton}
-              onPress={onExploreAsGuest}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.guestButtonText}>Explorar Carta como Invitado</Text>
-            </TouchableOpacity>
-          </View>
+            {onExploreAsGuest && (
+              <Button
+                title="Explorar Carta como Invitado"
+                onPress={onExploreAsGuest}
+                variant="secondary"
+                size="md"
+              />
+            )}
+          </Card>
 
           {/* Footer de Registro */}
           <View style={styles.footerNav}>
@@ -232,238 +221,192 @@ export const LoginScreen = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAF7F2',
+    backgroundColor: colors.fondo,
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
   },
   badgeContainer: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   badge: {
-    backgroundColor: '#F3E9E0',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    backgroundColor: colors.crema,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     borderRadius: 20,
   },
   badgeText: {
-    fontSize: 11,
+    fontSize: typography.etiqueta,
     fontWeight: '700',
-    color: '#6E5544',
+    color: colors.cafeMedio,
     letterSpacing: 0.5,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   logoImage: {
     width: 64,
     height: 64,
     borderRadius: 18,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   brandName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#3C2A21',
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    marginBottom: 6,
+    marginBottom: spacing.xs,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#2C1E16',
+    fontSize: typography.tituloGrande,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.cafeOscuro,
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    marginBottom: 6,
+    marginBottom: spacing.xs,
   },
   subtitle: {
-    fontSize: 13,
-    color: '#8A7A70',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
     textAlign: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
     lineHeight: 18,
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FCE8E6',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    backgroundColor: colors.rojoBg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   errorText: {
-    color: '#D93025',
-    fontSize: 13,
+    color: colors.rojo,
+    fontSize: typography.cuerpoPequeno,
     flex: 1,
-    fontWeight: '500',
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: '#3C2A21',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  inputGroup: {
-    marginBottom: 16,
+    fontWeight: typography.pesoMedio,
   },
   labelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: spacing.xs,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#3C2A21',
-  },
-  domainHint: {
-    fontSize: 12,
-    color: '#9C8E85',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
   },
   forgotPassword: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoMedio,
     color: '#E07A5F',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F7F4F0',
+    backgroundColor: colors.fondo,
     borderRadius: 14,
-    paddingHorizontal: 14,
+    paddingHorizontal: spacing.md,
     height: 48,
+    borderWidth: 1,
+    borderColor: colors.borde,
   },
   input: {
     flex: 1,
-    fontSize: 14,
-    color: '#2C1E16',
+    fontSize: typography.cuerpo,
+    color: colors.cafeOscuro,
   },
   eyeIcon: {
-    paddingVertical: 6,
-    paddingLeft: 8,
+    paddingVertical: spacing.sm,
+    paddingLeft: spacing.sm,
   },
   eyeIconText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: typography.etiqueta,
+    fontWeight: typography.pesoBold,
     color: '#E07A5F',
   },
-  hintRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
   hintText: {
-    fontSize: 11,
-    color: '#9C8E85',
+    fontSize: typography.micro,
+    color: colors.textoDeshabilitado,
+    marginTop: spacing.xs,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    gap: 10,
+    marginBottom: spacing.xl,
+    gap: spacing.md,
   },
   checkbox: {
     width: 20,
     height: 20,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#9C8E85',
+    borderColor: colors.textoDeshabilitado,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxChecked: {
-    backgroundColor: '#5C4033',
-    borderColor: '#5C4033',
+    backgroundColor: colors.cafeOscuro,
+    borderColor: colors.cafeOscuro,
   },
   checkmark: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
+    color: colors.textoBlanco,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: '700',
   },
   checkboxLabel: {
-    fontSize: 12,
-    color: '#7A6B63',
-  },
-  submitButton: {
-    backgroundColor: '#4A3728',
-    borderRadius: 16,
-    height: 52,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#4A3728',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  submitButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
   },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 18,
+    marginVertical: spacing.lg,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#EFE8E1',
+    backgroundColor: colors.borde,
   },
   dividerText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#B5A89E',
-    paddingHorizontal: 12,
+    fontSize: typography.micro,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeClaro,
+    paddingHorizontal: spacing.md,
     letterSpacing: 0.5,
-  },
-  guestButton: {
-    backgroundColor: '#F7F4F0',
-    borderRadius: 16,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  guestButtonText: {
-    color: '#4A3728',
-    fontSize: 14,
-    fontWeight: '700',
   },
   footerNav: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: spacing.xl,
   },
   footerText: {
-    fontSize: 12,
-    color: '#8A7A70',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
   },
   footerLink: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#3C2A21',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
     textDecorationLine: 'underline',
   },
   securityFooter: {
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: spacing.md,
   },
   securityText: {
-    fontSize: 10,
-    color: '#A89B91',
+    fontSize: typography.micro,
+    color: colors.textoDeshabilitado,
   },
 });
+
+export default LoginScreen;

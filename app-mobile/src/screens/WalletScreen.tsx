@@ -17,6 +17,13 @@ import {
 } from 'react-native';
 
 import { supabase } from '../lib/supabase';
+import PaymentScreen from './PaymentScreen';
+import MovimientoItem from './MovimientoItem';
+import Button from '../components/Button';
+import Card from '../components/Card';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 // ─── Tipos ───────────────────────────────────────────────────────
 interface Movimiento {
@@ -37,23 +44,6 @@ interface Wallet {
 
 // ─── Constantes ──────────────────────────────────────────────────
 const SALDOS_RAPIDOS = [2000, 5000, 10000, 20000];
-
-const COLORES = {
-  cafeOscuro: '#4A332C',
-  cafeMedio: '#8C6D58',
-  fondo: '#F8F6F4',
-  crema: '#F5EBE1',
-  blanco: '#FFFFFF',
-  verde: '#5B8C51',
-  verdeBg: '#E8F3E4',
-  rojo: '#A92A2A',
-  rojoBg: '#FCEAE3',
-  gris: '#958781',
-  grisClaro: '#A09590',
-  borde: '#EFE7DD',
-  dorado: '#C9A96E',
-  doradoBg: '#FBF5E8',
-};
 
 // ─── Helpers ─────────────────────────────────────────────────────
 const formatCLP = (monto: number): string => {
@@ -108,6 +98,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
   const [recargaVisible, setRecargaVisible] = useState(false);
   const [montoRecarga, setMontoRecarga] = useState('');
   const [procesandoRecarga, setProcesandoRecarga] = useState(false);
+  const [montoSeleccionado, setMontoSeleccionado] = useState(0);
+  const [saldoMostrado, setSaldoMostrado] = useState(0);
+  const saldoAnterior = useRef(0);
 
   // ─── Animaciones ─────────────────────────────────────────────────
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -115,6 +108,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const saldoAnim = useRef(new Animated.Value(0)).current;
   const recargaScale = useRef(new Animated.Value(1)).current;
+  const saldoInterpolado = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!loading) {
@@ -247,6 +241,13 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
     cargarSaldo();
   }, [cargarSaldo]);
 
+  // Inicializar saldoMostrado con el saldo real cuando wallet cambia
+  useEffect(() => {
+    if (wallet) {
+      setSaldoMostrado(wallet.saldo_actual);
+    }
+  }, [wallet]);
+
   // ─── Realtime ─────────────────────────────────────────────────
   useEffect(() => {
     if (!wallet) return;
@@ -296,9 +297,17 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
       // HTTP 204), la app sumaba en pantalla y al refrescar volvia el saldo
       // viejo. La recarga va por la RPC `recargar_saldo`, que suma, deja el
       // movimiento y devuelve el saldo real leido de la base.
+      console.log('=== DEBUG recargar_saldo ===');
+      console.log('Monto:', monto);
+      console.log('Wallet:', wallet);
+
       const { data, error } = await supabase.rpc('recargar_saldo', {
         p_monto: monto,
       });
+
+      console.log('Error en recargar_saldo:', error);
+      console.log('Data:', data);
+      console.log('=== FIN DEBUG ===');
 
       if (error) throw error;
 
@@ -314,9 +323,25 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
         return;
       }
 
+      // Animar el saldo con interpolación suave (sin saltos bruscos)
+      const nuevoSaldo = res.saldo_nuevo ?? 0;
+      saldoAnterior.current = wallet.saldo_actual;
+      saldoInterpolado.setValue(saldoAnterior.current);
+      setSaldoMostrado(saldoAnterior.current);
+      Animated.timing(saldoInterpolado, {
+        toValue: nuevoSaldo,
+        duration: 800,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start(({ finished }) => {
+        if (finished) {
+          setSaldoMostrado(nuevoSaldo);
+        }
+      });
+
       // El saldo se toma del servidor, no se calcula aqui.
       setWallet((prev) =>
-        prev ? { ...prev, saldo_actual: res.saldo_nuevo ?? prev.saldo_actual } : prev
+        prev ? { ...prev, saldo_actual: nuevoSaldo } : prev
       );
       setMovimientos((prev) => [
         {
@@ -331,6 +356,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
 
       setRecargaVisible(false);
       setMontoRecarga('');
+      setMontoSeleccionado(0);
     } catch (err) {
       Alert.alert('Error', 'No se pudo procesar la recarga. Inténtalo nuevamente.');
       console.warn('Error en recarga:', err);
@@ -371,7 +397,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           <Text style={styles.headerTitle}>Mi Wallet</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORES.cafeOscuro} />
+          <ActivityIndicator size="large" color={colors.cafeOscuro} />
           <Text style={styles.loadingText}>Cargando tu saldo...</Text>
         </View>
       </View>
@@ -401,15 +427,14 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={COLORES.cafeOscuro}
-            colors={[COLORES.cafeOscuro]}
+            tintColor={colors.cafeOscuro}
+            colors={[colors.cafeOscuro]}
           />
         }
       >
         {/* ─── Tarjeta de Saldo (animada) ───────────────────── */}
         <Animated.View
           style={[
-            styles.balanceCard,
             {
               opacity: fadeAnim,
               transform: [
@@ -419,6 +444,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
             },
           ]}
         >
+          <Card variant="elevated" padding="none" style={styles.balanceCard}>
           <View style={styles.balanceCardInner}>
             <View style={styles.balanceDecor1} />
             <View style={styles.balanceDecor2} />
@@ -440,7 +466,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
                   },
                 ]}
               >
-                {formatCLP(saldo)}
+                {`$${saldoMostrado.toLocaleString('es-CL')}`}
               </Animated.Text>
               <Text style={styles.balanceHint}>
                 {esSaldoCero
@@ -451,6 +477,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
               </Text>
             </View>
           </View>
+          </Card>
         </Animated.View>
 
         {/* ─── Botones de Acción (animados) ─────────────────── */}
@@ -463,7 +490,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           <TouchableOpacity
             style={styles.actionButton}
             onPressIn={animarRecarga}
-            onPress={() => setRecargaVisible(true)}
+            onPress={() => setMontoSeleccionado(5000)}
             activeOpacity={0.8}
           >
             <Animated.View
@@ -491,22 +518,22 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
             { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
           ]}
         >
-          <View style={styles.statCard}>
+          <Card variant="outlined" padding="none" style={styles.statCard}>
             <Text style={styles.statValue}>{movimientos.length}</Text>
             <Text style={styles.statLabel}>Movimientos</Text>
-          </View>
-          <View style={styles.statCard}>
+          </Card>
+          <Card variant="outlined" padding="none" style={styles.statCard}>
             <Text style={styles.statValue}>
               {movimientos.filter((m) => m.tipo === 'compra').length}
             </Text>
             <Text style={styles.statLabel}>Compras</Text>
-          </View>
-          <View style={styles.statCard}>
+          </Card>
+          <Card variant="outlined" padding="none" style={styles.statCard}>
             <Text style={styles.statValue}>
               {movimientos.filter((m) => m.tipo === 'recarga').length}
             </Text>
             <Text style={styles.statLabel}>Recargas</Text>
-          </View>
+          </Card>
         </Animated.View>
 
         {/* ─── Historial de Movimientos (animado) ──────────── */}
@@ -519,62 +546,16 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           <Text style={styles.sectionTitle}>Últimos movimientos</Text>
 
           {movimientos.length === 0 ? (
-            <View style={styles.emptyMovimientos}>
+            <Card variant="outlined" padding="none" style={styles.emptyMovimientos}>
               <Text style={styles.emptyEmoji}>💳</Text>
               <Text style={styles.emptyTitle}>Sin movimientos todavía</Text>
               <Text style={styles.emptyDescription}>
                 Tus recargas y compras aparecerán aquí para que lleves el control de tu saldo.
               </Text>
-            </View>
+            </Card>
           ) : (
             movimientos.map((mov, index) => (
-              <Animated.View
-                key={mov.id}
-                style={[
-                  styles.movimientoCard,
-                  {
-                    opacity: fadeAnim,
-                    transform: [
-                      {
-                        translateY: slideAnim.interpolate({
-                          inputRange: [0, 50],
-                          outputRange: [0, 50 + index * 10],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.movimientoIcon,
-                    mov.tipo === 'recarga' && styles.movimientoIconIn,
-                    mov.tipo === 'compra' && styles.movimientoIconOut,
-                    mov.tipo === 'reembolso' && styles.movimientoIconRefund,
-                  ]}
-                >
-                  <Text style={styles.movimientoIconText}>
-                    {mov.tipo === 'recarga' ? '+' : mov.tipo === 'compra' ? '−' : '↩'}
-                  </Text>
-                </View>
-                <View style={styles.movimientoInfo}>
-                  <Text style={styles.movimientoName}>{mov.descripcion}</Text>
-                  <Text style={styles.movimientoMeta}>
-                    {getTipoLabel(mov.tipo)} • {formatFecha(mov.creado_en)}
-                  </Text>
-                </View>
-                <Text
-                  style={[
-                    styles.movimientoAmount,
-                    mov.tipo === 'recarga' && styles.movimientoAmountIn,
-                    mov.tipo === 'compra' && styles.movimientoAmountOut,
-                    mov.tipo === 'reembolso' && styles.movimientoAmountRefund,
-                  ]}
-                >
-                  {mov.tipo === 'compra' ? '−' : '+'}
-                  {formatCLP(mov.monto)}
-                </Text>
-              </Animated.View>
+              <MovimientoItem key={mov.id} mov={mov} index={index} />
             ))
           )}
 
@@ -584,12 +565,12 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
         </Animated.View>
       </ScrollView>
 
-      {/* ─── Modal de Recarga ───────────────────────────────── */}
+      {/* ─── Selector de Monto ───────────────────────────────── */}
       <Modal
-        visible={recargaVisible}
+        visible={montoSeleccionado > 0 && !recargaVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setRecargaVisible(false)}
+        onRequestClose={() => setMontoSeleccionado(0)}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -597,13 +578,29 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
         >
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Recargar saldo</Text>
-              <TouchableOpacity onPress={() => setRecargaVisible(false)}>
+              <Text style={styles.modalTitle}>Selecciona el monto</Text>
+              <TouchableOpacity onPress={() => setMontoSeleccionado(0)}>
                 <Text style={styles.modalClose}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalLabel}>Monto</Text>
+            <Text style={styles.modalQuickLabel}>Montos rápidos</Text>
+            <View style={styles.quickAmountsRow}>
+              {SALDOS_RAPIDOS.map((monto) => (
+                <TouchableOpacity
+                  key={monto}
+                  style={styles.quickAmountBtn}
+                  onPress={() => {
+                    setMontoSeleccionado(monto);
+                    setRecargaVisible(true);
+                  }}
+                >
+                  <Text style={styles.quickAmountText}>{formatCLP(monto)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.modalLabel}>O ingresa un monto personalizado</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="$0"
@@ -613,40 +610,46 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
               autoFocus
             />
 
-            <Text style={styles.modalQuickLabel}>Saldos rápidos</Text>
-            <View style={styles.quickAmountsRow}>
-              {SALDOS_RAPIDOS.map((monto) => (
-                <TouchableOpacity
-                  key={monto}
-                  style={styles.quickAmountBtn}
-                  onPress={() => setMontoRecarga(monto.toString())}
-                >
-                  <Text style={styles.quickAmountText}>{formatCLP(monto)}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.confirmButton,
-                (!montoRecarga || procesandoRecarga) && styles.confirmButtonDisabled,
-              ]}
+            <Button
+              title="Continuar"
               onPress={() => {
                 const monto = parseInt(montoRecarga, 10);
                 if (!isNaN(monto) && monto > 0) {
-                  handleRecarga(monto);
+                  setMontoSeleccionado(monto);
+                  setRecargaVisible(true);
                 }
               }}
-              disabled={!montoRecarga || procesandoRecarga}
-            >
-              {procesandoRecarga ? (
-                <ActivityIndicator color={COLORES.blanco} />
-              ) : (
-                <Text style={styles.confirmButtonText}>Confirmar recarga</Text>
-              )}
-            </TouchableOpacity>
+              disabled={!montoRecarga}
+              style={[
+                styles.confirmButton,
+                !montoRecarga && styles.confirmButtonDisabled,
+              ]}
+            />
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ─── Modal de Recarga con Tarjeta Simulada ──────────── */}
+      <Modal
+        visible={recargaVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => !procesandoRecarga && setRecargaVisible(false)}
+      >
+        <PaymentScreen
+          monto={montoSeleccionado}
+          onPagoExitoso={(monto) => {
+            handleRecarga(monto);
+            setRecargaVisible(false);
+            setMontoSeleccionado(0);
+          }}
+          onCancelar={() => {
+            if (!procesandoRecarga) {
+              setRecargaVisible(false);
+              setMontoSeleccionado(0);
+            }
+          }}
+        />
       </Modal>
     </View>
   );
@@ -656,27 +659,27 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORES.fondo,
+    backgroundColor: colors.fondo,
   },
   header: {
     height: 72,
-    backgroundColor: COLORES.blanco,
+    backgroundColor: colors.blanco,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
     borderBottomWidth: 1,
-    borderBottomColor: COLORES.borde,
+    borderBottomColor: colors.borde,
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORES.cafeOscuro,
+    fontSize: typography.subtitulo,
+    fontWeight: typography.pesoMedio as '600',
+    color: colors.cafeOscuro,
   },
   refreshIcon: {
     fontSize: 24,
-    color: COLORES.cafeOscuro,
-    fontWeight: '700',
+    color: colors.cafeOscuro,
+    fontWeight: typography.pesoBold as '700',
   },
   refreshing: {
     opacity: 0.4,
@@ -688,30 +691,30 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: spacing.md,
     fontSize: 13,
-    color: COLORES.gris,
+    color: colors.textoSecundario,
   },
   content: {
-    padding: 16,
+    padding: spacing.lg,
     paddingBottom: 30,
   },
 
   // ─── Tarjeta de Saldo ───────────────────────────────────────
   balanceCard: {
-    backgroundColor: COLORES.cafeOscuro,
+    backgroundColor: colors.cafeOscuro,
     borderRadius: 28,
     padding: 3,
-    shadowColor: COLORES.cafeOscuro,
+    shadowColor: colors.cafeOscuro,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 8,
   },
   balanceCardInner: {
-    backgroundColor: COLORES.cafeOscuro,
+    backgroundColor: colors.cafeOscuro,
     borderRadius: 25,
-    padding: 24,
+    padding: spacing.xxl,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -738,39 +741,39 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   balanceLabel: {
-    color: COLORES.dorado,
+    color: colors.dorado,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: typography.pesoBold as '700',
     letterSpacing: 1.2,
   },
   balanceValue: {
-    color: COLORES.blanco,
+    color: colors.blanco,
     fontSize: 42,
-    fontWeight: '800',
-    fontFamily: 'serif',
-    marginTop: 8,
+    fontWeight: typography.pesoExtraBold as '800',
+    fontFamily: typography.familia,
+    marginTop: spacing.sm,
   },
   balanceHint: {
-    color: '#D8C9BD',
-    fontSize: 12,
+    color: colors.bordeOscuro,
+    fontSize: typography.cuerpoPequeno,
     marginTop: 6,
   },
 
   // ─── Botones de Acción ──────────────────────────────────────
   actionsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
+    gap: spacing.md,
+    marginTop: spacing.lg,
   },
   actionButton: {
     flex: 1,
-    backgroundColor: COLORES.blanco,
+    backgroundColor: colors.blanco,
     borderRadius: 18,
-    padding: 16,
+    padding: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORES.borde,
+    borderColor: colors.borde,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
@@ -781,51 +784,51 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: COLORES.cafeOscuro,
+    backgroundColor: colors.cafeOscuro,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
   },
   actionIconAlt: {
-    backgroundColor: COLORES.crema,
+    backgroundColor: colors.crema,
   },
   actionIcon: {
-    color: COLORES.blanco,
+    color: colors.blanco,
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: typography.pesoExtraBold as '800',
   },
   actionText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: COLORES.cafeOscuro,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.cafeOscuro,
   },
 
   // ─── Estadísticas ───────────────────────────────────────────
   statsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 16,
+    marginTop: spacing.lg,
   },
   statCard: {
     flex: 1,
-    backgroundColor: COLORES.doradoBg,
+    backgroundColor: colors.doradoBg,
     borderRadius: 16,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#F0E5D0',
+    borderColor: colors.borde,
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORES.cafeOscuro,
-    fontFamily: 'serif',
+    fontSize: typography.titulo,
+    fontWeight: typography.pesoExtraBold as '800',
+    color: colors.cafeOscuro,
+    fontFamily: typography.familia,
   },
   statLabel: {
-    fontSize: 10,
-    color: COLORES.gris,
+    fontSize: typography.etiqueta,
+    color: colors.textoSecundario,
     marginTop: 2,
-    fontWeight: '600',
+    fontWeight: typography.pesoMedio as '600',
   },
 
   // ─── Sección de Movimientos ────────────────────────────────
@@ -834,21 +837,21 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: COLORES.cafeOscuro,
-    marginBottom: 12,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.cafeOscuro,
+    marginBottom: spacing.md,
   },
 
   // ─── Movimiento Card ───────────────────────────────────────
   movimientoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORES.blanco,
+    backgroundColor: colors.blanco,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORES.borde,
+    borderColor: colors.borde,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
@@ -861,59 +864,59 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORES.rojoBg,
+    backgroundColor: colors.rojoBg,
   },
   movimientoIconIn: {
-    backgroundColor: COLORES.verdeBg,
+    backgroundColor: colors.verdeBg,
   },
   movimientoIconOut: {
-    backgroundColor: COLORES.rojoBg,
+    backgroundColor: colors.rojoBg,
   },
   movimientoIconRefund: {
-    backgroundColor: COLORES.doradoBg,
+    backgroundColor: colors.doradoBg,
   },
   movimientoIconText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORES.cafeOscuro,
+    fontSize: typography.subtitulo,
+    fontWeight: typography.pesoExtraBold as '800',
+    color: colors.cafeOscuro,
   },
   movimientoInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: spacing.md,
   },
   movimientoName: {
     fontSize: 13,
-    fontWeight: '600',
-    color: COLORES.cafeOscuro,
+    fontWeight: typography.pesoMedio as '600',
+    color: colors.cafeOscuro,
   },
   movimientoMeta: {
-    fontSize: 10,
-    color: COLORES.gris,
+    fontSize: typography.etiqueta,
+    color: colors.textoSecundario,
     marginTop: 2,
   },
   movimientoAmount: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoExtraBold as '800',
   },
   movimientoAmountIn: {
-    color: COLORES.verde,
+    color: colors.verde,
   },
   movimientoAmountOut: {
-    color: COLORES.rojo,
+    color: colors.rojo,
   },
   movimientoAmountRefund: {
-    color: COLORES.dorado,
+    color: colors.dorado,
   },
 
   // ─── Empty State ────────────────────────────────────────────
   emptyMovimientos: {
     alignItems: 'center',
     paddingVertical: 40,
-    paddingHorizontal: 24,
-    backgroundColor: '#F9F3EC',
+    paddingHorizontal: spacing.xxl,
+    backgroundColor: colors.crema,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#F0E8DD',
+    borderColor: colors.borde,
     borderStyle: 'dashed',
   },
   emptyContainer: {
@@ -925,26 +928,26 @@ const styles = StyleSheet.create({
   },
   emptyEmoji: {
     fontSize: 48,
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   emptyTitle: {
     fontSize: 17,
-    fontWeight: '700',
-    color: COLORES.cafeOscuro,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.cafeOscuro,
     textAlign: 'center',
   },
   emptyDescription: {
     fontSize: 13,
-    color: COLORES.gris,
+    color: colors.textoSecundario,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
     lineHeight: 20,
   },
   footerText: {
     textAlign: 'center',
-    fontSize: 10,
-    color: COLORES.grisClaro,
-    marginTop: 12,
+    fontSize: typography.etiqueta,
+    color: colors.textoDeshabilitado,
+    marginTop: spacing.md,
   },
 
   // ─── Modal ──────────────────────────────────────────────────
@@ -954,81 +957,81 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: COLORES.blanco,
+    backgroundColor: colors.blanco,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    padding: 24,
+    padding: spacing.xxl,
     paddingBottom: 36,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: COLORES.cafeOscuro,
+    fontWeight: typography.pesoExtraBold as '800',
+    color: colors.cafeOscuro,
   },
   modalClose: {
     fontSize: 18,
-    color: COLORES.gris,
-    fontWeight: '700',
-    padding: 4,
+    color: colors.textoSecundario,
+    fontWeight: typography.pesoBold as '700',
+    padding: spacing.xs,
   },
   modalLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORES.gris,
-    marginBottom: 8,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.textoSecundario,
+    marginBottom: spacing.sm,
     letterSpacing: 0.5,
   },
   modalInput: {
-    backgroundColor: COLORES.fondo,
+    backgroundColor: colors.fondo,
     borderRadius: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
     paddingVertical: 14,
     fontSize: 24,
-    fontWeight: '700',
-    color: COLORES.cafeOscuro,
-    fontFamily: 'serif',
+    fontWeight: typography.pesoBold as '700',
+    color: colors.cafeOscuro,
+    fontFamily: typography.familia,
     borderWidth: 2,
-    borderColor: COLORES.borde,
+    borderColor: colors.borde,
   },
   modalQuickLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORES.gris,
-    marginTop: 20,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.textoSecundario,
+    marginTop: spacing.xl,
     marginBottom: 10,
     letterSpacing: 0.5,
   },
   quickAmountsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
   },
   quickAmountBtn: {
     flex: 1,
-    backgroundColor: COLORES.doradoBg,
+    backgroundColor: colors.doradoBg,
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#F0E5D0',
+    borderColor: colors.borde,
   },
   quickAmountText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: COLORES.cafeOscuro,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.cafeOscuro,
   },
   confirmButton: {
-    backgroundColor: COLORES.cafeOscuro,
+    backgroundColor: colors.cafeOscuro,
     borderRadius: 16,
-    paddingVertical: 16,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    shadowColor: COLORES.cafeOscuro,
+    shadowColor: colors.cafeOscuro,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1040,9 +1043,9 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   confirmButtonText: {
-    color: COLORES.blanco,
+    color: colors.blanco,
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: typography.pesoExtraBold as '800',
   },
 });
 

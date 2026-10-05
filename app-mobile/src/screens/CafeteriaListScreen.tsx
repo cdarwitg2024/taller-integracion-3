@@ -3,7 +3,6 @@ import {
   StyleSheet,
   Text,
   View,
-  TouchableOpacity,
   ActivityIndicator,
   Image,
   ScrollView,
@@ -11,6 +10,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import Button from '../components/Button';
+import Card from '../components/Card';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 interface Cafeteria {
   /**
@@ -98,7 +102,7 @@ export const CafeteriaListScreen = ({
   }, [fetchCafeterias]);
 
   const renderCafeteriaCard = ({ item }: { item: Cafeteria }) => (
-    <View style={styles.card}>
+    <Card variant="elevated" padding="md" style={styles.card}>
       {imagenesCaidas[item.id] || !item.imagen_url ? (
         <View style={[styles.cardImage, styles.cardImageFallback]}>
           <Text style={styles.cardImageFallbackIcon}>☕</Text>
@@ -129,14 +133,13 @@ export const CafeteriaListScreen = ({
           {item.hora_cierre ? `Cierra ${recortarHora(item.hora_cierre)}` : 'Sin horario'}
         </Text>
       </View>
-      <TouchableOpacity
-        style={styles.menuButton}
+      <Button
+        title="Ver Menu"
+        variant="secondary"
+        size="sm"
         onPress={() => onSelectCafeteria?.(item)}
-        accessibilityLabel={`Ver el menú de ${item.nombre}`}
-      >
-        <Text style={styles.menuButtonText}>Ver Menu</Text>
-      </TouchableOpacity>
-    </View>
+      />
+    </Card>
   );
 
   return (
@@ -157,22 +160,22 @@ export const CafeteriaListScreen = ({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => fetchCafeterias(true)}
-            tintColor="#4A2E2B"
-            colors={['#4A2E2B']}
+            tintColor={colors.cafeOscuro}
+            colors={[colors.cafeOscuro]}
           />
         }
       >
         {/* Banner Informativo Superior */}
-        <View style={styles.infoBanner}>
+        <Card variant="elevated" padding="lg" style={styles.infoBanner}>
           <Text style={styles.infoBannerText}>
             Podras ver las cafeterias disponibles en este menu
           </Text>
-        </View>
+        </Card>
 
         {/* Lista de Cafeterías */}
         {loading ? (
           <View style={styles.loadingState}>
-            <ActivityIndicator size="large" color="#4A2E2B" />
+            <ActivityIndicator size="large" color={colors.cafeOscuro} />
             <Text style={styles.loadingText}>Cargando cafeterías…</Text>
           </View>
         ) : errorMessage ? (
@@ -180,14 +183,12 @@ export const CafeteriaListScreen = ({
             <Text style={styles.errorStateIcon}>📡</Text>
             <Text style={styles.errorStateTitle}>Sin conexión con el servidor</Text>
             <Text style={styles.errorStateText}>{errorMessage}</Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={() => fetchCafeterias()}
-              activeOpacity={0.85}
-              accessibilityLabel="Reintentar la carga de cafeterías"
-            >
-              <Text style={styles.retryButtonText}>Reintentar</Text>
-            </TouchableOpacity>
+            <View style={styles.retryButtonWrapper}>
+              <Button
+                title="Reintentar"
+                onPress={() => fetchCafeterias()}
+              />
+            </View>
           </View>
         ) : cafeterias.length === 0 ? (
           <View style={styles.emptyState}>
@@ -197,13 +198,12 @@ export const CafeteriaListScreen = ({
               No hay cafeterías activas registradas en este momento. Vuelve más tarde para ver
               el menú del campus.
             </Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={() => fetchCafeterias()}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.retryButtonText}>Actualizar</Text>
-            </TouchableOpacity>
+            <View style={styles.retryButtonWrapper}>
+              <Button
+                title="Actualizar"
+                onPress={() => fetchCafeterias()}
+              />
+            </View>
           </View>
         ) : (
           <View style={styles.listContainer}>
@@ -216,12 +216,12 @@ export const CafeteriaListScreen = ({
         )}
 
         {/* Banner Informativo Inferior */}
-        <View style={styles.bottomBanner}>
+        <Card variant="elevated" padding="lg" style={styles.bottomBanner}>
           <Text style={styles.bottomBannerText}>
             Si no encuentras una cafeteria que te guste puedes pasar a ver directamente los menus
             disponibles y se filtrara automaticamente a una cafeteria con este disponible
           </Text>
-        </View>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -242,210 +242,182 @@ const formatearDemora = (minutos?: number) => {
 const recortarHora = (hora: string) => hora.slice(0, 5);
 
 const getDelayStyle = (minutos?: number) => {
-  if (typeof minutos !== 'number' || Number.isNaN(minutos)) return { color: '#8C7A70' };
-  if (minutos <= 5) return { color: '#5B8C51' };
-  if (minutos <= 15) return { color: '#B58A29' };
-  return { color: '#A92A2A' };
+  if (typeof minutos !== 'number' || Number.isNaN(minutos)) return { color: colors.textoSecundario };
+  if (minutos <= 5) return { color: colors.verde };
+  if (minutos <= 15) return { color: colors.naranja };
+  return { color: colors.rojo };
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.blanco,
   },
   topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
   },
   welcomeText: {
     fontSize: 22,
-    fontWeight: '700',
-    color: '#3B2319',
-    fontFamily: 'serif',
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+    fontFamily: typography.familia,
   },
   iconBadge: {
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: '#4A2E2B',
+    backgroundColor: colors.cafeOscuro,
     justifyContent: 'center',
     alignItems: 'center',
   },
   infoBanner: {
-    backgroundColor: '#F5ECE5',
-    marginHorizontal: 20,
-    marginVertical: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    backgroundColor: colors.crema,
+    marginHorizontal: spacing.xl,
+    marginVertical: spacing.md,
     borderRadius: 20,
   },
   infoBannerText: {
     textAlign: 'center',
     fontSize: 14,
-    fontWeight: '600',
-    color: '#4A2E2B',
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
     lineHeight: 20,
   },
   listContainer: {
-    paddingHorizontal: 20,
-    gap: 16,
-    marginTop: 8,
+    paddingHorizontal: spacing.xl,
+    gap: spacing.lg,
+    marginTop: spacing.sm,
   },
   card: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#F0E8E1',
+    borderColor: colors.borde,
   },
   cardImage: {
     width: 90,
     height: 90,
     borderRadius: 20,
-    backgroundColor: '#EAEAEA',
+    backgroundColor: colors.borde,
   },
   cardImageFallback: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5ECE5',
+    backgroundColor: colors.crema,
   },
   cardImageFallbackIcon: {
     fontSize: 32,
   },
   cardContent: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: spacing.md,
     justifyContent: 'center',
   },
   cardTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#3B2319',
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
   },
   cardSubtitle: {
-    fontSize: 12,
-    color: '#8C7A70',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
     marginVertical: 2,
   },
   cardDelay: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 4,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    marginTop: spacing.xs,
   },
   cardRating: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#C026D3',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.textoSecundario,
     marginTop: 2,
   },
-  menuButton: {
-    backgroundColor: '#F5ECE5',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-  },
-  menuButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#3B2319',
-  },
   bottomBanner: {
-    backgroundColor: '#F9F3EC',
-    marginHorizontal: 20,
-    marginTop: 24,
-    padding: 18,
+    backgroundColor: colors.crema,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.xxl,
     borderRadius: 20,
   },
   bottomBannerText: {
     textAlign: 'center',
     fontSize: 11,
-    color: '#7A685D',
+    color: colors.textoSecundario,
     lineHeight: 16,
   },
   emptyState: {
     marginTop: 40,
-    marginHorizontal: 20,
+    marginHorizontal: spacing.xl,
     alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 24,
-    backgroundColor: '#F9F3EC',
+    paddingVertical: spacing.xxxl,
+    paddingHorizontal: spacing.xxl,
+    backgroundColor: colors.crema,
     borderRadius: 24,
   },
   emptyStateIcon: {
     fontSize: 40,
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   emptyStateTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#3B2319',
+    fontSize: typography.subtitulo,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
     textAlign: 'center',
   },
   emptyStateText: {
-    fontSize: 12,
-    color: '#7A685D',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
     textAlign: 'center',
     lineHeight: 18,
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
   loadingState: {
     marginTop: 40,
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: spacing.md,
     fontSize: 13,
-    color: '#8C7A70',
-    fontWeight: '600',
+    color: colors.textoSecundario,
+    fontWeight: typography.pesoMedio,
   },
   errorState: {
     marginTop: 40,
-    marginHorizontal: 20,
+    marginHorizontal: spacing.xl,
     alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 24,
-    backgroundColor: '#FCEEEE',
+    paddingVertical: spacing.xxxl,
+    paddingHorizontal: spacing.xxl,
+    backgroundColor: colors.rojoBg,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#F2D4D4',
+    borderColor: colors.rojo,
   },
   errorStateIcon: {
     fontSize: 40,
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   errorStateTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#8A2F2F',
+    fontSize: typography.subtitulo,
+    fontWeight: typography.pesoBold,
+    color: colors.rojo,
     textAlign: 'center',
   },
   errorStateText: {
-    fontSize: 12,
-    color: '#7A4A4A',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
     textAlign: 'center',
     lineHeight: 18,
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
-  retryButton: {
-    marginTop: 20,
-    backgroundColor: '#4A2E2B',
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 16,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
+  retryButtonWrapper: {
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.xxl,
+    width: '100%',
   },
 });

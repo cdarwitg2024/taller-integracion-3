@@ -1,11 +1,11 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
+import Button from '../components/Button';
+import Card from '../components/Card';
+import Header from '../components/Header';
 
 const PerfilScreen = ({ session, isGuest, onLogout }) => {
   const user = session?.user;
@@ -25,16 +25,17 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={{ width: 36 }} />
-        <Text style={styles.headerTitle}>Mi Perfil</Text>
-        <View style={styles.headerIcon}>
-          <Text style={styles.headerIconText}>▣</Text>
-        </View>
-      </View>
+      <Header
+        title="Mi Perfil"
+        rightElement={
+          <View style={styles.headerIcon}>
+            <Text style={styles.headerIconText}>▣</Text>
+          </View>
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.profileCard}>
+        <Card variant="elevated" style={styles.profileCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initial}</Text>
           </View>
@@ -47,9 +48,9 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
           <View style={styles.roleBadge}>
             <Text style={styles.roleBadgeText}>{isGuest ? 'Invitado' : rol}</Text>
           </View>
-        </View>
+        </Card>
 
-        <View style={styles.section}>
+        <Card variant="outlined" style={styles.section}>
           <Text style={styles.sectionTitle}>Información de la cuenta</Text>
 
           <View style={styles.infoRow}>
@@ -81,7 +82,7 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
               {isGuest ? 'Invitado' : 'Sincronizada con Supabase'}
             </Text>
           </View>
-        </View>
+        </Card>
 
         <View style={styles.infoBanner}>
           <Text style={styles.infoBannerText}>
@@ -89,11 +90,12 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
           </Text>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
-          <Text style={styles.logoutButtonText}>
-            {isGuest ? 'Finalizar modo invitado' : 'Cerrar sesión'}
-          </Text>
-        </TouchableOpacity>
+        <Button
+          title={isGuest ? 'Finalizar modo invitado' : 'Cerrar sesión'}
+          onPress={onLogout}
+          variant="danger"
+          style={styles.logoutButton}
+        />
       </ScrollView>
     </View>
   );
@@ -102,42 +104,29 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F6F4',
-  },
-  header: {
-    height: 72,
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4A332C',
+    backgroundColor: colors.fondo,
   },
   headerIcon: {
     width: 35,
     height: 35,
     borderRadius: 8,
-    backgroundColor: '#4A332C',
+    backgroundColor: colors.cafeOscuro,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerIconText: {
-    color: '#FFFFFF',
+    color: colors.blanco,
   },
   content: {
-    padding: 16,
+    padding: spacing.lg,
     paddingBottom: 30,
   },
   profileCard: {
-    backgroundColor: '#4A332C',
+    backgroundColor: colors.cafeOscuro,
     borderRadius: 24,
-    padding: 24,
+    padding: spacing.xxl,
     alignItems: 'center',
-    shadowColor: '#4A332C',
+    shadowColor: colors.cafeOscuro,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -147,97 +136,89 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#F5EBE1',
+    backgroundColor: colors.crema,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#4A332C',
-    fontFamily: 'serif',
+    fontSize: typography.tituloGrande,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.cafeOscuro,
+    fontFamily: typography.familia,
   },
   name: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
-    fontFamily: 'serif',
-    marginTop: 12,
+    color: colors.blanco,
+    fontSize: typography.titulo,
+    fontWeight: typography.pesoExtraBold,
+    fontFamily: typography.familia,
+    marginTop: spacing.md,
     textAlign: 'center',
   },
   email: {
-    color: '#D8C9BD',
-    fontSize: 12,
-    marginTop: 4,
+    color: colors.bordeOscuro,
+    fontSize: typography.cuerpoPequeno,
+    marginTop: spacing.xs,
     textAlign: 'center',
   },
   roleBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.14)',
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing.md,
     paddingVertical: 5,
     borderRadius: 14,
     marginTop: 10,
   },
   roleBadgeText: {
-    color: '#FFFFFF',
+    color: colors.blanco,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: typography.pesoBold,
   },
   section: {
     marginTop: 22,
   },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#4A332C',
-    marginBottom: 12,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+    marginBottom: spacing.md,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: spacing.xs,
   },
   infoLabel: {
-    fontSize: 12,
-    color: '#958781',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
   },
   infoValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4A332C',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
     maxWidth: '60%',
     textAlign: 'right',
   },
   separator: {
     height: 1,
-    backgroundColor: '#EBE4DE',
-    marginVertical: 8,
+    backgroundColor: colors.borde,
+    marginVertical: spacing.sm,
   },
   infoBanner: {
-    backgroundColor: '#F5ECE5',
+    backgroundColor: colors.crema,
     borderRadius: 16,
-    padding: 16,
+    padding: spacing.lg,
     marginTop: 22,
   },
   infoBannerText: {
     fontSize: 11,
-    color: '#7A685D',
-    lineHeight: 16,
+    color: colors.textoSecundario,
+    lineHeight: spacing.lg,
     textAlign: 'center',
   },
   logoutButton: {
     height: 52,
     borderRadius: 14,
-    backgroundColor: '#FCEAE3',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  logoutButtonText: {
-    color: '#A92A2A',
-    fontSize: 14,
-    fontWeight: '700',
+    marginTop: spacing.xl,
   },
 });
 
