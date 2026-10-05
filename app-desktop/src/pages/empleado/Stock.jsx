@@ -51,7 +51,7 @@ function StockEmpleado({ currentUser }) {
     try {
       setLoading(true);
       setError('');
-      const data = await productosService.listarProductos();
+      const data = await productosService.getAll();
       setProductos(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error cargando productos:', err);
