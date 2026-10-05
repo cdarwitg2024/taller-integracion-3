@@ -1,0 +1,22 @@
+﻿apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-cdarwitg-ingress
+  namespace: student-cdarwitg
+  annotations:
+    external-dns.alpha.kubernetes.io/target: proxy.inf.uct.cl
+  labels:
+    app: gateway
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api-cdarwitg.dev.censei.cl
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 80

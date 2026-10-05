@@ -1,4 +1,4 @@
-# ms-menus — Microservicio de Menus (productos).
+﻿# ms-menus â€” Microservicio de Menus (productos).
 #
 # NO forma parte de k8s/ (esa arboleria es la vieja, con backend-node).
 # Este manifiesto vive en k8s-next/ a proposito.
@@ -39,7 +39,6 @@ spec:
         ms: menus
     spec:
       # Rollback mas rapido: si la imagen nueva esta rota, se vuelve a la anterior.
-      revisionHistoryLimit: 3
 
       securityContext:
         runAsNonRoot: true
@@ -47,7 +46,7 @@ spec:
 
       containers:
         - name: ms-menus
-          image: coffeefaster/ms-menus:latest
+          image: cdarwitg2024/ms-menus:v1.0.0
           # Si la imagen no esta en el registro, 'IfNotPresent' evita que K8s
           # intente descargarla y se quede en ErrImagePull para siempre.
           imagePullPolicy: IfNotPresent

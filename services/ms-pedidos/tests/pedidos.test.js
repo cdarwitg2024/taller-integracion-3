@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const request = require('supertest');
 
@@ -106,7 +106,7 @@ describe('ms-pedidos', () => {
     const { obtenerCliente } = require('@coffeefaster/shared');
     const supa = obtenerCliente();
 
-    // Caso 1: dueño -> 200
+    // dueño
     supa.from.mockImplementation((tabla) => {
       if (tabla === 'pedidos') {
         return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 5, usuario_id: 10, cafeteria_id: 1 }, error: null }) }) }) };
@@ -119,10 +119,10 @@ describe('ms-pedidos', () => {
       }
       return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
     });
-    const resDueno = await service.obtenerTokenContingencia({ user: { authUserId: 'u1' } }, 5);
-    expect(resDueno).toHaveProperty('token');
+    const ok1 = await service.obtenerTokenContingencia({ user: { authUserId: 'u1' } }, 5);
+    expect(ok1).toHaveProperty('token');
 
-    // Caso 2: otro usuario, no dueño, no personal -> 403
+    // otro usuario 403
     supa.from.mockImplementation((tabla) => {
       if (tabla === 'pedidos') {
         return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 5, usuario_id: 10, cafeteria_id: 1 }, error: null }) }) }) };
@@ -137,7 +137,7 @@ describe('ms-pedidos', () => {
     });
     await expect(service.obtenerTokenContingencia({ user: { authUserId: 'otro' } }, 5)).rejects.toMatchObject({ status: 403 });
 
-    // Caso 3: no dueño pero personal cafeteria_usuarios -> 200
+    // personal
     supa.from.mockImplementation((tabla) => {
       if (tabla === 'pedidos') {
         return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 5, usuario_id: 10, cafeteria_id: 1 }, error: null }) }) }) };
@@ -146,12 +146,12 @@ describe('ms-pedidos', () => {
         return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 99 }, error: null }) }) }) };
       }
       if (tabla === 'cafeteria_usuarios') {
-        return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 1 }, error: null }) }) }) }) };
+        return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 22 }, error: null }) }) }) }) };
       }
       return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
     });
-    const resPersonal = await service.obtenerTokenContingencia({ user: { authUserId: 'otro' } }, 5);
-    expect(resPersonal).toHaveProperty('token');
+    const resP = await service.obtenerTokenContingencia({ user: { authUserId: 'otro2' } }, 5);
+    expect(resP).toHaveProperty('token');
   });
 });
 

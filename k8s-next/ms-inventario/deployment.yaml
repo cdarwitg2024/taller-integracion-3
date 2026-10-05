@@ -1,4 +1,4 @@
-# ms-inventario - Microservicio de Inventario (stock).
+﻿# ms-inventario - Microservicio de Inventario (stock).
 #
 # NO forma parte de k8s/ (esa arboleria es la vieja, con backend-node).
 # Este manifiesto vive en k8s-next/ a proposito.
@@ -42,7 +42,6 @@ spec:
         ms: inventario
     spec:
       # Rollback mas rapido: si la imagen nueva esta rota, se vuelve a la anterior.
-      revisionHistoryLimit: 3
 
       securityContext:
         runAsNonRoot: true
@@ -50,7 +49,7 @@ spec:
 
       containers:
         - name: ms-inventario
-          image: coffeefaster/ms-inventario:latest
+          image: cdarwitg2024/ms-inventario:v1.0.0
           # Si la imagen no esta en el registro, 'IfNotPresent' evita que K8s
           # intente descargarla y se quede en ErrImagePull para siempre.
           imagePullPolicy: IfNotPresent

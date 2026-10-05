@@ -1,4 +1,4 @@
-# ms-cafeterias — Microservicio de Cafeterias.
+﻿# ms-cafeterias â€” Microservicio de Cafeterias.
 #
 # NO forma parte de k8s/ (esa arboleria es la vieja, con backend-node).
 # Este manifiesto vive en k8s-next/ a proposito.
@@ -40,7 +40,6 @@ spec:
         ms: cafeterias
     spec:
       # Rollback mas rapido: si la imagen nueva esta rota, se vuelve a la anterior.
-      revisionHistoryLimit: 3
 
       securityContext:
         runAsNonRoot: true
@@ -48,7 +47,7 @@ spec:
 
       containers:
         - name: ms-cafeterias
-          image: coffeefaster/ms-cafeterias:latest
+          image: cdarwitg2024/ms-cafeterias:v1.0.0
           # Si la imagen no esta en el registro, 'IfNotPresent' evita que K8s
           # intente descargarla y se quede en ErrImagePull para siempre.
           imagePullPolicy: IfNotPresent
