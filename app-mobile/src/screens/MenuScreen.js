@@ -13,8 +13,13 @@ import {
 import ProductCard from '../components/ProductCard';
 import ProductDetail from '../components/ProductDetail';
 import CategoryFilter from '../components/CategoryFilter';
+import Button from '../components/Button';
+import Card from '../components/Card';
 import { supabase } from '../lib/supabase';
 import { useDisponibilidadProductos } from '../hooks/useDisponibilidadProductos';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 /**
  * Pantalla de Menú de una cafetería — FR-06
@@ -268,7 +273,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
 
   const renderBody = () => {
     if (loading) {
-      return <ActivityIndicator size="large" color="#4A332C" style={styles.loader} />;
+      return <ActivityIndicator size="large" color={colors.cafeOscuro} style={styles.loader} />;
     }
 
     if (error) {
@@ -277,9 +282,13 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
           <Text style={styles.stateEmoji}>📡</Text>
           <Text style={styles.stateTitle}>Sin conexión con el menú</Text>
           <Text style={styles.stateText}>{error}</Text>
-          <TouchableOpacity style={styles.stateButton} onPress={() => fetchProducts()}>
-            <Text style={styles.stateButtonText}>Reintentar</Text>
-          </TouchableOpacity>
+          <Button
+            title="Reintentar"
+            variant="secondary"
+            size="sm"
+            onPress={() => fetchProducts()}
+            style={{ marginTop: spacing.xl }}
+          />
         </View>
       );
     }
@@ -293,9 +302,13 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
             Todavía no hay productos cargados en {cafeteria?.nombre || 'esta cafetería'}.
             Probá con otra cafetería o volvé a revisar más tarde.
           </Text>
-          <TouchableOpacity style={styles.stateButton} onPress={onBack}>
-            <Text style={styles.stateButtonText}>Elegir otra cafetería</Text>
-          </TouchableOpacity>
+          <Button
+            title="Elegir otra cafetería"
+            variant="secondary"
+            size="sm"
+            onPress={onBack}
+            style={{ marginTop: spacing.xl }}
+          />
         </View>
       );
     }
@@ -310,12 +323,13 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
           <Text style={styles.stateText}>
             No hay productos disponibles en {catNombre || 'la categoría seleccionada'}.
           </Text>
-          <TouchableOpacity
-            style={styles.stateButton}
+          <Button
+            title="Ver todas las categorías"
+            variant="secondary"
+            size="sm"
             onPress={() => setCategoriaActiva('todos')}
-          >
-            <Text style={styles.stateButtonText}>Ver todas las categorías</Text>
-          </TouchableOpacity>
+            style={{ marginTop: spacing.xl }}
+          />
         </View>
       );
     }
@@ -331,8 +345,8 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#4A332C"
-            colors={['#4A332C']}
+            tintColor={colors.cafeOscuro}
+            colors={[colors.cafeOscuro]}
           />
         }
         renderItem={({ item: category }) => (
@@ -372,7 +386,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
           </View>
         </View>
 
-        <View style={styles.infoCard}>
+        <Card padding="sm" style={styles.infoCard}>
           <View style={[styles.liveDot, connected ? styles.liveDotOn : styles.liveDotOff]} />
           <Text style={styles.infoCafeteria} numberOfLines={1}>
             {cafeteria?.nombre || 'la cafetería seleccionada'}
@@ -382,7 +396,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
               ? productosSummary(disponibles, productosFiltrados.length)
               : 'Conectando…'}
           </Text>
-        </View>
+        </Card>
       </View>
 
       {/* FR-07: filtro por categoría, solo si hay más de una categoría */}
@@ -422,21 +436,21 @@ const productosSummary = (disponibles, total) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F6F4',
+    backgroundColor: colors.fondo,
   },
 
   // Capa del detalle: cubre el menú sin desmontarlo, por eso la cafetería
   // seleccionada y el filtro se conservan al cerrar.
   detailOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#F8F6F4',
+    backgroundColor: colors.fondo,
   },
 
   header: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
+    backgroundColor: colors.blanco,
+    paddingHorizontal: spacing.lg,
     paddingTop: 14,
-    paddingBottom: 8,
+    paddingBottom: spacing.sm,
   },
 
   headerTop: {
@@ -455,14 +469,14 @@ const styles = StyleSheet.create({
 
   backText: {
     fontSize: 32,
-    color: '#4A332C',
+    color: colors.cafeOscuro,
     lineHeight: 32,
   },
 
   title: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#4A332C',
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
   },
 
   headerIcon: {
@@ -471,54 +485,55 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 9,
-    backgroundColor: '#4A332C',
+    backgroundColor: colors.cafeOscuro,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   headerIconText: {
-    color: '#FFFFFF',
-    fontSize: 14,
+    color: colors.blanco,
+    fontSize: typography.cuerpo,
   },
 
   infoCard: {
     marginTop: 10,
-    backgroundColor: '#F5F2F0',
+    backgroundColor: colors.crema,
     borderRadius: 14,
+    borderWidth: 0,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: spacing.sm,
     alignItems: 'center',
   },
 
   // Indicador de que la suscripción en vivo está activa (FR-10)
   liveDot: {
     position: 'absolute',
-    top: 8,
-    right: 12,
+    top: spacing.sm,
+    right: spacing.md,
     width: 7,
     height: 7,
     borderRadius: 4,
   },
 
   liveDotOn: {
-    backgroundColor: '#5B8C5A',
+    backgroundColor: colors.verde,
   },
 
   liveDotOff: {
-    backgroundColor: '#C9A227',
+    backgroundColor: colors.dorado,
   },
 
   infoCafeteria: {
-    color: '#4A332C',
+    color: colors.cafeOscuro,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: typography.pesoBold,
     textAlign: 'center',
   },
 
   infoCount: {
-    color: '#8A7B76',
+    color: colors.textoSecundario,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: typography.pesoMedio,
     marginTop: 2,
   },
 
@@ -534,21 +549,21 @@ const styles = StyleSheet.create({
   },
 
   list: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 20,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
   },
 
   categorySection: {
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
 
   categoryTitle: {
     alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
-    color: '#4A332C',
-    fontSize: 16,
-    fontWeight: '700',
+    backgroundColor: colors.blanco,
+    color: colors.cafeOscuro,
+    fontSize: typography.subtitulo,
+    fontWeight: typography.pesoBold,
     paddingHorizontal: 18,
     paddingVertical: 6,
     borderRadius: 18,
@@ -564,36 +579,22 @@ const styles = StyleSheet.create({
 
   stateEmoji: {
     fontSize: 48,
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
 
   stateTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#4A332C',
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
     textAlign: 'center',
   },
 
   stateText: {
-    fontSize: 12,
-    color: '#958781',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
     lineHeight: 18,
-  },
-
-  stateButton: {
-    marginTop: 20,
-    backgroundColor: '#F5ECE5',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 14,
-  },
-
-  stateButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#4A332C',
   },
 });
 

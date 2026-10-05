@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
 import {
-  StyleSheet,
+  Alert,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator,
-  Alert,
   ScrollView,
   Image,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import Button from '../components/Button';
+import Input from '../components/Input';
+import Card from '../components/Card';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 const logo = require('../../assets/icon.png');
 
@@ -38,7 +43,6 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
       return false;
     }
 
-    // Validar formato de correo institucional @alu.uct.cl
     const emailTrimmed = email.trim().toLowerCase();
     if (!emailTrimmed.endsWith('@alu.uct.cl')) {
       setErrorMessage('Debes utilizar tu correo institucional (@alu.uct.cl).');
@@ -68,7 +72,6 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
 
     setLoading(true);
 
-    // Separar Nombre y Apellido
     const parts = nombreCompleto.trim().split(' ');
     const firstName = parts[0] || '';
     const lastName = parts.slice(1).join(' ') || '';
@@ -110,7 +113,6 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
                 setConfirmPassword('');
                 setAcceptedTerms(false);
                 setErrorMessage(null);
-                // Si existe la función para navegar a login, redirige tras cerrar la alerta
                 if (onNavigateToLogin) {
                   onNavigateToLogin();
                 }
@@ -129,7 +131,6 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-
         {/* Encabezado Superior / Brand */}
         <View style={styles.topHeader}>
           <TouchableOpacity style={styles.backButton} onPress={onNavigateToLogin}>
@@ -162,87 +163,83 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
         )}
 
         {/* Formulario */}
-        <View style={styles.form}>
+        <Card variant="elevated" padding="lg">
           {/* Nombre Completo */}
-          <Text style={styles.label}>NOMBRE COMPLETO</Text>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={styles.input}
-              placeholder="Ej. Francisca Morales"
-              placeholderTextColor="#A09A93"
-              value={nombreCompleto}
-              onChangeText={setNombreCompleto}
-              autoCapitalize="words"
-            />
-          </View>
+          <Input
+            label="NOMBRE COMPLETO"
+            placeholder="Ej. Francisca Morales"
+            value={nombreCompleto}
+            onChangeText={setNombreCompleto}
+            autoCapitalize="words"
+          />
 
           {/* Correo Institucional */}
-          <Text style={styles.label}>CORREO INSTITUCIONAL</Text>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={styles.input}
-              placeholder="tu.usuario@alu.uct.cl"
-              placeholderTextColor="#A09A93"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
+          <Input
+            label="CORREO INSTITUCIONAL"
+            placeholder="tu.usuario@alu.uct.cl"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
           <Text style={styles.helperText}>Solo correos @alu.uct.cl</Text>
 
           {/* Contraseña */}
-          <Text style={styles.label}>CONTRASEÑA</Text>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={styles.input}
-              placeholder="Mínimo 8 caracteres"
-              placeholderTextColor="#A09A93"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              textContentType="password"
-            />
-            <TouchableOpacity
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.eyeIcon}
-              accessibilityRole="button"
-              accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-            >
-              <Text style={styles.eyeIconText}>{showPassword ? 'Ocultar' : 'Ver'}</Text>
-            </TouchableOpacity>
+          <View>
+            <Text style={styles.label}>CONTRASEÑA</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Mínimo 8 caracteres"
+                placeholderTextColor={colors.textoDeshabilitado}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="off"
+                textContentType="password"
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeIcon}
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                <Text style={styles.eyeIconText}>{showPassword ? 'Ocultar' : 'Ver'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Confirmar Contraseña */}
-          <Text style={styles.label}>CONFIRMAR CONTRASEÑA</Text>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={styles.input}
-              placeholder="Repite tu contraseña"
-              placeholderTextColor="#A09A93"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry={!showConfirmPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              textContentType="password"
-            />
-            <TouchableOpacity
-              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-              style={styles.eyeIcon}
-              accessibilityRole="button"
-              accessibilityLabel={
-                showConfirmPassword ? 'Ocultar confirmación' : 'Mostrar confirmación'
-              }
-            >
-              <Text style={styles.eyeIconText}>
-                {showConfirmPassword ? 'Ocultar' : 'Ver'}
-              </Text>
-            </TouchableOpacity>
+          <View>
+            <Text style={styles.label}>CONFIRMAR CONTRASEÑA</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Repite tu contraseña"
+                placeholderTextColor={colors.textoDeshabilitado}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="off"
+                textContentType="password"
+              />
+              <TouchableOpacity
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={styles.eyeIcon}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  showConfirmPassword ? 'Ocultar confirmación' : 'Mostrar confirmación'
+                }
+              >
+                <Text style={styles.eyeIconText}>
+                  {showConfirmPassword ? 'Ocultar' : 'Ver'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Checkbox Términos */}
@@ -262,20 +259,12 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
           </TouchableOpacity>
 
           {/* Botón de Registro */}
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+          <Button
+            title="Registrarme"
             onPress={handleRegister}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <View style={styles.buttonContent}>
-                <Text style={styles.buttonText}>Registrarme</Text>
-                <Text style={styles.buttonArrow}>→</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+            loading={loading}
+            size="lg"
+          />
 
           {/* Enlace Login */}
           <TouchableOpacity style={styles.loginLink} onPress={onNavigateToLogin}>
@@ -283,8 +272,7 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
               ¿Ya tienes cuenta? <Text style={styles.loginBold}>Inicia sesión aquí</Text>
             </Text>
           </TouchableOpacity>
-        </View>
-
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -293,32 +281,32 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAF7F2',
+    backgroundColor: colors.fondo,
   },
   scrollContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
   },
   topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
     position: 'relative',
   },
   backButton: {
     position: 'absolute',
     left: 0,
-    padding: 4,
+    padding: spacing.xs,
   },
   backArrow: {
     fontSize: 22,
-    color: '#3C2A21',
+    color: colors.cafeOscuro,
   },
   brandContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   logoBadge: {
     width: 30,
@@ -326,101 +314,100 @@ const styles = StyleSheet.create({
     borderRadius: 7,
   },
   brandName: {
-    fontSize: 18,
+    fontSize: typography.subtitulo,
     fontWeight: '700',
-    color: '#3C2A21',
+    color: colors.cafeOscuro,
     fontFamily: 'serif',
   },
   badgeContainer: {
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5EBE1',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: colors.crema,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderRadius: 20,
   },
   badgeText: {
-    fontSize: 11,
+    fontSize: typography.etiqueta,
     fontWeight: '700',
-    color: '#8C6D58',
+    color: colors.cafeMedio,
     letterSpacing: 0.5,
   },
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#2C1E16',
+    color: colors.cafeOscuro,
     fontFamily: 'serif',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#8A7A70',
+    fontSize: typography.cuerpo,
+    color: colors.textoSecundario,
     lineHeight: 20,
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FCE8E6',
+    backgroundColor: colors.rojoBg,
     borderColor: '#F5C6CB',
     borderWidth: 1,
     borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
   },
   errorText: {
     color: '#A94442',
-    fontSize: 13,
+    fontSize: typography.cuerpoPequeno,
     flex: 1,
   },
-  form: {
-    width: '100%',
-  },
   label: {
-    fontSize: 11,
+    fontSize: typography.etiqueta,
     fontWeight: '700',
     color: '#5A4A42',
     letterSpacing: 0.8,
-    marginBottom: 8,
-    marginTop: 6,
+    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3EDE6',
+    backgroundColor: colors.fondo,
     borderRadius: 16,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
     height: 52,
-    marginBottom: 6,
+    marginBottom: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.borde,
   },
   input: {
     flex: 1,
-    fontSize: 14,
-    color: '#2C1E16',
+    fontSize: typography.cuerpo,
+    color: colors.cafeOscuro,
   },
   eyeIcon: {
-    paddingLeft: 8,
+    paddingLeft: spacing.sm,
   },
   eyeIconText: {
-    fontSize: 11,
+    fontSize: typography.etiqueta,
     fontWeight: '700',
     color: '#E07A5F',
   },
   helperText: {
-    fontSize: 12,
+    fontSize: typography.cuerpoPequeno,
     color: '#E07A5F',
-    marginBottom: 12,
-    marginLeft: 4,
+    marginBottom: spacing.md,
+    marginLeft: spacing.xs,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 16,
-    gap: 10,
+    marginVertical: spacing.lg,
+    gap: spacing.md,
   },
   checkbox: {
     width: 22,
@@ -430,68 +417,40 @@ const styles = StyleSheet.create({
     borderColor: '#D0C5B8',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.blanco,
   },
   checkboxChecked: {
-    backgroundColor: '#3C2A21',
-    borderColor: '#3C2A21',
+    backgroundColor: colors.cafeOscuro,
+    borderColor: colors.cafeOscuro,
   },
   checkmark: {
-    color: '#FFFFFF',
-    fontSize: 13,
+    color: colors.textoBlanco,
+    fontSize: typography.cuerpoPequeno,
     fontWeight: 'bold',
   },
   termsText: {
     flex: 1,
-    fontSize: 12,
-    color: '#8A7A70',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
     lineHeight: 16,
   },
   termsBold: {
     fontWeight: '700',
-    color: '#3C2A21',
-  },
-  button: {
-    backgroundColor: '#4A3728',
-    borderRadius: 16,
-    height: 54,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-    shadowColor: '#4A3728',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  buttonDisabled: {
-    backgroundColor: '#9A8B80',
-  },
-  buttonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  buttonArrow: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    color: colors.cafeOscuro,
   },
   loginLink: {
     alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 20,
+    marginTop: spacing.xl,
+    marginBottom: spacing.xl,
   },
   loginText: {
-    fontSize: 13,
-    color: '#8A7A70',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
   },
   loginBold: {
     fontWeight: '700',
-    color: '#3C2A21',
+    color: colors.cafeOscuro,
   },
 });
+
+export default RegisterScreen;

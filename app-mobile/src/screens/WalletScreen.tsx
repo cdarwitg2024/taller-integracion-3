@@ -19,6 +19,11 @@ import {
 import { supabase } from '../lib/supabase';
 import PaymentScreen from './PaymentScreen';
 import MovimientoItem from './MovimientoItem';
+import Button from '../components/Button';
+import Card from '../components/Card';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 // ─── Tipos ───────────────────────────────────────────────────────
 interface Movimiento {
@@ -39,23 +44,6 @@ interface Wallet {
 
 // ─── Constantes ──────────────────────────────────────────────────
 const SALDOS_RAPIDOS = [2000, 5000, 10000, 20000];
-
-const COLORES = {
-  cafeOscuro: '#4A332C',
-  cafeMedio: '#8C6D58',
-  fondo: '#F8F6F4',
-  crema: '#F5EBE1',
-  blanco: '#FFFFFF',
-  verde: '#5B8C51',
-  verdeBg: '#E8F3E4',
-  rojo: '#A92A2A',
-  rojoBg: '#FCEAE3',
-  gris: '#958781',
-  grisClaro: '#A09590',
-  borde: '#EFE7DD',
-  dorado: '#C9A96E',
-  doradoBg: '#FBF5E8',
-};
 
 // ─── Helpers ─────────────────────────────────────────────────────
 const formatCLP = (monto: number): string => {
@@ -409,7 +397,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           <Text style={styles.headerTitle}>Mi Wallet</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORES.cafeOscuro} />
+          <ActivityIndicator size="large" color={colors.cafeOscuro} />
           <Text style={styles.loadingText}>Cargando tu saldo...</Text>
         </View>
       </View>
@@ -439,15 +427,14 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={COLORES.cafeOscuro}
-            colors={[COLORES.cafeOscuro]}
+            tintColor={colors.cafeOscuro}
+            colors={[colors.cafeOscuro]}
           />
         }
       >
         {/* ─── Tarjeta de Saldo (animada) ───────────────────── */}
         <Animated.View
           style={[
-            styles.balanceCard,
             {
               opacity: fadeAnim,
               transform: [
@@ -457,6 +444,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
             },
           ]}
         >
+          <Card variant="elevated" padding="none" style={styles.balanceCard}>
           <View style={styles.balanceCardInner}>
             <View style={styles.balanceDecor1} />
             <View style={styles.balanceDecor2} />
@@ -489,6 +477,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
               </Text>
             </View>
           </View>
+          </Card>
         </Animated.View>
 
         {/* ─── Botones de Acción (animados) ─────────────────── */}
@@ -529,22 +518,22 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
             { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
           ]}
         >
-          <View style={styles.statCard}>
+          <Card variant="outlined" padding="none" style={styles.statCard}>
             <Text style={styles.statValue}>{movimientos.length}</Text>
             <Text style={styles.statLabel}>Movimientos</Text>
-          </View>
-          <View style={styles.statCard}>
+          </Card>
+          <Card variant="outlined" padding="none" style={styles.statCard}>
             <Text style={styles.statValue}>
               {movimientos.filter((m) => m.tipo === 'compra').length}
             </Text>
             <Text style={styles.statLabel}>Compras</Text>
-          </View>
-          <View style={styles.statCard}>
+          </Card>
+          <Card variant="outlined" padding="none" style={styles.statCard}>
             <Text style={styles.statValue}>
               {movimientos.filter((m) => m.tipo === 'recarga').length}
             </Text>
             <Text style={styles.statLabel}>Recargas</Text>
-          </View>
+          </Card>
         </Animated.View>
 
         {/* ─── Historial de Movimientos (animado) ──────────── */}
@@ -557,13 +546,13 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           <Text style={styles.sectionTitle}>Últimos movimientos</Text>
 
           {movimientos.length === 0 ? (
-            <View style={styles.emptyMovimientos}>
+            <Card variant="outlined" padding="none" style={styles.emptyMovimientos}>
               <Text style={styles.emptyEmoji}>💳</Text>
               <Text style={styles.emptyTitle}>Sin movimientos todavía</Text>
               <Text style={styles.emptyDescription}>
                 Tus recargas y compras aparecerán aquí para que lleves el control de tu saldo.
               </Text>
-            </View>
+            </Card>
           ) : (
             movimientos.map((mov, index) => (
               <MovimientoItem key={mov.id} mov={mov} index={index} />
@@ -621,11 +610,8 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
               autoFocus
             />
 
-            <TouchableOpacity
-              style={[
-                styles.confirmButton,
-                !montoRecarga && styles.confirmButtonDisabled,
-              ]}
+            <Button
+              title="Continuar"
               onPress={() => {
                 const monto = parseInt(montoRecarga, 10);
                 if (!isNaN(monto) && monto > 0) {
@@ -634,9 +620,11 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
                 }
               }}
               disabled={!montoRecarga}
-            >
-              <Text style={styles.confirmButtonText}>Continuar</Text>
-            </TouchableOpacity>
+              style={[
+                styles.confirmButton,
+                !montoRecarga && styles.confirmButtonDisabled,
+              ]}
+            />
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -671,27 +659,27 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORES.fondo,
+    backgroundColor: colors.fondo,
   },
   header: {
     height: 72,
-    backgroundColor: COLORES.blanco,
+    backgroundColor: colors.blanco,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
     borderBottomWidth: 1,
-    borderBottomColor: COLORES.borde,
+    borderBottomColor: colors.borde,
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORES.cafeOscuro,
+    fontSize: typography.subtitulo,
+    fontWeight: typography.pesoMedio as '600',
+    color: colors.cafeOscuro,
   },
   refreshIcon: {
     fontSize: 24,
-    color: COLORES.cafeOscuro,
-    fontWeight: '700',
+    color: colors.cafeOscuro,
+    fontWeight: typography.pesoBold as '700',
   },
   refreshing: {
     opacity: 0.4,
@@ -703,30 +691,30 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: spacing.md,
     fontSize: 13,
-    color: COLORES.gris,
+    color: colors.textoSecundario,
   },
   content: {
-    padding: 16,
+    padding: spacing.lg,
     paddingBottom: 30,
   },
 
   // ─── Tarjeta de Saldo ───────────────────────────────────────
   balanceCard: {
-    backgroundColor: COLORES.cafeOscuro,
+    backgroundColor: colors.cafeOscuro,
     borderRadius: 28,
     padding: 3,
-    shadowColor: COLORES.cafeOscuro,
+    shadowColor: colors.cafeOscuro,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 8,
   },
   balanceCardInner: {
-    backgroundColor: COLORES.cafeOscuro,
+    backgroundColor: colors.cafeOscuro,
     borderRadius: 25,
-    padding: 24,
+    padding: spacing.xxl,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -753,39 +741,39 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   balanceLabel: {
-    color: COLORES.dorado,
+    color: colors.dorado,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: typography.pesoBold as '700',
     letterSpacing: 1.2,
   },
   balanceValue: {
-    color: COLORES.blanco,
+    color: colors.blanco,
     fontSize: 42,
-    fontWeight: '800',
-    fontFamily: 'serif',
-    marginTop: 8,
+    fontWeight: typography.pesoExtraBold as '800',
+    fontFamily: typography.familia,
+    marginTop: spacing.sm,
   },
   balanceHint: {
-    color: '#D8C9BD',
-    fontSize: 12,
+    color: colors.bordeOscuro,
+    fontSize: typography.cuerpoPequeno,
     marginTop: 6,
   },
 
   // ─── Botones de Acción ──────────────────────────────────────
   actionsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
+    gap: spacing.md,
+    marginTop: spacing.lg,
   },
   actionButton: {
     flex: 1,
-    backgroundColor: COLORES.blanco,
+    backgroundColor: colors.blanco,
     borderRadius: 18,
-    padding: 16,
+    padding: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORES.borde,
+    borderColor: colors.borde,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
@@ -796,51 +784,51 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: COLORES.cafeOscuro,
+    backgroundColor: colors.cafeOscuro,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
   },
   actionIconAlt: {
-    backgroundColor: COLORES.crema,
+    backgroundColor: colors.crema,
   },
   actionIcon: {
-    color: COLORES.blanco,
+    color: colors.blanco,
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: typography.pesoExtraBold as '800',
   },
   actionText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: COLORES.cafeOscuro,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.cafeOscuro,
   },
 
   // ─── Estadísticas ───────────────────────────────────────────
   statsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 16,
+    marginTop: spacing.lg,
   },
   statCard: {
     flex: 1,
-    backgroundColor: COLORES.doradoBg,
+    backgroundColor: colors.doradoBg,
     borderRadius: 16,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#F0E5D0',
+    borderColor: colors.borde,
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORES.cafeOscuro,
-    fontFamily: 'serif',
+    fontSize: typography.titulo,
+    fontWeight: typography.pesoExtraBold as '800',
+    color: colors.cafeOscuro,
+    fontFamily: typography.familia,
   },
   statLabel: {
-    fontSize: 10,
-    color: COLORES.gris,
+    fontSize: typography.etiqueta,
+    color: colors.textoSecundario,
     marginTop: 2,
-    fontWeight: '600',
+    fontWeight: typography.pesoMedio as '600',
   },
 
   // ─── Sección de Movimientos ────────────────────────────────
@@ -849,21 +837,21 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: COLORES.cafeOscuro,
-    marginBottom: 12,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.cafeOscuro,
+    marginBottom: spacing.md,
   },
 
   // ─── Movimiento Card ───────────────────────────────────────
   movimientoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORES.blanco,
+    backgroundColor: colors.blanco,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORES.borde,
+    borderColor: colors.borde,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
@@ -876,59 +864,59 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORES.rojoBg,
+    backgroundColor: colors.rojoBg,
   },
   movimientoIconIn: {
-    backgroundColor: COLORES.verdeBg,
+    backgroundColor: colors.verdeBg,
   },
   movimientoIconOut: {
-    backgroundColor: COLORES.rojoBg,
+    backgroundColor: colors.rojoBg,
   },
   movimientoIconRefund: {
-    backgroundColor: COLORES.doradoBg,
+    backgroundColor: colors.doradoBg,
   },
   movimientoIconText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORES.cafeOscuro,
+    fontSize: typography.subtitulo,
+    fontWeight: typography.pesoExtraBold as '800',
+    color: colors.cafeOscuro,
   },
   movimientoInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: spacing.md,
   },
   movimientoName: {
     fontSize: 13,
-    fontWeight: '600',
-    color: COLORES.cafeOscuro,
+    fontWeight: typography.pesoMedio as '600',
+    color: colors.cafeOscuro,
   },
   movimientoMeta: {
-    fontSize: 10,
-    color: COLORES.gris,
+    fontSize: typography.etiqueta,
+    color: colors.textoSecundario,
     marginTop: 2,
   },
   movimientoAmount: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoExtraBold as '800',
   },
   movimientoAmountIn: {
-    color: COLORES.verde,
+    color: colors.verde,
   },
   movimientoAmountOut: {
-    color: COLORES.rojo,
+    color: colors.rojo,
   },
   movimientoAmountRefund: {
-    color: COLORES.dorado,
+    color: colors.dorado,
   },
 
   // ─── Empty State ────────────────────────────────────────────
   emptyMovimientos: {
     alignItems: 'center',
     paddingVertical: 40,
-    paddingHorizontal: 24,
-    backgroundColor: '#F9F3EC',
+    paddingHorizontal: spacing.xxl,
+    backgroundColor: colors.crema,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#F0E8DD',
+    borderColor: colors.borde,
     borderStyle: 'dashed',
   },
   emptyContainer: {
@@ -940,26 +928,26 @@ const styles = StyleSheet.create({
   },
   emptyEmoji: {
     fontSize: 48,
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   emptyTitle: {
     fontSize: 17,
-    fontWeight: '700',
-    color: COLORES.cafeOscuro,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.cafeOscuro,
     textAlign: 'center',
   },
   emptyDescription: {
     fontSize: 13,
-    color: COLORES.gris,
+    color: colors.textoSecundario,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
     lineHeight: 20,
   },
   footerText: {
     textAlign: 'center',
-    fontSize: 10,
-    color: COLORES.grisClaro,
-    marginTop: 12,
+    fontSize: typography.etiqueta,
+    color: colors.textoDeshabilitado,
+    marginTop: spacing.md,
   },
 
   // ─── Modal ──────────────────────────────────────────────────
@@ -969,81 +957,81 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: COLORES.blanco,
+    backgroundColor: colors.blanco,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    padding: 24,
+    padding: spacing.xxl,
     paddingBottom: 36,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: COLORES.cafeOscuro,
+    fontWeight: typography.pesoExtraBold as '800',
+    color: colors.cafeOscuro,
   },
   modalClose: {
     fontSize: 18,
-    color: COLORES.gris,
-    fontWeight: '700',
-    padding: 4,
+    color: colors.textoSecundario,
+    fontWeight: typography.pesoBold as '700',
+    padding: spacing.xs,
   },
   modalLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORES.gris,
-    marginBottom: 8,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.textoSecundario,
+    marginBottom: spacing.sm,
     letterSpacing: 0.5,
   },
   modalInput: {
-    backgroundColor: COLORES.fondo,
+    backgroundColor: colors.fondo,
     borderRadius: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
     paddingVertical: 14,
     fontSize: 24,
-    fontWeight: '700',
-    color: COLORES.cafeOscuro,
-    fontFamily: 'serif',
+    fontWeight: typography.pesoBold as '700',
+    color: colors.cafeOscuro,
+    fontFamily: typography.familia,
     borderWidth: 2,
-    borderColor: COLORES.borde,
+    borderColor: colors.borde,
   },
   modalQuickLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORES.gris,
-    marginTop: 20,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.textoSecundario,
+    marginTop: spacing.xl,
     marginBottom: 10,
     letterSpacing: 0.5,
   },
   quickAmountsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
   },
   quickAmountBtn: {
     flex: 1,
-    backgroundColor: COLORES.doradoBg,
+    backgroundColor: colors.doradoBg,
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#F0E5D0',
+    borderColor: colors.borde,
   },
   quickAmountText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: COLORES.cafeOscuro,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.cafeOscuro,
   },
   confirmButton: {
-    backgroundColor: COLORES.cafeOscuro,
+    backgroundColor: colors.cafeOscuro,
     borderRadius: 16,
-    paddingVertical: 16,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    shadowColor: COLORES.cafeOscuro,
+    shadowColor: colors.cafeOscuro,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1055,9 +1043,9 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   confirmButtonText: {
-    color: COLORES.blanco,
+    color: colors.blanco,
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: typography.pesoExtraBold as '800',
   },
 });
 

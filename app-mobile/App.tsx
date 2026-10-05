@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
+  Image,
   View,
   StyleSheet,
   Text,
@@ -22,6 +23,10 @@ import PedidosScreen from './src/screens/PedidosScreen';
 import WalletScreen from './src/screens/WalletScreen';
 import PerfilScreen from './src/screens/PerfilScreen';
 import { Cafeteria } from './src/types/cafeteria';
+import { CartProvider, useCart } from './src/context/CartContext';
+import { useCartTotals } from './src/hooks/useCartTotals';
+
+const logo = require('./assets/icon.png');
 
 type Product = {
   id: number;
@@ -89,7 +94,7 @@ const TABS: { key: AppTab; label: string }[] = [
   { key: 'perfil', label: 'Perfil' },
 ];
 
-export default function App() {
+function AppContent() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   // FR-04: 'forgot' pide el código de recuperación,
@@ -101,7 +106,12 @@ export default function App() {
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const { cart, setCart, clearCart, hydrated } = useCart() as {
+    cart: CartItem[];
+    setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
+    clearCart: () => void;
+    hydrated: boolean;
+  };
   const [paying, setPaying] = useState(false);
   const [pedidoConfirmado, setPedidoConfirmado] = useState<PedidoConfirmado | null>(null);
 
@@ -185,7 +195,7 @@ export default function App() {
           style: 'destructive',
           onPress: async () => {
             setSelectedCafeteria(null);
-            setCart([]);
+            clearCart();
             setActiveTab('cafeterias');
             if (isGuest) {
               setIsGuest(false);
@@ -283,7 +293,7 @@ export default function App() {
             // Se vacía y se agrega en el mismo toque: si solo se vaciaba, el
             // botón prometía algo que no pasaba.
             onPress: () => {
-              setCart([]);
+              clearCart();
               agregarProducto(product, cafeteria);
             },
           },
@@ -411,7 +421,7 @@ export default function App() {
       }
 
       // Solo aca se vacia el carrito: el pago se aprobo y el saldo se debito.
-      setCart([]);
+      clearCart();
       setPedidoConfirmado({
         pedido_id: resultado.pedido_id ?? 0,
         total: resultado.total ?? 0,
@@ -437,9 +447,9 @@ export default function App() {
     }
   };
 
-  const totalProducts = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const { totalProducts } = useCartTotals(cart);
 
-  if (loading) {
+  if (loading || !hydrated) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4A3728" />
@@ -496,9 +506,12 @@ export default function App() {
         {/* Barra superior con opción de salir */}
         <SafeAreaView edges={['top']} style={styles.topBar}>
           <View style={styles.topBarBrand}>
-            <Text style={styles.topBarTitle}>
-              ☕ CoffeeFast{isGuest ? ' (Invitado)' : ''}
-            </Text>
+            <View style={styles.topBarLogoRow}>
+              <Image source={logo} style={styles.topBarLogo} accessibilityIgnoresInvertColors />
+              <Text style={styles.topBarTitle}>
+                CoffeeFast{isGuest ? ' (Invitado)' : ''}
+              </Text>
+            </View>
             <Text style={styles.topBarGreeting}>{userName}</Text>
           </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
@@ -611,6 +624,14 @@ export default function App() {
   );
 }
 
+export default function App() {
+  return (
+    <CartProvider>
+      <AppContent />
+    </CartProvider>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -634,6 +655,16 @@ const styles = StyleSheet.create({
   },
   topBarBrand: {
     flexDirection: 'column',
+  },
+  topBarLogoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  topBarLogo: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
   },
   topBarTitle: {
     fontSize: 17,

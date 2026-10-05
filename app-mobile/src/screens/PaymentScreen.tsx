@@ -12,6 +12,10 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import Button from '../components/Button';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 // ─── Tarjetas de prueba ─────────────────────────────────────────
 // Saldo ilimitado para pruebas - no hay validación de saldo real
@@ -407,7 +411,7 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
                 },
               ]}
             >
-              <ActivityIndicator size="large" color="#4A332C" />
+              <ActivityIndicator size="large" color={colors.cafeOscuro} />
               <Text style={styles.estadoTexto}>Procesando pago...</Text>
             </Animated.View>
           )}
@@ -449,23 +453,14 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
           )}
 
           {/* Botón de pago */}
-          <TouchableOpacity
-            style={[
-              styles.pagoBoton,
-              (procesando || !numeroTarjeta || !titular || !vencimiento || !cvv || !pin) &&
-                styles.pagoBotonDeshabilitado,
-            ]}
+          <Button
+            title={`Pagar ${formatCLP(monto)}`}
             onPress={handlePago}
+            loading={procesando}
             disabled={procesando || !numeroTarjeta || !titular || !vencimiento || !cvv || !pin}
-          >
-            {procesando ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.pagoBotonTexto}>
-                Pagar {formatCLP(monto)}
-              </Text>
-            )}
-          </TouchableOpacity>
+            size="lg"
+            style={{ marginTop: spacing.sm }}
+          />
 
           <Text style={styles.notaSeguridad}>
             🔒 Pago simulado - No se procesará ningún cargo real
@@ -482,67 +477,67 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    padding: 20,
+    padding: spacing.xl,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.blanco,
     borderRadius: 24,
-    padding: 24,
+    padding: spacing.xxl,
     maxHeight: '90%',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#4A332C',
+    fontWeight: typography.pesoExtraBold,
+    color: colors.cafeOscuro,
   },
   headerClose: {
     fontSize: 18,
-    color: '#8A7B76',
-    fontWeight: '700',
-    padding: 4,
+    color: colors.textoSecundario,
+    fontWeight: typography.pesoBold,
+    padding: spacing.xs,
   },
   montoBox: {
-    backgroundColor: '#F5ECE5',
+    backgroundColor: colors.crema,
     borderRadius: 16,
-    padding: 16,
+    padding: spacing.lg,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   montoLabel: {
-    fontSize: 12,
-    color: '#8A7B76',
-    marginBottom: 4,
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+    marginBottom: spacing.xs,
   },
   montoValor: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#4A332C',
-    fontFamily: 'serif',
+    fontSize: typography.tituloGrande,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.cafeOscuro,
+    fontFamily: typography.familia,
   },
   pruebaSection: {
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   pruebaTitulo: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#8A7B76',
-    marginBottom: 8,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.textoSecundario,
+    marginBottom: spacing.sm,
   },
   pruebaTarjeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F6F4',
+    backgroundColor: colors.fondo,
     borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: '#EFE7DD',
+    borderColor: colors.borde,
   },
   pruebaTarjetaIcono: {
     width: 40,
@@ -550,133 +545,118 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: spacing.md,
   },
   pruebaTarjetaTipo: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
+    color: colors.blanco,
+    fontSize: typography.etiqueta,
+    fontWeight: typography.pesoBold,
   },
   pruebaTarjetaInfo: {
     flex: 1,
   },
   pruebaTarjetaNumero: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#4A332C',
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
   },
   pruebaTarjetaDetalle: {
     fontSize: 11,
-    color: '#8A7B76',
-    marginTop: 2,
+    color: colors.textoSecundario,
+    marginTop: spacing.xs,
   },
   formulario: {
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   label: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#8A7B76',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.textoSecundario,
     marginBottom: 6,
-    marginTop: 12,
+    marginTop: spacing.md,
   },
   input: {
-    backgroundColor: '#F8F6F4',
+    backgroundColor: colors.fondo,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4A332C',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
     borderWidth: 1,
-    borderColor: '#EFE7DD',
+    borderColor: colors.borde,
   },
   filaDoble: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
   },
   columnaMitad: {
     flex: 1,
   },
   tipoSelector: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.sm,
   },
   tipoBoton: {
     flex: 1,
-    backgroundColor: '#F8F6F4',
+    backgroundColor: colors.fondo,
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#EFE7DD',
+    borderColor: colors.borde,
   },
   tipoBotonActivo: {
-    backgroundColor: '#4A332C',
-    borderColor: '#4A332C',
+    backgroundColor: colors.cafeOscuro,
+    borderColor: colors.cafeOscuro,
   },
   tipoBotonTexto: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#4A332C',
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
   },
   tipoBotonTextoActivo: {
-    color: '#FFFFFF',
+    color: colors.blanco,
   },
 
   estadoBox: {
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: spacing.xl,
   },
   estadoTexto: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4A332C',
-    marginTop: 12,
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
+    marginTop: spacing.md,
   },
   estadoExitoBox: {
     alignItems: 'center',
-    paddingVertical: 20,
-    backgroundColor: '#E8F3E4',
+    paddingVertical: spacing.xl,
+    backgroundColor: colors.verdeBg,
     borderRadius: 12,
   },
   estadoExitoTexto: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#5B8C51',
+    fontSize: typography.subtitulo,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.verde,
   },
   estadoErrorBox: {
     alignItems: 'center',
-    paddingVertical: 20,
-    backgroundColor: '#FCEAE3',
+    paddingVertical: spacing.xl,
+    backgroundColor: colors.rojoBg,
     borderRadius: 12,
   },
   estadoErrorTexto: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#A92A2A',
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoBold,
+    color: colors.rojo,
     textAlign: 'center',
-  },
-  pagoBoton: {
-    backgroundColor: '#4A332C',
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  pagoBotonDeshabilitado: {
-    backgroundColor: '#B5A89E',
-  },
-  pagoBotonTexto: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
   },
   notaSeguridad: {
     fontSize: 11,
-    color: '#8A7B76',
+    color: colors.textoSecundario,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: spacing.md,
   },
 });
 

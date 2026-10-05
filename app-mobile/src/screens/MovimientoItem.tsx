@@ -1,5 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 interface Movimiento {
   id: string;
@@ -13,18 +16,6 @@ interface MovimientoItemProps {
   mov: Movimiento;
   index: number;
 }
-
-const COLORES = {
-  verde: '#5B8C51',
-  verdeBg: '#E8F3E4',
-  rojo: '#A92A2A',
-  rojoBg: '#FCEAE3',
-  dorado: '#C9A96E',
-  doradoBg: '#FBF5E8',
-  cafeOscuro: '#4A332C',
-  gris: '#958781',
-  borde: '#EFE7DD',
-};
 
 const formatCLP = (monto: number): string => {
   return `$${Math.abs(monto).toLocaleString('es-CL')}`;
@@ -140,13 +131,13 @@ const styles = StyleSheet.create({
   movimientoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.blanco,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORES.borde,
-    shadowColor: '#000',
+    borderColor: colors.borde,
+    shadowColor: colors.sombra,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
     shadowRadius: 4,
@@ -158,48 +149,48 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORES.rojoBg,
+    backgroundColor: colors.rojoBg,
   },
   movimientoIconIn: {
-    backgroundColor: COLORES.verdeBg,
+    backgroundColor: colors.verdeBg,
   },
   movimientoIconOut: {
-    backgroundColor: COLORES.rojoBg,
+    backgroundColor: colors.rojoBg,
   },
   movimientoIconRefund: {
-    backgroundColor: COLORES.doradoBg,
+    backgroundColor: colors.doradoBg,
   },
   movimientoIconText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORES.cafeOscuro,
+    fontSize: typography.subtitulo,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.cafeOscuro,
   },
   movimientoInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: spacing.md,
   },
   movimientoName: {
     fontSize: 13,
-    fontWeight: '600',
-    color: COLORES.cafeOscuro,
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
   },
   movimientoMeta: {
-    fontSize: 10,
-    color: COLORES.gris,
+    fontSize: typography.etiqueta,
+    color: colors.textoSecundario,
     marginTop: 2,
   },
   movimientoAmount: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoExtraBold,
   },
   movimientoAmountIn: {
-    color: COLORES.verde,
+    color: colors.verde,
   },
   movimientoAmountOut: {
-    color: COLORES.rojo,
+    color: colors.rojo,
   },
   movimientoAmountRefund: {
-    color: COLORES.dorado,
+    color: colors.dorado,
   },
 });
 
