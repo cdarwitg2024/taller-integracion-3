@@ -21,6 +21,7 @@ import GestorPrecioStock from './pages/dueno/GestorPrecioStock';
 import LogsValidacion from './pages/dueno/LogsValidacion';
 import LoginEmpleado from './pages/empleado/LoginEmpleado';
 import Comandas from './pages/empleado/Comandas';
+import StockEmpleado from './pages/empleado/Stock.jsx';
 import { supabase } from './service/supabase';
 
 const drawerWidth = 260;
@@ -71,6 +72,12 @@ function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
       path: '/empleado/comandas',
       label: 'Comandas',
       icon: <ReceiptLongOutlinedIcon fontSize="small" />,
+    },
+    {
+      id: 'stock',
+      path: '/empleado/stock',
+      label: 'Stock',
+      icon: <Inventory2OutlinedIcon fontSize="small" />,
     },
   ];
 
@@ -314,6 +321,17 @@ function App() {
             <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="empleado">
               <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="empleado">
                 <Comandas currentUser={currentUser} />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/empleado/stock"
+          element={
+            <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="empleado">
+              <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="empleado">
+                <StockEmpleado currentUser={currentUser} />
               </AuthenticatedLayout>
             </ProtectedRoute>
           }
