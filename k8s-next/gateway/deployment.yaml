@@ -23,6 +23,7 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 101
+        fsGroup: 101
       containers:
         - name: gateway
           image: nginx:1.27-alpine
@@ -35,6 +36,10 @@ spec:
               mountPath: /etc/nginx/nginx.conf
               subPath: nginx.conf
               readOnly: true
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
           resources:
             requests:
               cpu: 50m
@@ -63,3 +68,7 @@ spec:
         - name: config
           configMap:
             name: gateway-nginx-config
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
