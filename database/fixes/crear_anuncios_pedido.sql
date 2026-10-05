@@ -38,13 +38,14 @@ CREATE TABLE IF NOT EXISTS public.anuncios_pedido (
 );
 
 COMMENT ON TABLE public.anuncios_pedido IS
-  'Control de avisos de voz del KDS. pedido_id UNIQUE garantiza un solo aviso por pedido. Solo el Dueño (rol 3) puede consultar (RLS); los INSERT/UPDATE los hace la Edge Function voz-pedido con service_role.';
+  'Control de avisos de voz del KDS. pedido_id UNIQUE garantiza un solo aviso por pedido. Solo empleados y dueños pueden consultar (RLS); los INSERT/UPDATE los hace la Edge Function voz-pedido con service_role.';
 
 COMMENT ON COLUMN public.anuncios_pedido.estado IS
   'en_curso = reservado; emitido = el KDS ya lo reproduce; fallido = no se pudo generar audio (reintentable) o descartado';
 
 -- 2) Permisos mínimos: authenticated solo puede LEER (y RLS lo
---    restringe al dueño). Escribir es exclusivo de service_role.
+--    restringe a empleados y dueños). Escribir es exclusivo de
+--    service_role.
 REVOKE ALL ON public.anuncios_pedido FROM anon;
 REVOKE ALL ON public.anuncios_pedido FROM authenticated;
 GRANT SELECT ON public.anuncios_pedido TO authenticated;
@@ -56,9 +57,24 @@ CREATE INDEX IF NOT EXISTS idx_anuncios_pedido_cafeteria
 -- 4) RLS habilitado
 ALTER TABLE public.anuncios_pedido ENABLE ROW LEVEL SECURITY;
 
--- 5) Política de SELECT: SOLO dueño (rol 3)
+-- 5) Política de SELECT: empleados (rol 2) y dueños (rol 3)
+--
+--    Antes solo leía el dueño, y eso dejaba fuera a quien más lo
+--    necesita: el empleado que tiene el KDS abierto delante. El panel
+--    de pruebas (y cualquier pantalla de la cocina) no podía confirmar
+--    si una comanda se anunciaró, porque la consulta le volvía
+--    "permission denied" y no había forma de distinguir "no se anunció"
+--    de "no tengo permiso para mirar".
+--
+--    LIMITACIÓN CONOCIDA: la política mira el rol, no la cafetería, así
+--    que un empleado puede leer los avisos de todas las cafeterías.
+--    Limitarlos a las suyas exige cafeteria_usuarios, que todavía no
+--    existe en la base (ver el comentario de usuarios.js). Cuando esa
+--    tabla aparezca, esta política debe pasar a filtrar por
+--    cafeteria_id en lugar de por rol.
 DROP POLICY IF EXISTS anuncios_pedido_select_dueno ON public.anuncios_pedido;
-CREATE POLICY anuncios_pedido_select_dueno
+DROP POLICY IF EXISTS anuncios_pedido_select_operadores ON public.anuncios_pedido;
+CREATE POLICY anuncios_pedido_select_operadores
     ON public.anuncios_pedido
     FOR SELECT
     TO authenticated
@@ -66,7 +82,7 @@ CREATE POLICY anuncios_pedido_select_dueno
         EXISTS (
             SELECT 1 FROM public.usuarios u
             WHERE u.auth_user_id = auth.uid()
-              AND u.rol_id = 3          -- rol "dueño"
+              AND u.rol_id IN (2, 3)    -- empleado o dueño
         )
     );
 

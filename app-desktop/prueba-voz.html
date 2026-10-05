@@ -269,6 +269,23 @@
      */
     async function esperarAnuncio(pedido, segundos = 40) {
       habilitarBotones();
+      // La clave anon no alcanza para leer anuncios_pedido (solo leen
+      // empleados y dueños). El panel y el KDS se sirven en el mismo
+      // origen, así que comparten el almacenamiento local: si hay un KDS
+      // abierto en este navegador, su sesión ya está acá y alcanza con
+      // pedirla. Si no, se avisa en vez de dar por hecho que nadie habló.
+      const sesion = await supabase.auth.getSession();
+      if (!sesion.data.session) {
+        escribir(
+          'No hay sesión en este origen, así que no puedo consultar anuncios_pedido.',
+        );
+        escribir(
+          'Dejá el KDS abierto y con la voz activada en este mismo navegador: el panel usa esa sesión.',
+        );
+        decir('Sin sesión no puedo verificar el aviso.');
+        return null;
+      }
+
       for (let i = 0; i < segundos; i++) {
         const { data, error } = await supabase
           .from('anuncios_pedido')
@@ -296,11 +313,23 @@
           if (data.estado === 'emitido') {
             escribir(`✓ El KDS lo anunció con la voz ${data.voz}.`);
             decir(`Anunciado con la voz ${data.voz}.`);
-          } else {
-            escribir(`El KDS lo intentó pero quedó en ${data.estado}: ${data.detalle || '(sin detalle)'}`);
-            decir(`El KDS no lo pudo anunciar: ${data.detalle || data.estado}`);
+            return true;
           }
-          return true;
+
+          // 'en_curso' no es un resultado: la Edge Function reserva la
+          // fila antes de llamar a ElevenLabs y recién después la pasa a
+          // 'emitido' o 'fallido'. Antes se leía como "quedó en en_curso"
+          // y el panel cerraba la verificación justo en el momento en que
+          // el aviso iba a salir bien. Ahora se sigue esperando hasta que
+          // la fila tome un estado final.
+          if (data.estado === 'en_curso') {
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          }
+
+          escribir(`El KDS no lo pudo anunciar (quedó en ${data.estado}): ${data.detalle || '(sin detalle)'}`);
+          decir(`El KDS no lo pudo anunciar: ${data.detalle || data.estado}`);
+          return false;
         }
         await new Promise(r => setTimeout(r, 1000));
       }
