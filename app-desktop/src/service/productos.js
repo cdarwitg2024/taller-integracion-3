@@ -31,8 +31,7 @@ export const productos = {
       .from(TABLE)
       .select('*, cafeterias(*)')
       .eq('activo', true)
-      .is('eliminado_en', null)
-      .order('id', { ascending: true });
+            .order('id', { ascending: true });
 
     if (error) {
       console.error('Error consultando productos en Supabase:', error);
@@ -73,7 +72,7 @@ export const productos = {
       .select('*, cafeterias(*)')
       .eq('categoria_id', categoriaId)
       .eq('activo', true)
-      .is('eliminado_en', null);
+      
 
     if (error) {
       console.error('Error consultando categoría en Supabase:', error);
@@ -161,7 +160,7 @@ export const productos = {
 
     const { error } = await supabase
       .from(TABLE)
-      .update({ activo: false, eliminado_en: new Date().toISOString() })
+      .update({ activo: false,  })
       .eq('id', id);
 
     if (error) {
