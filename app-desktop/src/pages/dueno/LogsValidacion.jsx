@@ -56,16 +56,6 @@ function LogsValidacion() {
 
   return (
     <Box>
-<<<<<<< HEAD
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" fontWeight={800} sx={{ color: 'text.primary' }}>
-          Logs de Validación QR/Token
-        </Typography>
-        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-          Registro de entregas y rechazos verificados por QR o Token. Solo visible para el Dueño.
-        </Typography>
-      </Box>
-=======
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box>
           <Typography variant="h4" fontWeight={800} sx={{ color: '#4A3B32' }}>
@@ -89,7 +79,6 @@ function LogsValidacion() {
           </IconButton>
         </Tooltip>
       </Stack>
->>>>>>> origin/develop
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>

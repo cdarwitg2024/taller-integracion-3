@@ -5,6 +5,7 @@ import { Box, CssBaseline } from '@mui/material';
 import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurnedInOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import PriceChangeOutlinedIcon from '@mui/icons-material/PriceChangeOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
@@ -19,6 +20,7 @@ import Inventario from './pages/dueno/Inventario';
 import BotDueno from './pages/dueno/BotDueno';
 import GestorPrecioStock from './pages/dueno/GestorPrecioStock';
 import LogsValidacion from './pages/dueno/LogsValidacion';
+import SolicitudesStock from './pages/dueno/SolicitudesStock';
 import LoginEmpleado from './pages/empleado/LoginEmpleado';
 import Comandas from './pages/empleado/Comandas';
 import StockEmpleado from './pages/empleado/Stock.jsx';
@@ -53,6 +55,12 @@ function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
       path: '/dueno/inventario',
       label: 'Inventario',
       icon: <Inventory2OutlinedIcon fontSize="small" />,
+    },
+    {
+      id: 'solicitudes-stock',
+      path: '/dueno/solicitudes-stock',
+      label: 'Solicitudes de Stock',
+      icon: <AssignmentTurnedInOutlinedIcon fontSize="small" />,
     },
     {
       id: 'logs',
@@ -260,6 +268,17 @@ function App() {
             <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
               <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
                 <Inventario currentUser={currentUser} />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dueno/solicitudes-stock"
+          element={
+            <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
+              <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
+                <SolicitudesStock currentUser={currentUser} />
               </AuthenticatedLayout>
             </ProtectedRoute>
           }
