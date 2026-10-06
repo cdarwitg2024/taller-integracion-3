@@ -12,15 +12,20 @@ import {
   Alert,
   Chip,
   CircularProgress,
+  IconButton,
+  Stack,
+  Tooltip,
 } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 import logsValidacionQr from '../../service/logs_validacion_qr';
 import { formatearHora } from '../../utils/dateUtils';
 
 const resultadoColor = {
   entregado: '#2E7D32',
-  rechazado: '#C62828',
-  error: '#B71C1C',
+  aprobado: '#2E7D32',
+  rechazado: '#E65100',
+  error: '#C62828',
 };
 
 function LogsValidacion() {
@@ -51,14 +56,29 @@ function LogsValidacion() {
 
   return (
     <Box>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" fontWeight={800} sx={{ color: '#4A3B32' }}>
-          Logs de Validación QR/Token
-        </Typography>
-        <Typography sx={{ color: '#8C7A6F', mt: 0.5 }}>
-          Registro de entregas y rechazos verificados por QR o Token. Solo visible para el Dueño.
-        </Typography>
-      </Box>
+      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+        <Box>
+          <Typography variant="h4" fontWeight={800} sx={{ color: '#4A3B32' }}>
+            Logs de Validación QR/Token
+          </Typography>
+          <Typography sx={{ color: '#8C7A6F', mt: 0.5 }}>
+            Registro de entregas y rechazos verificados por QR o Token. Solo visible para el Dueño.
+          </Typography>
+        </Box>
+        <Tooltip title="Actualizar registros">
+          <IconButton
+            onClick={cargarLogs}
+            disabled={loading}
+            sx={{
+              backgroundColor: '#FFFFFF',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              '&:hover': { backgroundColor: '#F2ECE7' },
+            }}
+          >
+            <RefreshIcon />
+          </IconButton>
+        </Tooltip>
+      </Stack>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -84,39 +104,48 @@ function LogsValidacion() {
               <TableRow sx={{ backgroundColor: '#F2ECE7' }}>
                 <TableCell sx={{ fontWeight: 800, color: '#4A3B32' }}>Fecha</TableCell>
                 <TableCell sx={{ fontWeight: 800, color: '#4A3B32' }}>Pedido</TableCell>
-                <TableCell sx={{ fontWeight: 800, color: '#4A3B32' }}>Token</TableCell>
-                <TableCell sx={{ fontWeight: 800, color: '#4A3B32' }}>Usuario</TableCell>
+                <TableCell sx={{ fontWeight: 800, color: '#4A3B32' }}>Token / QR</TableCell>
+                <TableCell sx={{ fontWeight: 800, color: '#4A3B32' }}>Usuario / Empleado</TableCell>
                 <TableCell sx={{ fontWeight: 800, color: '#4A3B32' }}>Resultado</TableCell>
-                <TableCell sx={{ fontWeight: 800, color: '#4A3B32' }}>Detalle</TableCell>
+                <TableCell sx={{ fontWeight: 800, color: '#4A3B32' }}>Detalle / Motivo</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {logs.map((log) => {
-                const usuario =
-                  (Array.isArray(log.usuarios) ? log.usuarios[0] : log.usuarios)?.nombre ||
-                  (Array.isArray(log.usuarios) ? log.usuarios[0] : log.usuarios)?.apellido ||
-                  '—';
+                const userObj = Array.isArray(log.usuarios) ? log.usuarios[0] : log.usuarios;
+                const nombreCompleto = userObj
+                  ? `${userObj.nombre || ''} ${userObj.apellido || ''}`.trim() || userObj.nombre
+                  : null;
+                const usuario = nombreCompleto || (log.usuario_id ? `Usuario #${log.usuario_id}` : '—');
+                const fechaRaw = log.validado_en || log.creado_en;
+                const fechaStr = fechaRaw ? formatearHora(new Date(fechaRaw)) : '—';
+                const tokenStr = log.qr_token_leido || log.qr_token || '—';
+                const resultadoStr = String(log.resultado || '—').toLowerCase();
+                const esExito = resultadoStr === 'entregado' || resultadoStr === 'aprobado';
+                const detalleStr = log.motivo_rechazo || log.detalle || (esExito ? 'Entrega validada' : '—');
+
                 return (
                   <TableRow key={log.id} hover>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                      {log.validado_en ? formatearHora(new Date(log.validado_en)) : '—'}
+                      {fechaStr}
                     </TableCell>
                     <TableCell>#{log.pedido_id ?? log.pedidos?.id ?? '—'}</TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace' }}>{log.qr_token || '—'}</TableCell>
+                    <TableCell sx={{ fontFamily: 'monospace', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {tokenStr}
+                    </TableCell>
                     <TableCell>{usuario}</TableCell>
                     <TableCell>
                       <Chip
-                        label={(log.resultado || '—').toUpperCase()}
+                        label={resultadoStr.toUpperCase()}
                         size="small"
                         sx={{
-                          backgroundColor:
-                            log.resultado === 'entregado' ? '#E8F5E9' : '#FDEBEA',
-                          color: resultadoColor[log.resultado] || '#4A3B32',
+                          backgroundColor: esExito ? '#E8F5E9' : '#FDEBEA',
+                          color: resultadoColor[resultadoStr] || (esExito ? '#2E7D32' : '#C62828'),
                           fontWeight: 800,
                         }}
                       />
                     </TableCell>
-                    <TableCell>{log.detalle || '—'}</TableCell>
+                    <TableCell>{detalleStr}</TableCell>
                   </TableRow>
                 );
               })}

@@ -20,6 +20,7 @@
     "@mui/material": "^9.3.1",
     "@react-pdf/renderer": "^3.1.14",
     "@supabase/supabase-js": "^2.38.4",
+    "jsqr": "^1.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-qr-reader": "^3.0.0-beta-1",
