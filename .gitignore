@@ -194,3 +194,12 @@ k8s-next/**/*secret*.local.yaml
 k8s-next/**/*secrets*.local.yaml
 k8s-next/**/env.local.yaml
 !k8s-next/**/env.local.example
+
+# ============================================
+# supabase/: CLI de Supabase
+# ============================================
+# .temp/ lo genera `supabase link` con datos de la maquina: project-ref,
+# pooler-url y organization_id. Es de esta PC, no del repo, y no sirve de
+# nada para otro compañero. El resto de supabase/ (config.toml y
+# functions/) SI se versiona.
+supabase/.temp/
