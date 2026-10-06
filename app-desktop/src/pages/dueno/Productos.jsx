@@ -595,13 +595,13 @@ function CatalogoProductos() {
             </Box>
             <Box>
               <Typography
-                variant="h5"
+                variant="h4"
                 fontWeight={800}
-                sx={{ color: '#4A3728', letterSpacing: '-0.5px' }}
+                sx={{ color: 'text.primary', letterSpacing: '-0.5px' }}
               >
                 Gestión de Productos y Stock
               </Typography>
-              <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Catálogo general, control de precios, existencias y valorización de inventario
               </Typography>
             </Box>

@@ -52,10 +52,10 @@ function LogsValidacion() {
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" fontWeight={800} sx={{ color: '#4A3B32' }}>
+        <Typography variant="h4" fontWeight={800} sx={{ color: 'text.primary' }}>
           Logs de Validación QR/Token
         </Typography>
-        <Typography sx={{ color: '#8C7A6F', mt: 0.5 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
           Registro de entregas y rechazos verificados por QR o Token. Solo visible para el Dueño.
         </Typography>
       </Box>

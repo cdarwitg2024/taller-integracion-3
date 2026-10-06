@@ -68,10 +68,10 @@ function BotDueno({ currentUser }) {
         }}
       >
         <Box>
-          <Typography variant="h4" fontWeight={800} sx={{ color: '#4A3728', letterSpacing: '-0.5px' }}>
+          <Typography variant="h4" fontWeight={800} sx={{ color: 'text.primary', letterSpacing: '-0.5px' }}>
             Bot y Asistente del Dueño
           </Typography>
-          <Typography variant="body2" sx={{ color: '#8C7A6F', mt: 0.5 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
             Consola interactiva del Bot CoffeeFaster, diagnóstico de servicio y ejecución de consultas de existencias en tiempo real.
           </Typography>
         </Box>
