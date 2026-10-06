@@ -28,6 +28,11 @@ const ESTADOS = {
   cancelado: { label: 'Cancelado', color: colors.rojo, bg: colors.rojoBg },
 };
 
+// Estados que se consideran un pedido "activo": aun se puede retirar o esta
+// en curso. Lo contrario (entregado/cancelado) es el "inactivo".
+const ACTIVOS = ['pendiente', 'preparando', 'en_preparacion', 'listo'];
+const esActivo = (estado) => ACTIVOS.includes(estado);
+
 const fallbackOrders = [
   {
     id: 'demo-1',
@@ -66,6 +71,16 @@ const formatDate = (iso) => {
 const totalItems = (detalles = []) =>
   (detalles || []).reduce((suma, d) => suma + (Number(d.cantidad) || 0), 0);
 
+// Convierte el estado de la BD a una de las claves de ESTADOS:
+// 'pagado' (filas antiguas) -> 'pendiente', 'preparando' -> 'en_preparacion'.
+const normalizarEstado = (e) => {
+  if (!e) return 'pendiente';
+  const v = String(e).toLowerCase();
+  if (v === 'pagado') return 'pendiente';
+  if (v === 'preparando') return 'en_preparacion';
+  return v;
+};
+
 const mapPedido = (p) => ({
   id: String(p.id),
   qr_token: p.qr_token || null,
@@ -76,8 +91,12 @@ const mapPedido = (p) => ({
   codigo_retiro_diario: p.codigo_retiro_diario || null,
   franja_retiro: p.franja_retiro || null,
   cafeteria_nombre: p.cafeterias?.nombre || 'Cafetería',
+  cafeteria_direccion: p.cafeterias?.direccion || null,
+  cafeteria_telefono: p.cafeterias?.telefono || null,
+  cafeteria_rut: p.cafeterias?.rut || null,
+  metodo_pago: p.metodo_pago || null,
   total: Number(p.total) || 0,
-  estado: p.estado === 'preparando' ? 'en_preparacion' : p.estado || 'pendiente',
+  estado: normalizarEstado(p.estado),
   creado_en: p.creado_en,
   // Se usa para el recibo: si el pedido ya fue retirado, el QR deja de tener
   // sentido y en su lugar se muestra el detalle de lo que se compro y cuando.
@@ -118,6 +137,9 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [qrBackend, setQrBackend] = useState(null);
+  // Pestaña del conmutador: 'activos' (pendientes de retirar) o 'inactivos'
+  // (historial entregado/cancelado).
+  const [tab, setTab] = useState('activos');
   // Guarda qué pedido está abierto: si la respuesta del backend llega tarde,
   // no debe pintar el QR de un pedido que el estudiante ya cerró.
   const pedidoAbierto = useRef(null);
@@ -135,7 +157,9 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
     pedidoAbierto.current = item.id;
     setSelected(item);
     setQrBackend(null);
-    if (!item.qr_token || item.estado === 'entregado') return;
+    if (!item.qr_token || !esActivo(item.estado)) return;
+    // Solo se pide QR para pedidos ACTIVOS. Un pedido inactivo (entregado o
+    // cancelado) nunca debe solicitar el QR: no sirve y no conviene exponerlo.
     const data = await obtenerQrDesdeBackend(item.id);
     if (pedidoAbierto.current !== item.id) return;
     setQrBackend(data);
@@ -180,7 +204,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
 
       const { data, error } = await supabase
         .from('pedidos')
-        .select('*, cafeterias(nombre), detalles_pedido(productos(nombre, precio), cantidad)')
+        .select('*, cafeterias(nombre, direccion, telefono, rut), detalles_pedido(productos(nombre, precio), cantidad)')
         .eq('usuario_id', usuarioId)
         .order('creado_en', { ascending: false });
 
@@ -301,6 +325,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
     );
   };
 
+  // Activos = pendiente/preparando/en_preparacion/listo. Inactivos = lo demás
+  // (entregado/cancelado). Los placeholders de fallback NO se muestran en la
+  // vista de inactivos: en modo invitado no hay historial real.
+  const activos = orders.filter((o) => esActivo(o.estado));
+  const inactivos = orders.filter((o) => !esActivo(o.estado) && !o.isPlaceholder);
+
   return (
     <View style={styles.container}>
       <Header
@@ -315,35 +345,69 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
       {loading ? (
         <ActivityIndicator size="large" color={colors.cafeOscuro} style={{ marginTop: 48 }} />
       ) : (
-        <FlatList
-          data={orders}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.list}
-          ListHeaderComponent={
-            <View style={styles.infoBanner}>
-              <Text style={styles.infoBannerText}>
-                Acá verás el estado de tus pedidos en tiempo real. Toca un pedido para ver su detalle y, si sigue disponible, el QR de retiro.
+        <>
+          {/* Conmutador Activos/Inactivos, con contador en cada pestaña */}
+          <View style={styles.switcherRow}>
+            <TouchableOpacity
+              style={[styles.switcherBoton, tab === 'activos' && styles.switcherBotonActivo]}
+              onPress={() => setTab('activos')}
+            >
+              <Text style={[styles.switcherTexto, tab === 'activos' && styles.switcherTextoActivo]}>
+                Activos ({activos.length})
               </Text>
-            </View>
-          }
-          renderItem={renderItem}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyEmoji}>📋</Text>
-              <Text style={styles.emptyTitle}>Aún no tienes pedidos</Text>
-              <Text style={styles.emptyDescription}>
-                Cuando hagas tu primer pedido aparecerá aquí con su estado y el código de retiro.
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.switcherBoton, tab === 'inactivos' && styles.switcherBotonActivo]}
+              onPress={() => setTab('inactivos')}
+            >
+              <Text style={[styles.switcherTexto, tab === 'inactivos' && styles.switcherTextoActivo]}>
+                Inactivos ({inactivos.length})
               </Text>
-              <Button
-                title="Ver cafeterías"
-                onPress={onGoToCafeterias}
-                size="md"
-                style={{ marginTop: 18 }}
-              />
-            </View>
-          }
-        />
+            </TouchableOpacity>
+          </View>
+
+          <FlatList
+            data={tab === 'activos' ? activos : inactivos}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.list}
+            ListHeaderComponent={
+              <View style={styles.infoBanner}>
+                <Text style={styles.infoBannerText}>
+                  {tab === 'activos'
+                    ? 'Estos son tus pedidos activos, con su QR y token de retiro.'
+                    : 'Tu historial de pedidos. Al tocar uno verás la boleta, sin QR.'}
+                </Text>
+              </View>
+            }
+            renderItem={renderItem}
+            ListEmptyComponent={
+              tab === 'activos' ? (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyEmoji}>📦</Text>
+                  <Text style={styles.emptyTitle}>No tienes pedidos activos</Text>
+                  <Text style={styles.emptyDescription}>
+                    Cuando tengas un pedido pendiente, en preparación o listo para retiro, aparecerá aquí con su QR y token.
+                  </Text>
+                  <Button
+                    title="Ver cafeterías"
+                    onPress={onGoToCafeterias}
+                    size="md"
+                    style={{ marginTop: 18 }}
+                  />
+                </View>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyEmoji}>🗂️</Text>
+                  <Text style={styles.emptyTitle}>Todavía no tienes historial</Text>
+                  <Text style={styles.emptyDescription}>
+                    Cuando un pedido quede entregado o cancelado, aparecerá aquí y podrás ver su boleta.
+                  </Text>
+                </View>
+              )
+            }
+          />
+        </>
       )}
 
       {/* Modal de confirmación de pedido pagado (FR-21) */}
@@ -477,17 +541,41 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                   </View>
                 </View>
 
-                {selected.estado === 'entregado' ? (
-                  /* Pedido ya retirado: el QR y el token de contingencia ya no
-                     sirven para nada y ademas son una credencial que conviene
-                     dejar de exponer. En su lugar se muestra el recibo. */
+                {!esActivo(selected.estado) ? (
+                  /* Pedido inactivo (entregado/cancelado): ya no debe mostrar
+                     QR ni token de contingencia. En su lugar se muestra la
+                     boleta/comprobante con los datos de la cafetería. */
                   <View style={styles.reciboBox}>
-                    <Text style={styles.reciboTitulo}>✓ Pedido entregado</Text>
-                    <Text style={styles.reciboSubtitulo}>
-                      {selected.entregado_en
-                        ? `Retirado el ${formatDate(selected.entregado_en)}.`
-                        : 'Este pedido ya fue retirado de la cafetería.'}
+                    <Text style={styles.reciboTitulo}>
+                      {selected.estado === 'cancelado' ? '✕ Pedido cancelado' : '✓ Pedido entregado'}
                     </Text>
+                    <Text style={styles.reciboSubtitulo}>
+                      {selected.estado === 'cancelado'
+                        ? 'Este pedido fue cancelado. Conserva esta boleta, sin QR ni token.'
+                        : selected.entregado_en
+                          ? `Retirado el ${formatDate(selected.entregado_en)}. Conserva esta boleta, sin QR ni token.`
+                          : 'Este pedido ya fue retirado de la cafetería. Conserva esta boleta, sin QR ni token.'}
+                    </Text>
+
+                    <View style={styles.reciboDivider} />
+
+                    {/* Datos de la cafetería, según el requisito de la boleta */}
+                    <View style={styles.detalleRow}>
+                      <Text style={styles.reciboLabel}>Cafetería</Text>
+                      <Text style={styles.reciboValor}>{selected.cafeteria_nombre}</Text>
+                    </View>
+                    <View style={styles.detalleRow}>
+                      <Text style={styles.reciboLabel}>Dirección</Text>
+                      <Text style={styles.reciboValor}>{selected.cafeteria_direccion || '—'}</Text>
+                    </View>
+                    <View style={styles.detalleRow}>
+                      <Text style={styles.reciboLabel}>Teléfono</Text>
+                      <Text style={styles.reciboValor}>{selected.cafeteria_telefono || '—'}</Text>
+                    </View>
+                    <View style={styles.detalleRow}>
+                      <Text style={styles.reciboLabel}>RUT</Text>
+                      <Text style={styles.reciboValor}>{selected.cafeteria_rut || '—'}</Text>
+                    </View>
 
                     <View style={styles.reciboDivider} />
 
@@ -512,6 +600,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                       <Text style={styles.reciboLabel}>Retiro</Text>
                       <Text style={styles.reciboValor}>
                         {selected.franja_retiro || 'sin franja'}
+                      </Text>
+                    </View>
+                    <View style={styles.detalleRow}>
+                      <Text style={styles.reciboLabel}>Método de pago</Text>
+                      <Text style={styles.reciboValor}>
+                        {selected.metodo_pago || '—'}
                       </Text>
                     </View>
 
@@ -614,6 +708,33 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borde,
     paddingTop: 10,
+  },
+  switcherRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  switcherBoton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borde,
+    alignItems: 'center',
+    backgroundColor: colors.blanco,
+    marginRight: spacing.sm,
+  },
+  switcherBotonActivo: {
+    backgroundColor: colors.cafeOscuro,
+    borderColor: colors.cafeOscuro,
+  },
+  switcherTexto: {
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+  },
+  switcherTextoActivo: {
+    color: colors.blanco,
   },
   emptyContainer: {
     alignItems: 'center',
