@@ -147,28 +147,39 @@ function aMinutosDelDia(horaRetiro) {
 }
 
 function aInstanteRetiro(pedido) {
+  // Ojo: `normalizarPedido` deja `hora_retiro` como texto "HH:mm", así que
+  // hay que soportar los dos formatos que llegan desde la base.
+  const retiroTs = parsearFecha(pedido.hora_retiro);
+  if (retiroTs) return retiroTs.getTime();
+
   const minutos = aMinutosDelDia(pedido.hora_retiro);
-  if (minutos !== null) return minutos;
-  if (pedido.creado_en) {
-    const fecha = parsearFecha(pedido.creado_en);
-    if (fecha) {
-      const conAnticipo = new Date(fecha.getTime() + 15 * 60000);
-      return conAnticipo.getHours() * 60 + conAnticipo.getMinutes();
+  const creado = parsearFecha(pedido.creado_en);
+
+  if (minutos !== null) {
+    if (creado) {
+      // "HH:mm" sobre el día en que se creó el pedido.
+      const base = new Date(creado);
+      base.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
+      return base.getTime();
     }
+    // Sin fecha de creación: se asume hoy.
+    const hoy = new Date();
+    hoy.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
+    return hoy.getTime();
   }
+
+  if (creado) return creado.getTime() + 15 * 60000; // estimado por defecto
   return null;
 }
 
 function comparadorPrioridad(a, b) {
+  // Ordenar por minutos del día no servía: dos pedidos del mismo minuto
+  // quedaban "empate" y el kanban se veía desordenado. Se compara el
+  // instante real (epoch) y, ante empate, la hora de creación.
   const tA = aInstanteRetiro(a);
   const tB = aInstanteRetiro(b);
-  if (tA !== null && tB !== null) {
-    if (tA !== tB) return tA - tB;
-  } else if (tA !== null) {
-    return -1;
-  } else if (tB !== null) {
-    return 1;
-  }
+  if (tA !== null && tB !== null && tA !== tB) return tA - tB;
+
   const fA = parsearFecha(a?.creado_en);
   const fB = parsearFecha(b?.creado_en);
   return (fA ? fA.getTime() : 0) - (fB ? fB.getTime() : 0);

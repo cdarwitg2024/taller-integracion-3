@@ -4,6 +4,44 @@ const TABLE = 'usuarios';
 // Campos seguros que nunca exponen password_hash ni tokens sensibles
 const SAFE_USER_FIELDS = 'id, rol_id, nombre, apellido, email, telefono, foto_url, activo, ultima_conexion, creado_en, actualizado_en, auth_user_id';
 
+// Perfil + rol son lo único que el login necesita para validar el acceso. La
+// cafetería asignada es un dato complementario, y por eso va en una consulta
+// aparte en vez de anidarse en el mismo select: dentro del select principal,
+// que la relación cafeteria_usuarios no exista (todavía no está creada en
+// todas las bases) hace que PostgREST rechace la consulta entera y el login
+// termina diciendo "No se encontró el perfil" aunque el usuario exista y las
+// credenciales sean correctas. Así se degrada a null, que es lo que el propio
+// código ya esperaba con "?.[0]?.cafeteria_id || null".
+async function fetchPerfilYCafeteria(authUserId) {
+  const { data: userProfile, error: profileError } = await supabase
+    .from(TABLE)
+    .select(`${SAFE_USER_FIELDS}, roles(*)`)
+    .eq('auth_user_id', authUserId)
+    .single();
+
+  if (profileError || !userProfile) {
+    return { userProfile: null, cafeteriaAsignada: null, profileError };
+  }
+
+  let cafeteriaAsignada = null;
+  try {
+    const { data: asignacion, error: asignacionError } = await supabase
+      .from('cafeteria_usuarios')
+      .select('cafeteria_id')
+      .eq('usuario_id', userProfile.id)
+      .limit(1);
+
+    if (!asignacionError && asignacion?.length) {
+      cafeteriaAsignada = asignacion[0].cafeteria_id ?? null;
+    }
+  } catch (err) {
+    // Sin asignación no se corta el acceso: el login sigue siendo válido.
+    console.warn('No se pudo leer la cafetería asignada:', err);
+  }
+
+  return { userProfile, cafeteriaAsignada, profileError: null };
+}
+
 // Función para normalizar errores técnicos y presentar mensajes profesionales al usuario
 export function normalizeAuthError(authError) {
   if (!authError) return 'Error de autenticación. Verifique sus credenciales.';
@@ -146,11 +184,8 @@ export const usuarios = {
       }
 
       // 2. Consulta de perfil y rol en la tabla usuarios de Supabase
-      const { data: userProfile, error: profileError } = await supabase
-        .from(TABLE)
-        .select(`${SAFE_USER_FIELDS}, roles(*), cafeteria_usuarios(*)`)
-        .eq('auth_user_id', authData.user.id)
-        .single();
+      const { userProfile, cafeteriaAsignada, profileError } =
+        await fetchPerfilYCafeteria(authData.user.id);
 
       if (profileError || !userProfile) {
         await supabase.auth.signOut();
@@ -179,10 +214,7 @@ export const usuarios = {
         };
       }
 
-      // 5. Vincular cafetería asignada
-      const cafeteriaAsignada = userProfile.cafeteria_usuarios?.[0]?.cafeteria_id || null;
-
-      // 6. Registrar última conexión
+      // 5. Registrar última conexión
       try {
         await supabase
           .from(TABLE)
@@ -237,11 +269,8 @@ export const usuarios = {
       }
 
       // 2. Consulta de perfil y rol en la tabla usuarios de Supabase
-      const { data: userProfile, error: profileError } = await supabase
-        .from(TABLE)
-        .select(`${SAFE_USER_FIELDS}, roles(*), cafeteria_usuarios(*)`)
-        .eq('auth_user_id', authData.user.id)
-        .single();
+      const { userProfile, cafeteriaAsignada, profileError } =
+        await fetchPerfilYCafeteria(authData.user.id);
 
       if (profileError || !userProfile) {
         await supabase.auth.signOut();
@@ -270,10 +299,7 @@ export const usuarios = {
         };
       }
 
-      // 5. Vincular cafetería asignada
-      const cafeteriaAsignada = userProfile.cafeteria_usuarios?.[0]?.cafeteria_id || null;
-
-      // 6. Registrar última conexión
+      // 5. Registrar última conexión
       try {
         await supabase
           .from(TABLE)

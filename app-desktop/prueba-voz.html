@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prueba de aviso de voz del KDS (T16)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #F2ECE7; color: #4A3B32; margin: 0; padding: 24px; }
+    .card { background: #fff; border-radius: 12px; padding: 24px; max-width: 760px; margin: 0 auto 16px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    p.sub { margin: 0 0 20px; color: #78665B; font-size: 14px; }
+    .acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    button { font: inherit; font-weight: 800; border: 0; border-radius: 10px; padding: 14px 22px; color: #fff; cursor: pointer; text-transform: none; }
+    button:disabled { opacity: .55; cursor: progress; }
+    .play { background: #C86237; }
+    .ráfaga { background: #6D4C41; }
+    .limpiar { background: #8C7A6F; }
+    .estado { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+    .log { font-family: ui-monospace, monospace; font-size: 12px; background: #F7F4F1; border-radius: 8px; padding: 12px; max-height: 260px; overflow: auto; white-space: pre-wrap; }
+    ol { padding-left: 20px; font-size: 14px; line-height: 1.6; }
+    code { background: #F2ECE7; padding: 1px 5px; border-radius: 4px; }
+    .aviso { background: #FFF3E0; border-left: 4px solid #C86237; padding: 12px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>▶ Prueba del aviso de voz del KDS</h1>
+    <p class="sub">Crea pedidos reales en la base local para probar el aviso sonoro del KDS.</p>
+
+    <div class="aviso">
+      <strong>Antes de apretar:</strong> deja el KDS abierto en otra pestaña
+      (<code>http://localhost:5173/#/empleado/comandas</code>) con la sesión de
+      <code>empleado@coffeefast.cl</code> iniciada y el botón <strong>Activar voz</strong> apretado.
+      Esta página inserta el pedido: el KDS lo recibe por Realtime y lo anuncia.
+      <br>
+      <strong>Si no suena nada</strong>, el aviso lo dispara el navegador del KDS, no esta
+      página. El panel lo verifica: si al crear la comanda no aparece una fila en
+      <code>anuncios_pedido</code>, el problema está en la pestaña del KDS (pestaña cerrada,
+      sesión caída o voz sin activar), no acá.
+    </div>
+
+    <div class="acciones">
+      <button id="btnUna" class="play">▶ Crear 1 comanda</button>
+      <button id="btnRafa" class="ráfaga">⚡ Crear 3 de golpe</button>
+      <button id="btnLimpiar" class="limpiar">🧹 Borrar comandas de prueba</button>
+    </div>
+
+    <div class="estado" id="estado">Listo.</div>
+    <div class="log" id="log">— sin movimientos —</div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:16px">Escuchar un texto arbitrario</h2>
+    <p class="sub" style="margin:6px 0 14px">
+      Para comparar acentos, vitesse y la lectura de los códigos sin tener que
+      esperar que el KDS anuncie algo. Crea una comanda descartable y le pasa el
+      texto a la Edge Function; el audio se reproduce acá mismo.
+    </p>
+
+    <div class="acciones" style="display:block">
+      <textarea id="txtHablar" rows="2" style="width:100%;padding:10px;border-radius:8px;border:1px solid #D8CCC4;font-family:inherit;font-size:14px"
+        placeholder="Ej: Nueva comanda, número siete veintisiete. 2 cafés, 1 medialuna.">Nueva comanda, número 727. 2 cafés, 1 medialuna.</textarea>
+
+      <div class="acciones" style="margin-top:10px;flex-wrap:wrap">
+        <label style="font-size:13px">Idioma
+          <select id="selIdioma" style="padding:6px;border-radius:6px;border:1px solid #D8CCC4">
+            <option value="es" selected>es (forzado)</option>
+            <option value="en">en</option>
+            <option value="pt">pt</option>
+            <option value="fr">fr</option>
+            <option value="de">de</option>
+            <option value="it">it</option>
+          </select>
+        </label>
+
+        <label style="font-size:13px">Velocidad
+          <input id="rngVelocidad" type="range" min="0.7" max="1.2" step="0.05" value="0.95" style="vertical-align:middle">
+          <span id="lblVelocidad">0.95</span>
+        </label>
+
+        <button id="btnHablar" class="play">🔊 Escuchar</button>
+      </div>
+    </div>
+
+    <div class="log" id="logHablar">— sin reproducciones —</div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:16px">Qué se está probando</h2>
+    <ol>
+      <li>El <strong>INSERT</strong> en <code>pedidos</code> dispara el Realtime del KDS.</li>
+      <li>El KDS pinta la tarjeta y llama a <code>vozKds.anunciar()</code>.</li>
+      <li>La Edge Function <code>voz-pedido</code> valida la sesión y genera el audio (una sola vez por pedido).</li>
+      <li>Si ElevenLabs no responde, cae a la voz del sistema y el pedido <strong>igual</strong> aparece en pantalla.</li>
+    </ol>
+  </div>
+
+  <script>
+    // Guarda contra la forma más común de abrirla mal. Si el archivo se
+    // abre con doble clic (file://), el import de arriba no se puede
+    // resolver, el módulo nunca corre y los botones quedan muertos sin
+    // explicar por qué. Este script es clásico, no módulo, así que sí se
+    // ejecuta en ese caso y puede avisar.
+    (function () {
+      function apagar(titulo, detalle) {
+        var e = document.getElementById('estado');
+        if (e) { e.textContent = titulo; e.style.color = '#b45309'; }
+        var l = document.getElementById('log');
+        if (l) l.textContent = detalle;
+        Array.prototype.forEach.call(
+          document.querySelectorAll('.acciones button'),
+          function (b) { b.disabled = true; b.style.opacity = '0.4'; },
+        );
+      }
+
+      if (location.protocol === 'file:') {
+        apagar(
+          'Esta página necesita el servidor de desarrollo.',
+          'Abrila en http://localhost:5173/prueba-voz.html — con doble clic no funciona.',
+        );
+        return;
+      }
+
+      // Si a los 2,5 s el módulo no dejó su mensaje de arranque, es que
+      // falló al cargar.
+      setTimeout(function () {
+        var e = document.getElementById('estado');
+        if (e && e.textContent.trim() === 'Listo.') {
+          apagar('No se pudo cargar el módulo de la página.', 'Mirá la consola del navegador (F12) para ver el error.');
+        }
+      }, 2500);
+    })();
+  </script>
+
+  <script type="module">
+    import { supabase, isSupabaseConfigured } from '/src/service/supabase.js';
+
+    const CAFETERIA_ID = Number(import.meta.env.VITE_CAFETERIA_ID || 1);
+    const PREFIJO = 'PRUEBA';
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+    const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+    const btnUna = document.getElementById('btnUna');
+    const btnRafa = document.getElementById('btnRafa');
+    const btnLimpiar = document.getElementById('btnLimpiar');
+    const estado = document.getElementById('estado');
+    const log = document.getElementById('log');
+
+    // Panel de texto libre: idioma y velocidad para comparar acentos sin
+    // tener que crear comandas de prueba a mano.
+    const btnHablar = document.getElementById('btnHablar');
+    const txtHablar = document.getElementById('txtHablar');
+    const selIdioma = document.getElementById('selIdioma');
+    const rngVelocidad = document.getElementById('rngVelocidad');
+    const lblVelocidad = document.getElementById('lblVelocidad');
+    const logHablar = document.getElementById('logHablar');
+
+    let lineasHablar = [];
+    let lineas = [];
+
+    function escribirHablar(txt) {
+      const hora = new Date().toLocaleTimeString('es-CL');
+      lineasHablar.unshift(`[${hora}] ${txt}`);
+      lineasHablar = lineasHablar.slice(0, 40);
+      logHablar.textContent = lineasHablar.join('\n');
+    }
+
+    function escribir(txt) {
+      const hora = new Date().toLocaleTimeString('es-CL');
+      lineas.unshift(`[${hora}] ${txt}`);
+      lineas = lineas.slice(0, 60);
+      log.textContent = lineas.join('\n');
+    }
+
+    function decir(txt) {
+      estado.textContent = txt;
+    }
+
+    function codigoLibre() {
+      const n = Math.floor(Math.random() * 900) + 100;
+      return String(n);
+    }
+
+    async function productosReales() {
+      const { data, error } = await supabase
+        .from('productos')
+        .select('id, nombre, precio')
+        .eq('cafeteria_id', CAFETERIA_ID)
+        .eq('activo', true)
+        .limit(6);
+      if (error) throw error;
+      return data || [];
+    }
+
+    async function crearComanda() {
+      const productos = await productosReales();
+      if (!productos.length) throw new Error('No hay productos activos en la cafetería ' + CAFETERIA_ID);
+
+      const elegidos = [productos[0], productos[1] || productos[0], productos[2] || productos[0]]
+        .slice(0, 2 + Math.floor(Math.random() * 2));
+
+      const codigo = codigoLibre();
+      const token = `${PREFIJO}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
+      const { data: pedido, error: errPedido } = await supabase
+        .from('pedidos')
+        .insert({
+          cafeteria_id: CAFETERIA_ID,
+          codigo_retiro_diario: codigo,
+          estado: 'pendiente',
+          qr_token: token,
+          total: elegidos.reduce((s, p) => s + (Number(p.precio) || 0), 0),
+          hora_retiro: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        })
+        .select('id, codigo_retiro_diario, qr_token')
+        .single();
+
+      if (errPedido) throw errPedido;
+
+      const filas = elegidos.map(p => ({
+        pedido_id: pedido.id,
+        producto_id: p.id,
+        cantidad: 1 + Math.floor(Math.random() * 2),
+        precio_unitario: Number(p.precio) || 0,
+      }));
+
+      const { error: errDet } = await supabase.from('detalles_pedido').insert(filas);
+      if (errDet) throw errDet;
+
+      const resumen = elegidos.map(p => `${p.nombre}`).join(', ');
+      escribir(`Pedido #${pedido.id} (código ${codigo}) creado: ${resumen}`);
+      escribir(`   token: ${token}`);
+      return pedido;
+    }
+
+    /**
+     * Devuelve los botones a su estado normal. Se llama en cuanto la
+     * comanda ya está creada: esperar a que el KDS la anuncie es pasivo,
+     * y dejar "Crear 1 comanda" apagado durante esa espera hace que el
+     * panel parezca colgado (y rompe cualquier prueba que quiera crear
+     * otra comanda mientras esta se anuncia).
+     */
+    function habilitarBotones() {
+      btnUna.disabled = false;
+      btnRafa.disabled = false;
+      btnLimpiar.disabled = false;
+    }
+
+    async function acciones(fn, texto) {
+      btnUna.disabled = true;
+      btnRafa.disabled = true;
+      btnLimpiar.disabled = true;
+      decir(texto);
+      try {
+        await fn();
+      } catch (e) {
+        escribir(`ERROR: ${e.message || e}`);
+        decir(`Error: ${e.message || e}`);
+      } finally {
+        habilitarBotones();
+      }
+    }
+
+    /**
+     * El aviso lo dispara el NAVEGADOR del KDS, no la base: si no hay una
+     * pestaña del KDS con la voz activada, el pedido se crea igual pero
+     * nadie lo anuncia y no hay forma de saber por qué. Esta espera revisa
+     * si apareció la fila en anuncios_pedido y, si no, dice qué revisar.
+     */
+    async function esperarAnuncio(pedido, segundos = 40) {
+      habilitarBotones();
+      // La clave anon no alcanza para leer anuncios_pedido (solo leen
+      // empleados y dueños). El panel y el KDS se sirven en el mismo
+      // origen, así que comparten el almacenamiento local: si hay un KDS
+      // abierto en este navegador, su sesión ya está acá y alcanza con
+      // pedirla. Si no, se avisa en vez de dar por hecho que nadie habló.
+      const sesion = await supabase.auth.getSession();
+      if (!sesion.data.session) {
+        escribir(
+          'No hay sesión en este origen, así que no puedo consultar anuncios_pedido.',
+        );
+        escribir(
+          'Dejá el KDS abierto y con la voz activada en este mismo navegador: el panel usa esa sesión.',
+        );
+        decir('Sin sesión no puedo verificar el aviso.');
+        return null;
+      }
+
+      for (let i = 0; i < segundos; i++) {
+        const { data, error } = await supabase
+          .from('anuncios_pedido')
+          .select('estado, voz, detalle')
+          .eq('pedido_id', pedido.id)
+          .maybeSingle();
+
+        // La clave anon no tiene SELECT sobre anuncios_pedido (RLS), así que
+        // esta consulta puede estar siempre denied. Antes el error se
+        // ignoraba y, como data venía en null, el panel concluded "nadie lo
+        // anunció" aunque el aviso hubiera sonado. Un permiso que falta no
+        // es lo mismo que un aviso que no salió: se dice cuál de los dos es.
+        if (error) {
+          escribir(
+            `No pude verificar el aviso: la consulta a anuncios_pedido fue rechazada (${error.message || error.code}).`,
+          );
+          escribir(
+            'Eso dice que el panel no tiene permiso para leer los anuncios, no que el KDS haya guardado callado.',
+          );
+          decir('No pude verificar el aviso por permisos. Revisá el log.');
+          return null;
+        }
+
+        if (data) {
+          if (data.estado === 'emitido') {
+            escribir(`✓ El KDS lo anunció con la voz ${data.voz}.`);
+            decir(`Anunciado con la voz ${data.voz}.`);
+            return true;
+          }
+
+          // 'en_curso' no es un resultado: la Edge Function reserva la
+          // fila antes de llamar a ElevenLabs y recién después la pasa a
+          // 'emitido' o 'fallido'. Antes se leía como "quedó en en_curso"
+          // y el panel cerraba la verificación justo en el momento en que
+          // el aviso iba a salir bien. Ahora se sigue esperando hasta que
+          // la fila tome un estado final.
+          if (data.estado === 'en_curso') {
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          }
+
+          escribir(`El KDS no lo pudo anunciar (quedó en ${data.estado}): ${data.detalle || '(sin detalle)'}`);
+          decir(`El KDS no lo pudo anunciar: ${data.detalle || data.estado}`);
+          return false;
+        }
+        await new Promise(r => setTimeout(r, 1000));
+      }
+
+      // Con 12 s la respuesta era casi siempre "NADIE lo anunció" cuando el aviso sí
+      // iba a sonar un par de segundos después: en ventana visible, o con
+      // ElevenLabs lento, la cola tarda más. Ahora se espera bastante más y
+      // el mensaje dice lo que se sabe en realidad, que es "todavía no".
+      escribir(`El pedido se creó y sigue sin aparecer en anuncios_pedido después de ${segundos} s.`);
+      decir('Todavía no se anuncia. Revisá que el KDS tenga Voz on y la pestaña abierta.');
+      return false;
+    }
+
+    btnUna.addEventListener('click', () => acciones(async () => {
+      const p = await crearComanda();
+      decir(`Comanda ${p.codigo_retiro_diario} creada. Esperando a que el KDS la anuncie…`);
+      await esperarAnuncio(p);
+    }, 'Creando comanda…'));
+
+    // Varios pedidos en el mismo tick: el KDS debe agruparlos en un
+    // solo aviso ("Entraron 3 comandas nuevas") y no superponer audios.
+    btnRafa.addEventListener('click', () => acciones(async () => {
+      escribir('Creando 3 comandas seguidas…');
+      const ps = [];
+      ps.push(await crearComanda());
+      ps.push(await crearComanda());
+      ps.push(await crearComanda());
+      decir('3 comandas creadas. Esperando el aviso agrupado…');
+      await esperarAnuncio(ps[0]);
+    }, 'Creando 3 comandas…'));
+
+    btnLimpiar.addEventListener('click', () => acciones(async () => {
+      const { data, error } = await supabase
+        .from('pedidos')
+        .select('id')
+        .like('qr_token', `${PREFIJO}-%`);
+      if (error) throw error;
+      const ids = (data || []).map(p => p.id);
+      if (!ids.length) {
+        escribir('No hay comandas de prueba que borrar.');
+        return;
+      }
+      await supabase.from('detalles_pedido').delete().in('pedido_id', ids);
+      const { error: errDel } = await supabase.from('pedidos').delete().in('id', ids);
+      if (errDel) throw errDel;
+      escribir(`${ids.length} comanda(s) de prueba borradas.`);
+      decir('Comandas de prueba borradas.');
+    }, 'Borrando comandas de prueba…'));
+
+    rngVelocidad.addEventListener('input', () => {
+      lblVelocidad.textContent = Number(rngVelocidad.value).toFixed(2);
+    });
+
+    /**
+     * Escuchar un texto suelto.
+     *
+     * La Edge Function no es un TTS abierto: para gerar audio exige un
+     * pedido pendiente y reserves el pedido en anuncios_pedido, que es lo
+     * que evita que se repita el mismo aviso. Así que para probar un texto
+     * hay que crear una comanda descartable, pasar el texto y borrarla.
+     * Se avisa de los tres pasos porque si queda una a medias la base se
+     * va llenando de comandas de prueba.
+     */
+    async function hablarTextoLibre() {
+      const texto = (txtHablar.value || '').trim();
+      if (!texto) throw new Error('Escribí algo para escuchar.');
+
+      const idioma = selIdioma.value;
+      const velocidad = Number(rngVelocidad.value);
+
+      const { data: sesion } = await supabase.auth.getSession();
+      if (!sesion?.session?.access_token) {
+        throw new Error('No hay sesión en esta pestaña. Iniciá sesión como empleado o dueño primero.');
+      }
+      const token = sesion.session.access_token;
+
+      btnHablar.disabled = true;
+      escribirHablar(`"${texto}" (${idioma}, ${velocidad.toFixed(2)})`);
+
+      // La función no es un TTS abierto: pide un pedido pendiente y lo
+      // reserva, que es lo que evita repetir el mismo aviso. El problema
+      // es que al crear el pedido, el KDS abierto lo ve por Realtime y
+      // trata de anunciarlo también: si el KDS gana la reserva, esta
+      // llamada vuelve con ya_anunciado y sin audio. Por eso se reintenta
+      // con un pedido nuevo en vez de fingir que sonó algo.
+      for (let intento = 1; intento <= 3; intento++) {
+        escribirHablar(`Intento ${intento}: creando comanda descartable…`);
+        const p = await crearComanda();
+
+        try {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/voz-pedido`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ pedido_id: p.id, texto, idioma, velocidad }),
+          });
+
+          if (!res.ok) {
+            const cuerpo = await res.json().catch(() => ({}));
+            throw new Error(`La función respondió ${res.status}: ${cuerpo.error || 'sin detalle'}`);
+          }
+
+          // El servidor avisa por acá si lo realmente aplicado fue otro.
+          const idiomaAplicado = res.headers.get('X-Voz-Idioma') || '(sin espejo)';
+          const velocidadAplicada = res.headers.get('X-Voz-Velocidad') || '(sin espejo)';
+          escribirHablar(`   idioma aplicado: ${idiomaAplicado} · velocidad: ${velocidadAplicada}`);
+
+          // Si el KDS se adelantó, la respuesta es JSON y no hay audio.
+          if ((res.headers.get('content-type') || '').includes('application/json')) {
+            const cuerpo = await res.json().catch(() => ({}));
+            escribirHablar(`   el KDS se adelantó y ya lo anunció (${cuerpo.motivo || 'reservado'}). Se prueba con otra comanda.`);
+            continue;
+          }
+
+          const audio = await res.arrayBuffer();
+          const blob = new Blob([audio], { type: 'audio/mpeg' });
+          const url = URL.createObjectURL(blob);
+          const el = new Audio(url);
+          await el.play();
+          escribirHablar(`✓ Sonando (${(audio.byteLength / 1024).toFixed(0)} KB, ${texto.length} caracteres).`);
+          return;
+        } finally {
+          await supabase.from('detalles_pedido').delete().eq('pedido_id', p.id);
+          await supabase.from('anuncios_pedido').delete().eq('pedido_id', p.id);
+          await supabase.from('pedidos').delete().eq('id', p.id);
+          escribirHablar(`   comanda #${p.id} descartable borrada.`);
+        }
+      }
+
+      throw new Error('El KDS anunciando se adelantó 3 veces. Cerrá el KDS o apagá la voz y probá de nuevo.');
+    }
+
+    btnHablar.addEventListener('click', () => hablarTextoLibre().catch((e) => {
+      escribirHablar(`ERROR: ${e.message || e}`);
+      btnHablar.disabled = false;
+    }));
+
+    if (!isSupabaseConfigured) {
+      decir('Supabase NO está configurado: revisa app-desktop/.env');
+    } else {
+      decir('Listo. Supabase configurado. Cafetería ' + CAFETERIA_ID + '.');
+    }
+  </script>
+</body>
+</html>

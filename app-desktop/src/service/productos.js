@@ -6,7 +6,7 @@ const normalizeProducto = (p) => ({
   ...p,
   minimo: p.stock_minimo ?? p.minimo ?? 0,
   stock_minimo: p.stock_minimo ?? p.minimo ?? 0,
-  categoria: p.categorias?.nombre || p.categoria || 'GENERAL',
+  categoria: p.categoria || p.categorias?.nombre || 'GENERAL',
   cafeteria_nombre: p.cafeterias?.nombre || p.cafeteria_nombre || 'Cafetería Central',
   unidad: p.unidad || 'un',
   catColor: p.catColor || '#8D6E63',
@@ -29,10 +29,9 @@ export const productos = {
 
     const { data, error } = await supabase
       .from(TABLE)
-      .select('*, cafeterias(*), categorias(*)')
+      .select('*, cafeterias(*)')
       .eq('activo', true)
-      .is('eliminado_en', null)
-      .order('id', { ascending: true });
+            .order('id', { ascending: true });
 
     if (error) {
       console.error('Error consultando productos en Supabase:', error);
@@ -50,7 +49,7 @@ export const productos = {
 
     const { data, error } = await supabase
       .from(TABLE)
-      .select('*, cafeterias(*), categorias(*)')
+      .select('*, cafeterias(*)')
       .eq('id', id)
       .single();
 
@@ -70,10 +69,10 @@ export const productos = {
 
     const { data, error } = await supabase
       .from(TABLE)
-      .select('*, categorias(*)')
+      .select('*, cafeterias(*)')
       .eq('categoria_id', categoriaId)
       .eq('activo', true)
-      .is('eliminado_en', null);
+      
 
     if (error) {
       console.error('Error consultando categoría en Supabase:', error);
@@ -104,7 +103,7 @@ export const productos = {
     const { data, error } = await supabase
       .from(TABLE)
       .insert(dbPayload)
-      .select('*, cafeterias(*), categorias(*)')
+      .select('*, cafeterias(*)')
       .single();
 
     if (error) {
@@ -138,7 +137,7 @@ export const productos = {
       .from(TABLE)
       .update(dbPayload)
       .eq('id', id)
-      .select('*, cafeterias(*), categorias(*)')
+      .select('*, cafeterias(*)')
       .single();
 
     if (error) {
@@ -149,7 +148,7 @@ export const productos = {
     return normalizeProducto({
       ...data,
       ...(updates.unidad !== undefined ? { unidad: updates.unidad } : {}),
-      categoria: updates.categoria || data.categorias?.nombre,
+      categoria: updates.categoria || data.categoria || 'GENERAL',
     });
   },
 
@@ -161,7 +160,7 @@ export const productos = {
 
     const { error } = await supabase
       .from(TABLE)
-      .update({ activo: false, eliminado_en: new Date().toISOString() })
+      .update({ activo: false,  })
       .eq('id', id);
 
     if (error) {

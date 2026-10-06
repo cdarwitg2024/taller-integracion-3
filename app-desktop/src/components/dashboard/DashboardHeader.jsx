@@ -18,11 +18,11 @@ function DashboardHeader({ onRefresh, loading }) {
         <Typography
           variant="h4"
           fontWeight={800}
-          sx={{ color: '#4A3728', letterSpacing: '-0.5px' }}
+          sx={{ color: 'text.primary', letterSpacing: '-0.5px' }}
         >
           Dashboard Central
         </Typography>
-        <Typography variant="body2" sx={{ color: '#78665B', mt: 0.5 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
           Métricas en tiempo real, pedidos activos y rendimiento de ventas de la cafetería.
         </Typography>
       </Box>
