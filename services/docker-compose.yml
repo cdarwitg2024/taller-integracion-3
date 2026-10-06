@@ -1,0 +1,143 @@
+﻿# Microservicios de CoffeeFast - entorno local.
+
+# Los puertos del host salen de .env (GATEWAY_PORT, MS_*_PORT). El puerto que
+# ESCUCHA el contenedor va fijo en `environment.PORT`: nginx y los servicios
+# usan esos en el upstream y en /health, asi que cambiarlosrequires cambiar la
+# config de los dos lados. Lo unico parametrizable es el puerto del host, que es
+# donde puede haber choques con otra cosa que ya lo este usando.
+#
+# OJO: ms-inventario y ms-pedidos NO se exponen en el host por este compose. Sus
+# puertos se fijan igual para poder depurarlos con curl, pero el camino normal
+# de las apps es el gateway.
+
+name: coffeefaster-ms
+
+services:
+  # ---------------------------------------------------------------- gateway
+  gateway:
+    image: nginx:1.27-alpine
+    container_name: cf-gateway
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_PORT:-8080}:80"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      ms-cafeterias:
+        condition: service_healthy
+      ms-menus:
+        condition: service_healthy
+      ms-inventario:
+        condition: service_healthy
+      ms-pedidos:
+        condition: service_healthy
+    networks:
+      - cf-ms
+
+
+  # ----------------------------------------------------------- ms-cafeterias
+  ms-cafeterias:
+    build:
+      context: .
+      dockerfile: ms-cafeterias/Dockerfile
+    image: coffeefaster/ms-cafeterias:local
+    container_name: cf-ms-cafeterias
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3002
+    ports:
+      - "${MS_CAFETERIAS_PORT:-3002}:3002"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3002/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - cf-ms
+
+  # --------------------------------------------------------------- ms-menus
+  ms-menus:
+    build:
+      context: .
+      dockerfile: ms-menus/Dockerfile
+    image: coffeefaster/ms-menus:local
+    container_name: cf-ms-menus
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3003
+    ports:
+      - "${MS_MENUS_PORT:-3003}:3003"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3003/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - cf-ms
+
+  # ------------------------------------------------------------ ms-inventario
+  ms-inventario:
+    build:
+      context: .
+      dockerfile: ms-inventario/Dockerfile
+    image: coffeefaster/ms-inventario:local
+    container_name: cf-ms-inventario
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3004
+    ports:
+      - "${MS_INVENTARIO_PORT:-3004}:3004"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3004/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - cf-ms
+
+  # --------------------------------------------------------------- ms-pedidos
+  ms-pedidos:
+    build:
+      context: .
+      dockerfile: ms-pedidos/Dockerfile
+    image: coffeefaster/ms-pedidos:local
+    container_name: cf-ms-pedidos
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3005
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY}
+    ports:
+      - "${MS_PEDIDOS_PORT:-3005}:3005"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3005/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - cf-ms
+
+networks:
+  cf-ms:
+    driver: bridge
+
+

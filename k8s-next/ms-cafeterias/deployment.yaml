@@ -1,0 +1,125 @@
+﻿# ms-cafeterias â€” Microservicio de Cafeterias.
+#
+# NO forma parte de k8s/ (esa arboleria es la vieja, con backend-node).
+# Este manifiesto vive en k8s-next/ a proposito.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-cafeterias
+  namespace: student-cdarwitg
+  labels:
+    app: ms-cafeterias
+    ms: cafeterias
+spec:
+  # UNA sola replica a proposito. Este servicio no tiene estado en memoria
+  # (ver src/modules/cafeterias/cafeterias.service.js: todo va a Supabase), asi
+  # que podria escalar. Se deja en 1 para medir la linea base antes de subir, y
+  # para que la saturacion de este servicio no se confunda con el comportamiento
+  # del gateway.
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: ms-cafeterias
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # maxSurge 0 = no crear un Pod nuevo mientras el viejo sigue sirviendo.
+      # Con quota de CPU compartida, dos Pods a la vez durante el rollout puede
+      # provocar OOMKilled en el Pod que si estaba sano.
+      maxSurge: 0
+      # maxUnavailable 1 = se puede bajar el unico Pod. Aceptable porque este
+      # servicio es read-only: si cae, no se pierde informacion.
+      maxUnavailable: 1
+
+  template:
+    metadata:
+      labels:
+        app: ms-cafeterias
+        ms: cafeterias
+    spec:
+      # Rollback mas rapido: si la imagen nueva esta rota, se vuelve a la anterior.
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+
+      containers:
+        - name: ms-cafeterias
+          image: cdarwitg2024/ms-cafeterias:v1.0.0
+          # Si la imagen no esta en el registro, 'IfNotPresent' evita que K8s
+          # intente descargarla y se quede en ErrImagePull para siempre.
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 3002
+
+          env:
+            - name: PORT
+              value: '3002'
+            - name: NODE_ENV
+              value: 'production'
+            - name: SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: coffeesecret-supabase
+                  key: SUPABASE_URL
+            - name: SUPABASE_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: coffeesecret-supabase
+                  key: SUPABASE_SERVICE_KEY
+            # Para ambiente local contra el Docker de Supabase.
+            # Cambiar por la URL cloud cuando se apunte a Supabase cloud.
+            # - name: SUPABASE_URL
+            #   value: 'http://host.docker.internal:54321'
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 150m
+              memory: 128Mi
+
+          # /health NO consulta Supabase: responde ok mientras el proceso viva.
+          # Readiness verifica el proceso (K8s lo saca de rotation si murio).
+          # Liveness verifica que no se cuelgue; si /health tocara la base, una
+          # caida de Supabase reiniciaria el Pod en bucle.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ['ALL']
+
+          volumeMounts:
+            # readOnlyRootFilesystem: true impide escribir en /tmp, y Node lo usa.
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      # Cierre limpio: sin esto, SIGTERM se ignora durante los 30 s por defecto.
+      terminationGracePeriodSeconds: 15

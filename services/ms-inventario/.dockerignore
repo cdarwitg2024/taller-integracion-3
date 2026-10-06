@@ -1,0 +1,14 @@
+# INERTE. Docker solo lee el .dockerignore de la RAIZ del contexto de build, y
+# el contexto de ms-menus es `services/` (la carpeta padre, para poder copiar
+# shared/). El archivo que si aplica es services/.dockerignore.
+#
+# Se deja este archivo por simetria con ms-cafeterias, pero las reglas de aqui
+# NO se aplican durante el build.
+node_modules
+npm-debug.log
+.git
+.env
+.env.local
+coverage
+tests
+__pycache__

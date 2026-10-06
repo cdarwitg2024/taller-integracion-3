@@ -1,0 +1,10 @@
+{
+  "name": "@coffeefaster/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Codigo compartido entre microservicios de CoffeeFast: auth y cliente HTTP entre servicios",
+  "main": "src/index.js",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0"
+  }
+}

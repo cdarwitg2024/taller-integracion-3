@@ -1,0 +1,30 @@
+# .dockerignore del CONTEXTO services/ (la carpeta que se pasa a docker build).
+#
+# Este es el unico .dockerignore que cuenta: Docker lee el de la RAIZ del
+# contexto, no el de cada subcarpeta. Sin este archivo, `COPY ms-cafeterias/ ./`
+# traeria el node_modules local de 380 MB dentro de la imagen.
+
+# Dependencias locales: se reinstalan dentro de la imagen.
+**/node_modules
+**/npm-debug.log*
+
+# Secretos: nunca deben entrar en una capa de imagen.
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Tests: no se ejecutan en el contenedor.
+**/tests
+**/coverage
+**/__pycache__
+**/*.test.js
+
+# Ruido de git y del editor.
+.git
+**/.git
+.vscode
+.idea
+**/.DS_Store
+
+# El propio .env del compose lo lee docker compose, no la imagen.
+.env

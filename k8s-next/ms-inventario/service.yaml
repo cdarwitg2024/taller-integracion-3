@@ -1,0 +1,23 @@
+# ms-inventario - Service interno.
+#
+# ClusterIP: NO lo consume el gateway (por decision de arquitectura el gateway
+# responde 404 en /api/inventario). El unico que lo llama es ms-pedidos
+# (POST /api/inventario/verificar). Exponerlo por Ingress dejaria el stock
+# escribible desde internet.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-inventario
+  namespace: student-cdarwitg
+  labels:
+    app: ms-inventario
+    ms: inventario
+spec:
+  type: ClusterIP
+  selector:
+    app: ms-inventario
+  ports:
+    - name: http
+      port: 3004
+      targetPort: http   # -> 3004
+      protocol: TCP

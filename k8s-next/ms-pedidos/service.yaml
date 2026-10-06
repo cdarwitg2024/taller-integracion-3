@@ -1,0 +1,21 @@
+# ms-pedidos - Service interno.
+#
+# ClusterIP: lo consumen el gateway (POST /api/pedidos) y las apps. Todo
+# Requires sesion: exigirAuth devuelve 401 sin Bearer valido.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-pedidos
+  namespace: student-cdarwitg
+  labels:
+    app: ms-pedidos
+    ms: pedidos
+spec:
+  type: ClusterIP
+  selector:
+    app: ms-pedidos
+  ports:
+    - name: http
+      port: 3005
+      targetPort: http   # -> 3005
+      protocol: TCP

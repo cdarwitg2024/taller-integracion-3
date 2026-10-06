@@ -167,3 +167,30 @@ docs/secrets/*
 *.kubeconfig
 kubeconfig
 .kube/
+
+# ============================================
+# Microservicios en services/ (compose local)
+# ============================================
+# services/.env lleva SUPABASE_SERVICE_KEY: la clave anon de la instancia local
+# de Supabase. docker compose lo lee solo (es sibling del compose). Nota: el
+# patron `**/.env` de mas arriba ya lo cubre; se repite aqui para que quede
+# explicito cual es el archivo sensible de este arbol.
+services/.env
+services/.env.local
+services/.env.*.local
+# Los .example SI se versionan: no tienen claves reales.
+!services/.env.example
+# Logs de los contenedores del gateway/servicios.
+services/*.log
+
+# ============================================
+# k8s-next/: secretos locales, pero los manifiestos SI se versionan
+# ============================================
+# A diferencia de k8s/, aqui los manifiestos se versionan a proposito: son el
+# despliegue de los ms-* nuevos. No contienen claves: el Secret se referencia
+# por nombre (secretKeyRef) y se crea a mano.
+# Lo unico que no se versiona son los volcados con valores reales.
+k8s-next/**/*secret*.local.yaml
+k8s-next/**/*secrets*.local.yaml
+k8s-next/**/env.local.yaml
+!k8s-next/**/env.local.example
