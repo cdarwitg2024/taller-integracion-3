@@ -45,14 +45,18 @@ export function extraerCredenciales(texto) {
     }
   }
 
-  // Si el QR ya se desarmo, el JSON crudo no es una credencial: agregarlo solo
-  // genera una consulta garantizadamente vacia.
-  if (!qrInterpretado) agregar(original);
-
   // URL de retiro: la credencial es el ultimo segmento.
   if (/^https?:\/\//i.test(original)) {
-    agregar(original.split('/').filter(Boolean).pop());
+    const segmento = original.split('/').filter(Boolean).pop();
+    if (segmento) {
+      agregar(segmento);
+      qrInterpretado = true;
+    }
   }
+
+  // Si el QR ya se desarmo, el JSON o URL cruda no es una credencial: agregarlo solo
+  // genera una consulta garantizadamente vacia.
+  if (!qrInterpretado) agregar(original);
 
   return candidatas;
 }
@@ -143,28 +147,39 @@ function aMinutosDelDia(horaRetiro) {
 }
 
 function aInstanteRetiro(pedido) {
+  // Ojo: `normalizarPedido` deja `hora_retiro` como texto "HH:mm", así que
+  // hay que soportar los dos formatos que llegan desde la base.
+  const retiroTs = parsearFecha(pedido.hora_retiro);
+  if (retiroTs) return retiroTs.getTime();
+
   const minutos = aMinutosDelDia(pedido.hora_retiro);
-  if (minutos !== null) return minutos;
-  if (pedido.creado_en) {
-    const fecha = parsearFecha(pedido.creado_en);
-    if (fecha) {
-      const conAnticipo = new Date(fecha.getTime() + 15 * 60000);
-      return conAnticipo.getHours() * 60 + conAnticipo.getMinutes();
+  const creado = parsearFecha(pedido.creado_en);
+
+  if (minutos !== null) {
+    if (creado) {
+      // "HH:mm" sobre el día en que se creó el pedido.
+      const base = new Date(creado);
+      base.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
+      return base.getTime();
     }
+    // Sin fecha de creación: se asume hoy.
+    const hoy = new Date();
+    hoy.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
+    return hoy.getTime();
   }
+
+  if (creado) return creado.getTime() + 15 * 60000; // estimado por defecto
   return null;
 }
 
 function comparadorPrioridad(a, b) {
+  // Ordenar por minutos del día no servía: dos pedidos del mismo minuto
+  // quedaban "empate" y el kanban se veía desordenado. Se compara el
+  // instante real (epoch) y, ante empate, la hora de creación.
   const tA = aInstanteRetiro(a);
   const tB = aInstanteRetiro(b);
-  if (tA !== null && tB !== null) {
-    if (tA !== tB) return tA - tB;
-  } else if (tA !== null) {
-    return -1;
-  } else if (tB !== null) {
-    return 1;
-  }
+  if (tA !== null && tB !== null && tA !== tB) return tA - tB;
+
   const fA = parsearFecha(a?.creado_en);
   const fB = parsearFecha(b?.creado_en);
   return (fA ? fA.getTime() : 0) - (fB ? fB.getTime() : 0);
@@ -313,7 +328,7 @@ export const pedidosService = {
    * token no coincide, el token de contingencia del mismo pedido lo entrega; y
    * al reves, si el token fue borrado o mal tipeado, el QR lo entrega.
    */
-  async validarQrEntrega(textoQr) {
+  async validarQrEntrega(textoQr, idUsuario = null) {
     const candidatas = extraerCredenciales(textoQr);
     if (candidatas.length === 0) {
       return { valido: false, razon: 'QR vacío o ilegible, intenta nuevamente.' };
@@ -333,29 +348,29 @@ export const pedidosService = {
       }
 
       if (!pedido) {
-        await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'rechazado', detalle: 'QR no reconocido.' });
+        await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'rechazado', detalle: 'QR no reconocido.', usuarioId: idUsuario });
         return { valido: false, razon: 'QR no reconocido. Verifica que corresponda a un pedido de CofeeFaster.' };
       }
       if (Number(pedido.cafeteria_id) !== CAFETERIA_ID) {
         const razon = `El pedido #${pedido.id} no pertenece a esta cafetería.`;
-        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon });
+        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
         return { valido: false, razon };
       }
       if (pedido.estado === 'entregado') {
         const razon = `El pedido #${pedido.id} ya fue entregado.`;
-        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon });
+        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
         return { valido: false, razon };
       }
       if (pedido.estado !== 'listo') {
         const razon = `El pedido #${pedido.id} aún no está listo para retiro (estado: ${pedido.estado}).`;
-        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon });
+        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
         return { valido: false, razon };
       }
 
       const entregado = await this.updateEstado(pedido.rawId ?? pedido.id, 'entregado');
       if (!entregado || entregado.estado !== 'entregado') {
         const razon = `El pedido #${pedido.id} no pudo marcarse como entregado.`;
-        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon });
+        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
         return { valido: false, razon };
       }
       await this._registrarLogValidacion({
@@ -363,6 +378,7 @@ export const pedidosService = {
         qrToken: credencialUsada,
         resultado: 'entregado',
         detalle: `Pedido #${pedido.id} marcado como entregado por QR/Token.`,
+        usuarioId: idUsuario,
       });
       return {
         valido: true,
@@ -372,30 +388,32 @@ export const pedidosService = {
       };
     } catch (err) {
       console.warn('validarQrEntrega:', err);
-      await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'error', detalle: 'No se pudo validar el QR en este momento.' });
+      await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'error', detalle: 'No se pudo validar el QR en este momento.', usuarioId: idUsuario });
       return { valido: false, razon: 'No se pudo validar el QR en este momento.' };
     }
   },
 
-  async _registrarLogValidacion({ pedidoId = null, qrToken = null, resultado, detalle }) {
+  async _registrarLogValidacion({ pedidoId = null, qrToken = null, resultado, detalle, usuarioId = null }) {
     if (!isSupabaseConfigured) return;
     try {
-      let usuarioId = null;
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id) {
-        const { data: usuario } = await supabase
-          .from('usuarios')
-          .select('id')
-          .eq('auth_user_id', user.id)
-          .maybeSingle();
-        usuarioId = usuario?.id ?? null;
+      let finalUsuarioId = usuarioId && !isNaN(Number(usuarioId)) ? Number(usuarioId) : null;
+      if (!finalUsuarioId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id) {
+          const { data: usuario } = await supabase
+            .from('usuarios')
+            .select('id')
+            .eq('auth_user_id', user.id)
+            .maybeSingle();
+          finalUsuarioId = usuario?.id ?? null;
+        }
       }
       const { error } = await supabase
         .from('logs_validacion_qr')
         .insert({
           pedido_id: pedidoId,
           cafeteria_id: CAFETERIA_ID,
-          usuario_id: usuarioId,
+          usuario_id: finalUsuarioId,
           qr_token_leido: qrToken,
           resultado,
           motivo_rechazo: resultado === 'rechazado' ? detalle : null,

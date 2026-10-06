@@ -29,7 +29,17 @@ import { productos as productosService } from '../../service/productos';
  * Operación separada e independiente para el control de inventario y existencias por el Dueño.
  * Muestra valores actuales, valida que el stock no sea negativo (>= 0) y actualiza Supabase.
  */
-function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
+function ModificarStockDialog({
+  open,
+  onClose,
+  producto,
+  onSuccess,
+  onSolicitar,
+  modoSolicitud = false,
+  titulo = null,
+  subtitulo = null,
+  textoBotonGuardar = null,
+}) {
   const [nuevoStock, setNuevoStock] = useState('');
   const [nuevoMinimo, setNuevoMinimo] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -48,6 +58,7 @@ function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
   // Inicializar al abrir el diálogo con los datos actuales
   useEffect(() => {
     if (open && producto) {
+      // En modo solicitud, sugerimos pedir stock adicional (o dejar 0 para ingresar cantidad deseada)
       setNuevoStock(producto.stock !== undefined ? String(producto.stock) : '0');
       setNuevoMinimo(
         producto.stock_minimo !== undefined
@@ -157,6 +168,13 @@ function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
       return;
     }
 
+    if (modoSolicitud) {
+      if (stockFinal <= 0) {
+        setErrorMsg('La cantidad solicitada debe ser mayor a 0.');
+        return;
+      }
+    }
+
     const minimoFinal = nuevoMinimo.trim() !== '' ? Number(nuevoMinimo) : minimoActual;
     if (isNaN(minimoFinal) || minimoFinal < 0) {
       setErrorMsg('El stock mínimo no puede ser un valor negativo.');
@@ -167,6 +185,10 @@ function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
     setErrorMsg('');
 
     try {
+      if (modoSolicitud && onSolicitar) {
+        await onSolicitar(stockFinal);
+        return;
+      }
       // Actualizar en Supabase mediante el servicio dedicado (FR-47)
       const productoActualizado = await productosService.updateStock(
         producto.id,
@@ -182,8 +204,8 @@ function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
       }
       onClose();
     } catch (err) {
-      console.error('Error al actualizar stock en Supabase:', err);
-      setErrorMsg(err.message || 'Error al conectar con el servidor para actualizar el stock.');
+      console.error('Error al guardar:', err);
+      setErrorMsg(err.message || 'Error al conectar con el servidor.');
     } finally {
       setSaving(false);
     }
@@ -225,10 +247,10 @@ function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
           </Box>
           <Box>
             <Typography variant="h6" fontWeight={800} sx={{ color: '#3E2D22', lineHeight: 1.2 }}>
-              Modificar Stock e Inventario
+              {modoSolicitud ? titulo || 'Solicitar reposición de stock' : 'Modificar Stock e Inventario'}
             </Typography>
             <Typography variant="caption" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
-              Ajuste de Existencias en Bodega
+              {modoSolicitud ? subtitulo || 'Indica la cantidad a solicitar' : 'Ajuste de Existencias en Bodega'}
             </Typography>
           </Box>
         </Box>
@@ -311,7 +333,7 @@ function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
           <Box>
             <Stack direction="row" sx={{ mb: 0.8, justifyContent: 'space-between', alignItems: 'center'}}>
               <Typography variant="caption" fontWeight={700} sx={{ color: '#78665B' }}>
-                Nuevo Stock Disponible ({unidad}) *
+                {modoSolicitud ? `Cantidad a solicitar (${unidad}) *` : `Nuevo Stock Disponible (${unidad}) *`}
               </Typography>
               <Typography variant="caption" sx={{ color: '#8C7A6F' }}>
                 Mínimo permitido: 0
@@ -416,40 +438,41 @@ function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
             </Stack>
           </Box>
 
-          {/* Campo de Stock Mínimo de Alerta */}
-          <Box>
-            <Typography variant="caption" fontWeight={700} sx={{ color: '#78665B', display: 'block', mb: 0.8 }}>
-              Umbral Mínimo Requerido ({unidad})
-            </Typography>
-            <TextField
-              size="small"
-              fullWidth
-              type="number"
-              value={nuevoMinimo}
-              onChange={handleMinimoChange}
-              disabled={saving}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end" sx={{ color: '#8C7A6F', fontSize: '0.78rem' }}>
-                    {unidad}
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  backgroundColor: '#FFFFFF',
-                  fontWeight: 600,
-                  '& fieldset': {
-                    borderColor: '#D8CDC4',
+          {!modoSolicitud && (
+            <Box>
+              <Typography variant="caption" fontWeight={700} sx={{ color: '#78665B', display: 'block', mb: 0.8 }}>
+                Umbral Mínimo Requerido ({unidad})
+              </Typography>
+              <TextField
+                size="small"
+                fullWidth
+                type="number"
+                value={nuevoMinimo}
+                onChange={handleMinimoChange}
+                disabled={saving}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end" sx={{ color: '#8C7A6F', fontSize: '0.78rem' }}>
+                      {unidad}
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '12px',
+                    backgroundColor: '#FFFFFF',
+                    fontWeight: 600,
+                    '& fieldset': {
+                      borderColor: '#D8CDC4',
+                    },
                   },
-                },
-              }}
-            />
-          </Box>
+                }}
+              />
+            </Box>
+          )}
 
           {/* Previsualización del Estado Resultante */}
-          {estadoProyectado && (
+          {estadoProyectado && !modoSolicitud && (
             <Paper
               elevation={0}
               sx={{
@@ -471,6 +494,27 @@ function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
               </Stack>
               <Typography variant="caption" sx={{ color: estadoProyectado.color, fontWeight: 800 }}>
                 {parsedStock} {unidad}
+              </Typography>
+            </Paper>
+          )}
+          {modoSolicitud && (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 1.2,
+                borderRadius: '10px',
+                border: '1px solid #E0D6CE',
+                backgroundColor: '#FAF7F4',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <Typography variant="caption" fontWeight={700} sx={{ color: '#6E5C50' }}>
+                Cantidad a solicitar
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#4A3728', fontWeight: 800 }}>
+                {parsedStock > 0 ? parsedStock : 0} {unidad}
               </Typography>
             </Paper>
           )}
@@ -534,7 +578,11 @@ function ModificarStockDialog({ open, onClose, producto, onSuccess }) {
                 },
               }}
             >
-              {saving ? 'Guardando...' : 'Actualizar Stock'}
+              {saving
+                ? modoSolicitud
+                  ? 'Registrando...'
+                  : 'Guardando...'
+                : textoBotonGuardar || (modoSolicitud ? 'Registrar solicitud' : 'Actualizar Stock')}
             </Button>
           </Stack>
         </Stack>

@@ -97,6 +97,9 @@ const formatAuthError = (msg) => {
 
 function LoginEmpleado({ onLogin, onBack }) {
   const navigate = useNavigate();
+  // Upstream dejó el campo vacío a propósito y así se queda. Ojo: el
+  // correo de ejemplo anterior (empleado@coffeefaster.cl) no existe en
+  // Auth; la cuenta real es empleado@coffeefast.cl.
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -359,7 +362,7 @@ function LoginEmpleado({ onLogin, onBack }) {
                 size="small"
                 fullWidth
                 disabled={loading}
-                placeholder="empleado@coffeefaster.cl"
+                placeholder="empleado@coffeefast.cl"
                 autoCapitalize="none"
                 autoCorrect="off"
                 autoComplete="email"
