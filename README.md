@@ -79,24 +79,40 @@ mismas que inyectan los Deployments por `envFrom.secretRef`.
 | Rol | URL de acceso | Email | Contraseña |
 | --- | --- | --- | --- |
 | **Dueño** | `http://localhost:5173/login/dueno` | `dueno@coffeefaster.cl` | `123456` |
-| **Empleado** | `http://localhost:5173/login/empleado` | `empleado@coffeefaster.cl` | `123456` |
+| **Empleado** | `http://localhost:5173/login/empleado` | `empleado.prueba@ejemplo.cl` | `123456` |
 
-> **Nota**: el login intenta primero con Supabase Auth (si el proyecto está configurado) y si no responde usa un fallback de desarrollo que se activa ÚNICAMENTE en `import.meta.env.DEV` (comando `npm run dev`). Las credenciales de fallback se pueden cambiar con las variables `VITE_DEV_ADMIN_EMAIL`/`VITE_DEV_ADMIN_PASSWORD` y `VITE_DEV_EMPLEADO_EMAIL`/`VITE_DEV_EMPLEADO_PASSWORD` en `app-desktop/.env`.
+> **Nota**: el login valida **estrictamente contra Supabase Auth** (`signInWithPassword`) y después busca el perfil en la tabla `usuarios` por `auth_user_id`. No hay modo de respaldo: si la red falla o las credenciales son incorrectas, el acceso se rechaza.
 >
-> El usuario **dueño** (`usuarios.id = 1`) todavía no está vinculado en Supabase Auth, así que hoy solo entra por ese fallback de desarrollo.
+> Como el perfil se busca por `auth_user_id`, **las cuentas deben estar vinculadas en Supabase Auth** (Authentication → Users) y a la vez en la tabla `usuarios` con el mismo UUID. Si creas un usuario solo en el Dashboard, el login devuelve "No se encontró el perfil de usuario registrado".
+>
+> `app-desktop/.env` todavía define `VITE_DEV_ADMIN_*` y `VITE_DEV_EMPLEADO_*`, pero **ya no las lee ningún módulo**: el fallback de desarrollo fue eliminado. Se pueden borrar.
 
 ## 🔐 Credenciales de la App Móvil
 
 | Rol | Email | Contraseña |
 | --- | --- | --- |
-| **Estudiante** | `camilo.pago@alu.uct.cl` | `pruebapago2026` |
+| **Estudiante** | `camilo@uct.cl` | `123456` |
 
-## 🧪 Cuenta de KDS para probar el flujo completo
+## 🧪 Cuentas de prueba (Supabase Auth)
+
+Todas usan contraseña `123456`. Los dominios `@ejemplo.cl` son de prueba y sirven
+como cualquier otro usuario para el flujo de pedidos.
 
 | Rol | Email | Contraseña |
 | --- | --- | --- |
-| **Cocina** | `cocina.central@cafeteria.com` | `cocina2026` |
+| **Dueño** | `dueno@coffeefaster.cl` | `123456` |
+| **Empleado / KDS** | `empleado.prueba@ejemplo.cl` | `123456` |
+| **Estudiante** | `camilo@uct.cl` | `123456` |
+| **Estudiante** | `cliente.prueba@ejemplo.cl` | `123456` |
+| **Estudiante** | `otro.prueba@ejemplo.cl` | `123456` |
 
 - **Dueño**: panel de administración (productos, stock, personal, métricas y alertas).
 - **Empleado**: KDS de cocina (comandas en tiempo real, preparación y validación de retiros por QR).
+
+> Todas están vinculadas en Supabase Auth **y** en la tabla `usuarios` con el mismo
+> `auth_user_id`, que es lo que exige el login. La fila de `usuarios` la crea un
+> trigger al insertar en Auth, pero asigna `rol_id = 5` (estudiante) por defecto:
+> si creas un dueño o un empleado desde el Dashboard, corrige el rol a mano en
+> `usuarios.rol_id` (`dueño` = 6, `empleado` = 4), o el login rechazará el acceso
+> por rol.
 

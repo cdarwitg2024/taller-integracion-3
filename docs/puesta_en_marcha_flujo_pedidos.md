@@ -111,15 +111,18 @@ docker restart supabase_rest_db_CoffeeFaster
 
 | Rol | Email | Contraseña | Dónde entra |
 | --- | --- | --- | --- |
-| Estudiante | `camilo.pago@alu.uct.cl` | `pruebapago2026` | App móvil |
-| Empleado / KDS | `cocina.central@cafeteria.com` | `cocina2026` | App escritorio |
-| Dueño | `dueno@coffeefaster.cl` | `123456` | App escritorio (solo `npm run dev`) |
+| Estudiante | `camilo@uct.cl` | `123456` | App móvil |
+| Empleado / KDS | `empleado.prueba@ejemplo.cl` | `123456` | App escritorio |
+| Dueño | `dueno@coffeefaster.cl` | `123456` | App escritorio |
 
 - Los roles se leen de `usuarios.rol_id` → `roles.nombre`.
-- El usuario **dueño** (`usuarios.id = 1`) todavía **no tiene `auth_user_id`** en
-  Supabase Auth, así que entra por el fallback de desarrollo que se activa solo
-  con `import.meta.env.DEV`. En un build de producción ese login fallará hasta
-  que se cree la cuenta en Auth y se complete el `auth_user_id`.
+- Las cinco cuentas están vinculadas en Supabase Auth **y** en la tabla
+  `usuarios` con el mismo `auth_user_id`. El login es estricto contra Auth
+  (`signInWithPassword`) y no tiene modo de respaldo: sin `auth_user_id`
+  coincidente devuelve "No se encontró el perfil de usuario registrado".
+- Ojo al crear cuentas desde el Dashboard: el trigger que inserta la fila en
+  `usuarios` asigna `rol_id = 5` (estudiante) siempre. Para dueño oempleado hay
+  que corregir `usuarios.rol_id` a mano (`dueño` = 6, `empleado` = 4).
 
 ---
 
@@ -399,7 +402,7 @@ Compila sin errores (el aviso de chunk >500 kB es de Vite, no un fallo).
 
 ### 8.3 Prueba manual del flujo completo
 
-1. Móvil: entrar como `camilo.pago@alu.uct.cl`, elegir cafeteria, productos y
+1. Móvil: entrar como `camilo@uct.cl`, elegir cafeteria, productos y
    **franja de retiro**, pagar con la wallet.
 2. Verificar que el saldo baja y que el detalle del pedido muestra franja, QR y
    código de contingencia.
@@ -459,9 +462,9 @@ solo sus propios pedidos y su propia wallet.
 
 ## 10. Pendientes conocidos
 
-- **Dueño sin cuenta en Auth.** `usuarios.id = 1` no tiene `auth_user_id`, así
-  que el panel del dueño solo abre con el fallback de desarrollo. Hay que crear
-  la cuenta en Supabase Auth y vincularla para que funcione en producción.
+- ~~**Dueño sin cuenta en Auth.**~~ Resuelto: `dueno@coffeefaster.cl` ya está
+  creada en Auth y vinculada con `rol_id = 6` (`dueño`). Entra en producción igual
+  que en desarrollo.
 - **Recarga sin pasarela.** `recargar_saldo` suma saldo de verdad, pero no hay
   cobro detrás: es una recarga simulada con topes. Integrar la pasarela es el
   paso pendiente antes de producción.
