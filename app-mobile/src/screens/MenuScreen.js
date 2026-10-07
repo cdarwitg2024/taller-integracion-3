@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   BackHandler,
   RefreshControl,
+  TextInput,
 } from 'react-native';
 
 import ProductCard from '../components/ProductCard';
@@ -113,6 +114,10 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
 
   // FR-07: categoría activa. 'todos' = sin filtro
   const [categoriaActiva, setCategoriaActiva] = useState('todos');
+  // FR-15: búsqueda por texto con debounce + orden del catálogo
+  const [busqueda, setBusqueda] = useState('');
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
+  const [orden, setOrden] = useState('precio_asc');
   // FR-08: producto abierto en detalle. La cafetería NO se pasa: el detalle se
   // muestra encima del menú, así que el contexto se mantiene solo.
   const [productoDetalle, setProductoDetalle] = useState(null);
@@ -205,6 +210,14 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     fetchProducts();
   }, [fetchProducts]);
 
+  // FR-15: debounce de 300 ms para no refiltrar en cada tecla que se escribe.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setBusquedaDebounced(busqueda.trim().toLowerCase());
+    }, 300);
+    return () => clearTimeout(id);
+  }, [busqueda]);
+
   // FR-07: categorías que TIENEN productos. Armadas por id, no por nombre,
   // porque en la base hay 'Repostería' y 'Reposteria' como filas distintas.
   const categories = useMemo(() => {
@@ -221,16 +234,44 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     return [...porId.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   }, [products]);
 
-  // Filtrado por categoría
+  // Filtrado combinado: categoría + búsqueda por texto (FR-15)
   const productosFiltrados = useMemo(() => {
-    if (categoriaActiva === 'todos') return products;
-    return products.filter((p) => String(p.categoryId ?? 'sin-categoria') === String(categoriaActiva));
-  }, [products, categoriaActiva]);
+    let lista = products;
+    if (categoriaActiva !== 'todos') {
+      lista = lista.filter((p) => String(p.categoryId ?? 'sin-categoria') === String(categoriaActiva));
+    }
+    if (busquedaDebounced) {
+      lista = lista.filter((p) => (p.name || '').toLowerCase().includes(busquedaDebounced));
+    }
+    return lista;
+  }, [products, categoriaActiva, busquedaDebounced]);
 
-  // Agrupado por categoría, ya sobre la lista filtrada
-  const categoriasAgrupadas = useMemo(() => groupByCategory(productosFiltrados), [productosFiltrados]);
+  // Ordenamiento visible: precio o nombre, asc/desc (FR-15)
+  const productosOrdenados = useMemo(() => {
+    const lista = [...productosFiltrados];
+    switch (orden) {
+      case 'precio_asc':
+        lista.sort((a, b) => a.price - b.price);
+        break;
+      case 'precio_desc':
+        lista.sort((a, b) => b.price - a.price);
+        break;
+      case 'nombre_asc':
+        lista.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        break;
+      case 'nombre_desc':
+        lista.sort((a, b) => b.name.localeCompare(a.name, 'es'));
+        break;
+      default:
+        break;
+    }
+    return lista;
+  }, [productosFiltrados, orden]);
 
-  const disponibles = productosFiltrados.filter((p) => p.available).length;
+  // Agrupado por categoría, ya sobre la lista filtrada y ordenada
+  const categoriasAgrupadas = useMemo(() => groupByCategory(productosOrdenados), [productosOrdenados]);
+
+  const disponibles = productosOrdenados.filter((p) => p.available).length;
 
   // Al cambiar de cafetería, el filtro y el detalle se reinician
   useEffect(() => {
@@ -314,7 +355,28 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     }
 
     if (productosFiltrados.length === 0) {
-      // El menú tiene productos pero el filtro elegido no
+      // Primero se distingue búsqueda sin resultados de "no hay productos".
+      if (busquedaDebounced) {
+        return (
+          <View style={styles.stateContainer}>
+            <Text style={styles.stateEmoji}>🔍</Text>
+            <Text style={styles.stateTitle}>Sin resultados</Text>
+            <Text style={styles.stateText}>
+              No encontramos productos que coincidan con “{busquedaDebounced}”.
+              Probá con otro nombre o cambia la categoría.
+            </Text>
+            <Button
+              title="Limpiar búsqueda"
+              variant="secondary"
+              size="sm"
+              onPress={() => setBusqueda('')}
+              style={{ marginTop: spacing.xl }}
+            />
+          </View>
+        );
+      }
+
+      // El menú tiene productos pero el filtro de categoría no
       const catNombre = categories.find((c) => String(c.id) === String(categoriaActiva))?.nombre;
       return (
         <View style={styles.stateContainer}>
@@ -409,6 +471,41 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
         />
       )}
 
+      {/* FR-15: buscador de texto con debounce, combinado con la categoría */}
+      <View style={styles.searchRow}>
+        <TextInput
+          value={busqueda}
+          onChangeText={setBusqueda}
+          placeholder="Buscar producto…"
+          placeholderTextColor={colors.textoDeshabilitado}
+          style={styles.searchInput}
+          accessibilityLabel="Buscar producto"
+        />
+        {busqueda.length > 0 && (
+          <TouchableOpacity onPress={() => setBusqueda('')} style={styles.searchClear}>
+            <Text style={styles.searchClearText}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* FR-15: ordenamiento por precio o nombre, con el criterio visible */}
+      <View style={styles.ordenRow}>
+        <Text style={styles.ordenLabel}>Orden: {ORDEN_LABELS[orden]}</Text>
+        <View style={styles.ordenChips}>
+          {OPCIONES_ORDEN.map((o) => (
+            <TouchableOpacity
+              key={o.value}
+              style={[styles.ordenChip, orden === o.value && styles.ordenChipActivo]}
+              onPress={() => setOrden(o.value)}
+            >
+              <Text style={[styles.ordenChipText, orden === o.value && styles.ordenChipTextActivo]}>
+                {o.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
       {renderBody()}
 
       {/* FR-08: el detalle se superpone al menú, así que la cafetería
@@ -425,6 +522,20 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
       )}
     </View>
   );
+};
+
+const OPCIONES_ORDEN = [
+  { value: 'precio_asc', label: 'Precio ↑' },
+  { value: 'precio_desc', label: 'Precio ↓' },
+  { value: 'nombre_asc', label: 'Nombre A-Z' },
+  { value: 'nombre_desc', label: 'Nombre Z-A' },
+];
+
+const ORDEN_LABELS = {
+  precio_asc: 'Precio: de menor a mayor',
+  precio_desc: 'Precio: de mayor a menor',
+  nombre_asc: 'Nombre: A a la Z',
+  nombre_desc: 'Nombre: Z a la A',
 };
 
 const productosSummary = (disponibles, total) => {
@@ -535,6 +646,69 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: typography.pesoMedio,
     marginTop: 2,
+  },
+
+  // FR-15: búsqueda
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.blanco,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borde,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    fontSize: typography.cuerpoPequeno,
+    color: colors.cafeOscuro,
+  },
+  searchClear: {
+    padding: spacing.sm,
+  },
+  searchClearText: {
+    fontSize: 16,
+    color: colors.textoSecundario,
+  },
+
+  // FR-15: orden
+  ordenRow: {
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  ordenLabel: {
+    fontSize: typography.etiqueta,
+    color: colors.textoSecundario,
+    marginBottom: spacing.xs,
+  },
+  ordenChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  ordenChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borde,
+    backgroundColor: colors.blanco,
+    marginRight: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  ordenChipActivo: {
+    backgroundColor: colors.cafeOscuro,
+    borderColor: colors.cafeOscuro,
+  },
+  ordenChipText: {
+    fontSize: typography.etiqueta,
+    color: colors.cafeOscuro,
+    fontWeight: typography.pesoMedio,
+  },
+  ordenChipTextActivo: {
+    color: colors.blanco,
   },
 
   loader: {
