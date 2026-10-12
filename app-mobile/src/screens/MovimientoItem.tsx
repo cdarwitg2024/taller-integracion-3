@@ -57,8 +57,9 @@ const getTipoLabel = (tipo: string): string => {
 };
 
 const MovimientoItem: React.FC<MovimientoItemProps> = ({ mov, index }) => {
-  const esNuevo = mov.id.startsWith('temp-');
+  const esNuevo = String(mov?.id || '').startsWith('temp-');
   const entradaAnim = useRef(new Animated.Value(esNuevo ? 0 : 1)).current;
+
 
   useEffect(() => {
     if (esNuevo) {

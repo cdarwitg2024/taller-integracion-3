@@ -29,11 +29,15 @@ const ProductCard = ({ product, onAdd, onPress }) => {
   // Si la URL de la imagen existe pero no carga (404, host caído), caemos al
   // emoji en vez de dejar un cuadro gris vacío sin explicación.
   const [imagenCaida, setImagenCaida] = useState(false);
+  // La imagen aparece recién cuando carga (fade), y mientras tanto se ve el
+  // emoji de fondo:
+  const [imagenCargada, setImagenCargada] = useState(false);
 
   // Si cambia de producto (reutilización del componente en la lista), hay que
   // volver a intentar la imagen nueva.
   useEffect(() => {
     setImagenCaida(false);
+    setImagenCargada(false);
   }, [product.imageUrl]);
 
   const handleAdd = () => {
@@ -56,17 +60,33 @@ const ProductCard = ({ product, onAdd, onPress }) => {
       }
     >
       <View style={styles.imagePlaceholder}>
+        {/*
+         * Carga diferida + placeholder que no se vea roto:
+         * - El emoji queda siempre como capa base, así nunca hay un cuadro
+         *   vacío mientras la imagen baja.
+         * - La <Image> se monta con opacidad 0 y aparece (fade) recién al
+         *   terminar de cargar (onLoad). Si falla, queda el emoji.
+         * - Esto + FlatList (que sólo renderiza las filas visibles de la
+         *   ventana) evita cargar imágenes lejanas.
+         */}
+        <Text style={styles.imageEmoji}>{product.emoji}</Text>
+
         {product.imageUrl && !imagenCaida ? (
           <Image
             source={{ uri: product.imageUrl }}
-            style={styles.image}
+            style={[
+              styles.image,
+              { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: imagenCargada ? 1 : 0 },
+            ]}
             resizeMode="cover"
             accessibilityIgnoresInvertColors
-            onError={() => setImagenCaida(true)}
+            onLoad={() => setImagenCargada(true)}
+            onError={() => {
+              setImagenCaida(true);
+              setImagenCargada(false);
+            }}
           />
-        ) : (
-          <Text style={styles.imageEmoji}>{product.emoji}</Text>
-        )}
+        ) : null}
 
         {!available && (
           <View style={styles.soldOutOverlay}>
