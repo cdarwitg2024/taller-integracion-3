@@ -5,7 +5,9 @@ import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
 interface Movimiento {
-  id: string;
+  // BIGINT en la base -> PostgREST lo devuelve como numero. Solo el movimiento
+  // optimista que se inserta en cliente lleva un id string ("temp-<ms>").
+  id: number | string;
   tipo: 'recarga' | 'compra' | 'reembolso';
   monto: number;
   descripcion: string;
@@ -57,7 +59,11 @@ const getTipoLabel = (tipo: string): string => {
 };
 
 const MovimientoItem: React.FC<MovimientoItemProps> = ({ mov, index }) => {
-  const esNuevo = mov.id.startsWith('temp-');
+  // `mov.id` es un numero cuando viene de la base y un string cuando es el
+  // movimiento optimista de una recarga. `String()` cubre los dos: sin esto
+  // revienta con "mov.id.startsWith is not a function" al abrir la wallet,
+  // porque `(7).startsWith` es undefined.
+  const esNuevo = String(mov.id).startsWith('temp-');
   const entradaAnim = useRef(new Animated.Value(esNuevo ? 0 : 1)).current;
 
   useEffect(() => {

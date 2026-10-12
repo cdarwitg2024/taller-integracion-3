@@ -1,0 +1,15 @@
+# Contexto del build en la raiz: solo importa app-desktop/ para la imagen del
+# frontend. Se excluye todo lo demas para reducir el contexto de envio y para
+# que el .env local jamas entre a la imagen.
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+**/*.log
+.git
+docs
+database
+scrips_database
+services
+k8s
+k8s-next

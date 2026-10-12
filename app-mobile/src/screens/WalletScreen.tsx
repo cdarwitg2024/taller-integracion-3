@@ -10,7 +10,6 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   RefreshControl,
   Animated,
   Easing,
@@ -26,8 +25,14 @@ import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
 // ─── Tipos ───────────────────────────────────────────────────────
+// OJO con `id`: en la base es BIGINT, así que PostgREST lo devuelve como
+// número JSON (7), no como string. El único string es el que se genera en
+// cliente al insertar el movimiento optimista de la recarga (`temp-<ms>`).
+// Por eso el tipo es unión y no `string`.
+type MovimientoId = number | string;
+
 interface Movimiento {
-  id: string;
+  id: MovimientoId;
   tipo: 'recarga' | 'compra' | 'reembolso';
   monto: number;
   descripcion: string;
@@ -35,8 +40,8 @@ interface Movimiento {
 }
 
 interface Wallet {
-  id: string;
-  usuario_id: string;
+  id: number;
+  usuario_id: number;
   saldo_actual: number;
   moneda: string;
   actualizado_en: string;
@@ -90,6 +95,20 @@ interface WalletScreenProps {
   userId: string | null;
 }
 
+// Resultado de la recarga. `ok` refleja lo que respondió la RPC
+// `recargar_saldo`, no lo que el formulario de tarjeta dejó pasar: el ✓ o el ✕
+// se muestran después de que la base confirme.
+type ResultadoRecarga =
+  | {
+      ok: true;
+      monto: number;
+      saldoNuevo: number;
+    }
+  | {
+      ok: false;
+      mensaje: string;
+    };
+
 const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
@@ -100,6 +119,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
   const [procesandoRecarga, setProcesandoRecarga] = useState(false);
   const [montoSeleccionado, setMontoSeleccionado] = useState(0);
   const [saldoMostrado, setSaldoMostrado] = useState(0);
+  const [resultado, setResultado] = useState<ResultadoRecarga | null>(null);
   const saldoAnterior = useRef(0);
 
   // ─── Animaciones ─────────────────────────────────────────────────
@@ -109,6 +129,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
   const saldoAnim = useRef(new Animated.Value(0)).current;
   const recargaScale = useRef(new Animated.Value(1)).current;
   const saldoInterpolado = useRef(new Animated.Value(0)).current;
+  const popupAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!loading) {
@@ -297,19 +318,17 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
       // HTTP 204), la app sumaba en pantalla y al refrescar volvia el saldo
       // viejo. La recarga va por la RPC `recargar_saldo`, que suma, deja el
       // movimiento y devuelve el saldo real leido de la base.
-      console.log('=== DEBUG recargar_saldo ===');
-      console.log('Monto:', monto);
-      console.log('Wallet:', wallet);
-
       const { data, error } = await supabase.rpc('recargar_saldo', {
         p_monto: monto,
       });
 
-      console.log('Error en recargar_saldo:', error);
-      console.log('Data:', data);
-      console.log('=== FIN DEBUG ===');
-
-      if (error) throw error;
+      if (error) {
+        setResultado({
+          ok: false,
+          mensaje: 'No se pudo conectar con el servidor. Inténtalo nuevamente.',
+        });
+        return;
+      }
 
       const res = data as {
         ok: boolean;
@@ -318,8 +337,14 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
         saldo_nuevo?: number;
       } | null;
 
+      // `ok: false` con motivo: la RPC lo rechaza por regla de negocio
+      // (monto invalido, tope, saldo negativo). Se muestra el mensaje que
+      // devuelve la base en vez de uno generico.
       if (!res?.ok) {
-        Alert.alert('No se pudo recargar', res?.mensaje || 'Intenta nuevamente.');
+        setResultado({
+          ok: false,
+          mensaje: res?.mensaje || 'No se pudo completar la recarga.',
+        });
         return;
       }
 
@@ -343,6 +368,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
       setWallet((prev) =>
         prev ? { ...prev, saldo_actual: nuevoSaldo } : prev
       );
+
+      // Movimiento optimista con id `temp-*`: la fila real llega por Realtime
+      // (o en el refresco) y la reemplaza.
       setMovimientos((prev) => [
         {
           id: `temp-${Date.now()}`,
@@ -354,16 +382,40 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
         ...prev,
       ]);
 
+      setResultado({ ok: true, monto, saldoNuevo: nuevoSaldo });
+    } catch (err) {
+      console.warn('Error en recarga:', err);
+      setResultado({
+        ok: false,
+        mensaje: 'No se pudo procesar la recarga. Inténtalo nuevamente.',
+      });
+    } finally {
+      setProcesandoRecarga(false);
       setRecargaVisible(false);
       setMontoRecarga('');
       setMontoSeleccionado(0);
-    } catch (err) {
-      Alert.alert('Error', 'No se pudo procesar la recarga. Inténtalo nuevamente.');
-      console.warn('Error en recarga:', err);
-    } finally {
-      setProcesandoRecarga(false);
     }
   };
+
+  // ─── Popup de resultado ─────────────────────────────────────────
+  // El modal se monta con `popupAnim` en 0 y se anima a 1 cuando aparece el
+  // resultado. `useNativeDriver` queda en false porque el mismo valor se usa
+  // para opacity y scale dentro de un Modal.
+  useEffect(() => {
+    if (resultado) {
+      popupAnim.setValue(0);
+      Animated.spring(popupAnim, {
+        toValue: 1,
+        useNativeDriver: false,
+        friction: 7,
+        tension: 60,
+      }).start();
+    }
+  }, [resultado]);
+
+  const cerrarResultado = useCallback(() => {
+    setResultado(null);
+  }, []);
 
   // ─── Pull to refresh ──────────────────────────────────────────
   const onRefresh = () => {
@@ -638,10 +690,12 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
       >
         <PaymentScreen
           monto={montoSeleccionado}
-          onPagoExitoso={(monto) => {
+          procesando={procesandoRecarga}
+          onConfirmar={(monto) => {
+            // El modal se cierra en el `finally` de handleRecarga, junto con
+            // el resultado: cerrarlo antes y sin esperar la RPC dejaba al
+            // usuario sin saber si la recarga se había hecho.
             handleRecarga(monto);
-            setRecargaVisible(false);
-            setMontoSeleccionado(0);
           }}
           onCancelar={() => {
             if (!procesandoRecarga) {
@@ -650,6 +704,79 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
             }
           }}
         />
+      </Modal>
+
+      {/* ─── Popup de resultado de la recarga ────────────────
+          Se muestra DESPUÉS de que la RPC responda. El tick/entrecruz
+          refleja `resultado.ok`, no el hecho de haber llenado el formulario. */}
+      <Modal
+        visible={resultado !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={cerrarResultado}
+      >
+        <View style={styles.popupBackdrop}>
+          <Animated.View
+            style={[
+              styles.popupCard,
+              {
+                opacity: popupAnim,
+                transform: [
+                  {
+                    scale: popupAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.85, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.popupIcono,
+                resultado?.ok ? styles.popupIconoOk : styles.popupIconoError,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.popupIconoTexto,
+                  resultado?.ok
+                    ? styles.popupIconoTextoOk
+                    : styles.popupIconoTextoError,
+                ]}
+              >
+                {resultado?.ok ? '✓' : '✕'}
+              </Text>
+            </View>
+
+            <Text style={styles.popupTitulo}>
+              {resultado?.ok ? '¡Recarga realizada!' : 'No se pudo recargar'}
+            </Text>
+
+            <Text style={styles.popupMensaje}>
+              {resultado?.ok
+                ? `Se agregaron ${formatCLP(resultado.monto)} a tu saldo.`
+                : resultado?.mensaje}
+            </Text>
+
+            {resultado?.ok && (
+              <View style={styles.popupSaldo}>
+                <Text style={styles.popupSaldoLabel}>SALDO ACTUAL</Text>
+                <Text style={styles.popupSaldoValor}>
+                  {formatCLP(resultado.saldoNuevo)}
+                </Text>
+              </View>
+            )}
+
+            <Button
+              title="Listo"
+              onPress={cerrarResultado}
+              size="lg"
+              style={{ marginTop: spacing.lg, alignSelf: 'stretch' }}
+            />
+          </Animated.View>
+        </View>
       </Modal>
     </View>
   );
@@ -948,6 +1075,87 @@ const styles = StyleSheet.create({
     fontSize: typography.etiqueta,
     color: colors.textoDeshabilitado,
     marginTop: spacing.md,
+  },
+
+  // ─── Popup de resultado ─────────────────────────────────────
+  popupBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  popupCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: colors.blanco,
+    borderRadius: 24,
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.xl,
+    alignItems: 'center',
+    shadowColor: colors.sombra,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  popupIcono: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  popupIconoOk: {
+    backgroundColor: colors.verdeBg,
+  },
+  popupIconoError: {
+    backgroundColor: colors.rojoBg,
+  },
+  popupIconoTexto: {
+    fontSize: 40,
+    lineHeight: 48,
+    fontWeight: typography.pesoExtraBold as '800',
+  },
+  popupIconoTextoOk: {
+    color: colors.verde,
+  },
+  popupIconoTextoError: {
+    color: colors.rojo,
+  },
+  popupTitulo: {
+    fontSize: typography.titulo,
+    fontWeight: typography.pesoExtraBold as '800',
+    color: colors.cafeOscuro,
+    textAlign: 'center',
+  },
+  popupMensaje: {
+    fontSize: typography.cuerpo,
+    color: colors.textoSecundario,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    lineHeight: 20,
+  },
+  popupSaldo: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    backgroundColor: colors.fondo,
+    borderRadius: 14,
+    paddingVertical: spacing.md,
+    marginTop: spacing.lg,
+  },
+  popupSaldoLabel: {
+    fontSize: typography.etiqueta,
+    fontWeight: typography.pesoMedio as '600',
+    color: colors.textoSecundario,
+    letterSpacing: 1,
+  },
+  popupSaldoValor: {
+    fontSize: typography.titulo,
+    fontWeight: typography.pesoExtraBold as '800',
+    color: colors.verde,
+    marginTop: spacing.xs,
   },
 
   // ─── Modal ──────────────────────────────────────────────────

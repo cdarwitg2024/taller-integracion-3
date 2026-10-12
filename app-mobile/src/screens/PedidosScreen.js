@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Image,
 } from 'react-native';
 
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase'; import { apiGet } from '../api/backendClient';
 import QrCode from '../lib/QrCode';
 import Button from '../components/Button';
 import Card from '../components/Card';
@@ -91,7 +91,7 @@ const mapPedido = (p) => ({
 
 // URL del backend Node. Viene de EXPO_PUBLIC_API_URL (ver app-mobile/.env).
 // En un teléfono físico debe ser la IP de la PC, no 127.0.0.1.
-const API_URL = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '');
+// Backend URL ahora gestionado por backendClient
 
 // Pide el QR al backend, que es quien lo dibuja y lo registra. Si el backend no
 // responde (teléfono sin red contra la PC, API apagada) se degrada al QR local
@@ -333,7 +333,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
               <Text style={styles.emptyEmoji}>📋</Text>
               <Text style={styles.emptyTitle}>Aún no tienes pedidos</Text>
               <Text style={styles.emptyDescription}>
-                Cuando hagas tu primer pedido aparecerá aquí con su estado y el código de retiro.
+                Cuando hagas tu primer pedido aparecerá aquí­ con su estado y el código de retiro.
               </Text>
               <Button
                 title="Ver cafeterías"
@@ -554,7 +554,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                       </>
                     ) : (
                       <Text style={styles.qrHint}>
-                        El QR de retiro aparecerá aquí una vez confirmado el pago de tu pedido.
+                        El QR de retiro aparecerá aquí­ una vez confirmado el pago de tu pedido.
                       </Text>
                     )}
                   </View>
@@ -736,7 +736,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-  // ─── Confirmación de Pedido (FR-21) ─────────────────────────
+  // --- Confirmación de Pedido (FR-21) ---
   confirmacionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -822,3 +822,6 @@ const styles = StyleSheet.create({
 });
 
 export default PedidosScreen;
+
+
+

@@ -25,6 +25,21 @@ Servicios locales esperados:
 | App escritorio (Vite) | `http://localhost:5173` |
 | App móvil (Expo) | `http://localhost:8081` (emulador) o IP de la PC (físico) |
 
+### Variables de entorno
+
+| Archivo | Para qué | Clave que usa |
+| --- | --- | --- |
+| `.env` (raíz) | `backend-node` | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
+| `app-desktop/.env` | Escritorio | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
+| `app-mobile/.env` | Móvil | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` |
+
+- `backend-node` usa la **service_role**, que se salta RLS. Nunca va en las
+  apps: esas usan la clave publishable y dependen de RLS.
+- Sin `SUPABASE_SERVICE_KEY` el backend igual arranca (cae a las variables
+  `VITE_*`), pero las escrituras fallan por RLS. Si eso pasa, copiar la
+  service_role local desde `services/.env`.
+- La service_role local también sale de `supabase status`.
+
 ---
 
 ## 2. Levantar el entorno
@@ -76,6 +91,7 @@ correcciones.
 | 6 | `database/fixes/crear_logs_validacion_qr.sql` | Tabla de auditoría y sus políticas |
 | 7 | `database/fixes/bloquear_anon_sensibles.sql` | Revoca el acceso anónimo a datos sensibles (deja RLS habilitado) |
 | 8 | `database/fixes/habilitar_realtime.sql` | `pedidos` en la publicación Realtime |
+| 9 | `database/fixes/sincronizar_logs_validacion_qr.sql` | Agrega las columnas que faltaban en `logs_validacion_qr` (`qr_token`, `detalle`, `validado_en`). Sin ellas el backend registra cada validación con `PGRST204` y el panel del Dueño queda vacío |
 
 ### Archivos que NO se aplican
 
@@ -109,20 +125,55 @@ docker restart supabase_rest_db_CoffeeFaster
 
 ## 4. Cuentas de prueba
 
+Hay dos ambientes y **no comparten cuentas**. Cada una se creó en su propia
+base de datos.
+
+### Local (Supabase en Docker) — es el ambiente por defecto
+
+| Rol | Email | Contraseña | Dónde entra |
+| --- | --- | --- | --- |
+| Estudiante | `cliente.prueba@ejemplo.cl` | `123456` | App escritorio |
+| Estudiante | `otro.prueba@ejemplo.cl` | `123456` | App escritorio |
+| Estudiante (móvil) | `camilo.pago@alu.uct.cl` | `123456` | App móvil |
+| Empleado / KDS | `empleado.prueba@ejemplo.cl` | `123456` | App escritorio |
+| Empleado / KDS | `empleado@coffeefaster.cl` | `123456` | App escritorio |
+| Dueño | `dueno@coffeefaster.cl` | `123456` | App escritorio |
+
+- La app móvil **exige dominio institucional** en el registro (`@alu.uct.cl`),
+  ver `RegisterScreen.tsx`. Por eso la cuenta móvil es `camilo.pago@alu.uct.cl`
+  y no un `@ejemplo.cl`.
+- `camilo.pago@alu.uct.cl` tiene saldo (`wallets.saldo_actual = 50000`) para
+  poder probar el pago completo. `cliente.prueba@ejemplo.cl` trae 30000 de
+  salida; los demás en 0.
+- Los empleados necesitan fila en `cafeteria_usuarios` con
+  `gestiona_pedidos_kds = true`, o `cambiar_estado_pedido` los rechaza aunque el
+  login funcione. Los dos empleados locales lo tienen en la cafetería 1.
+- Los `usuarios.id` locales son 1..6 y los roles 1=estudiante, 2=empleado,
+  3=dueño.
+
+### Nube (`yvkpmqcynpygqjvaoiwn`) — para la entrega
+
 | Rol | Email | Contraseña | Dónde entra |
 | --- | --- | --- | --- |
 | Estudiante | `camilo@uct.cl` | `123456` | App móvil |
-| Empleado / KDS | `empleado.prueba@ejemplo.cl` | `123456` | App escritorio |
+| Empleado / KDS | `empleado@coffeefaster.cl` | `123456` | App escritorio |
 | Dueño | `dueno@coffeefaster.cl` | `123456` | App escritorio |
 
+- Ahí los roles son 5=estudiante, 4=empleado, 6=dueño.
+- Para trabajar en la nube hay que cambiar los `.env` a la URL y claves del
+  proyecto remoto. La app móvil queda apuntando a `10.0.2.2` solo en local.
+
+### Reglas que aplican a ambos ambientes
+
 - Los roles se leen de `usuarios.rol_id` → `roles.nombre`.
-- Las cinco cuentas están vinculadas en Supabase Auth **y** en la tabla
-  `usuarios` con el mismo `auth_user_id`. El login es estricto contra Auth
+- Las cuentas están vinculadas en Supabase Auth **y** en la tabla `usuarios`
+  con el mismo `auth_user_id`. El login es estricto contra Auth
   (`signInWithPassword`) y no tiene modo de respaldo: sin `auth_user_id`
   coincidente devuelve "No se encontró el perfil de usuario registrado".
 - Ojo al crear cuentas desde el Dashboard: el trigger que inserta la fila en
-  `usuarios` asigna `rol_id = 5` (estudiante) siempre. Para dueño oempleado hay
-  que corregir `usuarios.rol_id` a mano (`dueño` = 6, `empleado` = 4).
+  `usuarios` asigna siempre el rol de estudiante. Para dueño o empleado hay
+  que corregir `usuarios.rol_id` a mano (local: dueño = 3, empleado = 2; nube:
+  dueño = 6, empleado = 4).
 
 ---
 
@@ -374,6 +425,87 @@ recibía en vivo las actualizaciones de sus pedidos.
 
 ---
 
+### 7.12 La local devolvía HTTP 500 en casi todo (`42P17`)
+
+Las políticas `usuarios_select_dueno`, `usuarios_insert_dueno` y
+`usuarios_delete_dueno` tenían su `EXISTS` escrito a mano, y como leía de
+`usuarios` desde una política sobre `usuarios`, Postgres la abortaba con
+`infinite recursion detected in policy`. Una sola política inválida tiraba
+abajo **todas** las consultas con la clave anon o authenticated: por eso no
+cargaban ni `cafeterias` ni `productos`.
+
+No se resolvió borrando las políticas (con RLS activo y sin política SELECT el
+login deja de poder leer su propio perfil), sino replacing el `EXISTS` por
+`es_dueno()`, que es `SECURITY DEFINER` y por lo tanto no dispara RLS.
+Está en `database/fixes/fix_rls_recursion_usuarios.sql`.
+
+### 7.13 El dueño solo veía su propia fila (`es_dueno()` siempre false)
+
+Al aplicar el script de arriba por PowerShell hacia el contenedor, la `ñ` de
+`IN ('dueño', 'dueno')` se corrompió a `IN ('due??o', 'dueno')`. Como el rol real
+es `dueño`, `es_dueno()` devolvía `false` para todos y las políticas del dueño
+degeneraban en "ve solo su propio usuario".
+
+Dos detalles que hacen fácil que vuelva a pasar:
+
+- El archivo en el repo estaba bien en UTF-8; la corrupción fue en el tránsito.
+  Por eso ahora `es_dueno()` no escribe el literal: usa el regex ASCII
+  `'^due.o$'`, que matchea `dueño` y `dueno` indistinto del encoding con que
+  llegue.
+- `is_dueno()` (sin prefijo `es_`) nunca estuvo rota: comparaba dentro de
+  plpgsql, donde el `dueño` sí llegó bien. Que dos funciones con el mismo nombre
+  y distinto comportamiento den bugs distintos es la trampa.
+
+Para verificar rápido:
+
+```sql
+select proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and pg_get_functiondef(p.oid) like '%??%';
+-- no debe salir nada
+```
+
+---
+
+### 7.14 La wallet del móvil reventaba al abrirla (`mov.id.startsWith is not a function`)
+
+`movimientos_wallet.id` es **BIGINT**, así que PostgREST lo devuelve como número
+JSON (`7`), no como string. La interfaz TypeScript de la app lo declaraba
+`id: string` y `MovimientoItem` hacía:
+
+```ts
+const esNuevo = mov.id.startsWith('temp-');   // (7).startsWith -> undefined
+```
+
+En JSC el error queda como `(it is undefined)`, que no dice "es un número" y
+hace pensar en un campo faltante. El movimiento optimista que se inserta en
+cliente al recargar sí usa un string (`temp-<ms>`), así que conviven los dos
+tipos: por eso el tipo ahora es `number | string` y la comparación va con
+`String(mov.id)`.
+
+El error salía **al entrar** a la wallet, no al recargar: cualquier movimiento
+con `id` numérico ya lo dispara.
+
+### 7.15 El saldo no se actualizaba solo (Realtime)
+
+`movimientos_wallet` no estaba en la publicación `supabase_realtime`. El canal
+de `WalletScreen` se suscribe a `wallets` **y** a `movimientos_wallet`; al
+suscribirse a una tabla que no está publicada, el canal entero queda con error
+y **tampoco** llegan los eventos de `wallets`. Es decir, la falta de una tabla
+rompía el balance en vivo de la otra.
+
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.movimientos_wallet;
+```
+
+Para revisar qué tablas escuchan en vivo:
+
+```sql
+SELECT tablename FROM pg_publication_tables
+WHERE pubname = 'supabase_realtime' ORDER BY tablename;
+```
+
+---
+
 ## 8. Verificación
 
 ### 8.1 Pruebas del backend
@@ -381,6 +513,13 @@ recibía en vivo las actualizaciones de sus pedidos.
 ```bash
 cd backend-node
 npm test
+
+# Ojo: las 4 suites pegan a la MISMA base local y, en paralelo, se pisan entre
+# ellas. Con el timeout por defecto de Jest (5000 ms) aparecen fallos
+# intermitentes del tipo "Exceeded timeout of 5000 ms for a test" y el número
+# de tests que falla cambia en cada corrida (2, luego 1, luego ninguno).
+# No es lógica rota: es contención. En serie pasa todo.
+npm test -- --runInBand
 ```
 
 **51/51 pruebas en 4 suites** (`maquina-estados`, `notificaciones`, `pedidos`,
@@ -391,19 +530,27 @@ UUID sino `CF-` + 20 caracteres, y `codigo_legible` ya no es un `#CF-####`
 decorativo sino el token real de 8 caracteres. Los dos formatos anteriores
 estaban codificados en los tests, no en la base.
 
-### 8.2 Build del escritorio
+### 8.2 Build de las apps
 
 ```bash
 cd app-desktop
 npm run build
+
+cd ../app-mobile
+npx expo export --platform android --output-dir .expo-export-check
 ```
 
-Compila sin errores (el aviso de chunk >500 kB es de Vite, no un fallo).
+Ambos compilan sin errores (el aviso de chunk >500 kB en el escritorio es de
+Vite, no un fallo).
+
+> En `app-desktop`, `npm install` a secas falla con un conflicto de peer
+> dependency de `react-qr-reader@3.0.0-beta-1`. Instalar con
+> `npm install --legacy-peer-deps`.
 
 ### 8.3 Prueba manual del flujo completo
 
-1. Móvil: entrar como `camilo@uct.cl`, elegir cafeteria, productos y
-   **franja de retiro**, pagar con la wallet.
+1. Móvil: entrar como `camilo.pago@alu.uct.cl` (local), elegir cafeteria,
+   productos y **franja de retiro**, pagar con la wallet.
 2. Verificar que el saldo baja y que el detalle del pedido muestra franja, QR y
    código de contingencia.
 3. Escritorio: el KDS muestra la comanda en "Pendiente" sin recargar (Realtime).
@@ -457,14 +604,23 @@ solo sus propios pedidos y su propia wallet.
 | El QR sale en blanco o no carga | El móvil no alcanza al backend | Revisar `EXPO_PUBLIC_API_URL` con la IP de la PC y el firewall |
 | El backend ignera los cambios | Proceso antiguo en memoria | Reiniciar `npm start` |
 | "Código QR o Token no encontrado" | QR con JSON malformado, o QR de otra cafetería | Verificar el contenido del QR y `CAFETERIA_ID` |
+| Todo responde HTTP 500 en local | Política RLS recursiva sobre `usuarios` (42P17) | Aplicar `database/fixes/fix_rls_recursion_usuarios.sql` |
+| El backend arranca pero no escribe | Sin `SUPABASE_SERVICE_KEY`, cae a la clave anon y RLS bloquea | Copiar la service_role local de `services/.env` al `.env` raíz |
+| El dueño solo ve su propia fila | `es_dueno()` con la `ñ` corrompida (`'due??o'`) | Reaplicar `fix_rls_recursion_usuarios.sql`; el regex `'^due.o$'` es a prueba de encoding |
+| `Cannot find module 'dotenv'` al arrancar | `backend-node` sin dependencias instaladas | `cd backend-node && npm install` |
+| La wallet del móvil revienta al abrirla | `movimientos_wallet.id` es BIGINT (número) y la app lo trataba como string | Ya corregido en `MovimientoItem.tsx` con `String(mov.id)` |
+| El saldo no se actualiza solo en el móvil | `movimientos_wallet` fuera de la publicación `supabase_realtime` | `ALTER PUBLICATION supabase_realtime ADD TABLE public.movimientos_wallet` |
 
 ---
 
 ## 10. Pendientes conocidos
 
 - ~~**Dueño sin cuenta en Auth.**~~ Resuelto: `dueno@coffeefaster.cl` ya está
-  creada en Auth y vinculada con `rol_id = 6` (`dueño`). Entra en producción igual
-  que en desarrollo.
+  creada en Auth y vinculada con `rol_id = 6` (`dueño`) en la nube, y con
+  `rol_id = 3` en la local. Entra en producción igual que en desarrollo.
+- ~~**Acentos rotos al aplicar SQL por consola.**~~ Resuelto: `es_dueno()`
+  compara con el regex ASCII `'^due.o$'`, así que ya no depende del encoding con
+  que el archivo llegue a la base.
 - **Recarga sin pasarela.** `recargar_saldo` suma saldo de verdad, pero no hay
   cobro detrás: es una recarga simulada con topes. Integrar la pasarela es el
   paso pendiente antes de producción.

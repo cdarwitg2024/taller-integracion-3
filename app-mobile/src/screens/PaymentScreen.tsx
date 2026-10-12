@@ -84,14 +84,19 @@ const validarPIN = (valor: string): boolean => {
 // ─── Componente Principal ────────────────────────────────────────
 interface PaymentScreenProps {
   monto: number;
-  onPagoExitoso: (monto: number) => void;
+  /** Se dispara al confirmar. NO significa que la recarga haya pasado: el
+   *  resultado real lo devuelve la RPC `recargar_saldo` y lo muestra el padre
+   *  en su popup. Aquí solo se validan los datos de la tarjeta. */
+  onConfirmar: (monto: number) => void;
   onCancelar: () => void;
+  procesando: boolean;
 }
 
 const PaymentScreen: React.FC<PaymentScreenProps> = ({
   monto,
-  onPagoExitoso,
+  onConfirmar,
   onCancelar,
+  procesando,
 }) => {
   const [numeroTarjeta, setNumeroTarjeta] = useState('');
   const [titular, setTitular] = useState('');
@@ -99,16 +104,12 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
   const [cvv, setCvv] = useState('');
   const [pin, setPin] = useState('');
   const [tipoTarjeta, setTipoTarjeta] = useState('Visa');
-  const [procesando, setProcesando] = useState(false);
-  const [estadoPago, setEstadoPago] = useState<'exito' | 'error' | null>(null);
+  const [errorCampo, setErrorCampo] = useState<string | null>(null);
 
   // ─── Animaciones ─────────────────────────────────────────────
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
-  const spinnerAnim = useRef(new Animated.Value(0)).current;
-  const exitoAnim = useRef(new Animated.Value(0)).current;
-  const errorAnim = useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
     Animated.parallel([
@@ -133,103 +134,38 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
     ]).start();
   }, []);
 
-  React.useEffect(() => {
-    if (procesando) {
-      Animated.loop(
-        Animated.timing(spinnerAnim, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        })
-      ).start();
-    } else {
-      spinnerAnim.setValue(0);
-    }
-  }, [procesando]);
-
-  React.useEffect(() => {
-    if (estadoPago === 'exito') {
-      Animated.sequence([
-        Animated.timing(exitoAnim, {
-          toValue: 1,
-          duration: 300,
-          easing: Easing.out(Easing.back(1.5)),
-          useNativeDriver: true,
-        }),
-        Animated.timing(exitoAnim, {
-          toValue: 0,
-          duration: 200,
-          delay: 1500,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        onPagoExitoso(monto);
-      });
-    } else if (estadoPago === 'error') {
-      Animated.sequence([
-        Animated.timing(errorAnim, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(errorAnim, {
-          toValue: 0,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(errorAnim, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(errorAnim, {
-          toValue: 0,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [estadoPago]);
-
-  // ─── Manejo de pago ──────────────────────────────────────────
-  const handlePago = async () => {
+  // ─── Confirmación ────────────────────────────────────────────
+  // Acá solo se valida el formulario de la tarjeta. El "pago" es simulado y
+  // la recarga real la hace la RPC `recargar_saldo` desde el padre, que es
+  // quien decide si se muestra el ✓ o el ✕. Antes esta función se aprobaba a
+  // sí misma con `Math.random()` y pintaba "Pago aprobado" sin haber tocado la
+  // base: el usuario veía un éxito que todavía no había ocurrido.
+  const handleConfirmar = () => {
     if (procesando) return;
 
-    // Validar campos
     if (!validarNumeroTarjeta(numeroTarjeta)) {
-      setEstadoPago('error');
+      setErrorCampo('El número de tarjeta debe tener 16 dígitos.');
+      return;
+    }
+    if (!titular.trim()) {
+      setErrorCampo('Escribe el nombre del titular.');
       return;
     }
     if (!validarVencimiento(vencimiento)) {
-      setEstadoPago('error');
+      setErrorCampo('Vencimiento inválido. Usa el formato MM/AA.');
       return;
     }
     if (!validarCVV(cvv)) {
-      setEstadoPago('error');
+      setErrorCampo('El CVV debe tener 3 dígitos.');
       return;
     }
     if (!validarPIN(pin)) {
-      setEstadoPago('error');
+      setErrorCampo('El PIN debe tener 4 dígitos.');
       return;
     }
 
-    setProcesando(true);
-
-    // Simular latencia de pago (500ms según SRS)
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    // Tarjetas de prueba tienen saldo ilimitado - siempre se aprueba
-    const tarjeta = TARJETAS_PRUEBA.find(t => t.numero === numeroTarjeta);
-    const aprobado = tarjeta ? true : Math.random() > 0.01;
-
-    setProcesando(false);
-
-    if (aprobado) {
-      setEstadoPago('exito');
-    } else {
-      setEstadoPago('error');
-    }
+    setErrorCampo(null);
+    onConfirmar(monto);
   };
 
   const usarTarjetaPrueba = (tarjeta: typeof TARJETAS_PRUEBA[0]) => {
@@ -263,7 +199,14 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
           },
         ]}
       >
-        <ScrollView showsVerticalScrollIndicator={false}>
+        {/* flexShrink: sin esto el ScrollView toma su altura natural completa
+            y empuja el pie (botón) fuera del maxHeight de la tarjeta, que es
+            justo lo que hacía il-localizable al botón: quedaba invisible. */}
+        <ScrollView
+          style={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Pago con tarjeta</Text>
@@ -393,79 +336,36 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
 
           </View>
 
-          {/* Estado del pago */}
+{errorCampo && (
+            <View style={styles.errorCampoBox}>
+              <Text style={styles.errorCampoTexto}>✕ {errorCampo}</Text>
+            </View>
+          )}
+
           {procesando && (
-            <Animated.View
-              style={[
-                styles.estadoBox,
-                {
-                  opacity: fadeAnim,
-                  transform: [
-                    {
-                      rotate: spinnerAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: ['0deg', '360deg'],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
+            <View style={styles.procesandoBox}>
               <ActivityIndicator size="large" color={colors.cafeOscuro} />
-              <Text style={styles.estadoTexto}>Procesando pago...</Text>
-            </Animated.View>
+              <Text style={styles.procesandoTexto}>Recargando saldo...</Text>
+            </View>
           )}
-
-          {estadoPago === 'exito' && (
-            <Animated.View
-              style={[
-                styles.estadoExitoBox,
-                {
-                  opacity: exitoAnim,
-                  transform: [
-                    {
-                      scale: exitoAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.5, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <Text style={styles.estadoExitoTexto}>✓ Pago aprobado</Text>
-            </Animated.View>
-          )}
-
-          {estadoPago === 'error' && (
-            <Animated.View
-              style={[
-                styles.estadoErrorBox,
-                {
-                  opacity: errorAnim,
-                },
-              ]}
-            >
-              <Text style={styles.estadoErrorTexto}>
-                ✕ Pago rechazado. Verifica los datos.
-              </Text>
-            </Animated.View>
-          )}
-
-          {/* Botón de pago */}
-          <Button
-            title={`Pagar ${formatCLP(monto)}`}
-            onPress={handlePago}
-            loading={procesando}
-            disabled={procesando || !numeroTarjeta || !titular || !vencimiento || !cvv || !pin}
-            size="lg"
-            style={{ marginTop: spacing.sm }}
-          />
 
           <Text style={styles.notaSeguridad}>
             🔒 Pago simulado - No se procesará ningún cargo real
           </Text>
         </ScrollView>
+
+        {/* El botón va FUERA del ScrollView: antes quedaba bajo el fold (había
+            que hacer scroll para encontrarlo) y con el formulario lleno se
+            perdía de vista justo cuando el usuario decide confirmar. */}
+        <View style={styles.footer}>
+          <Button
+            title={procesando ? 'Recargando...' : `Confirmar recarga ${formatCLP(monto)}`}
+            onPress={handleConfirmar}
+            loading={procesando}
+            disabled={procesando || !numeroTarjeta || !titular || !vencimiento || !cvv || !pin}
+            size="lg"
+          />
+        </View>
       </Animated.View>
     </KeyboardAvoidingView>
   );
@@ -484,6 +384,9 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: spacing.xxl,
     maxHeight: '90%',
+  },
+  scroll: {
+    flexShrink: 1,
   },
   header: {
     flexDirection: 'row',
@@ -619,44 +522,46 @@ const styles = StyleSheet.create({
     color: colors.blanco,
   },
 
-  estadoBox: {
+  // ─── Estado del formulario de tarjeta ───────────────────────
+  errorCampoBox: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.xl,
-  },
-  estadoTexto: {
-    fontSize: typography.cuerpo,
-    fontWeight: typography.pesoMedio,
-    color: colors.cafeOscuro,
-    marginTop: spacing.md,
-  },
-  estadoExitoBox: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-    backgroundColor: colors.verdeBg,
-    borderRadius: 12,
-  },
-  estadoExitoTexto: {
-    fontSize: typography.subtitulo,
-    fontWeight: typography.pesoExtraBold,
-    color: colors.verde,
-  },
-  estadoErrorBox: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
     backgroundColor: colors.rojoBg,
     borderRadius: 12,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.sm,
   },
-  estadoErrorTexto: {
-    fontSize: typography.cuerpo,
-    fontWeight: typography.pesoBold,
+  errorCampoTexto: {
+    flex: 1,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoMedio as '600',
     color: colors.rojo,
-    textAlign: 'center',
+  },
+  procesandoBox: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+  },
+  procesandoTexto: {
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoMedio as '600',
+    color: colors.cafeOscuro,
+    marginTop: spacing.sm,
   },
   notaSeguridad: {
     fontSize: 11,
     color: colors.textoSecundario,
     textAlign: 'center',
     marginTop: spacing.md,
+  },
+
+  // Pie fijo: mantiene el botón siempre alcanzable, sin depender del scroll.
+  footer: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.borde,
+    backgroundColor: colors.blanco,
   },
 });
 

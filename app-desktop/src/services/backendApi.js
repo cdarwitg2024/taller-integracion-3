@@ -1,13 +1,30 @@
+import { supabase } from './supabaseClient';
+
 export const BASE_BACKEND =
   import.meta.env?.VITE_BACKEND || 'http://localhost:3000';
 
 export const CAFETERIA_ID =
   (import.meta.env?.VITE_CAFETERIA_ID && Number(import.meta.env.VITE_CAFETERIA_ID)) || 1;
 
+async function getAccessToken() {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data?.session?.access_token || null;
+  } catch {
+    return null;
+  }
+}
+
 async function request(url, options = {}) {
+  const token = await getAccessToken();
+  const { headers: extra, ...rest } = options;
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options,
+    ...rest,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(extra || {}),
+    },
   });
   const body = await res.json().catch(() => null);
   if (!res.ok) {

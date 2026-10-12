@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-cdarwitg-ingress
+  namespace: student-cdarwitg
+  annotations:
+    external-dns.alpha.kubernetes.io/target: proxy.inf.uct.cl
+  labels:
+    app: frontend-web
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: coffeefaster-cdarwitg.dev.censei.cl
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-web
+                port:
+                  number: 80

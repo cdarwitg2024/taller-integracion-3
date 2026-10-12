@@ -1,17 +1,17 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+﻿import { supabase, isSupabaseConfigured } from './supabase';
 
 const TABLE = 'usuarios';
 // Campos seguros que nunca exponen password_hash ni tokens sensibles
 const SAFE_USER_FIELDS = 'id, rol_id, nombre, apellido, email, telefono, foto_url, activo, ultima_conexion, creado_en, actualizado_en, auth_user_id';
 
-// Perfil + rol son lo único que el login necesita para validar el acceso. La
-// cafetería asignada es un dato complementario, y por eso va en una consulta
+// Perfil + rol son lo Ãºnico que el login necesita para validar el acceso. La
+// cafeterÃ­a asignada es un dato complementario, y por eso va en una consulta
 // aparte en vez de anidarse en el mismo select: dentro del select principal,
-// que la relación cafeteria_usuarios no exista (todavía no está creada en
+// que la relaciÃ³n cafeteria_usuarios no exista (todavÃ­a no estÃ¡ creada en
 // todas las bases) hace que PostgREST rechace la consulta entera y el login
-// termina diciendo "No se encontró el perfil" aunque el usuario exista y las
-// credenciales sean correctas. Así se degrada a null, que es lo que el propio
-// código ya esperaba con "?.[0]?.cafeteria_id || null".
+// termina diciendo "No se encontrÃ³ el perfil" aunque el usuario exista y las
+// credenciales sean correctas. AsÃ­ se degrada a null, que es lo que el propio
+// cÃ³digo ya esperaba con "?.[0]?.cafeteria_id || null".
 async function fetchPerfilYCafeteria(authUserId) {
   const { data: userProfile, error: profileError } = await supabase
     .from(TABLE)
@@ -35,21 +35,21 @@ async function fetchPerfilYCafeteria(authUserId) {
       cafeteriaAsignada = asignacion[0].cafeteria_id ?? null;
     }
   } catch (err) {
-    // Sin asignación no se corta el acceso: el login sigue siendo válido.
-    console.warn('No se pudo leer la cafetería asignada:', err);
+    // Sin asignaciÃ³n no se corta el acceso: el login sigue siendo vÃ¡lido.
+    console.warn('No se pudo leer la cafeterÃ­a asignada:', err);
   }
 
   return { userProfile, cafeteriaAsignada, profileError: null };
 }
 
-// Función para normalizar errores técnicos y presentar mensajes profesionales al usuario
+// FunciÃ³n para normalizar errores tÃ©cnicos y presentar mensajes profesionales al usuario
 export function normalizeAuthError(authError) {
-  if (!authError) return 'Error de autenticación. Verifique sus credenciales.';
+  if (!authError) return 'Error de autenticaciÃ³n. Verifique sus credenciales.';
 
   const rawMsg = typeof authError === 'string' ? authError : authError?.message || '';
   const rawLower = rawMsg.toLowerCase();
 
-  // Errores de red / conexión / fetch
+  // Errores de red / conexiÃ³n / fetch
   if (
     rawLower.includes('failed to fetch') ||
     rawLower.includes('network') ||
@@ -61,33 +61,33 @@ export function normalizeAuthError(authError) {
     authError?.name === 'AuthRetryableFetchError' ||
     authError?.status === 0
   ) {
-    return 'No se pudo conectar con el servidor. Verifique su conexión a internet o el estado del servicio.';
+    return 'No se pudo conectar con el servidor. Verifique su conexiÃ³n a internet o el estado del servicio.';
   }
 
   if (
     rawLower.includes('invalid login credentials') ||
     rawLower.includes('invalid_grant')
   ) {
-    return 'Credenciales incorrectas. Verifique su correo y contraseña.';
+    return 'Credenciales incorrectas. Verifique su correo y contraseÃ±a.';
   }
 
   if (rawLower.includes('email not confirmed')) {
-    return 'El correo electrónico aún no ha sido verificado.';
+    return 'El correo electrÃ³nico aÃºn no ha sido verificado.';
   }
 
   if (authError?.status === 429 || rawLower.includes('too many') || rawLower.includes('rate limit')) {
-    return 'Demasiados intentos fallidos. Intente más tarde por motivos de seguridad.';
+    return 'Demasiados intentos fallidos. Intente mÃ¡s tarde por motivos de seguridad.';
   }
 
   if (rawLower.includes('user not found')) {
-    return 'No existe una cuenta registrada con este correo electrónico.';
+    return 'No existe una cuenta registrada con este correo electrÃ³nico.';
   }
 
   if (rawMsg && !rawLower.includes('error:') && !rawLower.includes('typeerror') && !rawLower.includes('fetch')) {
     return rawMsg;
   }
 
-  return 'Ocurrió un error inesperado al validar sus credenciales. Intente nuevamente.';
+  return 'OcurriÃ³ un error inesperado al validar sus credenciales. Intente nuevamente.';
 }
 
 export const usuarios = {
@@ -158,7 +158,7 @@ export const usuarios = {
     if (!isSupabaseConfigured) {
       return {
         success: false,
-        error: 'El servicio de autenticación Supabase no está configurado o no está disponible.',
+        error: 'El servicio de autenticaciÃ³n Supabase no estÃ¡ configurado o no estÃ¡ disponible.',
       };
     }
 
@@ -168,12 +168,12 @@ export const usuarios = {
     if (!cleanEmail || !cleanPassword) {
       return {
         success: false,
-        error: 'Por favor ingresa tanto el correo como la contraseña.',
+        error: 'Por favor ingresa tanto el correo como la contraseÃ±a.',
       };
     }
 
     try {
-      // 1. Autenticación estricta con Supabase Auth (GoTrue)
+      // 1. AutenticaciÃ³n estricta con Supabase Auth (GoTrue)
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: cleanPassword,
@@ -191,11 +191,11 @@ export const usuarios = {
         await supabase.auth.signOut();
         return {
           success: false,
-          error: 'No se encontró el perfil de usuario registrado en la base de datos de Supabase.',
+          error: 'No se encontrÃ³ el perfil de usuario registrado en la base de datos de Supabase.',
         };
       }
 
-      // 3. Verificación de estado de cuenta activa
+      // 3. VerificaciÃ³n de estado de cuenta activa
       if (userProfile.activo === false || userProfile.activo === 'false') {
         await supabase.auth.signOut();
         return {
@@ -204,17 +204,26 @@ export const usuarios = {
         };
       }
 
-      // 4. Verificación estricta de Rol: Debe ser Dueño
+      // 4. VerificaciÃ³n estricta de Rol: Debe ser DueÃ±o
+      console.log('[DEBUG LOGIN EMPLEADO]', {
+        perfilId: userProfile?.id,
+        email: userProfile?.email,
+        rolId: userProfile?.rol_id,
+        rolRelacion: userProfile?.roles?.nombre,
+        rolMetadata: authData.user?.user_metadata?.rol,
+        activo: userProfile?.activo,
+        cafeteriaAsignada
+      });
       const rolNombre = userProfile?.roles?.nombre || authData.user?.user_metadata?.rol;
       if (!rolNombre || rolNombre.toLowerCase() !== 'dueño') {
         await supabase.auth.signOut();
         return {
           success: false,
-          error: 'Acceso denegado. Esta cuenta no cuenta con permisos de Dueño.',
+          error: 'Acceso denegado. Esta cuenta no cuenta con permisos de DueÃ±o.',
         };
       }
 
-      // 5. Registrar última conexión
+      // 5. Registrar Ãºltima conexiÃ³n
       try {
         await supabase
           .from(TABLE)
@@ -243,7 +252,7 @@ export const usuarios = {
     if (!isSupabaseConfigured) {
       return {
         success: false,
-        error: 'El servicio de autenticación Supabase no está configurado o no está disponible.',
+        error: 'El servicio de autenticaciÃ³n Supabase no estÃ¡ configurado o no estÃ¡ disponible.',
       };
     }
 
@@ -253,12 +262,12 @@ export const usuarios = {
     if (!cleanEmail || !cleanPassword) {
       return {
         success: false,
-        error: 'Por favor ingresa tanto el correo como la contraseña.',
+        error: 'Por favor ingresa tanto el correo como la contraseÃ±a.',
       };
     }
 
     try {
-      // 1. Autenticación estricta con Supabase Auth (GoTrue)
+      // 1. AutenticaciÃ³n estricta con Supabase Auth (GoTrue)
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: cleanPassword,
@@ -276,11 +285,11 @@ export const usuarios = {
         await supabase.auth.signOut();
         return {
           success: false,
-          error: 'No se encontró el perfil de usuario registrado en la base de datos de Supabase.',
+          error: 'No se encontrÃ³ el perfil de usuario registrado en la base de datos de Supabase.',
         };
       }
 
-      // 3. Verificación de estado de cuenta activa
+      // 3. VerificaciÃ³n de estado de cuenta activa
       if (userProfile.activo === false || userProfile.activo === 'false') {
         await supabase.auth.signOut();
         return {
@@ -289,7 +298,16 @@ export const usuarios = {
         };
       }
 
-      // 4. Verificación estricta de Rol: Debe ser Empleado
+      // 4. VerificaciÃ³n estricta de Rol: Debe ser Empleado
+      console.log('[DEBUG LOGIN EMPLEADO]', {
+        perfilId: userProfile?.id,
+        email: userProfile?.email,
+        rolId: userProfile?.rol_id,
+        rolRelacion: userProfile?.roles?.nombre,
+        rolMetadata: authData.user?.user_metadata?.rol,
+        activo: userProfile?.activo,
+        cafeteriaAsignada
+      });
       const rolNombre = userProfile?.roles?.nombre || authData.user?.user_metadata?.rol;
       if (!rolNombre || rolNombre.toLowerCase() !== 'empleado') {
         await supabase.auth.signOut();
@@ -299,7 +317,7 @@ export const usuarios = {
         };
       }
 
-      // 5. Registrar última conexión
+      // 5. Registrar Ãºltima conexiÃ³n
       try {
         await supabase
           .from(TABLE)
@@ -356,3 +374,4 @@ export const usuarios = {
 };
 
 export default usuarios;
+

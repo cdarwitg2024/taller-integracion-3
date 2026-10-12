@@ -79,7 +79,7 @@ mismas que inyectan los Deployments por `envFrom.secretRef`.
 | Rol | URL de acceso | Email | Contraseña |
 | --- | --- | --- | --- |
 | **Dueño** | `http://localhost:5173/login/dueno` | `dueno@coffeefaster.cl` | `123456` |
-| **Empleado** | `http://localhost:5173/login/empleado` | `empleado.prueba@ejemplo.cl` | `123456` |
+| **Empleado** | `http://localhost:5173/login/empleado` | `empleado@coffeefaster.cl` | `123456` |
 
 > **Nota**: el login valida **estrictamente contra Supabase Auth** (`signInWithPassword`) y después busca el perfil en la tabla `usuarios` por `auth_user_id`. No hay modo de respaldo: si la red falla o las credenciales son incorrectas, el acceso se rechaza.
 >
@@ -89,30 +89,56 @@ mismas que inyectan los Deployments por `envFrom.secretRef`.
 
 ## 🔐 Credenciales de la App Móvil
 
-| Rol | Email | Contraseña |
-| --- | --- | --- |
-| **Estudiante** | `camilo@uct.cl` | `123456` |
+| Ambiente | Rol | Email | Contraseña |
+| --- | --- | --- | --- |
+| Local | **Estudiante** | `camilo.pago@alu.uct.cl` | `123456` |
+| Nube | **Estudiante** | `camilo@uct.cl` | `123456` |
 
 ## 🧪 Cuentas de prueba (Supabase Auth)
 
-Todas usan contraseña `123456`. Los dominios `@ejemplo.cl` son de prueba y sirven
-como cualquier otro usuario para el flujo de pedidos.
+Todas usan contraseña `123456`. **Local y nube no comparten cuentas**: cada
+ambiente tiene las suyas, porque el trigger de alta es el mismo pero los roles
+tienen ids distintos.
+
+### Local (Supabase en Docker) — ambiente por defecto
 
 | Rol | Email | Contraseña |
 | --- | --- | --- |
 | **Dueño** | `dueno@coffeefaster.cl` | `123456` |
+| **Empleado / KDS** | `empleado@coffeefaster.cl` | `123456` |
 | **Empleado / KDS** | `empleado.prueba@ejemplo.cl` | `123456` |
-| **Estudiante** | `camilo@uct.cl` | `123456` |
 | **Estudiante** | `cliente.prueba@ejemplo.cl` | `123456` |
 | **Estudiante** | `otro.prueba@ejemplo.cl` | `123456` |
+| **Estudiante (móvil)** | `camilo.pago@alu.uct.cl` | `123456` |
+
+- Roles locales: **1** = estudiante, **2** = empleado, **3** = dueño.
+- La app móvil exige dominio institucional (`@alu.uct.cl`) en el registro, por
+  eso la cuenta móvil no es un `@ejemplo.cl`.
+- `camilo.pago@alu.uct.cl` tiene saldo (50000) para probar el pago completo;
+  `cliente.prueba@ejemplo.cl` tiene 30000; los demás, 0.
+- Para que un empleado pueda mover comandas en el KDS necesita su fila en
+  `cafeteria_usuarios` con `gestiona_pedidos_kds = true`; con el login solo no
+  basta.
+
+### Nube (`yvkpmqcynpygqjvaoiwn`)
+
+| Rol | Email | Contraseña |
+| --- | --- | --- |
+| **Dueño** | `dueno@coffeefaster.cl` | `123456` |
+| **Empleado / KDS** | `empleado@coffeefaster.cl` | `123456` |
+| **Estudiante** | `camilo@uct.cl` | `123456` |
+
+- Roles en nube: **5** = estudiante, **4** = empleado, **6** = dueño.
+
+### Notas
 
 - **Dueño**: panel de administración (productos, stock, personal, métricas y alertas).
 - **Empleado**: KDS de cocina (comandas en tiempo real, preparación y validación de retiros por QR).
 
 > Todas están vinculadas en Supabase Auth **y** en la tabla `usuarios` con el mismo
 > `auth_user_id`, que es lo que exige el login. La fila de `usuarios` la crea un
-> trigger al insertar en Auth, pero asigna `rol_id = 5` (estudiante) por defecto:
-> si creas un dueño o un empleado desde el Dashboard, corrige el rol a mano en
-> `usuarios.rol_id` (`dueño` = 6, `empleado` = 4), o el login rechazará el acceso
-> por rol.
+> trigger al insertar en Auth, pero asigna siempre el rol de estudiante por
+> defecto: si creas un dueño o un empleado desde el Dashboard, corrige el rol a
+> mano en `usuarios.rol_id` (local: `dueño` = 3, `empleado` = 2; nube: `dueño` = 6,
+> `empleado` = 4), o el login rechazará el acceso por rol.
 
