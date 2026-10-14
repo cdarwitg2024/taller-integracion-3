@@ -234,3 +234,169 @@ describe('ms-pedidos', () => {
     expect(resP).toHaveProperty('token');
   });
 });
+
+describe('pedidos.maquina-estados', () => {
+  const maquina = require('../src/modules/pedidos/pedidos.maquina-estados');
+
+  test('estados canonicos definitivos', () => {
+    expect(maquina.ESTADOS_CANONICOS).toEqual([
+      'pendiente',
+      'en_preparacion',
+      'listo',
+      'entregado',
+      'cancelado'
+    ]);
+  });
+
+  test('el estado inicial es pendiente (pedido ya pagado)', () => {
+    expect(maquina.ESTADO_INICIAL).toBe('pendiente');
+  });
+
+  test('matriz de transiciones', () => {
+    expect(maquina.MATRIZ_TRANSICIONES).toEqual({
+      pendiente: ['en_preparacion', 'cancelado'],
+      en_preparacion: ['listo'],
+      listo: ['entregado'],
+      entregado: [],
+      cancelado: []
+    });
+  });
+
+  test('transiciones validas', () => {
+    expect(maquina.puedeTransicionar('pendiente', 'en_preparacion')).toBe(true);
+    expect(maquina.puedeTransicionar('en_preparacion', 'listo')).toBe(true);
+    expect(maquina.puedeTransicionar('listo', 'entregado')).toBe(true);
+    expect(maquina.puedeTransicionar('pendiente', 'cancelado')).toBe(true);
+  });
+
+  test('transiciones invalidas', () => {
+    expect(maquina.puedeTransicionar('pendiente', 'listo')).toBe(false);
+    expect(maquina.puedeTransicionar('pendiente', 'entregado')).toBe(false);
+    expect(maquina.puedeTransicionar('en_preparacion', 'cancelado')).toBe(false);
+    expect(maquina.puedeTransicionar('listo', 'cancelado')).toBe(false);
+    expect(maquina.puedeTransicionar('entregado', 'pendiente')).toBe(false);
+    expect(maquina.puedeTransicionar('cancelado', 'en_preparacion')).toBe(false);
+  });
+
+  test('entregado y cancelado son terminales', () => {
+    expect(maquina.esEstadoTerminal('entregado')).toBe(true);
+    expect(maquina.esEstadoTerminal('cancelado')).toBe(true);
+    expect(maquina.esEstadoTerminal('pendiente')).toBe(false);
+    expect(maquina.esEstadoTerminal('listo')).toBe(false);
+  });
+
+  test('normalizacion de aliases historicos', () => {
+    expect(maquina.normalizarEstado('Pagado')).toBe('pendiente');
+    expect(maquina.normalizarEstado('pagado')).toBe('pendiente');
+    expect(maquina.normalizarEstado('preparando')).toBe('en_preparacion');
+    expect(maquina.normalizarEstado('En preparación')).toBe('en_preparacion');
+    expect(maquina.normalizarEstado('en-preparacion')).toBe('en_preparacion');
+    expect(maquina.normalizarEstado('Listo')).toBe('listo');
+    expect(maquina.normalizarEstado('Retirado')).toBe('entregado');
+    expect(maquina.normalizarEstado('retirado')).toBe('entregado');
+    expect(maquina.normalizarEstado('Cancelado')).toBe('cancelado');
+    expect(maquina.normalizarEstado('inventado')).toBeNull();
+  });
+});
+
+describe('PATCH /api/pedidos/:id/estado', () => {
+  // Mock stateful del cliente Supabase: expone un pedido y permite inspeccionar
+  // si hubo UPDATE. `updateMock` recibe el objeto de cambios.
+  function configurarPedido(pedidoInicial) {
+    const supa = supabaseMock.obtenerCliente();
+    const updateMock = jest.fn();
+    let actual = pedidoInicial;
+    supa.from.mockImplementation(() => ({
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: actual, error: null }) }) }),
+      update: (cambios) => {
+        updateMock(cambios);
+        actual = { ...actual, ...cambios };
+        return { eq: () => ({ select: () => ({ maybeSingle: () => Promise.resolve({ data: actual, error: null }) }) }) };
+      }
+    }));
+    return updateMock;
+  }
+
+  test.each([
+    ['pendiente', 'en_preparacion'],
+    ['en_preparacion', 'listo'],
+    ['listo', 'entregado'],
+    ['pendiente', 'cancelado']
+  ])('permite %s -> %s y guarda el slug canonico', async (desde, hacia) => {
+    const updateMock = configurarPedido({ id: 5, estado: desde });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: hacia });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe(hacia);
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).toHaveBeenCalledWith({ estado: hacia });
+  });
+
+  test.each([
+    ['pendiente', 'listo'],
+    ['pendiente', 'entregado'],
+    ['en_preparacion', 'cancelado'],
+    ['listo', 'cancelado'],
+    ['entregado', 'pendiente'],
+    ['cancelado', 'en_preparacion']
+  ])('rechaza %s -> %s con 409 y no actualiza', async (desde, hacia) => {
+    const updateMock = configurarPedido({ id: 5, estado: desde });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: hacia });
+    expect(res.status).toBe(409);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('estado desconocido -> 400 y no actualiza', async () => {
+    const updateMock = configurarPedido({ id: 5, estado: 'pendiente' });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'cualquier_estado_inventado' });
+    expect(res.status).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['pendiente', 'pendiente'],
+    ['listo', 'listo']
+  ])('idempotente %s -> %s responde 200 SIN update', async (estado, solicitado) => {
+    const updateMock = configurarPedido({ id: 5, estado });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: solicitado });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe(estado);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('pedido inexistente -> 404', async () => {
+    const supa = supabaseMock.obtenerCliente();
+    supa.from.mockImplementation(() => ({
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) })
+    }));
+    const res = await request(app).patch('/api/pedidos/999/estado').send({ estado: 'en_preparacion' });
+    expect(res.status).toBe(404);
+  });
+
+  test('legacy: Pagado -> en_preparacion permitido y guarda en_preparacion', async () => {
+    const updateMock = configurarPedido({ id: 5, estado: 'Pagado' });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'en_preparacion' });
+    expect(res.status).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith({ estado: 'en_preparacion' });
+  });
+
+  test('legacy: preparando -> listo permitido y guarda listo', async () => {
+    const updateMock = configurarPedido({ id: 5, estado: 'preparando' });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'listo' });
+    expect(res.status).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith({ estado: 'listo' });
+  });
+
+  test('legacy: Retirado -> pendiente rechazado 409 (terminal)', async () => {
+    const updateMock = configurarPedido({ id: 5, estado: 'Retirado' });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'pendiente' });
+    expect(res.status).toBe(409);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('alias historico en la ENTRADA se normaliza y persiste canonico', async () => {
+    const updateMock = configurarPedido({ id: 5, estado: 'pendiente' });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'Preparando' });
+    expect(res.status).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith({ estado: 'en_preparacion' });
+  });
+});

@@ -124,7 +124,7 @@ BEGIN
     usuario_id, cafeteria_id, total, estado, pago_estado, metodo_pago, franja_retiro
   )
   VALUES (
-    v_usuario_id, p_cafeteria_id, v_total, 'Pagado', 'aprobado', 'wallet', p_franja_retiro
+    v_usuario_id, p_cafeteria_id, v_total, 'pendiente', 'aprobado', 'wallet', p_franja_retiro
   )
   RETURNING id INTO v_pedido_id;
 
@@ -174,7 +174,7 @@ BEGIN
     'pedido_id', v_pedido_id,
     'total', v_total,
     'saldo_restante', v_saldo,
-    'estado', 'Pagado',
+    'estado', 'pendiente',
     'pago_estado', 'aprobado',
     'franja_retiro', p_franja_retiro,
     'qr_token', v_qr_token,

@@ -4,6 +4,11 @@
 // historico a la interfaz plana: `shared` exporta `supabase`, `httpClient` y
 // `HttpError` de forma estable (ver shared/src/index.js).
 const { supabase, httpClient, HttpError } = require('@coffeefaster/shared');
+const {
+  normalizarEstado,
+  puedeTransicionar,
+  transicionesDe
+} = require('./pedidos.maquina-estados');
 
 /**
  * Valida el `cafeteria_id` recibido en el body. Mismo criterio que ms-cafeterias
@@ -158,10 +163,61 @@ async function obtenerPedidosPorUsuario({ user, usuarioId }) {
 
 async function actualizarEstado({ user, id, body }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
+
+  // 1. El estado solicitado debe poder normalizarse a un slug canonico. Tambien
+  //    se aceptan aliases historicos en la ENTRADA, pero nunca se persisten.
+  const solicitado = normalizarEstado(body?.estado);
+  if (!solicitado) {
+    throw new HttpError(400, 'estado invalido', {
+      detalle: `Recibido: ${body?.estado}`
+    });
+  }
+
   const cliente = supabase.obtenerCliente();
-  const { data, error } = await cliente.from('pedidos').update({ estado: body?.estado }).eq('id', id).select().maybeSingle();
+
+  // 2. Leer el pedido actual (fuente de verdad del estado).
+  const { data: pedido, error } = await cliente
+    .from('pedidos')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
   if (error) throw new HttpError(503, error.message);
-  return data;
+  if (!pedido) throw new HttpError(404, 'Pedido no encontrado');
+
+  // 3. Normalizar el estado actual para comparar (tolera datos historicos).
+  const actual = normalizarEstado(pedido.estado);
+  if (!actual) {
+    throw new HttpError(409, `El pedido tiene un estado desconocido ('${pedido.estado}'); no se puede validar la transicion.`);
+  }
+
+  // 4. Idempotencia: si ya esta en el estado solicitado, se responde el pedido
+  //    actual SIN ejecutar UPDATE (tolera doble clic, reintentos, duplicados).
+  if (actual === solicitado) {
+    return pedido;
+  }
+
+  // 5. Validar la transicion contra la matriz. Cubre tambien los estados
+  //    terminales (sin destinos) -> 409.
+  if (!puedeTransicionar(actual, solicitado)) {
+    const permitidas = transicionesDe(actual);
+    const mensaje = permitidas.length === 0
+      ? `El pedido ya esta en un estado terminal ('${actual}'); no admite transiciones.`
+      : `Transicion no permitida: '${actual}' -> '${solicitado}'. Transiciones validas: ${permitidas.join(', ')}.`;
+    throw new HttpError(409, mensaje);
+  }
+
+  // 6. Guardar UNICAMENTE el slug canonico. Sin timestamps en esta etapa.
+  const { data: actualizado, error: errUpdate } = await cliente
+    .from('pedidos')
+    .update({ estado: solicitado })
+    .eq('id', id)
+    .select()
+    .maybeSingle();
+
+  if (errUpdate) throw new HttpError(503, errUpdate.message);
+  if (!actualizado) throw new HttpError(404, 'Pedido no encontrado');
+  return actualizado;
 }
 
 async function obtenerQr({ user, id }) {
