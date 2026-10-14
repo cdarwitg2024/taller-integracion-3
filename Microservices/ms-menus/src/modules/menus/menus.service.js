@@ -26,6 +26,8 @@ const COLUMNAS = 'id, cafeteria_id, nombre, precio, activo';
 // Techo de items por llamada a /precios. Sin limite, un cliente podria pedir
 // 1e6 de ids y agotar la memoria del Pod.
 const MAX_ITEMS_PRECIO = 100;
+
+// Techo de unidades por item. Una cantidad mayor se rechaza con 400.
 const CANTIDAD_MAXIMA = 999;
 
 const CAMPOS_ENTEROS = ['producto_id', 'cantidad'];
@@ -77,6 +79,13 @@ function validarItems(cuerpo) {
           detalle: `${campo} debe ser un entero positivo. Recibido: ${JSON.stringify(item[campo])}`
         });
       }
+    }
+
+    // CANTIDAD_MAXIMA acota las unidades por item (producto_id no tiene tope).
+    if (item.cantidad > CANTIDAD_MAXIMA) {
+      throw new HttpError(400, `La cantidad no puede superar ${CANTIDAD_MAXIMA}`, {
+        detalle: `El item ${i} tiene cantidad ${item.cantidad}`
+      });
     }
 
     // Duplicados se agregan en vez de rechazarse: un carrito puede enviar el

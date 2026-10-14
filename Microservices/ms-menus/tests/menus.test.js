@@ -137,6 +137,40 @@ describe('GET /api/menus', () => {
   });
 });
 
+describe('Validacion de cafeteria_id', () => {
+  const invalidos = [
+    ['0', 'cero'],
+    ['-1', 'negativo'],
+    ['1.5', 'decimal'],
+    ['9007199254740992', 'mayor que Number.MAX_SAFE_INTEGER'],
+    ['abc', 'no numerico']
+  ];
+
+  it.each(invalidos)(
+    'rechaza cafeteria_id %s (%s) con 400 sin consultar Supabase',
+    async (valor) => {
+      const res = await request(app).get(`/api/menus?cafeteria_id=${valor}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/cafeteria_id/);
+      // Un cafeteria_id invalido no debe llegar a Supabase.
+      expect(obtenerCliente).not.toHaveBeenCalled();
+    }
+  );
+
+  it('acepta cafeteria_id valido y filtra por el', async () => {
+    const falso = clienteFalso({ filas: [] });
+    usarCliente(falso);
+
+    const res = await request(app).get('/api/menus?cafeteria_id=25');
+
+    expect(res.status).toBe(200);
+    expect(falso.log.eq).toEqual(
+      expect.arrayContaining([['cafeteria_id', 25]])
+    );
+  });
+});
+
 describe('GET /api/menus/:id', () => {
   it('devuelve el producto si existe', async () => {
     usarCliente(
@@ -308,6 +342,112 @@ describe('POST /api/menus/precios', () => {
 
     expect(res.status).toBe(503);
     expect(res.body.data).toBeUndefined();
+  });
+
+  it('acepta cantidad = CANTIDAD_MAXIMA (999)', async () => {
+    usarCliente(
+      clienteFalso({
+        filas: [
+          { id: 7, cafeteria_id: 1, nombre: 'Capuchino', precio: 3300, activo: true }
+        ]
+      })
+    );
+
+    const res = await request(app)
+      .post('/api/menus/precios')
+      .send({ items: [{ producto_id: 7, cantidad: 999 }] });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('devuelve 400 si cantidad supera CANTIDAD_MAXIMA (1000)', async () => {
+    const res = await request(app)
+      .post('/api/menus/precios')
+      .send({ items: [{ producto_id: 7, cantidad: 1000 }] });
+
+    expect(res.status).toBe(400);
+    // La validacion corta antes de consultar: no debe tocar Supabase.
+    expect(obtenerCliente).not.toHaveBeenCalled();
+  });
+
+  it('un producto inactivo no entra al precio: 404', async () => {
+    // La consulta filtra activo=true, asi que un producto inactivo no lo
+    // devuelve la base y el service lo trata como no disponible.
+    const falso = clienteFalso({ filas: [] });
+    usarCliente(falso);
+
+    const res = await request(app)
+      .post('/api/menus/precios')
+      .send({ items: [{ producto_id: 7, cantidad: 1 }] });
+
+    expect(res.status).toBe(404);
+    expect(falso.log.eq).toEqual(expect.arrayContaining([['activo', true]]));
+  });
+
+  it('un producto con eliminado_en no nulo no entra al precio: 404', async () => {
+    const falso = clienteFalso({ filas: [] });
+    usarCliente(falso);
+
+    const res = await request(app)
+      .post('/api/menus/precios')
+      .send({ items: [{ producto_id: 7, cantidad: 1 }] });
+
+    expect(res.status).toBe(404);
+    expect(falso.log.is).toEqual(
+      expect.arrayContaining([['eliminado_en', null]])
+    );
+  });
+
+  it('fija el contrato actual: {data:[...], total:N} (total = cantidad, NO monto)', async () => {
+    usarCliente(
+      clienteFalso({
+        filas: [
+          { id: 7, cafeteria_id: 1, nombre: 'Capuchino', precio: 3300, activo: true },
+          { id: 9, cafeteria_id: 1, nombre: 'Limonada', precio: 3800, activo: true }
+        ]
+      })
+    );
+
+    const res = await request(app)
+      .post('/api/menus/precios')
+      .send({
+        items: [
+          { producto_id: 7, cantidad: 1 },
+          { producto_id: 9, cantidad: 1 }
+        ]
+      });
+
+    expect(res.status).toBe(200);
+    // Envoltura exacta del endpoint: { data, total }.
+    expect(Object.keys(res.body).sort()).toEqual(['data', 'total']);
+    // `total` es el NUMERO DE PRODUCTOS devueltos, no un monto: el monto de
+    // 3300 + 3800 seria 7100.
+    expect(res.body.total).toBe(2);
+    expect(res.body.total).not.toBe(7100);
+    // Una fila por producto, con exactamente los campos del contrato.
+    expect(res.body.data).toHaveLength(2);
+    expect(Object.keys(res.body.data[0]).sort()).toEqual(
+      ['activo', 'cafeteria_id', 'id', 'nombre', 'precio'].sort()
+    );
+  });
+});
+
+describe('Errores 5xx sin filtrar informacion interna', () => {
+  it('no expone causa ni el mensaje interno de Supabase', async () => {
+    const secreto = 'columna_interna_secreta';
+    usarCliente(
+      clienteFalso({ filas: [], error: { message: secreto, details: 'pista' } })
+    );
+
+    const res = await request(app)
+      .post('/api/menus/precios')
+      .send({ items: [{ producto_id: 7, cantidad: 1 }] });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('Servicio no disponible');
+    expect(res.body.causa).toBeUndefined();
+    expect(res.body.detalle).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain(secreto);
   });
 });
 

@@ -15,12 +15,20 @@ async function listar(req, res, next) {
 
     let cafeteriaId;
     if (cafeteria_id !== undefined) {
-      if (!/^\d+$/.test(String(cafeteria_id))) {
+      // Mismo criterio que ms-cafeterias: entero positivo representable de forma
+      // segura en JS. Un valor mayor que Number.MAX_SAFE_INTEGER perderia
+      // precision al convertirlo y la consulta podria filtrar OTRO id; se
+      // rechaza (400) sin llegar a Supabase.
+      const valor = String(cafeteria_id);
+      const numero = /^\d+$/.test(valor) ? Number(valor) : NaN;
+
+      if (!Number.isSafeInteger(numero) || numero <= 0) {
         throw new HttpError(400, 'cafeteria_id debe ser un entero positivo', {
           detalle: `Recibido: ${cafeteria_id}`
         });
       }
-      cafeteriaId = Number(cafeteria_id);
+
+      cafeteriaId = numero;
     }
 
     const productos = await MenusService.listar({ cafeteria_id: cafeteriaId });
