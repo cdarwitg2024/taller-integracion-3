@@ -76,6 +76,60 @@ beforeEach(() => {
   delete process.env.SUPABASE_SERVICE_KEY;
 });
 
+/**
+ * Mock stateful del cliente Supabase para las transiciones de estado (D.3).
+ * Es "consciente de tabla" porque `actualizarEstado` ahora consulta `pedidos`
+ * (lectura + update), `usuarios` (resolucion del usuario interno) y
+ * `cafeteria_usuarios` (pertenencia a la cafeteria del pedido).
+ *
+ * Devuelve el `updateMock`, que permite comprobar si hubo UPDATE y con que
+ * cambios. Por defecto simula un EMPLEADO (rol_id=2) que SI pertenece a la
+ * cafeteria del pedido.
+ */
+function configurarPedido(pedidoInicial, opciones = {}) {
+  const supa = supabaseMock.obtenerCliente();
+  const updateMock = jest.fn();
+  let actual = pedidoInicial;
+
+  const usuarioInterno = opciones.usuarioInterno === undefined
+    ? { id: 10, rol_id: 2 }
+    : opciones.usuarioInterno;
+  const pertenece = opciones.pertenece === undefined ? true : opciones.pertenece;
+
+  supa.from.mockImplementation((tabla) => {
+    if (tabla === 'usuarios') {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: () => Promise.resolve({ data: usuarioInterno, error: null })
+          })
+        })
+      };
+    }
+    if (tabla === 'cafeteria_usuarios') {
+      return {
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: pertenece ? { id: 77 } : null, error: null })
+            })
+          })
+        })
+      };
+    }
+    // pedidos
+    return {
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: actual, error: null }) }) }),
+      update: (cambios) => {
+        updateMock(cambios);
+        actual = { ...actual, ...cambios };
+        return { eq: () => ({ select: () => ({ maybeSingle: () => Promise.resolve({ data: actual, error: null }) }) }) };
+      }
+    };
+  });
+  return updateMock;
+}
+
 describe('ms-pedidos', () => {
   test('GET /health sin auth', async () => {
     const res = await request(app).get('/health');
@@ -304,29 +358,11 @@ describe('pedidos.maquina-estados', () => {
 });
 
 describe('PATCH /api/pedidos/:id/estado', () => {
-  // Mock stateful del cliente Supabase: expone un pedido y permite inspeccionar
-  // si hubo UPDATE. `updateMock` recibe el objeto de cambios.
-  function configurarPedido(pedidoInicial) {
-    const supa = supabaseMock.obtenerCliente();
-    const updateMock = jest.fn();
-    let actual = pedidoInicial;
-    supa.from.mockImplementation(() => ({
-      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: actual, error: null }) }) }),
-      update: (cambios) => {
-        updateMock(cambios);
-        actual = { ...actual, ...cambios };
-        return { eq: () => ({ select: () => ({ maybeSingle: () => Promise.resolve({ data: actual, error: null }) }) }) };
-      }
-    }));
-    return updateMock;
-  }
-
   test.each([
     ['pendiente', 'en_preparacion'],
-    ['en_preparacion', 'listo'],
-    ['listo', 'entregado']
+    ['en_preparacion', 'listo']
   ])('permite %s -> %s y guarda el slug canonico (sin RPC de cancelacion)', async (desde, hacia) => {
-    const updateMock = configurarPedido({ id: 5, estado: desde });
+    const updateMock = configurarPedido({ id: 5, estado: desde, cafeteria_id: 1 });
     const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: hacia });
     expect(res.status).toBe(200);
     expect(res.body.estado).toBe(hacia);
@@ -403,6 +439,110 @@ describe('PATCH /api/pedidos/:id/estado', () => {
     const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'Preparando' });
     expect(res.status).toBe(200);
     expect(updateMock).toHaveBeenCalledWith({ estado: 'en_preparacion' });
+  });
+});
+
+describe('PATCH /api/pedidos/:id/estado — autorizacion KDS (D.3)', () => {
+  test('empleado autorizado: pendiente -> en_preparacion = 200', async () => {
+    const updateMock = configurarPedido({ id: 5, estado: 'pendiente', cafeteria_id: 1 });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'en_preparacion' });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('en_preparacion');
+    expect(updateMock).toHaveBeenCalledWith({ estado: 'en_preparacion' });
+  });
+
+  test('empleado autorizado: en_preparacion -> listo = 200', async () => {
+    const updateMock = configurarPedido({ id: 5, estado: 'en_preparacion', cafeteria_id: 1 });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'listo' });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('listo');
+    expect(updateMock).toHaveBeenCalledWith({ estado: 'listo' });
+  });
+
+  test('estudiante intenta pendiente -> en_preparacion = 403 y NO actualiza', async () => {
+    const updateMock = configurarPedido(
+      { id: 5, estado: 'pendiente', cafeteria_id: 1 },
+      { usuarioInterno: { id: 10, rol_id: 1 } }
+    );
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'en_preparacion' });
+    expect(res.status).toBe(403);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('dueño intenta pendiente -> en_preparacion = 403 y NO actualiza', async () => {
+    const updateMock = configurarPedido(
+      { id: 5, estado: 'pendiente', cafeteria_id: 1 },
+      { usuarioInterno: { id: 10, rol_id: 3 } }
+    );
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'en_preparacion' });
+    expect(res.status).toBe(403);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('empleado de otra cafeteria: pendiente -> en_preparacion = 403 y NO actualiza', async () => {
+    const updateMock = configurarPedido(
+      { id: 5, estado: 'pendiente', cafeteria_id: 1 },
+      { pertenece: false }
+    );
+    // Aunque el body envie una cafeteria_id "autorizada", la autorizacion usa
+    // el cafeteria_id DEL PEDIDO.
+    const res = await request(app)
+      .patch('/api/pedidos/5/estado')
+      .send({ estado: 'en_preparacion', cafeteria_id: 1 });
+    expect(res.status).toBe(403);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('empleado autorizado: listo -> entregado = 409 (requiere QR) y NO actualiza', async () => {
+    const updateMock = configurarPedido({ id: 5, estado: 'listo', cafeteria_id: 1 });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'entregado' });
+    expect(res.status).toBe(409);
+    expect(res.body.detalle || res.body.error || '').toMatch(/QR/i);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('estudiante: listo -> entregado = 409 (requiere QR) y NO actualiza', async () => {
+    const updateMock = configurarPedido(
+      { id: 5, estado: 'listo', cafeteria_id: 1 },
+      { usuarioInterno: { id: 10, rol_id: 1 } }
+    );
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'entregado' });
+    expect(res.status).toBe(409);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('pedido inexistente -> 404 (no hay UPDATE)', async () => {
+    const supa = supabaseMock.obtenerCliente();
+    const updateMock = jest.fn();
+    supa.from.mockImplementation(() => ({
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }),
+      update: updateMock
+    }));
+    const res = await request(app).patch('/api/pedidos/999/estado').send({ estado: 'en_preparacion' });
+    expect(res.status).toBe(404);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('usuario autenticado sin fila interna -> error coherente y NO actualiza', async () => {
+    const updateMock = configurarPedido(
+      { id: 5, estado: 'pendiente', cafeteria_id: 1 },
+      { usuarioInterno: null }
+    );
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'en_preparacion' });
+    expect(res.status).toBe(404);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('no confia en el rol enviado por el body (estudiante que se declara empleado = 403)', async () => {
+    const updateMock = configurarPedido(
+      { id: 5, estado: 'pendiente', cafeteria_id: 1 },
+      { usuarioInterno: { id: 10, rol_id: 1 } }
+    );
+    const res = await request(app)
+      .patch('/api/pedidos/5/estado')
+      .send({ estado: 'en_preparacion', rol_id: 2, rol: 'empleado', usuario_id: 10 });
+    expect(res.status).toBe(403);
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });
 

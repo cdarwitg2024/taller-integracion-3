@@ -268,10 +268,84 @@ async function obtenerPedidosPorUsuario({ user, usuarioId }) {
   return data || [];
 }
 
+// Rol interno (public.usuarios.rol_id) que puede ejecutar las transiciones de
+// cocina. Confirmado contra la BD real: 1=estudiante, 2=empleado, 3=dueño.
+// En D.3 SOLO el empleado opera comandas: el dueño NO recibe permisos nuevos.
+const ROL_EMPLEADO = 2;
+
+/**
+ * Resuelve la fila interna de `public.usuarios` a partir del UUID de auth
+ * (`req.user.authUserId`). Devuelve `null` si el usuario autenticado no tiene
+ * una cuenta interna asociada.
+ *
+ * NUNCA se confia en un rol/usuario_id/cafeteria_id enviado por el cliente: la
+ * identidad y el rol salen de la base de datos.
+ */
+async function resolverUsuarioInterno(cliente, authUserId) {
+  const { data, error } = await cliente
+    .from('usuarios')
+    .select('id, rol_id')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle();
+
+  if (error) {
+    throw new HttpError(503, 'No se pudo resolver el usuario interno', {
+      causa: error.message
+    });
+  }
+  return data || null;
+}
+
+/**
+ * Autoriza una transicion KDS (no-cancelacion) ANTES de tocar la base.
+ *
+ * Esta validacion vive en Node porque ms-pedidos escribe con el cliente
+ * server-side (`service_role`), que SALTA RLS: la unica barrera posible es esta.
+ *
+ * Reglas:
+ *  - El usuario autenticado debe tener cuenta interna (`usuarios`).
+ *  - Debe ser EMPLEADO (rol_id = 2).
+ *  - Debe pertenecer a la cafeteria DEL PEDIDO (`cafeteria_usuarios`); el
+ *    `cafeteria_id` autoritativo es `pedido.cafeteria_id`, nunca el del body.
+ */
+async function autorizarTransicionKds(cliente, authUserId, pedido) {
+  const usuarioInterno = await resolverUsuarioInterno(cliente, authUserId);
+  if (!usuarioInterno) {
+    // Coherente con `crearPedido`, que tambien responde 404 cuando el usuario
+    // autenticado no tiene fila interna.
+    throw new HttpError(404, 'Usuario no encontrado');
+  }
+
+  if (Number(usuarioInterno.rol_id) !== ROL_EMPLEADO) {
+    throw new HttpError(403, 'Solo un empleado puede cambiar el estado del pedido');
+  }
+
+  const { data: pertenece, error } = await cliente
+    .from('cafeteria_usuarios')
+    .select('id')
+    .eq('usuario_id', usuarioInterno.id)
+    .eq('cafeteria_id', pedido.cafeteria_id)
+    .maybeSingle();
+
+  if (error) {
+    throw new HttpError(503, 'No se pudo verificar la cafeteria del empleado', {
+      causa: error.message
+    });
+  }
+  if (!pertenece) {
+    throw new HttpError(403, 'El empleado no pertenece a la cafeteria del pedido');
+  }
+
+  return usuarioInterno;
+}
+
 async function actualizarEstado({ user, accessToken, id, body }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
 
-  // 1. El estado solicitado debe poder normalizarse a un slug canonico. Tambien
+  // 1. El `:id` debe ser un entero positivo antes de tocar la base.
+  const pedidoId = validarPedidoId(id);
+
+  // 2. El estado solicitado debe poder normalizarse a un slug canonico. Tambien
   //    se aceptan aliases historicos en la ENTRADA, pero nunca se persisten.
   const solicitado = normalizarEstado(body?.estado);
   if (!solicitado) {
@@ -280,39 +354,43 @@ async function actualizarEstado({ user, accessToken, id, body }) {
     });
   }
 
-  // 1.b La CANCELACION no se hace con UPDATE directo: es una operacion
-  //     transaccional (reembolso a Wallet) que vive en la RPC `cancelar_pedido`.
-  //     La RPC valida propiedad y estado con el JWT real del estudiante.
+  // 3. La CANCELACION no se hace con UPDATE directo: es una operacion
+  //    transaccional (reembolso a Wallet) que vive en la RPC `cancelar_pedido`.
+  //    La RPC valida propiedad y estado con el JWT real del estudiante.
+  //    (Flujo D.2.1: sin cambios.)
   if (solicitado === 'cancelado') {
     return cancelarPedido({ accessToken, id });
   }
 
   const cliente = supabase.obtenerCliente();
 
-  // 2. Leer el pedido actual (fuente de verdad del estado).
+  // 4. Leer el pedido actual (fuente de verdad del estado y de la cafeteria).
   const { data: pedido, error } = await cliente
     .from('pedidos')
     .select('*')
-    .eq('id', id)
+    .eq('id', pedidoId)
     .maybeSingle();
 
   if (error) throw new HttpError(503, error.message);
   if (!pedido) throw new HttpError(404, 'Pedido no encontrado');
 
-  // 3. Normalizar el estado actual para comparar (tolera datos historicos).
+  // 5. Normalizar el estado actual para comparar (tolera datos historicos).
   const actual = normalizarEstado(pedido.estado);
   if (!actual) {
     throw new HttpError(409, `El pedido tiene un estado desconocido ('${pedido.estado}'); no se puede validar la transicion.`);
   }
 
-  // 4. Idempotencia: si ya esta en el estado solicitado, se responde el pedido
+  // 6. Idempotencia: si ya esta en el estado solicitado, se responde el pedido
   //    actual SIN ejecutar UPDATE (tolera doble clic, reintentos, duplicados).
+  //    No hay cambio de estado, por lo que no se requiere autorizacion KDS.
   if (actual === solicitado) {
     return pedido;
   }
 
-  // 5. Validar la transicion contra la matriz. Cubre tambien los estados
-  //    terminales (sin destinos) -> 409.
+  // 7. Validar la transicion contra la matriz. Cubre tambien los estados
+  //    terminales (sin destinos) -> 409. Se ejecuta ANTES de autorizar para que
+  //    una transicion imposible devuelva 409 sin filtrar el resultado de la
+  //    autorizacion.
   if (!puedeTransicionar(actual, solicitado)) {
     const permitidas = transicionesDe(actual);
     const mensaje = permitidas.length === 0
@@ -321,11 +399,27 @@ async function actualizarEstado({ user, accessToken, id, body }) {
     throw new HttpError(409, mensaje);
   }
 
-  // 6. Guardar UNICAMENTE el slug canonico. Sin timestamps en esta etapa.
+  // 8. La ENTREGA (`listo -> entregado`) queda reservada para la validacion QR
+  //    (D.4). El PATCH generico NO puede ejecutarla, ni siquiera para un
+  //    empleado. Se rechaza ANTES de autorizar para que cualquier actor reciba
+  //    un 409 coherente.
+  if (solicitado === 'entregado') {
+    throw new HttpError(409, 'La entrega del pedido requiere validacion QR', {
+      detalle: "El estado 'entregado' solo se produce al validar el QR o token de retiro."
+    });
+  }
+
+  // 9. Autorizacion de negocio ANTES de cualquier UPDATE: empleado de la
+  //    cafeteria del pedido. (service_role saltaria RLS: la unica barrera es
+  //    esta validacion en Node.)
+  await autorizarTransicionKds(cliente, user.authUserId || user.id, pedido);
+
+  // 10. Guardar UNICAMENTE el slug canonico, ya autorizado. Sin timestamps en
+  //     esta etapa.
   const { data: actualizado, error: errUpdate } = await cliente
     .from('pedidos')
     .update({ estado: solicitado })
-    .eq('id', id)
+    .eq('id', pedidoId)
     .select()
     .maybeSingle();
 
