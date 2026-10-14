@@ -9,11 +9,13 @@
  * DECISION DE NEGOCIO: agregar productos al carrito NO crea un pedido. El
  * pedido nace cuando `procesar_pago` aprueba el pago de Wallet, con
  *
- *   pago_estado = 'aprobado'
- *   estado      = 'pendiente'
+ *   pedidos.pago_estado = 'pagado'    (estado del PAGO del pedido)
+ *   pedidos.estado      = 'pendiente' (estado OPERATIVO del pedido)
+ *   pagos.estado        = 'aprobado'  (registro del cobro en `pagos`)
  *
- * donde 'pendiente' significa "ya pagado, pendiente de preparacion" (NO
- * pendiente de pago).
+ * No confundir ambos conceptos: 'pagado' es el estado del pago del pedido y
+ * 'aprobado' es el estado del registro en la tabla `pagos`. Ademas, 'pendiente'
+ * significa "ya pagado, pendiente de preparacion" (NO pendiente de pago).
  */
 
 // Estados operativos canonicos (son los slugs que se guardan en la columna

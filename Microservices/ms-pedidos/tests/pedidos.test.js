@@ -24,11 +24,14 @@ jest.mock('@coffeefaster/shared', () => {
   };
 });
 
+// `createClient` se expone como jest.fn para poder inspeccionar con que
+// argumentos (incluido el JWT del estudiante) se construye el cliente de RPC.
 jest.mock('@supabase/supabase-js', () => ({
-  createClient: () => ({ rpc: mockRpc })
+  createClient: jest.fn(() => ({ rpc: mockRpc }))
 }));
 
 const app = require('../src/app');
+const { createClient: createClientMock } = require('@supabase/supabase-js');
 
 // Respuesta REAL de ms-menus: httpClient.post -> { status, data: CUERPO_HTTP },
 // y el CUERPO_HTTP es { data: [{ id, nombre, precio, activo, cafeteria_id }], total }.
@@ -58,6 +61,7 @@ beforeEach(() => {
   httpMock.post.mockReset();
   mockRpc.mockReset();
   mockRpc.mockResolvedValue({ data: { pedido_id: 99 }, error: null });
+  createClientMock.mockClear();
 
   // Lookup de `usuarios` en crearPedido. Los tests de token-contingencia
   // reemplazan esta cadena por su propio mock.
@@ -320,22 +324,21 @@ describe('PATCH /api/pedidos/:id/estado', () => {
   test.each([
     ['pendiente', 'en_preparacion'],
     ['en_preparacion', 'listo'],
-    ['listo', 'entregado'],
-    ['pendiente', 'cancelado']
-  ])('permite %s -> %s y guarda el slug canonico', async (desde, hacia) => {
+    ['listo', 'entregado']
+  ])('permite %s -> %s y guarda el slug canonico (sin RPC de cancelacion)', async (desde, hacia) => {
     const updateMock = configurarPedido({ id: 5, estado: desde });
     const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: hacia });
     expect(res.status).toBe(200);
     expect(res.body.estado).toBe(hacia);
     expect(updateMock).toHaveBeenCalledTimes(1);
     expect(updateMock).toHaveBeenCalledWith({ estado: hacia });
+    // Las transiciones normales NO pasan por la RPC de cancelacion.
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 
   test.each([
     ['pendiente', 'listo'],
     ['pendiente', 'entregado'],
-    ['en_preparacion', 'cancelado'],
-    ['listo', 'cancelado'],
     ['entregado', 'pendiente'],
     ['cancelado', 'en_preparacion']
   ])('rechaza %s -> %s con 409 y no actualiza', async (desde, hacia) => {
@@ -343,6 +346,8 @@ describe('PATCH /api/pedidos/:id/estado', () => {
     const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: hacia });
     expect(res.status).toBe(409);
     expect(updateMock).not.toHaveBeenCalled();
+    // Tampoco se delega a la RPC de cancelacion: el destino no es 'cancelado'.
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 
   test('estado desconocido -> 400 y no actualiza', async () => {
@@ -398,5 +403,105 @@ describe('PATCH /api/pedidos/:id/estado', () => {
     const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'Preparando' });
     expect(res.status).toBe(200);
     expect(updateMock).toHaveBeenCalledWith({ estado: 'en_preparacion' });
+  });
+});
+
+describe('PATCH /api/pedidos/:id/estado -> cancelado (RPC cancelar_pedido)', () => {
+  test('pendiente -> cancelado invoca cancelar_pedido y devuelve monto_reembolsado/saldo_nuevo', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: { ok: true, pedido_id: 5, estado: 'cancelado', monto_reembolsado: 5000, saldo_nuevo: 9000 },
+      error: null
+    });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'cancelado' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      pedido_id: 5,
+      estado: 'cancelado',
+      monto_reembolsado: 5000,
+      saldo_nuevo: 9000
+    });
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockRpc).toHaveBeenCalledWith('cancelar_pedido', { p_pedido_id: 5 });
+  });
+
+  test('pasa el p_pedido_id correcto y NO hace UPDATE directo', async () => {
+    const supa = supabaseMock.obtenerCliente();
+    mockRpc.mockResolvedValueOnce({
+      data: { ok: true, pedido_id: 42, estado: 'cancelado', monto_reembolsado: 1000, saldo_nuevo: 1000 },
+      error: null
+    });
+    const res = await request(app).patch('/api/pedidos/42/estado').send({ estado: 'cancelado' });
+    expect(res.status).toBe(200);
+    expect(mockRpc).toHaveBeenCalledWith('cancelar_pedido', { p_pedido_id: 42 });
+    // La cancelacion va por RPC: NO se toca el cliente con service role.
+    expect(supa.from).not.toHaveBeenCalled();
+  });
+
+  test('usa el JWT del estudiante (Bearer) para construir el cliente de RPC', async () => {
+    mockRpc.mockResolvedValueOnce({ data: { ok: true, pedido_id: 5, estado: 'cancelado' }, error: null });
+    await request(app).patch('/api/pedidos/5/estado').send({ estado: 'cancelado' });
+    expect(createClientMock).toHaveBeenCalledTimes(1);
+    const opciones = createClientMock.mock.calls[0][2];
+    expect(opciones.global.headers.Authorization).toBe('Bearer token123');
+  });
+
+  test('normaliza el alias de ENTRADA Cancelado y delega a la RPC', async () => {
+    mockRpc.mockResolvedValueOnce({ data: { ok: true, pedido_id: 7, estado: 'cancelado' }, error: null });
+    const res = await request(app).patch('/api/pedidos/7/estado').send({ estado: 'Cancelado' });
+    expect(res.status).toBe(200);
+    expect(mockRpc).toHaveBeenCalledWith('cancelar_pedido', { p_pedido_id: 7 });
+  });
+
+  test.each([
+    ['no_cancelable', 409],
+    ['ya_cancelado', 409],
+    ['no_autorizado', 403],
+    ['pedido_no_encontrado', 404],
+    ['monto_invalido', 422],
+    ['monto_no_entero', 422],
+    ['saldo_invalido', 422],
+    ['sin_wallet', 503]
+  ])('motivo %s -> HTTP %i', async (motivo, esperado) => {
+    mockRpc.mockResolvedValueOnce({ data: { ok: false, motivo }, error: null });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'cancelado' });
+    expect(res.status).toBe(esperado);
+  });
+
+  test('en_preparacion -> cancelado: delega a la RPC (no UPDATE directo) y responde 409 no_cancelable', async () => {
+    const supa = supabaseMock.obtenerCliente();
+    mockRpc.mockResolvedValueOnce({
+      data: { ok: false, motivo: 'no_cancelable', estado_actual: 'en_preparacion' },
+      error: null
+    });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'cancelado' });
+    expect(res.status).toBe(409);
+    expect(res.body.detalle).toContain('no_cancelable');
+    expect(mockRpc).toHaveBeenCalledWith('cancelar_pedido', { p_pedido_id: 5 });
+    expect(supa.from).not.toHaveBeenCalled();
+  });
+
+  test('sin_sesion (SQLSTATE 42501) -> 403', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'sin_sesion' } });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'cancelado' });
+    expect(res.status).toBe(403);
+  });
+
+  test('error de transporte de la RPC -> 503', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: { code: 'XX000', message: 'boom' } });
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'cancelado' });
+    expect(res.status).toBe(503);
+  });
+
+  test('estado desconocido no llega a la RPC (400)', async () => {
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'inventado' });
+    expect(res.status).toBe(400);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  test('id de pedido no numerico -> 400 sin llamar a la RPC', async () => {
+    const res = await request(app).patch('/api/pedidos/abc/estado').send({ estado: 'cancelado' });
+    expect(res.status).toBe(400);
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 });

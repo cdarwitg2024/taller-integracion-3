@@ -1,3 +1,23 @@
+-- =============================================================================
+-- RPC procesar_pago (Wallet) — definicion VERSIONADA reconciliada con la
+-- funcion REALMENTE desplegada en Supabase (Etapa D.2.1-D).
+-- =============================================================================
+-- SINCRONIZACION (respeta lo que existe en la BD real):
+--   * v_wallet_id es BIGINT (antes decia UUID, que NO coincide con wallets.id).
+--   * El usuario se resuelve con public.get_current_user_id().
+--   * El pedido se crea con estado='pendiente' y pago_estado='pagado'.
+--   * pagos.estado se sigue insertando como 'aprobado'.
+--
+-- DEPENDENCIA NO VERSIONADA:
+--   public.get_current_user_id() existe en la BD real pero NO en el
+--   repositorio. NO se inventa su SQL: se referencia tal cual lo hace la
+--   funcion desplegada. Si se recrea procesar_pago desde cero, esa funcion
+--   debe existir antes.
+--
+-- IMPORTANTE: este archivo NO se ejecuta automaticamente. Aplicar en Supabase
+-- es manual.
+-- =============================================================================
+
 CREATE OR REPLACE FUNCTION public.procesar_pago(
   p_cafeteria_id  BIGINT,
   p_items         JSONB,
@@ -10,7 +30,7 @@ SET search_path = public
 AS $$
 DECLARE
   v_usuario_id   BIGINT;
-  v_wallet_id    UUID;
+  v_wallet_id    BIGINT;
   v_saldo        INTEGER;
   v_total        INTEGER  := 0;
   v_item         JSONB;
@@ -25,7 +45,8 @@ DECLARE
   v_qr_token     UUID;
   v_codigo_retiro TEXT;
 BEGIN
-  v_usuario_id := public.mi_usuario_id();
+  -- Resolver de usuario de la funcion desplegada. NO versionado en el repo.
+  v_usuario_id := public.get_current_user_id();
 
   IF v_usuario_id IS NULL THEN
     RAISE EXCEPTION 'sin_sesion'
@@ -124,7 +145,7 @@ BEGIN
     usuario_id, cafeteria_id, total, estado, pago_estado, metodo_pago, franja_retiro
   )
   VALUES (
-    v_usuario_id, p_cafeteria_id, v_total, 'pendiente', 'aprobado', 'wallet', p_franja_retiro
+    v_usuario_id, p_cafeteria_id, v_total, 'pendiente', 'pagado', 'wallet', p_franja_retiro
   )
   RETURNING id INTO v_pedido_id;
 
@@ -175,7 +196,7 @@ BEGIN
     'total', v_total,
     'saldo_restante', v_saldo,
     'estado', 'pendiente',
-    'pago_estado', 'aprobado',
+    'pago_estado', 'pagado',
     'franja_retiro', p_franja_retiro,
     'qr_token', v_qr_token,
     'codigo_retiro', v_codigo_retiro

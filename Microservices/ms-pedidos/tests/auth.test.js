@@ -21,4 +21,9 @@ describe('ms-pedidos auth', () => {
     const res = await request(app).post('/api/pedidos').send({ items: [{ producto_id: 1, cantidad: 1 }] });
     expect(res.status).toBe(401);
   });
+
+  test('PATCH estado (incluida cancelacion) sin token → 401', async () => {
+    const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'cancelado' });
+    expect(res.status).toBe(401);
+  });
 });

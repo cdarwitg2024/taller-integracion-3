@@ -54,7 +54,7 @@ async function obtenerPedidosPorUsuario(req, res, next) {
 
 async function actualizarEstado(req, res, next) {
   try {
-    const resultado = await PedidosService.actualizarEstado({ user: req.user, id: req.params.id, body: req.body });
+    const resultado = await PedidosService.actualizarEstado({ user: req.user, accessToken: req.accessToken, id: req.params.id, body: req.body });
     res.json(resultado);
   } catch (e) {
     next(e);

@@ -29,6 +29,113 @@ function validarCafeteriaId(valor) {
   return numero;
 }
 
+/**
+ * Valida el `:id` de pedido recibido por la ruta. Mismo criterio que
+ * `validarCafeteriaId`: entero positivo representable de forma segura en JS.
+ * Se valida ANTES de invocar la RPC `cancelar_pedido(BIGINT)` para no enviar
+ * a Postgres un valor que no puede castearse a BIGINT.
+ */
+function validarPedidoId(valor) {
+  const numero = /^\d+$/.test(String(valor)) ? Number(valor) : NaN;
+  if (!Number.isSafeInteger(numero) || numero <= 0) {
+    throw new HttpError(400, 'id de pedido debe ser un entero positivo', {
+      detalle: `Recibido: ${valor}`
+    });
+  }
+  return numero;
+}
+
+/**
+ * Mapeo de los motivos que devuelve la RPC `cancelar_pedido` (JSONB con
+ * `ok:false`) a codigos HTTP. `sin_sesion` NO aparece aca: la RPC lo lanza como
+ * EXCEPCION (SQLSTATE 42501), no como respuesta `ok:false`.
+ */
+const MAPA_ERRORES_CANCELACION = {
+  pedido_no_encontrado: 404,
+  no_autorizado: 403,
+  ya_cancelado: 409,
+  no_cancelable: 409,
+  monto_invalido: 422,
+  monto_no_entero: 422,
+  saldo_invalido: 422,
+  sin_wallet: 503
+};
+
+/**
+ * Cancela un pedido del estudiante invocando la RPC transaccional
+ * `public.cancelar_pedido(p_pedido_id)`, que reembolsa el monto a su Wallet.
+ *
+ * Puntos clave:
+ *  - Se usa un cliente Supabase AUTENTICADO con el JWT real del estudiante
+ *    (NUNCA `service_role`, que simularia la identidad y saltaria RLS).
+ *  - La RPC resuelve al usuario con `auth.uid()` y valida propiedad + estado,
+ *    por lo que NO se confia en ningun `usuario_id` recibido del cliente.
+ *  - NUNCA se hace UPDATE directo de `estado` a 'cancelado'.
+ */
+async function cancelarPedido({ accessToken, id }) {
+  const pedidoId = validarPedidoId(id);
+
+  if (!accessToken) {
+    throw new HttpError(401, 'Usuario no autenticado');
+  }
+
+  const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!publishableKey) {
+    throw new HttpError(503, 'No se pudo cancelar el pedido', {
+      causa: 'SUPABASE_PUBLISHABLE_KEY/ANON_KEY no configuradas'
+    });
+  }
+
+  let rpcData;
+  try {
+    const clienteConToken = require('@supabase/supabase-js').createClient(
+      process.env.SUPABASE_URL,
+      publishableKey,
+      {
+        global: { headers: { Authorization: 'Bearer ' + accessToken } },
+        auth: { autoRefreshToken: false, persistSession: false }
+      }
+    );
+    const { data, error } = await clienteConToken.rpc('cancelar_pedido', {
+      p_pedido_id: pedidoId
+    });
+
+    if (error) {
+      // `sin_sesion` se lanza con ERRCODE 42501 (insufficient_privilege).
+      const esSinSesion = error.code === '42501' || /sin_sesion/i.test(error.message || '');
+      if (esSinSesion) {
+        throw new HttpError(403, 'La sesion no tiene usuario interno asociado', {
+          causa: error.message
+        });
+      }
+      throw new HttpError(503, 'No se pudo cancelar el pedido', { causa: error.message });
+    }
+    rpcData = data;
+  } catch (e) {
+    if (e instanceof HttpError) throw e;
+    throw new HttpError(503, 'No se pudo cancelar el pedido', { causa: e.message });
+  }
+
+  if (!rpcData || typeof rpcData !== 'object') {
+    throw new HttpError(503, 'Respuesta invalida de cancelar_pedido');
+  }
+
+  if (rpcData.ok === true) {
+    // { ok:true, pedido_id, estado:'cancelado', monto_reembolsado, saldo_nuevo }
+    return rpcData;
+  }
+
+  const status = MAPA_ERRORES_CANCELACION[rpcData.motivo] || 503;
+  const detalle = rpcData.estado_actual
+    ? `motivo: ${rpcData.motivo}; estado_actual: ${rpcData.estado_actual}`
+    : `motivo: ${rpcData.motivo}`;
+  throw new HttpError(status, 'No se pudo cancelar el pedido', {
+    motivo: rpcData.motivo,
+    estado_actual: rpcData.estado_actual,
+    detalle
+  });
+}
+
 async function crearPedido({ user, accessToken, body }) {
   if (!user || !user.authUserId) {
     throw new HttpError(401, 'Usuario no autenticado');
@@ -161,7 +268,7 @@ async function obtenerPedidosPorUsuario({ user, usuarioId }) {
   return data || [];
 }
 
-async function actualizarEstado({ user, id, body }) {
+async function actualizarEstado({ user, accessToken, id, body }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
 
   // 1. El estado solicitado debe poder normalizarse a un slug canonico. Tambien
@@ -171,6 +278,13 @@ async function actualizarEstado({ user, id, body }) {
     throw new HttpError(400, 'estado invalido', {
       detalle: `Recibido: ${body?.estado}`
     });
+  }
+
+  // 1.b La CANCELACION no se hace con UPDATE directo: es una operacion
+  //     transaccional (reembolso a Wallet) que vive en la RPC `cancelar_pedido`.
+  //     La RPC valida propiedad y estado con el JWT real del estudiante.
+  if (solicitado === 'cancelado') {
+    return cancelarPedido({ accessToken, id });
   }
 
   const cliente = supabase.obtenerCliente();
