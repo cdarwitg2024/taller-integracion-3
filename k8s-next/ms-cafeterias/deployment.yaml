@@ -1,4 +1,4 @@
-﻿# ms-cafeterias â€” Microservicio de Cafeterias.
+# ms-cafeterias — Microservicio de Cafeterias.
 #
 # NO forma parte de k8s/ (esa arboleria es la vieja, con backend-node).
 # Este manifiesto vive en k8s-next/ a proposito.

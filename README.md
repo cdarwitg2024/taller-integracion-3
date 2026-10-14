@@ -1,4 +1,4 @@
-﻿# ☕ App de Pedidos para Cafeterías Universitarias
+# ☕ App de Pedidos para Cafeterías Universitarias
 
 ## 📋 Descripción
 Aplicación full stack para pedidos por adelantado en cafeterías universitarias.
@@ -12,28 +12,41 @@ Aplicación full stack para pedidos por adelantado en cafeterías universitarias
 ## 📁 Estructura del Proyecto
 - /app-mobile - App Android (React Native + Expo)
 - /app-desktop - App Escritorio (React + Electron)
-- /backend-node - Servidor Node.js
-- /database - Migraciones y seeds de Supabase
-- /docs - Documentación del proyecto
+- /BotTelegramCoffeFaster - Bot de alertas de stock (Python + FastAPI + Telegram)
+- /Microservices - Stack de microservicios vigente (gateway nginx, ms-cafeterias, ms-menus, ms-pedidos, shared)
+- /k8s-next - Manifiestos Kubernetes del stack vigente (gateway + 3 microservicios)
+- /backend-node - Backend LEGACY (en retiro; ver `docs/README.md`)
+- /supabase - Config y Edge Functions de Supabase
+- /database - Fixes SQL de Supabase (migraciones y seeds)
+- /docs - Documentación del proyecto (con clasificación en `docs/README.md`)
 
 ## 📖 Documentación
+- **[Índice y clasificación de la documentación](docs/README.md)** — qué está actual,
+  qué hay que actualizar y qué quedó obsoleto.
 - **[Puesta en marcha del flujo de pedidos](docs/puesta_en_marcha_flujo_pedidos.md)** —
   cómo levantar el entorno, orden de migraciones, cuentas de prueba, endpoints
   y qué se corrigió para que el flujo pago → preparación → retiro por QR funcione
   de punta a punta.
-- **[Despliegue en Kubernetes](docs/despliegue_kubernetes_backend.md)** — build,
-  push y aplicación de `backend-node` e `inventario-service` en el clúster
-  `student-cdarwitg`.
-- **[Arquitectura de microservicios](docs/arquitectura-microservicios.md)** —
-  Ingress, Secrets, réplicas y comunicación interna entre servicios.
+- **[Arquitectura de microservicios](docs/obsoleto/arquitectura-microservicios.md)** — *(OBSOLETO)*
+  (archivado en `docs/obsoleto/`) describe la arquitectura previa
+  (`backend-node` + `inventario-service`) y su K8s legacy.
+- **[Despliegue en Kubernetes](docs/obsoleto/despliegue_kubernetes_backend.md)** — *(OBSOLETO)*
+  (archivado en `docs/obsoleto/`) despliegue del backend legacy sobre el extinto `k8s/`.
 
 ## ⚠️ Advertencia: seguridad al aplicar manifiestos
+
+> **Nota de estado:** la infraestructura vigente es **`k8s-next/`** (gateway +
+> `ms-cafeterias` + `ms-menus` + `ms-pedidos`). Los manifiestos legacy de `k8s/`
+> (`backend-node` + `inventario-service`) fueron **eliminados** del repositorio; su
+> documentación quedó archivada en `docs/obsoleto/`. La advertencia de abajo aplica a
+> **cualquier** árbol que pueda contener Secrets.
 
 **Nunca uses `kubectl apply -R` (ni `--recursive`) sobre carpetas que puedan
 contener Secrets.** Un `apply` recursivo no distingue una plantilla de un Secret
 real: aplica **todo** lo que encuentra, y en este proyecto ya pasó — un
-`kubectl apply -f k8s/ --recursive` sobrescribió el Secret
-`coffeesecret-supabase` del clúster con los placeholders de una plantilla.
+`kubectl apply -f ... --recursive` sobre el antiguo árbol de manifiestos
+sobrescribió el Secret `coffeesecret-supabase` del clúster con los placeholders
+de una plantilla.
 
 Reglas al aplicar manifiestos:
 
@@ -41,15 +54,15 @@ Reglas al aplicar manifiestos:
    completo:
    ```powershell
    # correcto: archivos o subcarpetas explícitas
-   kubectl apply -f k8s/ingress.yaml
-   kubectl apply -f k8s/pedidos/
-   kubectl apply -f k8s/inventario/
+   kubectl apply -f k8s-next/gateway/
+   kubectl apply -f k8s-next/ms-pedidos/
 
    # PROHIBIDO: recorre todo el árbol, incluidos Secrets
-   kubectl apply -f k8s/ --recursive
+   kubectl apply -f k8s-next/ --recursive
    ```
-2. **Dentro de `k8s/` no hay ningún manifiesto de Secret.** Es intencional: así
-   un `apply` recursivo no tiene nada que pisar. La plantilla de referencia vive
+2. **No debe haber manifiestos de Secret dentro de los árboles de despliegue.**
+   Es intencional: así un `apply` recursivo no tiene nada que pisar. La plantilla
+   de referencia vive
    fuera, en [`docs/secrets/supabase-secret.example.yaml`](docs/secrets/supabase-secret.example.yaml),
    que solo contiene placeholders (`<TU_SUPABASE_URL>`).
 3. **El Secret real se crea a mano, una vez, y no se versiona:**

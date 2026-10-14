@@ -35,9 +35,6 @@ data:
         location ~ ^/api/menus/precios/?$ {
           return 404;
         }
-        location ~ ^/api/inventario(/|$) {
-          return 404;
-        }
 
         location /api/cafeterias {
           set $up_caf http://ms-cafeterias.student-cdarwitg.svc.cluster.local:3002;

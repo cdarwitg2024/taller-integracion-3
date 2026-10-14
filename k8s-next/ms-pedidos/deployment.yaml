@@ -1,4 +1,4 @@
-﻿# ms-pedidos - Microservicio de Pedidos.
+# ms-pedidos - Microservicio de Pedidos.
 #
 # NO forma parte de k8s/ (esa arboleria es la vieja, con backend-node).
 # Este manifiesto vive en k8s-next/ a proposito.

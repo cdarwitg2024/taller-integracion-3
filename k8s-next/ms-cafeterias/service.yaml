@@ -5,7 +5,7 @@
 #
 # `port` es el PUERTO DEL CONTENEDOR (3002), no 80, porque el gateway lo llama
 # por DNS con ese numero (`upstream ms_cafeterias { server ms-cafeterias:3002; }`
-# en services/gateway/nginx.conf). Con `port: 80` el Service no escucha en 3002
+# en Microservices/gateway/nginx.conf). Con `port: 80` el Service no escucha en 3002
 # y el gateway da502. Mismo contrato que el compose local.
 apiVersion: v1
 kind: Service

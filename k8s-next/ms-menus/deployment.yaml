@@ -1,4 +1,4 @@
-﻿# ms-menus â€” Microservicio de Menus (productos).
+# ms-menus — Microservicio de Menus (productos).
 #
 # NO forma parte de k8s/ (esa arboleria es la vieja, con backend-node).
 # Este manifiesto vive en k8s-next/ a proposito.
