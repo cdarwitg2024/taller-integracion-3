@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 
-# Contexto de build: services/ (la carpeta PADRE de este Dockerfile), porque
-# shared/ vive un nivel arriba.
+# Contexto de build: Microservices/ (la carpeta PADRE de este Dockerfile),
+# porque shared/ vive un nivel arriba.
 #
-# OJO: el .dockerignore que cuenta es services/.dockerignore, no este.
+# OJO: el .dockerignore que cuenta es Microservices/.dockerignore, no este.
 FROM node:22-alpine
 
 WORKDIR /usr/src/app

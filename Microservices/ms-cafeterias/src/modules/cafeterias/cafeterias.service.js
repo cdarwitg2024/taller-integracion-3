@@ -15,8 +15,6 @@ const TABLA = 'cafeterias';
 // Columnas publicas. Se listan a mano y no con `select('*')` para no filtrar por
 // accidente una columna interna si alguien agrega una a la tabla.
 // Verificadas contra el esquema real de la tabla `cafeterias` en Supabase local.
-// Se listan a mano y no con `select('*')` para no filtrar por accidente una
-// columna interna si alguien agrega una a la tabla.
 const COLUMNAS = [
   'id',
   'campus_id',
@@ -51,8 +49,14 @@ const CafeteriasService = {
   },
 
   /**
-   * Obtiene una cafeteria por id.
-   * @returns {Promise<object|null>} null si no existe.
+   * Obtiene una cafeteria por id, SOLO si esta activa.
+   *
+   * El filtro `activa=true` es deliberado: la API publica no debe exponer
+   * cafeterias inactivas. Para el cliente, una cafeteria inactiva es
+   * indistinguible de una inexistente (ambas dan null -> 404), asi no se
+   * revela que el id existe internamente.
+   *
+   * @returns {Promise<object|null>} null si no existe o esta inactiva.
    */
   async obtenerPorId(id) {
     const cliente = obtenerCliente();
@@ -61,6 +65,7 @@ const CafeteriasService = {
       .from(TABLA)
       .select(COLUMNAS)
       .eq('id', id)
+      .eq('activa', true)
       .maybeSingle();
 
     if (error) throw error;

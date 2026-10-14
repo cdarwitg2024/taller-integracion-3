@@ -28,15 +28,27 @@ async function obtenerPorId(req, res, next) {
   try {
     const { id } = req.params;
 
-    // `id` es BIGINT en Postgres. Validar aqui evita que un id no numerico
-    // llegue a PostgREST y devuelva un 400 sin formato.
+    // `id` es BIGINT en Postgres. Se valida aqui para que un id invalido
+    // responda 400 con formato propio en vez del 400 crudo de PostgREST.
+    //
+    // Solo se aceptan enteros positivos representables de forma segura en JS:
+    // un id mayor que Number.MAX_SAFE_INTEGER perderia precision al convertirlo
+    // y la consulta podria pedir OTRO id distinto al solicitado. En ese caso se
+    // rechaza (400) en vez de consultar un id equivocado.
     if (!/^\d+$/.test(id)) {
       throw new HttpError(400, 'El id debe ser un entero positivo', {
         detalle: `Recibido: ${id}`
       });
     }
 
-    const cafeteria = await CafeteriasService.obtenerPorId(Number(id));
+    const idNumerico = Number(id);
+    if (!Number.isSafeInteger(idNumerico) || idNumerico <= 0) {
+      throw new HttpError(400, 'El id debe ser un entero positivo', {
+        detalle: `Recibido: ${id}`
+      });
+    }
+
+    const cafeteria = await CafeteriasService.obtenerPorId(idNumerico);
 
     if (!cafeteria) {
       throw new HttpError(404, 'Cafeteria no encontrada', { detalle: `id=${id}` });

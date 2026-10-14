@@ -24,12 +24,21 @@ const { obtenerCliente } = require('@coffeefaster/shared');
 const request = require('supertest');
 const app = require('../src/app');
 
-/** Construye un cliente Supabase falso con la cadena que el service usa. */
+/**
+ * Construye un cliente Supabase falso con la cadena que el service usa.
+ *
+ * `eq` es encadenable: sirve tanto `.eq('activa', true)` (lista) como
+ * `.eq('id', n).eq('activa', true)` (detalle), porque cada llamada devuelve el
+ * mismo objeto con `order` y `maybeSingle`.
+ */
 function clienteFalso({ filas = [], error = null } = {}) {
   const maybeSingle = jest.fn().mockResolvedValue({ data: filas[0] || null, error });
   const orden = jest.fn().mockResolvedValue({ data: filas, error });
 
-  const eq = jest.fn(() => ({ order: orden, maybeSingle }));
+  const cadena = { order: orden, maybeSingle };
+  cadena.eq = jest.fn(() => cadena);
+
+  const eq = cadena.eq;
   const select = jest.fn(() => ({ eq }));
   const from = jest.fn(() => ({ select }));
 
@@ -167,6 +176,99 @@ describe('GET /api/cafeterias/:id', () => {
 
     expect(res.status).toBe(503);
     expect(res.body.data).toBeUndefined();
+  });
+});
+
+describe('GET /api/cafeterias/:id: solo cafeterias activas', () => {
+  it('filtra activa=true al buscar por id', async () => {
+    const cliente = clienteFalso({
+      filas: [{ id: 1, nombre: 'Cafeteria Central', activa: true }]
+    });
+    obtenerCliente.mockReturnValue(cliente);
+
+    const res = await request(app).get('/api/cafeterias/1');
+
+    expect(res.status).toBe(200);
+    expect(cliente.eq).toHaveBeenCalledWith('id', 1);
+    expect(cliente.eq).toHaveBeenCalledWith('activa', true);
+  });
+
+  it('una cafeteria inactiva no se devuelve: 404 sin revelar que el id existe', async () => {
+    // La consulta filtra activa=true, asi que un id inactivo no lo devuelve la
+    // base: el service lo ve como "no existe" y el controller responde 404.
+    const cliente = clienteFalso({ filas: [] });
+    obtenerCliente.mockReturnValue(cliente);
+
+    const res = await request(app).get('/api/cafeterias/2');
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('Cafeteria no encontrada');
+    expect(cliente.eq).toHaveBeenCalledWith('activa', true);
+  });
+});
+
+describe('Validacion de :id', () => {
+  const invalidos = [
+    ['0', 'cero'],
+    ['-1', 'negativo'],
+    ['abc', 'no numerico'],
+    ['1.5', 'decimal'],
+    ['9007199254740992', 'mayor que Number.MAX_SAFE_INTEGER'],
+    ['99999999999999999999', 'enorme']
+  ];
+
+  it.each(invalidos)('rechaza id %s (%s) con 400 sin consultar Supabase', async (valor) => {
+    obtenerCliente.mockReturnValue(clienteFalso());
+
+    const res = await request(app).get(`/api/cafeterias/${valor}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('El id debe ser un entero positivo');
+    // Un id invalido no debe llegar a Supabase: si se convirtiera con perdida de
+    // precision, podria consultar un id distinto al solicitado.
+    expect(obtenerCliente).not.toHaveBeenCalled();
+  });
+
+  it('acepta el limite seguro superior (Number.MAX_SAFE_INTEGER)', async () => {
+    const cliente = clienteFalso({ filas: [] });
+    obtenerCliente.mockReturnValue(cliente);
+
+    const res = await request(app).get('/api/cafeterias/9007199254740991');
+
+    // No se rechaza por validacion (400); el 404 es porque el mock no devolvio
+    // filas, es decir, la consulta si llego a Supabase.
+    expect(res.status).toBe(404);
+    expect(obtenerCliente).toHaveBeenCalled();
+  });
+});
+
+describe('Contrato de columnas publicas', () => {
+  it('selecciona solo las columnas publicas esperadas', async () => {
+    const cliente = clienteFalso();
+    obtenerCliente.mockReturnValue(cliente);
+
+    await request(app).get('/api/cafeterias');
+
+    expect(cliente.select).toHaveBeenCalledWith(
+      'id, campus_id, nombre, descripcion, hora_apertura, hora_cierre, telefono, imagen_url, activa'
+    );
+  });
+});
+
+describe('Errores 5xx sin filtrar informacion interna', () => {
+  it('no expone causa ni el mensaje interno de Supabase', async () => {
+    const secreto = 'columna_interna_secreta';
+    obtenerCliente.mockReturnValue(
+      clienteFalso({ error: { message: secreto, details: 'pista interna' } })
+    );
+
+    const res = await request(app).get('/api/cafeterias');
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('Servicio no disponible');
+    expect(res.body.causa).toBeUndefined();
+    expect(res.body.detalle).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain(secreto);
   });
 });
 
