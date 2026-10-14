@@ -4,6 +4,9 @@
   "private": true,
   "description": "Codigo compartido entre microservicios de CoffeeFast: auth y cliente HTTP entre servicios",
   "main": "src/index.js",
+  "scripts": {
+    "test": "node --test tests/index.test.js"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.38.0"
   }
