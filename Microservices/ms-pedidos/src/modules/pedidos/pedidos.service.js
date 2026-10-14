@@ -1,8 +1,28 @@
 'use strict';
 
-const { obtenerCliente } = require('@coffeefaster/shared').supabase || require('@coffeefaster/shared');
-const httpClient = require('@coffeefaster/shared').httpClient || require('@coffeefaster/shared/src/http-client');
-const { HttpError } = require('@coffeefaster/shared');
+// Interfaz publica de `shared` (namespaces). Ya no hace falta el fallback
+// historico a la interfaz plana: `shared` exporta `supabase`, `httpClient` y
+// `HttpError` de forma estable (ver shared/src/index.js).
+const { supabase, httpClient, HttpError } = require('@coffeefaster/shared');
+
+/**
+ * Valida el `cafeteria_id` recibido en el body. Mismo criterio que ms-cafeterias
+ * y ms-menus: entero positivo representable de forma segura en JS.
+ *
+ * Se rechaza 0, negativos, decimales, strings no numericos y valores mayores que
+ * Number.MAX_SAFE_INTEGER (perderian precision al convertirlos y se podria
+ * filtrar/crear contra OTRO id). Un valor invalido no debe llegar ni a ms-menus
+ * ni a `procesar_pago`.
+ */
+function validarCafeteriaId(valor) {
+  const numero = /^\d+$/.test(String(valor)) ? Number(valor) : NaN;
+  if (!Number.isSafeInteger(numero) || numero <= 0) {
+    throw new HttpError(400, 'cafeteria_id debe ser un entero positivo', {
+      detalle: `Recibido: ${valor}`
+    });
+  }
+  return numero;
+}
 
 async function crearPedido({ user, accessToken, body }) {
   if (!user || !user.authUserId) {
@@ -13,16 +33,16 @@ async function crearPedido({ user, accessToken, body }) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new HttpError(400, 'Debe incluir items');
   }
-  if (!body?.cafeteria_id) {
-    throw new HttpError(400, 'cafeteria_id requerido');
-  }
+
+  const cafeteriaId = validarCafeteriaId(body?.cafeteria_id);
+
   if (!body?.franja_retiro || !String(body.franja_retiro).trim()) {
     throw new HttpError(400, 'franja_retiro requerida');
   }
 
-  const supabase = obtenerCliente();
+  const cliente = supabase.obtenerCliente();
 
-  const { data: usuarioInterno, error: errUsuario } = await supabase
+  const { data: usuarioInterno, error: errUsuario } = await cliente
     .from('usuarios')
     .select('id')
     .eq('auth_user_id', user.authUserId)
@@ -34,8 +54,6 @@ async function crearPedido({ user, accessToken, body }) {
   if (!usuarioInterno) {
     throw new HttpError(404, 'Usuario no encontrado');
   }
-
-  const usuarioIdInterno = usuarioInterno.id;
 
   let preciosResp;
   try {
@@ -50,21 +68,37 @@ async function crearPedido({ user, accessToken, body }) {
   // El stock ya no se valida aca: ms-inventario salio del stack. Si se reactiva
   // el control de stock, la verificacion va antes de llamar a `procesar_pago`.
 
-  const precios = preciosResp.data || {};
-
-  let total = 0;
-  for (const it of items) {
-    const pid = String(it.producto_id);
-    const p = precios[pid] ?? precios[it.producto_id] ?? 0;
-    total += Number(p) * Number(it.cantidad || 0);
+  // `httpClient.post` devuelve { status, data }, donde `data` es el CUERPO HTTP
+  // de ms-menus: { data: [{ id, nombre, precio, activo, cafeteria_id }], total }.
+  // El contrato real es esa lista; NO un mapa producto_id -> precio.
+  const productos = preciosResp.data?.data;
+  if (!Array.isArray(productos) || productos.length === 0) {
+    throw new HttpError(503, 'Respuesta invalida de ms-menus', {
+      causa: 'la cotizacion no devolvio productos'
+    });
   }
+
+  // Regla de negocio: TODOS los productos del pedido deben pertenecer a la
+  // cafeteria indicada por cafeteria_id. ms-menus ya garantiza que existen,
+  // estan activos y no borrados (si no, responde 404); aqui se comprueba la
+  // pertenencia cruzada, que ms-menus no puede validar porque /precios no recibe
+  // cafeteria_id.
+  const productoDeOtraCafeteria = productos.find(
+    (p) => Number(p.cafeteria_id) !== cafeteriaId
+  );
+  if (productoDeOtraCafeteria) {
+    throw new HttpError(400, 'Uno o mas productos no pertenecen a la cafeteria indicada');
+  }
+
+  // El calculo monetario NO se duplica aqui: `procesar_pago` sigue siendo la
+  // autoridad transaccional del pago y obtiene los precios reales directamente
+  // desde public.productos.
 
   const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
   if (!publishableKey) {
     throw new HttpError(503, 'No se pudo procesar el pago', { causa: 'SUPABASE_PUBLISHABLE_KEY/ANON_KEY no configuradas' });
   }
   let pedidoResultado;
-  const cafeteriaId = body?.cafeteria_id ?? null;
   const franjaRetiro = body?.franja_retiro ?? null;
   try {
     const clienteConToken = require('@supabase/supabase-js').createClient(
@@ -90,17 +124,17 @@ async function crearPedido({ user, accessToken, body }) {
 }
 
 async function listarPedidos({ user }) {
-  const supabase = obtenerCliente();
+  const cliente = supabase.obtenerCliente();
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
-  const { data, error } = await supabase.from('pedidos').select('*').limit(100);
+  const { data, error } = await cliente.from('pedidos').select('*').limit(100);
   if (error) throw new HttpError(503, error.message);
   return data || [];
 }
 
 async function obtenerPedido({ user, id }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
-  const supabase = obtenerCliente();
-  const { data: pedido, error } = await supabase.from('pedidos').select('*').eq('id', id).maybeSingle();
+  const cliente = supabase.obtenerCliente();
+  const { data: pedido, error } = await cliente.from('pedidos').select('*').eq('id', id).maybeSingle();
   if (error) throw new HttpError(503, error.message);
   if (!pedido) throw new HttpError(404, 'Pedido no encontrado');
   return pedido;
@@ -108,32 +142,32 @@ async function obtenerPedido({ user, id }) {
 
 async function obtenerPedidosPorCafeteria({ user, cafeteriaId }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
-  const supabase = obtenerCliente();
-  const { data, error } = await supabase.from('pedidos').select('*').eq('cafeteria_id', cafeteriaId);
+  const cliente = supabase.obtenerCliente();
+  const { data, error } = await cliente.from('pedidos').select('*').eq('cafeteria_id', cafeteriaId);
   if (error) throw new HttpError(503, error.message);
   return data || [];
 }
 
 async function obtenerPedidosPorUsuario({ user, usuarioId }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
-  const supabase = obtenerCliente();
-  const { data, error } = await supabase.from('pedidos').select('*').eq('usuario_id', usuarioId);
+  const cliente = supabase.obtenerCliente();
+  const { data, error } = await cliente.from('pedidos').select('*').eq('usuario_id', usuarioId);
   if (error) throw new HttpError(503, error.message);
   return data || [];
 }
 
 async function actualizarEstado({ user, id, body }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
-  const supabase = obtenerCliente();
-  const { data, error } = await supabase.from('pedidos').update({ estado: body?.estado }).eq('id', id).select().maybeSingle();
+  const cliente = supabase.obtenerCliente();
+  const { data, error } = await cliente.from('pedidos').update({ estado: body?.estado }).eq('id', id).select().maybeSingle();
   if (error) throw new HttpError(503, error.message);
   return data;
 }
 
 async function obtenerQr({ user, id }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
-  const supabase = obtenerCliente();
-  const { data: pedido, error } = await supabase.from('pedidos').select('qr_token, id').eq('id', id).maybeSingle();
+  const cliente = supabase.obtenerCliente();
+  const { data: pedido, error } = await cliente.from('pedidos').select('qr_token, id').eq('id', id).maybeSingle();
   if (error) throw new HttpError(503, error.message);
   if (!pedido) throw new HttpError(404, 'Pedido no encontrado');
   return { qr_token: pedido.qr_token };
@@ -141,13 +175,13 @@ async function obtenerQr({ user, id }) {
 
 async function obtenerTokenContingencia({ user, id }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
-  const supabase = obtenerCliente();
-  const { data: pedido, error } = await supabase.from('pedidos').select('id, usuario_id, cafeteria_id').eq('id', id).maybeSingle();
+  const cliente = supabase.obtenerCliente();
+  const { data: pedido, error } = await cliente.from('pedidos').select('id, usuario_id, cafeteria_id').eq('id', id).maybeSingle();
   if (error) throw new HttpError(503, error.message);
   if (!pedido) throw new HttpError(404, 'Pedido no encontrado');
 
   const usuarioIdInterno = await (async () => {
-    const { data: ui } = await supabase.from('usuarios').select('id').eq('auth_user_id', user.authUserId).maybeSingle();
+    const { data: ui } = await cliente.from('usuarios').select('id').eq('auth_user_id', user.authUserId).maybeSingle();
     return ui?.id || null;
   })();
 
@@ -156,7 +190,7 @@ async function obtenerTokenContingencia({ user, id }) {
     autorizado = true;
   } else {
     try {
-      const { data: cu } = await supabase
+      const { data: cu } = await cliente
         .from('cafeteria_usuarios')
         .select('id')
         .eq('usuario_id', usuarioIdInterno)
@@ -177,7 +211,7 @@ async function obtenerTokenContingencia({ user, id }) {
 
 async function validarQr({ user, body }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
-  const { data, error } = await obtenerCliente().rpc('log_qr_validation', { p_qr_token: body?.qr_token });
+  const { data, error } = await supabase.obtenerCliente().rpc('log_qr_validation', { p_qr_token: body?.qr_token });
   if (error) throw new HttpError(503, error.message);
   return data;
 }
@@ -193,6 +227,3 @@ module.exports = {
   obtenerTokenContingencia,
   validarQr
 };
-
-
-
