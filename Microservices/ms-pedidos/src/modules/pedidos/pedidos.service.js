@@ -46,6 +46,57 @@ function validarPedidoId(valor) {
 }
 
 /**
+ * Valida el `:usuarioId` de `GET /usuario/:usuarioId`. Mismo criterio que
+ * `validarPedidoId`. El valor identifica el RECURSO solicitado; NUNCA demuestra
+ * autorizacion (la identidad autorizada sale del JWT, no de este parametro).
+ */
+function validarUsuarioId(valor) {
+  const numero = /^\d+$/.test(String(valor)) ? Number(valor) : NaN;
+  if (!Number.isSafeInteger(numero) || numero <= 0) {
+    throw new HttpError(400, 'usuario_id debe ser un entero positivo', {
+      detalle: `Recibido: ${valor}`
+    });
+  }
+  return numero;
+}
+
+/**
+ * Proyeccion explicita de `pedidos` para las lecturas generales
+ * (`GET /`, `GET /:id`, `GET /usuario/:id`, `GET /cafeteria/:id`).
+ *
+ * Deliberadamente EXCLUYE las credenciales de retiro:
+ *   - `qr_token`
+ *   - `codigo_retiro_diario`
+ * Esas solo se exponen por el endpoint dedicado `GET /:id/qr`, y unicamente al
+ * estudiante propietario. Se evita `select('*')`, que devolvia la fila completa
+ * (incluidas credenciales) a cualquier actor autenticado.
+ *
+ * Solo contiene columnas operativas confirmadas contra la BD real / el codigo
+ * de los consumidores (dato de `datosFicticios/server/db.ts`, consultas de
+ * Desktop/Mobile y D.2.1).
+ */
+const CAMPOS_PEDIDO_PUBLICOS = [
+  'id',
+  'usuario_id',
+  'cafeteria_id',
+  'estado',
+  'pago_estado',
+  'metodo_pago',
+  'total',
+  'codigo_pedido',
+  'franja_retiro',
+  'nota',
+  'qr_usado',
+  'tiempo_estimado_min',
+  'tiempo_real_min',
+  'creado_en',
+  'inicio_preparacion_en',
+  'listo_en',
+  'entregado_en',
+  'cancelado_en'
+].join(', ');
+
+/**
  * Mapeo de los motivos que devuelve la RPC `cancelar_pedido` (JSONB con
  * `ok:false`) a codigos HTTP. `sin_sesion` NO aparece aca: la RPC lo lanza como
  * EXCEPCION (SQLSTATE 42501), no como respuesta `ok:false`.
@@ -235,42 +286,152 @@ async function crearPedido({ user, accessToken, body }) {
   return { ok: true, pedido: pedidoResultado };
 }
 
+/**
+ * GET / — coleccion de pedidos visible para el actor autenticado.
+ *
+ * Reglas D.5-B (la identidad y el rol salen de la BD, nunca del cliente):
+ *  - estudiante (rol 1): SOLO sus propios pedidos (`usuario_id = usuarioInterno.id`).
+ *  - empleado   (rol 2): pedidos de SUS cafeterias (`cafeteria_usuarios`).
+ *  - dueño (3) / cualquier otro rol: 403 (no se le concede esta coleccion global).
+ *
+ * La consulta usa la proyeccion explicita `CAMPOS_PEDIDO_PUBLICOS`: la respuesta
+ * NUNCA incluye `qr_token` ni `codigo_retiro_diario`.
+ */
 async function listarPedidos({ user }) {
-  const cliente = supabase.obtenerCliente();
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
-  const { data, error } = await cliente.from('pedidos').select('*').limit(100);
+  const cliente = supabase.obtenerCliente();
+  const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
+  const rol = Number(usuarioInterno.rol_id);
+
+  if (rol !== ROL_ESTUDIANTE && rol !== ROL_EMPLEADO) {
+    throw new HttpError(403, 'No autorizado para listar pedidos');
+  }
+
+  let consulta = cliente.from('pedidos').select(CAMPOS_PEDIDO_PUBLICOS);
+
+  if (rol === ROL_ESTUDIANTE) {
+    consulta = consulta.eq('usuario_id', usuarioInterno.id);
+  } else {
+    const cafeteriaIds = await obtenerCafeteriasDelUsuario(cliente, usuarioInterno.id);
+    if (cafeteriaIds.length === 0) return [];
+    consulta = consulta.in('cafeteria_id', cafeteriaIds);
+  }
+
+  const { data, error } = await consulta.limit(100);
   if (error) throw new HttpError(503, error.message);
   return data || [];
 }
 
+/**
+ * GET /:id — pedido individual.
+ *
+ * El `:id` identifica el recurso, no autoriza. Se resuelve primero la identidad
+ * desde el JWT y luego se comprueba pertenencia:
+ *  - estudiante: solo si es SU pedido.
+ *  - empleado:   solo si el pedido es de una cafeteria suya.
+ *  - dueño/otros: 404 (sin acceso nuevo; no se revela si el pedido existe).
+ *
+ * Toda denegacion individual responde 404 (no 403) para no permitir enumeracion.
+ * La proyeccion excluye credenciales QR.
+ */
 async function obtenerPedido({ user, id }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
+  const pedidoId = validarPedidoId(id);
   const cliente = supabase.obtenerCliente();
-  const { data: pedido, error } = await cliente.from('pedidos').select('*').eq('id', id).maybeSingle();
+  const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
+  const rol = Number(usuarioInterno.rol_id);
+
+  if (rol !== ROL_ESTUDIANTE && rol !== ROL_EMPLEADO) {
+    throw new HttpError(404, 'Pedido no encontrado');
+  }
+
+  const { data: pedido, error } = await cliente
+    .from('pedidos')
+    .select(CAMPOS_PEDIDO_PUBLICOS)
+    .eq('id', pedidoId)
+    .maybeSingle();
   if (error) throw new HttpError(503, error.message);
   if (!pedido) throw new HttpError(404, 'Pedido no encontrado');
+
+  if (rol === ROL_ESTUDIANTE) {
+    if (Number(pedido.usuario_id) !== Number(usuarioInterno.id)) {
+      throw new HttpError(404, 'Pedido no encontrado');
+    }
+    return pedido;
+  }
+
+  // empleado: debe pertenecer a la cafeteria DEL PEDIDO.
+  const pertenece = await perteneceACafeteria(cliente, usuarioInterno.id, pedido.cafeteria_id);
+  if (!pertenece) throw new HttpError(404, 'Pedido no encontrado');
   return pedido;
 }
 
+/**
+ * GET /cafeteria/:cafeteriaId — pedidos de una cafeteria.
+ *
+ * Solo un EMPLEADO que pertenezca a esa cafeteria puede listarlos. Estudiante,
+ * dueño y empleado ajeno reciben 403 (es una ruta explicita de coleccion, no un
+ * recurso individual: aqui si se distingue el motivo). La proyeccion excluye
+ * credenciales QR.
+ */
 async function obtenerPedidosPorCafeteria({ user, cafeteriaId }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
+  const cafeteriaIdNum = validarCafeteriaId(cafeteriaId);
   const cliente = supabase.obtenerCliente();
-  const { data, error } = await cliente.from('pedidos').select('*').eq('cafeteria_id', cafeteriaId);
+  const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
+
+  if (Number(usuarioInterno.rol_id) !== ROL_EMPLEADO) {
+    throw new HttpError(403, 'No autorizado para listar pedidos de esta cafeteria');
+  }
+
+  const pertenece = await perteneceACafeteria(cliente, usuarioInterno.id, cafeteriaIdNum);
+  if (!pertenece) {
+    throw new HttpError(403, 'No autorizado para listar pedidos de esta cafeteria');
+  }
+
+  const { data, error } = await cliente
+    .from('pedidos')
+    .select(CAMPOS_PEDIDO_PUBLICOS)
+    .eq('cafeteria_id', cafeteriaIdNum);
   if (error) throw new HttpError(503, error.message);
   return data || [];
 }
 
+/**
+ * GET /usuario/:usuarioId — pedidos de un usuario.
+ *
+ * Solo el ESTUDIANTE puede consultar SU propio historial: debe cumplir
+ * `Number(usuarioId) === Number(usuarioInterno.id)`. La consulta final usa el id
+ * interno resuelto desde el JWT (nunca el parametro). Empleado y dueño reciben
+ * 403. La proyeccion excluye credenciales QR.
+ */
 async function obtenerPedidosPorUsuario({ user, usuarioId }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
+  const usuarioIdNum = validarUsuarioId(usuarioId);
   const cliente = supabase.obtenerCliente();
-  const { data, error } = await cliente.from('pedidos').select('*').eq('usuario_id', usuarioId);
+  const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
+
+  if (Number(usuarioInterno.rol_id) !== ROL_ESTUDIANTE) {
+    throw new HttpError(403, 'No autorizado para listar pedidos de este usuario');
+  }
+  if (usuarioIdNum !== Number(usuarioInterno.id)) {
+    throw new HttpError(403, 'No autorizado para listar pedidos de este usuario');
+  }
+
+  const { data, error } = await cliente
+    .from('pedidos')
+    .select(CAMPOS_PEDIDO_PUBLICOS)
+    .eq('usuario_id', usuarioInterno.id);
   if (error) throw new HttpError(503, error.message);
   return data || [];
 }
 
-// Rol interno (public.usuarios.rol_id) que puede ejecutar las transiciones de
-// cocina. Confirmado contra la BD real: 1=estudiante, 2=empleado, 3=dueño.
-// En D.3 SOLO el empleado opera comandas: el dueño NO recibe permisos nuevos.
+// Roles internos (public.usuarios.rol_id) confirmados contra la BD real:
+// 1 = estudiante, 2 = empleado, 3 = dueño.
+// D.3: SOLO el empleado (2) opera comandas; el dueño (3) NO recibe permisos.
+// D.5-B: lecturas -> estudiante ve lo suyo; empleado ve sus cafeterias; el
+// dueño NO recibe permisos nuevos (403 en colecciones, 404 en individuales).
+const ROL_ESTUDIANTE = 1;
 const ROL_EMPLEADO = 2;
 
 /**
@@ -297,6 +458,58 @@ async function resolverUsuarioInterno(cliente, authUserId) {
 }
 
 /**
+ * Igual que `resolverUsuarioInterno`, pero falla con 404 cuando el usuario
+ * autenticado no tiene cuenta interna (coherente con `crearPedido`). Se usa en
+ * todas las lecturas de D.5-B: sin cuenta interna no hay identidad ni rol, y por
+ * tanto no hay autorizacion posible.
+ */
+async function resolverUsuarioInternoObligatorio(cliente, authUserId) {
+  const usuarioInterno = await resolverUsuarioInterno(cliente, authUserId);
+  if (!usuarioInterno) {
+    throw new HttpError(404, 'Usuario no encontrado');
+  }
+  return usuarioInterno;
+}
+
+/**
+ * Devuelve los `cafeteria_id` asociados al usuario interno en
+ * `cafeteria_usuarios`. Un usuario sin asociaciones devuelve `[]`.
+ */
+async function obtenerCafeteriasDelUsuario(cliente, usuarioId) {
+  const { data, error } = await cliente
+    .from('cafeteria_usuarios')
+    .select('cafeteria_id')
+    .eq('usuario_id', usuarioId);
+
+  if (error) {
+    throw new HttpError(503, 'No se pudieron obtener las cafeterias del usuario', {
+      causa: error.message
+    });
+  }
+  return (data || []).map((fila) => fila.cafeteria_id);
+}
+
+/**
+ * Comprueba la pertenencia de un usuario interno a una cafeteria concreta
+ * (`cafeteria_usuarios`). Devuelve `true`/`false`; un fallo de Supabase se eleva
+ * como 503. El `cafeteriaId` debe ser SIEMPRE el de la entidad autoritativa
+ * (p. ej. `pedido.cafeteria_id`), nunca uno enviado por el cliente.
+ */
+async function perteneceACafeteria(cliente, usuarioId, cafeteriaId, mensajeError = 'No se pudo verificar la cafeteria del usuario') {
+  const { data, error } = await cliente
+    .from('cafeteria_usuarios')
+    .select('id')
+    .eq('usuario_id', usuarioId)
+    .eq('cafeteria_id', cafeteriaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new HttpError(503, mensajeError, { causa: error.message });
+  }
+  return Boolean(data);
+}
+
+/**
  * Autoriza una transicion KDS (no-cancelacion) ANTES de tocar la base.
  *
  * Esta validacion vive en Node porque ms-pedidos escribe con el cliente
@@ -320,18 +533,12 @@ async function autorizarTransicionKds(cliente, authUserId, pedido) {
     throw new HttpError(403, 'Solo un empleado puede cambiar el estado del pedido');
   }
 
-  const { data: pertenece, error } = await cliente
-    .from('cafeteria_usuarios')
-    .select('id')
-    .eq('usuario_id', usuarioInterno.id)
-    .eq('cafeteria_id', pedido.cafeteria_id)
-    .maybeSingle();
-
-  if (error) {
-    throw new HttpError(503, 'No se pudo verificar la cafeteria del empleado', {
-      causa: error.message
-    });
-  }
+  const pertenece = await perteneceACafeteria(
+    cliente,
+    usuarioInterno.id,
+    pedido.cafeteria_id,
+    'No se pudo verificar la cafeteria del empleado'
+  );
   if (!pertenece) {
     throw new HttpError(403, 'El empleado no pertenece a la cafeteria del pedido');
   }
@@ -428,12 +635,59 @@ async function actualizarEstado({ user, accessToken, id, body }) {
   return actualizado;
 }
 
+// Estados en los que el QR sigue siendo utilizable (aun no consumido/terminal).
+// Se compara contra el slug canonico (tolera aliases historicos de lectura).
+const ESTADOS_QR_DISPONIBLE = ['pendiente', 'en_preparacion', 'listo'];
+
+/**
+ * GET /:id/qr — CREDENCIAL de retiro del pedido.
+ *
+ * D.5-B: SOLO el estudiante propietario puede obtenerla. Empleado y dueño
+ * reciben 404 (no se revela la existencia del pedido). El pedido ajeno tambien
+ * responde 404. El estado debe seguir siendo utilizable (`pendiente`,
+ * `en_preparacion`, `listo`); `entregado`/`cancelado` responden 409.
+ *
+ * Este es el UNICO endpoint que expone `qr_token`. No devuelve
+ * `codigo_retiro_diario` ni genera imagen.
+ */
 async function obtenerQr({ user, id }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
+  const pedidoId = validarPedidoId(id);
   const cliente = supabase.obtenerCliente();
-  const { data: pedido, error } = await cliente.from('pedidos').select('qr_token, id').eq('id', id).maybeSingle();
+  const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
+
+  // Se comprueba el rol ANTES de leer el pedido: asi un empleado/dueño no puede
+  // distinguir un pedido existente de uno inexistente (siempre 404).
+  if (Number(usuarioInterno.rol_id) !== ROL_ESTUDIANTE) {
+    throw new HttpError(404, 'Pedido no encontrado');
+  }
+
+  const { data: pedido, error } = await cliente
+    .from('pedidos')
+    .select('id, usuario_id, estado, qr_token')
+    .eq('id', pedidoId)
+    .maybeSingle();
   if (error) throw new HttpError(503, error.message);
   if (!pedido) throw new HttpError(404, 'Pedido no encontrado');
+
+  if (Number(pedido.usuario_id) !== Number(usuarioInterno.id)) {
+    throw new HttpError(404, 'Pedido no encontrado');
+  }
+
+  const estado = normalizarEstado(pedido.estado);
+  if (!estado || !ESTADOS_QR_DISPONIBLE.includes(estado)) {
+    throw new HttpError(409, 'El QR del pedido no esta disponible en su estado actual', {
+      detalle: `estado actual: ${pedido.estado}`
+    });
+  }
+
+  if (!pedido.qr_token) {
+    // Pedido activo sin credencial: inconsistencia de datos. Se responde 409
+    // (el recurso existe pero la credencial no esta disponible) para no
+    // confundirlo con un 404 de autorizacion/existencia.
+    throw new HttpError(409, 'El pedido no tiene un QR disponible');
+  }
+
   return { qr_token: pedido.qr_token };
 }
 

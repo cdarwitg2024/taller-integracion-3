@@ -130,6 +130,62 @@ function configurarPedido(pedidoInicial, opciones = {}) {
   return updateMock;
 }
 
+/**
+ * Mock "consciente de tabla" para las LECTURAS de D.5-B. Cada tabla recibe su
+ * propio resultado `{ data, error }` y expone una cadena fluida
+ * (`select/eq/in/order/limit`) que resuelve a ese resultado (o via
+ * `maybeSingle`/`single`).
+ *
+ * `cafeteria_usuarios` se usa de dos formas distintas segun el flujo:
+ *  - `obtenerCafeteriasDelUsuario` -> espera `data` = lista de filas.
+ *  - `perteneceACafeteria`        -> espera `data` = fila o `null`.
+ * Cada caso configura la forma que corresponda.
+ *
+ * Devuelve los "registros" de llamadas por tabla para poder comprobar
+ * proyeccion (`select`), filtros (`eq`/`in`) y limite.
+ */
+function fijarLecturas({
+  usuario = { id: 10, rol_id: 1 },
+  pedidos = { data: [], error: null },
+  cafeterias = { data: null, error: null }
+} = {}) {
+  const supa = supabaseMock.obtenerCliente();
+
+  const nuevoRegistro = () => ({ select: null, eq: [], in: [], limit: null });
+  const registros = {
+    usuarios: nuevoRegistro(),
+    pedidos: nuevoRegistro(),
+    cafeteria_usuarios: nuevoRegistro()
+  };
+
+  const cadena = (resultado, registro) => {
+    const q = {
+      select: (campos) => { registro.select = campos; return q; },
+      eq: (col, val) => { registro.eq.push([col, val]); return q; },
+      in: (col, val) => { registro.in.push([col, val]); return q; },
+      order: () => q,
+      limit: (n) => { registro.limit = n; return q; },
+      maybeSingle: () => Promise.resolve(resultado),
+      single: () => Promise.resolve(resultado),
+      then: (resolve) => resolve(resultado)
+    };
+    return q;
+  };
+
+  supa.from.mockReset();
+  supa.from.mockImplementation((tabla) => {
+    if (tabla === 'usuarios') return cadena({ data: usuario, error: null }, registros.usuarios);
+    if (tabla === 'cafeteria_usuarios') return cadena(cafeterias, registros.cafeteria_usuarios);
+    if (tabla === 'pedidos') return cadena(pedidos, registros.pedidos);
+    return cadena({ data: null, error: null }, nuevoRegistro());
+  });
+
+  return registros;
+}
+
+// Campos de una proyeccion PostgREST separados por coma, ya normalizados.
+const camposDe = (proyeccion) => String(proyeccion).split(',').map((c) => c.trim());
+
 describe('ms-pedidos', () => {
   test('GET /health sin auth', async () => {
     const res = await request(app).get('/health');
@@ -643,5 +699,318 @@ describe('PATCH /api/pedidos/:id/estado -> cancelado (RPC cancelar_pedido)', () 
     const res = await request(app).patch('/api/pedidos/abc/estado').send({ estado: 'cancelado' });
     expect(res.status).toBe(400);
     expect(mockRpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/pedidos — lecturas autorizadas (D.5-B)', () => {
+  test('estudiante recibe solo sus pedidos', async () => {
+    const reg = fijarLecturas({
+      usuario: { id: 10, rol_id: 1 },
+      pedidos: { data: [{ id: 1, usuario_id: 10, estado: 'listo' }], error: null }
+    });
+    const res = await request(app).get('/api/pedidos');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    // La consulta filtra por el id interno resuelto desde el JWT.
+    expect(reg.pedidos.eq).toContainEqual(['usuario_id', 10]);
+    expect(reg.pedidos.limit).toBe(100);
+  });
+
+  test('empleado recibe solo pedidos de sus cafeterias', async () => {
+    const reg = fijarLecturas({
+      usuario: { id: 20, rol_id: 2 },
+      pedidos: { data: [{ id: 2, cafeteria_id: 7, estado: 'pendiente' }], error: null },
+      cafeterias: { data: [{ cafeteria_id: 7 }, { cafeteria_id: 8 }], error: null }
+    });
+    const res = await request(app).get('/api/pedidos');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(reg.pedidos.in).toContainEqual(['cafeteria_id', [7, 8]]);
+  });
+
+  test('empleado sin cafeterias recibe coleccion vacia (200)', async () => {
+    fijarLecturas({
+      usuario: { id: 20, rol_id: 2 },
+      cafeterias: { data: [], error: null }
+    });
+    const res = await request(app).get('/api/pedidos');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  test('dueño recibe 403 (sin coleccion global)', async () => {
+    fijarLecturas({ usuario: { id: 30, rol_id: 3 } });
+    const res = await request(app).get('/api/pedidos');
+    expect(res.status).toBe(403);
+  });
+
+  test('usuario autenticado sin fila interna -> 404', async () => {
+    fijarLecturas({ usuario: null });
+    const res = await request(app).get('/api/pedidos');
+    expect(res.status).toBe(404);
+  });
+
+  test('la respuesta NO filtra credenciales QR (proyeccion explicita)', async () => {
+    const reg = fijarLecturas({
+      usuario: { id: 10, rol_id: 1 },
+      pedidos: { data: [{ id: 1, usuario_id: 10, estado: 'listo' }], error: null }
+    });
+    const res = await request(app).get('/api/pedidos');
+    expect(res.status).toBe(200);
+    const campos = camposDe(reg.pedidos.select);
+    expect(campos).not.toContain('qr_token');
+    expect(campos).not.toContain('codigo_retiro_diario');
+    expect(JSON.stringify(res.body)).not.toMatch(/qr_token|codigo_retiro_diario/);
+  });
+});
+
+describe('GET /api/pedidos/:id — lectura individual autorizada (D.5-B)', () => {
+  test('estudiante obtiene su propio pedido', async () => {
+    const reg = fijarLecturas({
+      usuario: { id: 10, rol_id: 1 },
+      pedidos: { data: { id: 5, usuario_id: 10, cafeteria_id: 1, estado: 'listo' }, error: null }
+    });
+    const res = await request(app).get('/api/pedidos/5');
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(5);
+    expect(reg.pedidos.eq).toContainEqual(['id', 5]);
+  });
+
+  test('estudiante pide un pedido ajeno -> 404 (no revela existencia)', async () => {
+    fijarLecturas({
+      usuario: { id: 10, rol_id: 1 },
+      pedidos: { data: { id: 5, usuario_id: 99, cafeteria_id: 1, estado: 'listo' }, error: null }
+    });
+    const res = await request(app).get('/api/pedidos/5');
+    expect(res.status).toBe(404);
+  });
+
+  test('empleado obtiene un pedido de su cafeteria', async () => {
+    const reg = fijarLecturas({
+      usuario: { id: 20, rol_id: 2 },
+      pedidos: { data: { id: 5, usuario_id: 99, cafeteria_id: 7, estado: 'listo' }, error: null },
+      cafeterias: { data: { id: 77 }, error: null }
+    });
+    const res = await request(app).get('/api/pedidos/5');
+    expect(res.status).toBe(200);
+    // La pertenencia se comprueba contra el cafeteria_id DEL PEDIDO.
+    expect(reg.cafeteria_usuarios.eq).toContainEqual(['cafeteria_id', 7]);
+    expect(reg.cafeteria_usuarios.eq).toContainEqual(['usuario_id', 20]);
+  });
+
+  test('empleado pide un pedido de otra cafeteria -> 404', async () => {
+    fijarLecturas({
+      usuario: { id: 20, rol_id: 2 },
+      pedidos: { data: { id: 5, usuario_id: 99, cafeteria_id: 7, estado: 'listo' }, error: null },
+      cafeterias: { data: null, error: null }
+    });
+    const res = await request(app).get('/api/pedidos/5');
+    expect(res.status).toBe(404);
+  });
+
+  test('dueño -> 404 (sin acceso nuevo)', async () => {
+    fijarLecturas({ usuario: { id: 30, rol_id: 3 } });
+    const res = await request(app).get('/api/pedidos/5');
+    expect(res.status).toBe(404);
+  });
+
+  test('id invalido -> 400', async () => {
+    fijarLecturas({ usuario: { id: 10, rol_id: 1 } });
+    const res = await request(app).get('/api/pedidos/abc');
+    expect(res.status).toBe(400);
+  });
+
+  test('la respuesta NO filtra credenciales QR (proyeccion explicita)', async () => {
+    const reg = fijarLecturas({
+      usuario: { id: 10, rol_id: 1 },
+      pedidos: { data: { id: 5, usuario_id: 10, estado: 'listo' }, error: null }
+    });
+    const res = await request(app).get('/api/pedidos/5');
+    const campos = camposDe(reg.pedidos.select);
+    expect(campos).not.toContain('qr_token');
+    expect(campos).not.toContain('codigo_retiro_diario');
+    expect(JSON.stringify(res.body)).not.toMatch(/qr_token|codigo_retiro_diario/);
+  });
+});
+
+describe('GET /api/pedidos/usuario/:usuarioId (D.5-B)', () => {
+  test('estudiante consulta su propio historial', async () => {
+    const reg = fijarLecturas({
+      usuario: { id: 10, rol_id: 1 },
+      pedidos: { data: [{ id: 1, usuario_id: 10 }], error: null }
+    });
+    const res = await request(app).get('/api/pedidos/usuario/10');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    // La query usa el id interno del JWT, no el parametro.
+    expect(reg.pedidos.eq).toContainEqual(['usuario_id', 10]);
+  });
+
+  test('estudiante consulta otro usuario -> 403', async () => {
+    fijarLecturas({ usuario: { id: 10, rol_id: 1 } });
+    const res = await request(app).get('/api/pedidos/usuario/99');
+    expect(res.status).toBe(403);
+  });
+
+  test('empleado -> 403', async () => {
+    fijarLecturas({ usuario: { id: 20, rol_id: 2 } });
+    const res = await request(app).get('/api/pedidos/usuario/20');
+    expect(res.status).toBe(403);
+  });
+
+  test('dueño -> 403', async () => {
+    fijarLecturas({ usuario: { id: 30, rol_id: 3 } });
+    const res = await request(app).get('/api/pedidos/usuario/30');
+    expect(res.status).toBe(403);
+  });
+
+  test('usuarioId invalido -> 400', async () => {
+    fijarLecturas({ usuario: { id: 10, rol_id: 1 } });
+    const res = await request(app).get('/api/pedidos/usuario/abc');
+    expect(res.status).toBe(400);
+  });
+
+  test('NO devuelve credenciales QR', async () => {
+    const reg = fijarLecturas({ usuario: { id: 10, rol_id: 1 }, pedidos: { data: [], error: null } });
+    const res = await request(app).get('/api/pedidos/usuario/10');
+    const campos = camposDe(reg.pedidos.select);
+    expect(campos).not.toContain('qr_token');
+    expect(campos).not.toContain('codigo_retiro_diario');
+    expect(JSON.stringify(res.body)).not.toMatch(/qr_token|codigo_retiro_diario/);
+  });
+});
+
+describe('GET /api/pedidos/cafeteria/:cafeteriaId (D.5-B)', () => {
+  test('estudiante -> 403', async () => {
+    fijarLecturas({ usuario: { id: 10, rol_id: 1 } });
+    const res = await request(app).get('/api/pedidos/cafeteria/7');
+    expect(res.status).toBe(403);
+  });
+
+  test('empleado asociado -> 200', async () => {
+    const reg = fijarLecturas({
+      usuario: { id: 20, rol_id: 2 },
+      pedidos: { data: [{ id: 1, cafeteria_id: 7 }], error: null },
+      cafeterias: { data: { id: 77 }, error: null }
+    });
+    const res = await request(app).get('/api/pedidos/cafeteria/7');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(reg.cafeteria_usuarios.eq).toContainEqual(['cafeteria_id', 7]);
+    expect(reg.pedidos.eq).toContainEqual(['cafeteria_id', 7]);
+  });
+
+  test('empleado no asociado -> 403', async () => {
+    fijarLecturas({ usuario: { id: 20, rol_id: 2 }, cafeterias: { data: null, error: null } });
+    const res = await request(app).get('/api/pedidos/cafeteria/7');
+    expect(res.status).toBe(403);
+  });
+
+  test('dueño -> 403', async () => {
+    fijarLecturas({ usuario: { id: 30, rol_id: 3 } });
+    const res = await request(app).get('/api/pedidos/cafeteria/7');
+    expect(res.status).toBe(403);
+  });
+
+  test('cafeteriaId invalido -> 400', async () => {
+    fijarLecturas({ usuario: { id: 20, rol_id: 2 } });
+    const res = await request(app).get('/api/pedidos/cafeteria/abc');
+    expect(res.status).toBe(400);
+  });
+
+  test('NO devuelve credenciales QR', async () => {
+    const reg = fijarLecturas({
+      usuario: { id: 20, rol_id: 2 },
+      pedidos: { data: [], error: null },
+      cafeterias: { data: { id: 77 }, error: null }
+    });
+    const res = await request(app).get('/api/pedidos/cafeteria/7');
+    const campos = camposDe(reg.pedidos.select);
+    expect(campos).not.toContain('qr_token');
+    expect(campos).not.toContain('codigo_retiro_diario');
+    expect(JSON.stringify(res.body)).not.toMatch(/qr_token|codigo_retiro_diario/);
+  });
+});
+
+describe('GET /api/pedidos/:id/qr — credencial de retiro (D.5-B)', () => {
+  test.each(['pendiente', 'en_preparacion', 'listo'])(
+    'estudiante propietario en estado %s -> 200 con qr_token',
+    async (estado) => {
+      fijarLecturas({
+        usuario: { id: 10, rol_id: 1 },
+        pedidos: { data: { id: 5, usuario_id: 10, estado, qr_token: 'tok-5' }, error: null }
+      });
+      const res = await request(app).get('/api/pedidos/5/qr');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ qr_token: 'tok-5' });
+    }
+  );
+
+  test('estudiante pide el QR de un pedido ajeno -> 404', async () => {
+    fijarLecturas({
+      usuario: { id: 10, rol_id: 1 },
+      pedidos: { data: { id: 5, usuario_id: 99, estado: 'listo', qr_token: 'tok-5' }, error: null }
+    });
+    const res = await request(app).get('/api/pedidos/5/qr');
+    expect(res.status).toBe(404);
+  });
+
+  test('empleado -> 404 (el QR es del estudiante)', async () => {
+    fijarLecturas({ usuario: { id: 20, rol_id: 2 } });
+    const res = await request(app).get('/api/pedidos/5/qr');
+    expect(res.status).toBe(404);
+  });
+
+  test('dueño -> 404', async () => {
+    fijarLecturas({ usuario: { id: 30, rol_id: 3 } });
+    const res = await request(app).get('/api/pedidos/5/qr');
+    expect(res.status).toBe(404);
+  });
+
+  test.each(['entregado', 'cancelado'])('estado %s -> 409 (QR no disponible)', async (estado) => {
+    fijarLecturas({
+      usuario: { id: 10, rol_id: 1 },
+      pedidos: { data: { id: 5, usuario_id: 10, estado, qr_token: 'tok-5' }, error: null }
+    });
+    const res = await request(app).get('/api/pedidos/5/qr');
+    expect(res.status).toBe(409);
+  });
+
+  test('pedido inexistente -> 404', async () => {
+    fijarLecturas({ usuario: { id: 10, rol_id: 1 }, pedidos: { data: null, error: null } });
+    const res = await request(app).get('/api/pedidos/999/qr');
+    expect(res.status).toBe(404);
+  });
+
+  test('id invalido -> 400', async () => {
+    fijarLecturas({ usuario: { id: 10, rol_id: 1 } });
+    const res = await request(app).get('/api/pedidos/abc/qr');
+    expect(res.status).toBe(400);
+  });
+
+  test('no devuelve codigo_retiro_diario ni imagen; si qr_token', async () => {
+    const reg = fijarLecturas({
+      usuario: { id: 10, rol_id: 1 },
+      pedidos: { data: { id: 5, usuario_id: 10, estado: 'listo', qr_token: 'tok-5' }, error: null }
+    });
+    const res = await request(app).get('/api/pedidos/5/qr');
+    expect(res.body).not.toHaveProperty('codigo_retiro_diario');
+    expect(res.body).not.toHaveProperty('qr_image');
+    // El endpoint dedicado SI proyecta qr_token (y solo ese).
+    expect(camposDe(reg.pedidos.select)).toContain('qr_token');
+    expect(camposDe(reg.pedidos.select)).not.toContain('codigo_retiro_diario');
+  });
+});
+
+describe('regresion D.5-B', () => {
+  test('token-contingencia sigue respondiendo { token } al propietario', async () => {
+    fijarLecturas({
+      usuario: { id: 10, rol_id: 1 },
+      pedidos: { data: { id: 5, usuario_id: 10, cafeteria_id: 1 }, error: null }
+    });
+    const res = await request(app).get('/api/pedidos/5/token-contingencia');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('token');
+    expect(res.body).not.toHaveProperty('codigo_retiro_diario');
   });
 });
