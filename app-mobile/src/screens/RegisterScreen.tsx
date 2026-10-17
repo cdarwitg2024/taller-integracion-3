@@ -101,11 +101,16 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
       }
 
       if (data.user) {
-        // S2-T1: Si Supabase requiere confirmación de correo (email confirmation activada),
+        // S2-T2: En Supabase con protección de enumeración de correos, si el correo
+        // ya existe, GoTrue devuelve el usuario con identities = [] y no envía nuevo correo.
+        if (data.user.identities && data.user.identities.length === 0) {
+          setErrorMessage('Este correo institucional ya se encuentra registrado. Por favor inicia sesión.');
+          return;
+        }
+
+        // Si Supabase requiere confirmación de correo (email confirmation activada),
         // no hay sesión activa inmediata (data.session === null).
-        const pendingConfirmation =
-          !data.session &&
-          (!data.user.confirmed_at || data.user.identities?.length === 0);
+        const pendingConfirmation = !data.session && !data.user.confirmed_at;
 
         const alertTitle = pendingConfirmation
           ? '¡Verifica tu correo!'

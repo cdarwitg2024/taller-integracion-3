@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   Text,
   View,
   TextInput,
@@ -37,7 +38,43 @@ export const LoginScreen = ({
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [showResendConfirmation, setShowResendConfirmation] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleResendConfirmation = async () => {
+    if (!email.trim()) {
+      Alert.alert(
+        'Correo requerido',
+        'Ingresa tu correo institucional en el campo superior para reenviarte el enlace de confirmación.'
+      );
+      return;
+    }
+
+    setResendingEmail(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim().toLowerCase(),
+        options: {
+          emailRedirectTo: 'coffeefast://auth/callback',
+        },
+      });
+
+      if (error) {
+        Alert.alert('No fue posible reenviar', error.message);
+      } else {
+        Alert.alert(
+          '¡Correo de confirmación enviado!',
+          `Hemos reenviado el enlace a ${email.trim().toLowerCase()}. Por favor revisa tu bandeja de entrada o spam para activar tu cuenta.`
+        );
+      }
+    } catch {
+      Alert.alert('Error', 'Ocurrió un problema al solicitar el reenvío de confirmación.');
+    } finally {
+      setResendingEmail(false);
+    }
+  };
 
   const handleLogin = async () => {
     setErrorMessage(null);
@@ -58,12 +95,17 @@ export const LoginScreen = ({
 
     if (error) {
       if (error.message.includes('Invalid login credentials')) {
+        setShowResendConfirmation(false);
         setErrorMessage('Correo o contraseña incorrectos.');
       } else if (error.message.includes('Email not confirmed')) {
-        setErrorMessage('Tu correo aún no ha sido confirmado.');
+        setShowResendConfirmation(true);
+        setErrorMessage('Tu correo institucional aún no ha sido confirmado.');
       } else {
+        setShowResendConfirmation(false);
         setErrorMessage(error.message);
       }
+    } else {
+      setShowResendConfirmation(false);
     }
   };
 
@@ -94,10 +136,22 @@ export const LoginScreen = ({
             </Text>
           </View>
 
-          {/* Alerta de Error */}
+          {/* Alerta de Error y Reenvío de Confirmación */}
           {errorMessage && (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{errorMessage}</Text>
+              {showResendConfirmation && (
+                <TouchableOpacity
+                  style={styles.resendBtn}
+                  onPress={handleResendConfirmation}
+                  disabled={resendingEmail}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.resendBtnText}>
+                    {resendingEmail ? 'Reenviando correo...' : 'Reenviar enlace de confirmación'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -279,19 +333,32 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     backgroundColor: colors.rojoBg,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderRadius: 12,
     marginBottom: spacing.lg,
+    gap: spacing.xs,
   },
   errorText: {
     color: colors.rojo,
     fontSize: typography.cuerpoPequeno,
-    flex: 1,
     fontWeight: typography.pesoMedio,
+    lineHeight: 18,
+  },
+  resendBtn: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.cafeOscuro,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  resendBtnText: {
+    color: colors.textoBlanco,
+    fontSize: typography.micro,
+    fontWeight: typography.pesoBold,
   },
   labelRow: {
     flexDirection: 'row',
