@@ -81,6 +81,7 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
         email: email.trim().toLowerCase(),
         password: password,
         options: {
+          emailRedirectTo: 'coffeefast://auth/callback',
           data: {
             first_name: firstName,
             last_name: lastName,
@@ -100,9 +101,23 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
       }
 
       if (data.user) {
+        // S2-T1: Si Supabase requiere confirmación de correo (email confirmation activada),
+        // no hay sesión activa inmediata (data.session === null).
+        const pendingConfirmation =
+          !data.session &&
+          (!data.user.confirmed_at || data.user.identities?.length === 0);
+
+        const alertTitle = pendingConfirmation
+          ? '¡Verifica tu correo!'
+          : '¡Registro exitoso!';
+
+        const alertMessage = pendingConfirmation
+          ? 'Hemos enviado un enlace de confirmación a tu correo institucional (@alu.uct.cl). Por favor revísalo para activar tu cuenta antes de iniciar sesión.'
+          : 'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.';
+
         Alert.alert(
-          '¡Registro exitoso!',
-          'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.',
+          alertTitle,
+          alertMessage,
           [
             {
               text: 'OK',

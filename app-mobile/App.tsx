@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   BackHandler,
   Image,
+  Linking,
   View,
   StyleSheet,
   Text,
@@ -138,6 +139,48 @@ function AppContent() {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // S2-T1: Manejo de Deep Linking para confirmación de correo (coffeefast://auth/callback)
+  useEffect(() => {
+    const handleDeepLink = async (url: string | null) => {
+      if (!url) return;
+      try {
+        const hashOrQuery = url.includes('#') ? url.split('#')[1] : url.split('?')[1];
+        if (!hashOrQuery) return;
+
+        const params = new URLSearchParams(hashOrQuery);
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const type = params.get('type');
+
+        if (accessToken && refreshToken) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (!error && data?.session) {
+            setSession(data.session);
+            if (type === 'signup') {
+              Alert.alert(
+                '¡Cuenta confirmada!',
+                'Tu correo ha sido verificado exitosamente. Ya puedes utilizar CoffeeFast.'
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[DeepLink] Error procesando enlace de autenticación:', err);
+      }
+    };
+
+    Linking.getInitialURL().then(handleDeepLink);
+    const linkingSub = Linking.addEventListener('url', (event) => handleDeepLink(event.url));
+
+    return () => {
+      linkingSub.remove();
+    };
   }, []);
 
   /**
