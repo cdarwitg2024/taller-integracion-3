@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   BackHandler,
   Image,
+  Linking,
   View,
   StyleSheet,
   Text,
@@ -138,6 +139,80 @@ function AppContent() {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // S2-T2: Manejo robusto de Deep Linking para confirmación de correo (coffeefast://auth/callback)
+  // Soporta tanto flujo implícito (access_token en hash) como flujo PKCE (code en query),
+  // y notifica errores claros si el enlace expiró o fue reutilizado.
+  useEffect(() => {
+    const handleDeepLink = async (url: string | null) => {
+      if (!url) return;
+      try {
+        // Extraer tanto query string como hash fragment
+        const queryPart = url.includes('?') ? url.split('?')[1].split('#')[0] : '';
+        const hashPart = url.includes('#') ? url.split('#')[1] : '';
+        const combined = [queryPart, hashPart].filter(Boolean).join('&');
+        if (!combined) return;
+
+        const params = new URLSearchParams(combined);
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const code = params.get('code');
+        const type = params.get('type');
+        const error = params.get('error');
+        const errorDescription = params.get('error_description');
+
+        if (error || errorDescription) {
+          const mensajeError = decodeURIComponent(
+            (errorDescription || error || 'El enlace de confirmación no es válido o ha expirado.').replace(/\+/g, ' ')
+          );
+          Alert.alert('Error de confirmación', mensajeError);
+          return;
+        }
+
+        // Caso 1: Flujo PKCE (código de autorización)
+        if (code) {
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (!exchangeError && data?.session) {
+            setSession(data.session);
+            Alert.alert(
+              '¡Cuenta confirmada!',
+              'Tu correo institucional ha sido verificado exitosamente. Ya puedes utilizar CoffeeFast.'
+            );
+            return;
+          } else if (exchangeError) {
+            console.warn('[DeepLink] Error en exchangeCodeForSession:', exchangeError.message);
+          }
+        }
+
+        // Caso 2: Flujo implícito (tokens directos)
+        if (accessToken && refreshToken) {
+          const { data, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (!sessionError && data?.session) {
+            setSession(data.session);
+            Alert.alert(
+              '¡Cuenta confirmada!',
+              'Tu correo institucional ha sido verificado exitosamente. Ya puedes utilizar CoffeeFast.'
+            );
+          } else if (sessionError) {
+            console.warn('[DeepLink] Error en setSession:', sessionError.message);
+          }
+        }
+      } catch (err) {
+        console.warn('[DeepLink] Error procesando enlace de autenticación:', err);
+      }
+    };
+
+    Linking.getInitialURL().then(handleDeepLink);
+    const linkingSub = Linking.addEventListener('url', (event) => handleDeepLink(event.url));
+
+    return () => {
+      linkingSub.remove();
+    };
   }, []);
 
   /**

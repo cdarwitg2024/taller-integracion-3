@@ -81,6 +81,7 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
         email: email.trim().toLowerCase(),
         password: password,
         options: {
+          emailRedirectTo: 'coffeefast://auth/callback',
           data: {
             first_name: firstName,
             last_name: lastName,
@@ -100,9 +101,28 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
       }
 
       if (data.user) {
+        // S2-T2: En Supabase con protección de enumeración de correos, si el correo
+        // ya existe, GoTrue devuelve el usuario con identities = [] y no envía nuevo correo.
+        if (data.user.identities && data.user.identities.length === 0) {
+          setErrorMessage('Este correo institucional ya se encuentra registrado. Por favor inicia sesión.');
+          return;
+        }
+
+        // Si Supabase requiere confirmación de correo (email confirmation activada),
+        // no hay sesión activa inmediata (data.session === null).
+        const pendingConfirmation = !data.session && !data.user.confirmed_at;
+
+        const alertTitle = pendingConfirmation
+          ? '¡Verifica tu correo!'
+          : '¡Registro exitoso!';
+
+        const alertMessage = pendingConfirmation
+          ? 'Hemos enviado un enlace de confirmación a tu correo institucional (@alu.uct.cl). Por favor revísalo para activar tu cuenta antes de iniciar sesión.'
+          : 'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.';
+
         Alert.alert(
-          '¡Registro exitoso!',
-          'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.',
+          alertTitle,
+          alertMessage,
           [
             {
               text: 'OK',
