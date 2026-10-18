@@ -1,0 +1,38 @@
+# ms-pedidos — Horizontal Pod Autoscaler (basado en utilización de CPU).
+#
+# Autoscaling independiente para ms-pedidos. Requiere:
+#   1. Metrics API (metrics.k8s.io) operativa en el clúster;
+#   2. que el contenedor declare requests.cpu (actualmente 50m), que es la
+#      base del cálculo de "Utilization" (uso_actual / requests.cpu).
+#
+# Este manifiesto vive en k8s-next/ a proposito, junto a deployment.yaml y
+# service.yaml (la arboleria k8s/ es la vieja, con backend-node).
+#
+# maxReplicas: 2 se eligió por análisis global de ResourceQuota (ver
+# docs/kubernetes/configuracion-hpa-microservicios.md): con los 3 microservicios
+# a max 2 + 3 Pods fijos (gateway, ms-inventario, fortio) el namespace llega a
+# 9/12 Pods, conservando margen para rolling updates e infraestructura.
+#
+# Nota: NO se define "behavior" ni métricas de memoria todavia. HPA mínimo.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ms-pedidos
+  namespace: student-cdarwitg
+  labels:
+    app: ms-pedidos
+    ms: pedidos
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-pedidos
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
