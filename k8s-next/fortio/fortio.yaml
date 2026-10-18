@@ -1,0 +1,33 @@
+# Fortio - generador de carga del stack vigente de CoffeeFast.
+#
+# Es un **Pod standalone** (`kind: Pod`), NO un Deployment: se usa una sola
+# instancia durante las pruebas de carga y se retira despues.
+# `restartPolicy: Never` evita que Kubernetes lo reinicie solo si el proceso
+# termina.
+#
+# Este manifiesto REPRESENTA el Pod `fortio` que ya esta corriendo en el
+# namespace `student-cdarwitg` (descubierto en S2-T6). Es solo declaracion:
+# **NO se aplica en S2-T6** porque `kubectl apply` sobre un Pod existente puede
+# recrearlo y dejaria momentaneamente dos/ninguno. Las pruebas se lanzan con
+# `kubectl exec` sobre el Pod vivo (ver k8s-next/comandos-fortio.ps1).
+#
+# Recursos compatibles con la ResourceQuota del namespace
+# (requests 25m/64Mi, limits 100m/128Mi).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fortio
+  namespace: student-cdarwitg
+spec:
+  restartPolicy: Never
+  containers:
+    - name: fortio
+      image: fortio/fortio
+      args: ["server"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
