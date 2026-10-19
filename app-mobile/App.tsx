@@ -17,6 +17,7 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
+import { ConfirmationErrorScreen } from './src/screens/ConfirmationErrorScreen';
 import { CafeteriaListScreen } from './src/screens/CafeteriaListScreen';
 import MenuScreen from './src/screens/MenuScreen';
 import CartScreen from './src/screens/CartScreen';
@@ -101,8 +102,13 @@ function AppContent() {
   // FR-04: 'forgot' pide el código de recuperación,
   // 'reset' define la contraseña nueva una vez validado el código
   const [authScreen, setAuthScreen] = useState<
-    'login' | 'register' | 'forgot' | 'reset'
+    'login' | 'register' | 'forgot' | 'reset' | 'confirmation-error'
   >('login');
+  const [confirmationError, setConfirmationError] = useState<{
+    title?: string;
+    description?: string;
+    code?: string;
+  } | null>(null);
   const [isGuest, setIsGuest] = useState(false);
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
@@ -141,9 +147,8 @@ function AppContent() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // S2-T2: Manejo robusto de Deep Linking para confirmación de correo (coffeefast://auth/callback)
-  // Soporta tanto flujo implícito (access_token en hash) como flujo PKCE (code en query),
-  // y notifica errores claros si el enlace expiró o fue reutilizado.
+  // S2-T4: Manejo comprensible y robusto de enlaces de confirmación inválidos,
+  // expirados o ya utilizados (evita dejar al estudiante en una pantalla rota).
   useEffect(() => {
     const handleDeepLink = async (url: string | null) => {
       if (!url) return;
@@ -160,13 +165,38 @@ function AppContent() {
         const code = params.get('code');
         const type = params.get('type');
         const error = params.get('error');
+        const errorCode = params.get('error_code');
         const errorDescription = params.get('error_description');
 
-        if (error || errorDescription) {
-          const mensajeError = decodeURIComponent(
-            (errorDescription || error || 'El enlace de confirmación no es válido o ha expirado.').replace(/\+/g, ' ')
-          );
-          Alert.alert('Error de confirmación', mensajeError);
+        // S2-T4: Si GoTrue devuelve un error directo en la URL
+        if (error || errorDescription || errorCode) {
+          const rawDesc = errorDescription || error || '';
+          const decodedDesc = decodeURIComponent(rawDesc.replace(/\+/g, ' '));
+
+          let title = 'Enlace no disponible o expirado';
+          let description =
+            'El enlace de confirmación ha expirado por motivos de seguridad (24 horas) o ya fue utilizado previamente. Si tu cuenta ya fue confirmada, puedes iniciar sesión directamente.';
+
+          if (
+            errorCode === 'otp_expired' ||
+            decodedDesc.toLowerCase().includes('expired') ||
+            decodedDesc.toLowerCase().includes('invalid')
+          ) {
+            title = 'Enlace de confirmación expirado';
+            description =
+              'Este enlace de confirmación ya no es válido porque ha superado el tiempo límite de vigencia (24 horas). Puedes solicitar uno nuevo o iniciar sesión si ya habías activado tu cuenta.';
+          } else if (decodedDesc.toLowerCase().includes('access_denied')) {
+            title = 'Acceso denegado al enlace';
+            description =
+              'No fue posible verificar tu enlace de confirmación. Puede haber sido alterado o ya haber sido procesado.';
+          }
+
+          setConfirmationError({
+            title,
+            description,
+            code: errorCode || error || undefined,
+          });
+          setAuthScreen('confirmation-error');
           return;
         }
 
@@ -175,6 +205,7 @@ function AppContent() {
           const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           if (!exchangeError && data?.session) {
             setSession(data.session);
+            setAuthScreen('login');
             Alert.alert(
               '¡Cuenta confirmada!',
               'Tu correo institucional ha sido verificado exitosamente. Ya puedes utilizar CoffeeFast.'
@@ -182,6 +213,15 @@ function AppContent() {
             return;
           } else if (exchangeError) {
             console.warn('[DeepLink] Error en exchangeCodeForSession:', exchangeError.message);
+            // S2-T4: Manejar error cuando el código PKCE ya fue usado o expiró
+            setConfirmationError({
+              title: 'Enlace ya utilizado o expirado',
+              description:
+                'El código de validación de este enlace ya fue canjeado o ha caducado. Si tu cuenta ya fue verificada, puedes iniciar sesión directamente.',
+              code: exchangeError.message,
+            });
+            setAuthScreen('confirmation-error');
+            return;
           }
         }
 
@@ -194,16 +234,33 @@ function AppContent() {
 
           if (!sessionError && data?.session) {
             setSession(data.session);
+            setAuthScreen('login');
             Alert.alert(
               '¡Cuenta confirmada!',
               'Tu correo institucional ha sido verificado exitosamente. Ya puedes utilizar CoffeeFast.'
             );
+            return;
           } else if (sessionError) {
             console.warn('[DeepLink] Error en setSession:', sessionError.message);
+            // S2-T4: Manejar error cuando los tokens son inválidos o expiraron
+            setConfirmationError({
+              title: 'Sesión del enlace expirada o inválida',
+              description:
+                'Los datos de acceso del enlace ya no son válidos. Si ya activaste tu cuenta, puedes iniciar sesión directamente.',
+              code: sessionError.message,
+            });
+            setAuthScreen('confirmation-error');
+            return;
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('[DeepLink] Error procesando enlace de autenticación:', err);
+        setConfirmationError({
+          title: 'Error al procesar el enlace',
+          description:
+            'Ocurrió un problema inesperado al abrir el enlace de confirmación. Puedes intentar iniciar sesión o solicitar un nuevo correo.',
+        });
+        setAuthScreen('confirmation-error');
       }
     };
 
@@ -538,8 +595,11 @@ function AppContent() {
   // sesión. Al validar el código el usuario YA tiene una sesión temporal, así
   // que si esperáramos a `isUserAllowed` la pantalla quedaría inalcanzable.
   const mostrarReset = authScreen === 'reset';
+  // S2-T4: la pantalla de error de enlace de confirmación también se muestra
+  // de forma prioritaria, evitando dejar al estudiante en una pantalla rota.
+  const mostrarConfirmationError = authScreen === 'confirmation-error';
 
-  if (mostrarReset || !isUserAllowed) {
+  if (mostrarReset || mostrarConfirmationError || !isUserAllowed) {
     return (
       <SafeAreaProvider>
         {authScreen === 'login' ? (
@@ -561,6 +621,12 @@ function AppContent() {
               await supabase.auth.signOut();
               setAuthScreen('login');
             }}
+          />
+        ) : mostrarConfirmationError ? (
+          <ConfirmationErrorScreen
+            onNavigateToLogin={() => setAuthScreen('login')}
+            onNavigateToRegister={() => setAuthScreen('register')}
+            errorInfo={confirmationError || undefined}
           />
         ) : (
           <RegisterScreen onNavigateToLogin={() => setAuthScreen('login')} />
