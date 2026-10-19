@@ -3,7 +3,6 @@ import { Box, Grid, Alert, Button } from '@mui/material';
 
 import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 import pedidosService from '../../services/pedidosService';
-import DashboardHeader from '../../components/dashboard/DashboardHeader';
 import KpiCards from '../../components/dashboard/KpiCards';
 import SalesChart from '../../components/dashboard/SalesChart';
 import OrdersDistributionChart from '../../components/dashboard/OrdersDistributionChart';
@@ -77,9 +76,6 @@ function Dashboard() {
 
   return (
     <Box sx={{ width: '100%', maxWidth: '100%', pb: 4, boxSizing: 'border-box' }}>
-      {/* 1. Encabezado y Acción de Actualizar */}
-      <DashboardHeader onRefresh={loadData} loading={loading} />
-
       {/* Alerta de Error de Base de Datos */}
       {dbError && (
         <Alert

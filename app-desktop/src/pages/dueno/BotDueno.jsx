@@ -56,74 +56,7 @@ function BotDueno({ currentUser }) {
 
   return (
     <Box sx={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
-      {/* 1. CABECERA DE LA PÁGINA */}
-      <Box
-        sx={{
-          mb: 3,
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Typography variant="h4" fontWeight={800} sx={{ color: 'text.primary', letterSpacing: '-0.5px' }}>
-            Bot y Asistente del Dueño
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            Consola interactiva del Bot CoffeeFaster, diagnóstico de servicio y ejecución de consultas de existencias en tiempo real.
-          </Typography>
-        </Box>
-
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={loadingHealth ? <CircularProgress size={14} color="inherit" /> : <RefreshOutlinedIcon />}
-            onClick={loadData}
-            disabled={loadingHealth}
-            sx={{
-              borderColor: '#D7CCC8',
-              color: '#5D4037',
-              borderRadius: '10px',
-              textTransform: 'none',
-              fontWeight: 600,
-              py: 0.8,
-              px: 1.8,
-              '&:hover': {
-                backgroundColor: '#FAF7F5',
-                borderColor: '#A1887F',
-              },
-            }}
-          >
-            Actualizar Estado
-          </Button>
-
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<SettingsOutlinedIcon />}
-            onClick={() => setConfigModalOpen(true)}
-            sx={{
-              backgroundColor: '#433225',
-              color: '#FFFFFF',
-              borderRadius: '10px',
-              textTransform: 'none',
-              fontWeight: 700,
-              py: 0.8,
-              px: 2,
-              boxShadow: 'none',
-              '&:hover': {
-                backgroundColor: '#2D231B',
-                boxShadow: 'none',
-              },
-            }}
-          >
-            Vincular Telegram
-          </Button>
-        </Stack>
-      </Box>
+      {/* 2. TARJETAS DE ESTADO Y VINCULACIÓN COMPACTAS */}
 
       {/* 2. TARJETAS DE ESTADO Y VINCULACIÓN COMPACTAS */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2.5 }}>

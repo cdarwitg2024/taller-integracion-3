@@ -3,7 +3,7 @@ import Sidebar from '../components/sidebar';
 
 const drawerWidth = 260;
 
-function AppLayout({ currentPage, onNavigate, onLogout, menuItems, subtitle, currentUser, children }) {
+function AppLayout({ currentPage, onNavigate, onLogout, menuItems, subtitle, currentUser, children, headerElement }) {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#FAF7F5', width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
       <Sidebar
@@ -27,6 +27,9 @@ function AppLayout({ currentPage, onNavigate, onLogout, menuItems, subtitle, cur
           boxSizing: 'border-box',
         }}
       >
+        {headerElement && (
+          <Box sx={{ mb: 3 }}>{headerElement}</Box>
+        )}
         {children}
       </Box>
     </Box>
