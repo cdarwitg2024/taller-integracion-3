@@ -101,4 +101,25 @@ const theme = createTheme({
   },
 });
 
+// ── Tokens compartidos del layout de escritorio (KDS / Panel de dueño) ──────
+// Fuente única de verdad: `drawerWidth` estaba repetido en app.jsx,
+// AppLayout.jsx y sidebar.jsx, y las superficies del KDS estaban como hex
+// sueltos en cada componente. Los colores derivan del tema de arriba.
+export const drawerWidth = 260;
+
+export const kdsColors = {
+  canvas: theme.palette.background.default, // fondo general de las vistas
+  surface: theme.palette.background.paper, // tarjetas / superficies claras
+  border: theme.palette.divider, // bordes y separadores
+  header: theme.palette.primary.main, // barra superior del KDS
+  sidebar: '#433225', // café un tono más oscuro que el header (prototipos)
+  accent: '#C86237', // botón principal (Escanear QR)
+  accentHover: '#B2522B',
+  onDark: theme.palette.common.white, // texto sobre fondos oscuros
+  onDarkMuted: '#C8B6A6',
+  onDarkSoft: '#D0C0B4',
+  textPrimary: theme.palette.text.primary,
+  textSecondary: theme.palette.text.secondary,
+};
+
 export default theme;

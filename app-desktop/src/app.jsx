@@ -10,7 +10,6 @@ import PriceChangeOutlinedIcon from '@mui/icons-material/PriceChangeOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 
-import Sidebar from './components/sidebar';
 import RoleSelector from './pages/auth/RoleSelector';
 import LoginDueno from './pages/dueno/LoginDueno';
 import Dashboard from './pages/dueno/Dashboard';
@@ -23,8 +22,6 @@ import LoginEmpleado from './pages/empleado/LoginEmpleado';
 import Comandas from './pages/empleado/Comandas';
 import StockEmpleado from './pages/empleado/Stock.jsx';
 import { supabase } from './service/supabase';
-
-const drawerWidth = 260;
 
 // Layout compartido con Sidebar adaptado al rol y la ruta activa
 import AppLayout from './layouts/AppLayout';
