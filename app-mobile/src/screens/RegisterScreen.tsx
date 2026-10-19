@@ -35,6 +35,10 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendStatus, setResendStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
   const validateInputs = (): boolean => {
     setErrorMessage(null);
 
@@ -65,6 +69,38 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
     }
 
     return true;
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!registeredEmail) return;
+
+    setResendingEmail(true);
+    setResendStatus(null);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: registeredEmail,
+        options: {
+          emailRedirectTo: 'coffeefast://auth/callback',
+        },
+      });
+
+      if (error) {
+        setResendStatus({ type: 'error', message: error.message });
+      } else {
+        setResendStatus({
+          type: 'success',
+          message: '¡Enlace reenviado! Revisa tu bandeja de entrada o spam.',
+        });
+      }
+    } catch {
+      setResendStatus({
+        type: 'error',
+        message: 'Ocurrió un problema al solicitar el reenvío de confirmación.',
+      });
+    } finally {
+      setResendingEmail(false);
+    }
   };
 
   const handleRegister = async () => {
@@ -112,34 +148,36 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
         // no hay sesión activa inmediata (data.session === null).
         const pendingConfirmation = !data.session && !data.user.confirmed_at;
 
-        const alertTitle = pendingConfirmation
-          ? '¡Verifica tu correo!'
-          : '¡Registro exitoso!';
-
-        const alertMessage = pendingConfirmation
-          ? 'Hemos enviado un enlace de confirmación a tu correo institucional (@alu.uct.cl). Por favor revísalo para activar tu cuenta antes de iniciar sesión.'
-          : 'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.';
-
-        Alert.alert(
-          alertTitle,
-          alertMessage,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setNombreCompleto('');
-                setEmail('');
-                setPassword('');
-                setConfirmPassword('');
-                setAcceptedTerms(false);
-                setErrorMessage(null);
-                if (onNavigateToLogin) {
-                  onNavigateToLogin();
-                }
+        if (pendingConfirmation) {
+          // S2-T3: Mostrar estado visual dedicado "Revisa tu correo"
+          setRegisteredEmail(email.trim().toLowerCase());
+          setPassword('');
+          setConfirmPassword('');
+          setAcceptedTerms(false);
+          setErrorMessage(null);
+          setResendStatus(null);
+        } else {
+          Alert.alert(
+            '¡Registro exitoso!',
+            'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  setNombreCompleto('');
+                  setEmail('');
+                  setPassword('');
+                  setConfirmPassword('');
+                  setAcceptedTerms(false);
+                  setErrorMessage(null);
+                  if (onNavigateToLogin) {
+                    onNavigateToLogin();
+                  }
+                },
               },
-            },
-          ]
-        );
+            ]
+          );
+        }
       }
     } catch (err: any) {
       setErrorMessage('Ocurrió un error inesperado. Inténtalo de nuevo.');
@@ -147,6 +185,144 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
       setLoading(false);
     }
   };
+
+  if (registeredEmail) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+          {/* Encabezado Superior / Brand */}
+          <View style={styles.topHeader}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => {
+                setRegisteredEmail(null);
+                setResendStatus(null);
+              }}
+              accessibilityLabel="Volver al formulario de registro"
+            >
+              <Text style={styles.backArrow}>←</Text>
+            </TouchableOpacity>
+            <View style={styles.brandContainer}>
+              <Image source={logo} style={styles.logoBadge} accessibilityIgnoresInvertColors />
+              <Text style={styles.brandName}>CoffeeFast</Text>
+            </View>
+          </View>
+
+          {/* Badge Institucional */}
+          <View style={styles.badgeContainer}>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>CONFIRMACIÓN PENDIENTE • UCT</Text>
+            </View>
+          </View>
+
+          {/* Tarjeta Principal de Revisa tu Correo */}
+          <Card variant="elevated" padding="lg">
+            <View style={styles.iconCenterContainer}>
+              <View style={styles.mailIconCircle}>
+                <Text style={styles.mailEmoji}>✉️</Text>
+              </View>
+            </View>
+
+            <Text style={styles.checkEmailTitle}>Revisa tu correo</Text>
+            <Text style={styles.checkEmailSubtitle}>
+              Hemos enviado un enlace de confirmación a tu cuenta institucional:
+            </Text>
+
+            <View style={styles.emailPill}>
+              <Text style={styles.emailPillText}>{registeredEmail}</Text>
+            </View>
+
+            <View style={styles.stepsContainer}>
+              <View style={styles.stepRow}>
+                <View style={styles.stepNumberBadge}>
+                  <Text style={styles.stepNumberText}>1</Text>
+                </View>
+                <Text style={styles.stepText}>
+                  Abre tu bandeja de entrada institucional en <Text style={styles.boldText}>@alu.uct.cl</Text>.
+                </Text>
+              </View>
+
+              <View style={styles.stepRow}>
+                <View style={styles.stepNumberBadge}>
+                  <Text style={styles.stepNumberText}>2</Text>
+                </View>
+                <Text style={styles.stepText}>
+                  Busca el correo de <Text style={styles.boldText}>CoffeeFast</Text> (revisa también <Text style={styles.boldText}>Spam</Text>).
+                </Text>
+              </View>
+
+              <View style={styles.stepRow}>
+                <View style={styles.stepNumberBadge}>
+                  <Text style={styles.stepNumberText}>3</Text>
+                </View>
+                <Text style={styles.stepText}>
+                  Presiona el enlace de confirmación para activar tu acceso.
+                </Text>
+              </View>
+            </View>
+
+            {/* Ayuda para desarrollo local */}
+            {__DEV__ && (
+              <View style={styles.devBox}>
+                <Text style={styles.devTitle}>Entorno local de desarrollo</Text>
+                <Text style={styles.devText}>
+                  El correo se captura localmente en Mailpit:{'\n'}
+                  http://127.0.0.1:54324
+                </Text>
+              </View>
+            )}
+
+            {/* Feedback de reenvío */}
+            {resendStatus && (
+              <View style={resendStatus.type === 'success' ? styles.successBox : styles.errorBox}>
+                <Text style={resendStatus.type === 'success' ? styles.successText : styles.errorText}>
+                  {resendStatus.message}
+                </Text>
+              </View>
+            )}
+
+            {/* Botón principal */}
+            <Button
+              title="Ya confirmé mi cuenta · Iniciar sesión"
+              onPress={() => {
+                setRegisteredEmail(null);
+                setNombreCompleto('');
+                setEmail('');
+                if (onNavigateToLogin) {
+                  onNavigateToLogin();
+                }
+              }}
+              size="lg"
+            />
+
+            {/* Reenviar confirmación */}
+            <Button
+              title={resendingEmail ? 'Reenviando enlace...' : '¿No recibiste el correo? Reenviar'}
+              onPress={handleResendConfirmation}
+              variant="ghost"
+              size="md"
+              loading={resendingEmail}
+              disabled={resendingEmail}
+              style={{ marginTop: spacing.md }}
+            />
+
+            {/* Enlace para corregir correo o volver */}
+            <TouchableOpacity
+              style={styles.changeEmailLink}
+              onPress={() => {
+                setRegisteredEmail(null);
+                setResendStatus(null);
+              }}
+            >
+              <Text style={styles.changeEmailText}>
+                ¿Correo equivocado? <Text style={styles.changeEmailBold}>Volver al formulario</Text>
+              </Text>
+            </TouchableOpacity>
+          </Card>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -468,6 +644,135 @@ const styles = StyleSheet.create({
     color: colors.textoSecundario,
   },
   loginBold: {
+    fontWeight: '700',
+    color: colors.cafeOscuro,
+  },
+  iconCenterContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  mailIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: colors.crema,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.bordeOscuro,
+  },
+  mailEmoji: {
+    fontSize: 32,
+  },
+  checkEmailTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: colors.cafeOscuro,
+    fontFamily: 'serif',
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  checkEmailSubtitle: {
+    fontSize: typography.cuerpo,
+    color: colors.textoSecundario,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
+  emailPill: {
+    backgroundColor: colors.fondo,
+    borderColor: colors.bordeOscuro,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
+  },
+  emailPillText: {
+    fontSize: typography.cuerpo,
+    fontWeight: '700',
+    color: colors.cafeOscuro,
+  },
+  stepsContainer: {
+    backgroundColor: colors.fondo,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    gap: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borde,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  stepNumberBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.cafeOscuro,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepNumberText: {
+    color: colors.textoBlanco,
+    fontSize: typography.etiqueta,
+    fontWeight: '700',
+  },
+  stepText: {
+    flex: 1,
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+    lineHeight: 18,
+  },
+  boldText: {
+    fontWeight: '700',
+    color: colors.cafeOscuro,
+  },
+  devBox: {
+    backgroundColor: colors.doradoBg,
+    borderColor: '#ECD5AA',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  devTitle: {
+    fontSize: typography.etiqueta,
+    fontWeight: '700',
+    color: colors.naranja,
+    marginBottom: 2,
+  },
+  devText: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+    lineHeight: 16,
+  },
+  successBox: {
+    backgroundColor: colors.verdeBg,
+    borderColor: '#C3E6CB',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  successText: {
+    color: '#155724',
+    fontSize: typography.cuerpoPequeno,
+    textAlign: 'center',
+  },
+  changeEmailLink: {
+    alignItems: 'center',
+    marginTop: spacing.lg,
+    paddingVertical: spacing.xs,
+  },
+  changeEmailText: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+  },
+  changeEmailBold: {
     fontWeight: '700',
     color: colors.cafeOscuro,
   },
