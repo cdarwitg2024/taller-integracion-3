@@ -1,50 +1,64 @@
 import React from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
-import { spacing } from '../theme/spacing';
+import { spacing, radius } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
 /**
- * Campo de texto base de CoffeeFast
- * 
+ * Campo de texto base de CoffeeFast.
+ *
+ * S2-T1: componente reutilizable normalizado (label + input + error).
+ *
  * Props:
  * - label: Etiqueta del campo
  * - placeholder: Texto de ayuda
  * - value: Valor del campo
  * - onChangeText: Función al cambiar texto
- * - keyboardType: Tipo de teclado
- * - secureTextEntry: Boolean
- * - maxLength: Longitud máxima
- * - autoCapitalize: 'none' | 'sentences' | 'words' | 'characters'
- * - error: Mensaje de error
- * - style: Estilos adicionales
+ * - error: Mensaje de error (pinta el borde y muestra el texto)
+ * - style: Estilos del contenedor externo
+ * - inputStyle: Estilos del TextInput
+ * - ...rest: Cualquier otra prop de TextInput (keyboardType, secureTextEntry,
+ *   autoCapitalize, autoCorrect, maxLength, onSubmitEditing, returnKeyType,
+ *   editable, multiline, onFocus, onBlur, textContentType, etc.)
+ *
+ * @type {React.FC<{
+ *   label?: React.ReactNode,
+ *   placeholder?: string,
+ *   value?: string,
+ *   onChangeText?: (text: string) => void,
+ *   error?: React.ReactNode,
+ *   style?: any,
+ *   inputStyle?: any,
+ *   autoCapitalize?: 'none'|'sentences'|'words'|'characters',
+ *   autoCorrect?: boolean,
+ *   children?: React.ReactNode,
+ *   readonly [prop: string]: any,
+ * }>}
  */
 const Input = ({
   label,
   placeholder,
   value,
   onChangeText,
-  keyboardType = 'default',
-  secureTextEntry = false,
-  maxLength = undefined,
-  autoCapitalize = 'none',
-  autoCorrect = true,
   error = undefined,
   style = {},
+  inputStyle = {},
+  autoCapitalize = 'none',
+  autoCorrect = true,
+  ...rest
 }) => {
   return (
     <View style={[styles.container, style]}>
       {label && <Text style={styles.label}>{label}</Text>}
       <TextInput
-        style={[styles.input, error && styles.inputError]}
+        style={[styles.input, error && styles.inputError, inputStyle]}
         placeholder={placeholder}
         placeholderTextColor={colors.textoDeshabilitado}
         value={value}
         onChangeText={onChangeText}
-        keyboardType={keyboardType}
-        secureTextEntry={secureTextEntry}
-        maxLength={maxLength}
         autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
+        {...rest}
       />
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
@@ -63,7 +77,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.fondo,
-    borderRadius: 12,
+    borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     fontSize: typography.cuerpo,

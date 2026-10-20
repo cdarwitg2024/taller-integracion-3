@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import { colors } from '../theme/colors';
+import { radius } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 /**
  * Detalle de un producto — FR-08
@@ -192,7 +195,7 @@ const ProductDetail = ({ product, onAdd, onClose, cafeteriaName }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F6F4',
+    backgroundColor: colors.fondo,
   },
 
   scroll: {
@@ -201,7 +204,7 @@ const styles = StyleSheet.create({
 
   hero: {
     height: 230,
-    backgroundColor: '#F3E7DD',
+    backgroundColor: colors.superficieCrema,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -217,15 +220,15 @@ const styles = StyleSheet.create({
 
   soldOutOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(74, 51, 44, 0.55)',
+    backgroundColor: colors.overlayOscuro,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   soldOutText: {
-    color: '#FFFFFF',
+    color: colors.textoBlanco,
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: typography.pesoExtraBold,
     letterSpacing: 1,
   },
 
@@ -236,15 +239,15 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: colors.blancoOverlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   closeText: {
-    color: '#4A332C',
-    fontSize: 16,
-    fontWeight: '700',
+    color: colors.textoPrimario,
+    fontSize: typography.subtitulo,
+    fontWeight: typography.pesoBold,
     lineHeight: 18,
   },
 
@@ -260,8 +263,8 @@ const styles = StyleSheet.create({
   },
 
   tag: {
-    backgroundColor: '#F0E7E0',
-    borderRadius: 12,
+    backgroundColor: colors.superficieCremaSuave,
+    borderRadius: radius.md,
     paddingHorizontal: 10,
     paddingVertical: 4,
     marginRight: 6,
@@ -270,21 +273,21 @@ const styles = StyleSheet.create({
   },
 
   tagText: {
-    color: '#6B5850',
-    fontSize: 10,
-    fontWeight: '700',
+    color: colors.textoMedio,
+    fontSize: typography.etiqueta,
+    fontWeight: typography.pesoBold,
   },
 
   name: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#3D2B26',
+    fontWeight: typography.pesoExtraBold,
+    color: colors.textoOscuro,
   },
 
   price: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#4A332C',
+    fontSize: typography.titulo,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.textoPrimario,
     marginTop: 4,
   },
 
@@ -293,9 +296,9 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#6B5850',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.textoMedio,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginBottom: 8,
@@ -313,23 +316,23 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
 
-  dotOk: { backgroundColor: '#5B8C5A' },
-  dotLow: { backgroundColor: '#B8860B' },
-  dotOut: { backgroundColor: '#B05A4E' },
+  dotOk: { backgroundColor: colors.verdeStock },
+  dotLow: { backgroundColor: colors.naranjaStock },
+  dotOut: { backgroundColor: colors.rojoStock },
 
   availabilityText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: typography.pesoBold,
   },
 
-  textOk: { color: '#5B8C5A' },
-  textLow: { color: '#B8860B' },
-  textOut: { color: '#B05A4E' },
+  textOk: { color: colors.verdeStock },
+  textLow: { color: colors.naranjaStock },
+  textOut: { color: colors.rojoStock },
 
   stockBarTrack: {
     height: 5,
     borderRadius: 3,
-    backgroundColor: '#E6DED8',
+    backgroundColor: colors.stockTrack,
     marginTop: 10,
     overflow: 'hidden',
   },
@@ -339,19 +342,19 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
 
-  stockBarOk: { backgroundColor: '#5B8C5A' },
-  stockBarLow: { backgroundColor: '#B8860B' },
+  stockBarOk: { backgroundColor: colors.verdeStock },
+  stockBarLow: { backgroundColor: colors.naranjaStock },
 
   stockHint: {
-    fontSize: 10,
-    color: '#958781',
+    fontSize: typography.etiqueta,
+    color: colors.textoTenue,
     marginTop: 6,
     lineHeight: 15,
   },
 
   description: {
     fontSize: 13,
-    color: '#6B5850',
+    color: colors.textoMedio,
     lineHeight: 20,
   },
 
@@ -362,15 +365,15 @@ const styles = StyleSheet.create({
   },
 
   modBullet: {
-    color: '#B8860B',
+    color: colors.naranjaStock,
     fontSize: 13,
     marginRight: 6,
   },
 
   modText: {
     flex: 1,
-    fontSize: 12,
-    color: '#6B5850',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoMedio,
     lineHeight: 18,
   },
 
@@ -378,43 +381,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.blanco,
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 18,
     borderTopWidth: 1,
-    borderTopColor: '#EFE8E3',
+    borderTopColor: colors.bordeSuave,
   },
 
   footerPrice: {},
 
   footerPriceLabel: {
-    fontSize: 10,
-    color: '#958781',
-    fontWeight: '600',
+    fontSize: typography.etiqueta,
+    color: colors.textoTenue,
+    fontWeight: typography.pesoMedio,
   },
 
   footerPriceValue: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#4A332C',
+    fontWeight: typography.pesoExtraBold,
+    color: colors.textoPrimario,
   },
 
   addButton: {
-    backgroundColor: '#4A332C',
+    backgroundColor: colors.textoPrimario,
     borderRadius: 22,
     paddingHorizontal: 22,
     paddingVertical: 12,
   },
 
   addButtonDisabled: {
-    backgroundColor: '#D8D3D0',
+    backgroundColor: colors.deshabilitado,
   },
 
   addButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
+    color: colors.textoBlanco,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
   },
 });
 
