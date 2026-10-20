@@ -6,6 +6,7 @@ import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 import Clock from './Clock';
 import ConnectionBadge from './ConnectionBadge';
 import { VOZ_ACTIVA, VOZ_SILENCIADA } from '../services/vozKdsService';
+import { kdsColors } from '../theme/theme';
 
 // T16 · Avisos de voz del KDS.
 // El botón cumple dos funciones distintas según el estado:
@@ -24,8 +25,8 @@ function BotonVoz({ estado, onActivar, onSilenciar }) {
 
   const onClick = activa ? onSilenciar : onActivar;
 
-  const color = activa ? '#2E7D32' : silenciada ? '#6D4C41' : '#C86237';
-  const colorHover = activa ? '#27662B' : silenciada ? '#5D4037' : '#B2522B';
+  const color = activa ? '#2E7D32' : silenciada ? '#6D4C41' : kdsColors.accent;
+  const colorHover = activa ? '#27662B' : silenciada ? '#5D4037' : kdsColors.accentHover;
 
   return (
     <Tooltip title={texto}>
@@ -35,10 +36,11 @@ function BotonVoz({ estado, onActivar, onSilenciar }) {
           startIcon={activa ? <VolumeUpIcon /> : <VolumeOffIcon />}
           sx={{
             backgroundColor: color,
-            color: '#FFFFFF',
+            color: kdsColors.onDark,
             minHeight: 44,
             fontWeight: 800,
             textTransform: 'none',
+            whiteSpace: 'nowrap',
             '&:hover': { backgroundColor: colorHover },
           }}
         >
@@ -56,47 +58,50 @@ function KdsTopBar({ conexion = 'conectado', onEscanear, estadoVoz, onActivarVoz
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 3,
-        backgroundColor: '#4A3B32',
+        gap: { xs: 1.5, md: 2 },
+        backgroundColor: kdsColors.header,
         borderRadius: 2,
-        px: 3,
-        py: 2,
+        px: { xs: 2, md: 3 },
+        py: 1.5,
         minHeight: 72,
+        flexShrink: 0,
       }}
     >
-      <Box sx={{ minWidth: 0 }}>
+      {/* Identidad + aviso: ocupa el espacio flexible y trunca si hace falta */}
+      <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <Typography
           variant="h4"
-          fontWeight={700}
+          fontWeight={800}
+          noWrap
           sx={{
-            color: '#FFFFFF',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            minWidth: 0,
+            color: kdsColors.onDark,
+            fontSize: { xs: '1.4rem', sm: '1.7rem', md: '1.9rem' },
+            lineHeight: 1.2,
           }}
         >
           CoffeeFast - KDS Cocina Central
         </Typography>
         {avisoVoz && (
-          <Typography sx={{ color: '#E8D5C4', fontSize: 12, mt: 0.5 }}>
+          <Typography noWrap sx={{ color: kdsColors.onDarkMuted, fontSize: 12, mt: 0.25 }}>
             {avisoVoz}
           </Typography>
         )}
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+      {/* Acciones: no se encogen y quedan siempre alineadas a la derecha */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, md: 2 }, flexShrink: 0 }}>
         {onEscanear && (
           <Button
             variant="contained"
             startIcon={<QrCodeScannerIcon />}
             onClick={onEscanear}
             sx={{
-              backgroundColor: '#C86237',
+              backgroundColor: kdsColors.accent,
               minHeight: 44,
               fontWeight: 800,
               textTransform: 'none',
-              '&:hover': { backgroundColor: '#B2522B' },
+              whiteSpace: 'nowrap',
+              '&:hover': { backgroundColor: kdsColors.accentHover },
             }}
           >
             Escanear QR

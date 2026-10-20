@@ -1,6 +1,7 @@
 import { Box, Chip, Typography } from '@mui/material';
+import { kdsColors } from '../theme/theme';
 
-function KanbanColumn({ titulo, count, backgroundColor, headerColor = '#4A3B32', children }) {
+function KanbanColumn({ titulo, count, backgroundColor, headerColor = kdsColors.header, children }) {
   return (
     <Box
       sx={{
@@ -8,7 +9,7 @@ function KanbanColumn({ titulo, count, backgroundColor, headerColor = '#4A3B32',
         flexDirection: 'column',
         backgroundColor,
         borderRadius: 3,
-        border: '1px solid #EFEAE6',
+        border: `1px solid ${kdsColors.border}`,
         minWidth: 0,
         minHeight: 0,
       }}
@@ -20,17 +21,26 @@ function KanbanColumn({ titulo, count, backgroundColor, headerColor = '#4A3B32',
           justifyContent: 'space-between',
           gap: 1,
           px: 2.5,
-          py: 2,
+          py: 1.5,
           flexShrink: 0,
         }}
       >
-        <Typography variant="h4" fontWeight={800} sx={{ color: headerColor, fontSize: { xs: '1.5rem', sm: '1.8rem', md: '2rem' } }}>
+        <Typography
+          variant="h4"
+          fontWeight={800}
+          noWrap
+          sx={{
+            color: headerColor,
+            fontSize: { xs: '1.5rem', sm: '1.7rem', md: '1.85rem' },
+            letterSpacing: '-0.3px',
+          }}
+        >
           {titulo}
         </Typography>
         <Chip
           label={count}
           size="medium"
-          sx={{ minWidth: 52, minHeight: 52, fontSize: '1.25rem', fontWeight: 900 }}
+          sx={{ minWidth: 48, minHeight: 48, fontSize: '1.2rem', fontWeight: 900 }}
         />
       </Box>
 

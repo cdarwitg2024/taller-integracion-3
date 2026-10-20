@@ -10,7 +10,6 @@ import PriceChangeOutlinedIcon from '@mui/icons-material/PriceChangeOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 
-import Sidebar from './components/sidebar';
 import PageHeader from './components/dueno/PageHeader';
 import RoleSelector from './pages/auth/RoleSelector';
 import LoginDueno from './pages/dueno/LoginDueno';
@@ -24,8 +23,6 @@ import LoginEmpleado from './pages/empleado/LoginEmpleado';
 import Comandas from './pages/empleado/Comandas';
 import StockEmpleado from './pages/empleado/Stock.jsx';
 import { supabase } from './service/supabase';
-
-const drawerWidth = 260;
 
 // Layout compartido con Sidebar adaptado al rol y la ruta activa
 import AppLayout from './layouts/AppLayout';
@@ -92,7 +89,7 @@ function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
       menuItems={isEmpleado ? empleadoMenuItems : duenoMenuItems}
       subtitle={isEmpleado ? 'Terminal de Cocina' : 'Panel de Administración'}
       currentUser={currentUser}
-      headerElement={!isEmpleado ? buildDuenoHeader() : null}
+      headerElement={!isEmpleado ? buildDuenoHeader(location.pathname) : null}
     >
       <CssBaseline />
       {children}
@@ -100,7 +97,13 @@ function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
   );
 };
 
-function buildDuenoHeader() {
+/**
+ * Cabecera (título + subtítulo) de cada pantalla del panel de dueño.
+ * Recibe `pathname` del `useLocation()` de AuthenticatedLayout: la ruta real
+ * vive en el hash (`#/dueno/dashboard`), por lo que `location` global de
+ * `window` no sirve aquí.
+ */
+function buildDuenoHeader(pathname) {
   const duenoPageHeaders = {
     '/dueno/dashboard': {
       title: 'Dashboard Central',
@@ -124,7 +127,7 @@ function buildDuenoHeader() {
     },
   };
 
-  const headerInfo = duenoPageHeaders[location.pathname];
+  const headerInfo = duenoPageHeaders[pathname];
   if (!headerInfo) return null;
 
   return (

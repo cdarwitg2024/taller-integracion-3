@@ -14,6 +14,25 @@ import kdsRealtime, {
 } from '../../services/kdsRealtime';
 import vozKds, { VOZ_APAGADA, VOZ_SILENCIADA } from '../../services/vozKdsService';
 import { CAFETERIA_ID } from '../../services/backendApi';
+import { kdsColors } from '../../theme/theme';
+
+// Estado vacío de una columna. Se define una sola vez para las tres columnas.
+function EstadoVacioColumna() {
+  return (
+    <Box
+      sx={{
+        borderRadius: 3,
+        border: `2px dashed ${kdsColors.onDarkSoft}`,
+        p: 3,
+        textAlign: 'center',
+      }}
+    >
+      <Typography sx={{ color: kdsColors.textSecondary, fontWeight: 700 }}>
+        Sin comandas
+      </Typography>
+    </Box>
+  );
+}
 
 const COLUMNAS = [
   { estado: 'pendiente', titulo: 'Pendiente', backgroundColor: '#F2ECE7' },
@@ -147,9 +166,9 @@ function Comandas({ currentUser }) {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 128px)',
-        minHeight: 560,
-        pb: 2,
+        // Ocupa el alto disponible que le da AppLayout (que ya mide 100vh).
+        // Sin píxeles mágicos: las columnas del Kanban hacen scroll interno.
+        height: '100%',
       }}
     >
       <Box sx={{ mb: 2, flexShrink: 0 }}>
@@ -188,18 +207,7 @@ function Comandas({ currentUser }) {
                 backgroundColor={col.backgroundColor}
               >
                 {items.length === 0 ? (
-                  <Box
-                    sx={{
-                      borderRadius: 3,
-                      border: '2px dashed #C8B2A1',
-                      p: 3,
-                      textAlign: 'center',
-                    }}
-                  >
-                    <Typography sx={{ color: '#78665B', fontWeight: 700 }}>
-                      Sin comandas
-                    </Typography>
-                  </Box>
+                  <EstadoVacioColumna />
                 ) : (
                   items.map(pedido => (
                     <PedidoCard
