@@ -426,6 +426,37 @@ export const usuarios = {
     }
   },
 
+  // Reconsulta el perfil REAL del usuario autenticado (con su rol) desde la
+  // base de datos. La usa la app en el arranque para no confiar únicamente en
+  // lo guardado en localStorage: si el rol cambió, ya no existe o no es válido,
+  // la sesión se invalida. Distingue respuestas definitivas (`fatal: true`,
+  // como "perfil no encontrado") de errores de red (`fatal: false`), para no
+  // cerrar la sesión de forma equivocada si el servidor no responde.
+  async getPerfilSesion() {
+    if (!isSupabaseConfigured) {
+      return { success: false, error: 'supabase_no_configurado', fatal: false };
+    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const authUserId = session?.user?.id;
+      if (!authUserId) {
+        return { success: false, error: 'sin_sesion', fatal: true };
+      }
+      const { userProfile, profileError } = await fetchPerfilYCafeteria(authUserId);
+      if (profileError || !userProfile) {
+        return { success: false, error: 'perfil_no_encontrado', fatal: true };
+      }
+      const rolNombre = String(userProfile?.roles?.nombre || '')
+        .trim()
+        .toLowerCase();
+      return { success: true, user: { ...userProfile, rol: rolNombre }, rol: rolNombre };
+    } catch (err) {
+      // Error de red u otro no definitivo: no se cierra la sesión.
+      console.warn('Error consultando perfil de sesión:', err);
+      return { success: false, error: 'red', fatal: false };
+    }
+  },
+
   async create(usuario) {
     const { data, error } = await supabase
       .from(TABLE)

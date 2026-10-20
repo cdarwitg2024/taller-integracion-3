@@ -12,6 +12,7 @@ import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 
 import PageHeader from './components/dueno/PageHeader';
 import Login from './pages/auth/Login';
+import AccesoNoAutorizado from './components/AccesoNoAutorizado';
 import Dashboard from './pages/dueno/Dashboard';
 import Productos from './pages/dueno/Productos';
 import Inventario from './pages/dueno/Inventario';
@@ -21,6 +22,7 @@ import LogsValidacion from './pages/dueno/LogsValidacion';
 import Comandas from './pages/empleado/Comandas';
 import StockEmpleado from './pages/empleado/Stock.jsx';
 import { supabase } from './service/supabase';
+import { usuarios } from './service/usuarios';
 
 // Layout compartido con Sidebar adaptado al rol y la ruta activa
 import AppLayout from './layouts/AppLayout';
@@ -137,15 +139,45 @@ function buildDuenoHeader(pathname) {
 }
 
 // Guardia de ruta para proteger accesos no autorizados
+// Normaliza el rol del usuario y solo reconoce los dos roles válidos del
+// sistema (dueño y empleado). Cualquier otro valor (vacío, "admin", "cajero",
+// etc.) se considera un rol no válido y devuelve null.
+function rolNormalizado(rol) {
+  const r = String(rol || '').trim().toLowerCase();
+  if (r === 'empleado') return 'empleado';
+  if (r === 'dueño' || r === 'dueno') return 'dueño';
+  return null;
+}
+
+// Ruta destino según el rol real del usuario. Si el rol no es válido no hay
+// destino (null), para tratarlo como acceso no autorizado en vez de asumir un
+// panel por defecto.
+function destinoPorRol(rol) {
+  const r = rolNormalizado(rol);
+  if (r === 'empleado') return '/empleado/comandas';
+  if (r === 'dueño') return '/dueno/dashboard';
+  return null;
+}
+
 function ProtectedRoute({ currentUser, isAuthenticated, requiredRole, children }) {
   if (!isAuthenticated || !currentUser) {
     // Sin sesión se vuelve al login unificado (ahora no hay selección de rol).
     return <Navigate to="/" replace />;
   }
 
-  const userRole = (currentUser?.roles?.nombre || currentUser?.rol || '').toLowerCase();
-  if (requiredRole && userRole !== requiredRole.toLowerCase()) {
-    return <Navigate to={userRole === 'empleado' ? '/empleado/comandas' : '/dueno/dashboard'} replace />;
+  const rol = rolNormalizado(currentUser?.roles?.nombre || currentUser?.rol);
+
+  // Rol inválido o sin autorización: no se redirige a ningún panel (eso
+  // provocaría un bucle infinito) y se muestra la pantalla de acceso no
+  // autorizado.
+  if (!rol) {
+    return <Navigate to="/acceso-denegado" replace />;
+  }
+
+  // Rol válido pero de otra sección: se lleva al panel que le corresponde.
+  const requerido = rolNormalizado(requiredRole);
+  if (requerido && rol !== requerido) {
+    return <Navigate to={destinoPorRol(rol)} replace />;
   }
 
   return children;
@@ -173,8 +205,10 @@ function App() {
     const syncSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session && isMounted) {
-          // Si Supabase no tiene sesión activa válida, limpiar estado
+        if (!isMounted) return;
+
+        // Sin sesión de Supabase: limpiar el estado guardado en el cliente.
+        if (!session) {
           const storedAuth = localStorage.getItem('coffeefaster_authenticated');
           if (storedAuth === 'true') {
             setIsAuthenticated(false);
@@ -182,7 +216,43 @@ function App() {
             localStorage.removeItem('coffeefaster_authenticated');
             localStorage.removeItem('coffeefaster_user');
           }
+          return;
         }
+
+        // Con sesión activa se re-consulta el rol REAL desde la base de datos
+        // para no confiar solo en localStorage (evita que una sesión conserve
+        // un rol cambiado o datos manipulados en el cliente).
+        const perfil = await usuarios.getPerfilSesion();
+        if (!isMounted) return;
+
+        if (perfil?.success) {
+          setCurrentUser(perfil.user);
+          try {
+            localStorage.setItem('coffeefaster_user', JSON.stringify(perfil.user));
+          } catch {}
+          // Si el rol ya no es válido, la cuenta queda sin autorización.
+          if (!destinoPorRol(perfil.rol)) {
+            setIsAuthenticated(false);
+            setCurrentUser(null);
+            try {
+              localStorage.removeItem('coffeefaster_authenticated');
+              localStorage.removeItem('coffeefaster_user');
+            } catch {}
+            await supabase.auth.signOut();
+          }
+        } else if (perfil?.fatal) {
+          // Respuesta definitiva (sin perfil en la BD o sin sesión): cerrar.
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          try {
+            localStorage.removeItem('coffeefaster_authenticated');
+            localStorage.removeItem('coffeefaster_user');
+          } catch {}
+          if (perfil.error === 'perfil_no_encontrado') {
+            await supabase.auth.signOut();
+          }
+        }
+        // Si no es definitivo (p. ej. error de red), se mantiene la sesión.
       } catch (err) {
         console.warn('Error al verificar sesión activa en Supabase:', err);
       }
@@ -194,7 +264,9 @@ function App() {
   }, []);
 
   const userRole = useMemo(() => {
-    const rol = currentUser?.roles?.nombre || currentUser?.rol || 'dueño';
+    // Sin un rol explícito no se asume ninguno (antes asumía 'dueño', lo que
+    // daba acceso al panel de dueño a cuentas sin rol asignado).
+    const rol = currentUser?.roles?.nombre || currentUser?.rol || '';
     return String(rol).toLowerCase();
   }, [currentUser]);
 
@@ -208,8 +280,10 @@ function App() {
       localStorage.setItem('coffeefaster_authenticated', 'true');
       localStorage.setItem('coffeefaster_user', JSON.stringify(user));
     } catch {}
-    const rol = String(user?.roles?.nombre || user?.rol || '').toLowerCase();
-    navigate(rol === 'empleado' ? '/empleado/comandas' : '/dueno/dashboard');
+    const destino = destinoPorRol(user?.roles?.nombre || user?.rol);
+    // Si el rol no es válido (no debería pasar: el login ya lo valida), se va
+    // a la pantalla de acceso no autorizado en vez de asumir un panel.
+    navigate(destino || '/acceso-denegado');
   };
 
   const handleLogout = async () => {
@@ -232,8 +306,22 @@ function App() {
     <>
       <CssBaseline />
       <Routes>
-        {/* 1. Ruta Principal: Login unificado de escritorio (sin selección de rol) */}
-        <Route path="/" element={<Login onLogin={handleLogin} />} />
+        {/* 1. Ruta Principal: login unificado; si ya hay sesión iniciada, se
+            redirige automáticamente al panel que corresponde según el rol real
+            del usuario (empleado → KDS, dueño → panel administrativo). */}
+        <Route
+          path="/"
+          element={
+            isAuthenticated && currentUser
+              ? (destinoPorRol(userRole)
+                  ? <Navigate to={destinoPorRol(userRole)} replace />
+                  : <Navigate to="/acceso-denegado" replace />)
+              : <Login onLogin={handleLogin} />
+          }
+        />
+
+        {/* Pantalla de acceso no autorizado (rol inválido o sin autorización) */}
+        <Route path="/acceso-denegado" element={<AccesoNoAutorizado onLogout={handleLogout} />} />
 
         {/* URLs de login anteriores: redirigen al login unificado */}
         <Route path="/login" element={<Navigate to="/" replace />} />
