@@ -1,13 +1,26 @@
 // ─── Componente: Tarjeta de Pedido (KDS / Panel Dueño) ──────────────────────
 // Tarjeta de pedido normalizada para la cocina y panel administrativo.
 //
-// Muestra de un vistazo: código del pedido, estado, hora de retiro, productos y
-// la acción disponible para ese estado. El color del acento lateral, el chip de
+// Muestra de un vistazo: código del pedido, estado, horario de retiro, productos
+// y la acción disponible para ese estado. El color del acento lateral, el chip de
 // estado y la cantidad de cada producto salen de BaseBadge/tokens, que es la
-// fuente única de verdad: así el KDS y el panel de dueño usan los mismos
-// colores para el mismo estado.
+// fuente única de verdad: así el KDS y el panel de dueño usan los mismos colores
+// para el mismo estado.
+//
+// IMPORTANTE (2 detalles de MUI v9 / sx):
+//  1. Los tokens SPACING vienen en px reales (12 = 12px), pero dentro de `sx` los
+//     números se multiplican por theme.spacing (×8). Por eso se pasan con `px()`
+//     como string: si no, `px: SPACING.md` se aplicaba como 96px y la tarjeta
+//     desbordaba.
+//  2. Los contenedores flex se declaran con `sx` (y no con los props `flexWrap` /
+//     `justifyContent` de Stack), que en esta versión se filtran al DOM sin
+//     aplicarse.
+//
+// Todos los bloques usan `minWidth: 0` + recorte de texto, para que la tarjeta
+// se adapte a columnas angostas (ventana chica, muchas columnas) en vez de
+// desbordar y quedar cortada.
 
-import { Box, Chip, Divider, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Chip, Divider, Tooltip, Typography } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -21,6 +34,9 @@ import BaseCard from './ui/BaseCard';
 import BaseButton from './ui/BaseButton';
 import BaseBadge, { getEstadoConfig } from './ui/BaseBadge';
 import { COLORS, SPACING, TYPOGRAPHY } from '../design/tokens';
+
+// Los tokens SPACING son px reales; en `sx` hay que declararlos como string.
+const px = (valor) => `${valor}px`;
 
 // Flujo de estados del pedido y la acción disponible en cada uno:
 // pendiente → en_preparacion → listo.
@@ -45,25 +61,39 @@ const ACCION_POR_ESTADO = {
   },
 };
 
+// Contenedor flex declarado con sx: envuelve en pantallas angostas y respeta
+// los gaps, sin depender de props de Stack que esta versión de MUI no aplica.
+const filaFlex = {
+  display: 'flex',
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: px(SPACING.sm),
+  minWidth: 0,
+};
+
 function PedidoCard({ pedido, onOpen, onChangeEstado }) {
   const configEstado = getEstadoConfig(pedido.estado);
   const accion = ACCION_POR_ESTADO[pedido.estado];
   const horaRetiro = horaRetiroPedido(pedido);
   const estadoImpresion = impresionService.getEstadoImpresion(pedido.rawId ?? pedido.id);
+  const nombreCafeteria = pedido.cafeteria_nombre || pedido.ubicacion || '';
 
-  // Texto del horario de retiro, con fallbacks claros cuando no hay hora exacta.
-  const textoRetiro = horaRetiro
-    ? `Retiro ${horaRetiro}`
-    : pedido.franja_retiro
-      ? `Retiro ${pedido.franja_retiro}`
-      : 'Sin hora de retiro';
+  // Texto del horario de retiro, con fallback claro cuando no hay hora exacta.
+  const textoRetiro = horaRetiro ? `Retiro ${horaRetiro}` : 'Sin hora de retiro';
 
   return (
     <BaseCard
       padding="none"
       sx={{
         cursor: 'pointer',
-        mb: SPACING.md,
+        mb: px(SPACING.md),
+        // `display: block` + `minWidth: 0`: la tarjeta y sus bloques se ajustan
+        // al ancho de la columna en vez de quedarse en su ancho natural.
+        display: 'block',
+        boxSizing: 'border-box',
+        maxWidth: '100%',
+        minWidth: 0,
         // Acento de color: identifica el estado sin tener que leer el chip.
         borderLeft: `6px solid ${configEstado.color}`,
         '&:hover': { boxShadow: '0 6px 16px rgba(74, 55, 40, 0.08)' },
@@ -72,119 +102,195 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
       onClick={() => onOpen(pedido)}
     >
       {/* Cabecera: código + estado + tiempo transcurrido */}
-      <Box sx={{ px: SPACING.lg, pt: SPACING.lg, pb: SPACING.md }}>
-        <Stack direction="row" justifyContent="space-between" spacing={SPACING.sm} alignItems="flex-start">
-          <Box sx={{ minWidth: 0 }}>
-            <Stack direction="row" spacing={SPACING.sm} alignItems="center" flexWrap="wrap" useFlexGap>
-              <Typography
-                variant="h5"
-                sx={{
-                  fontSize: { xs: '1.55rem', md: '1.8rem' },
-                  fontWeight: TYPOGRAPHY.fontWeightExtraBold,
-                  color: COLORS.textPrimary,
-                  lineHeight: 1.1,
-                }}
+      <Box
+        sx={{
+          boxSizing: 'border-box',
+          maxWidth: '100%',
+          px: px(SPACING.lg),
+          pt: px(SPACING.md),
+          pb: px(SPACING.sm),
+        }}
+      >
+        <Box sx={{ ...filaFlex, justifyContent: 'space-between' }}>
+          <Typography
+            variant="h5"
+            sx={{
+              minWidth: 0,
+              fontSize: { xs: '1.2rem', md: '1.55rem' },
+              fontWeight: TYPOGRAPHY.fontWeightExtraBold,
+              color: COLORS.textPrimary,
+              lineHeight: 1.15,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {pedido.codigo_pedido || `#${pedido.rawId ?? pedido.id}`}
+          </Typography>
+
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: px(SPACING.xs),
+              minWidth: 0,
+            }}
+          >
+            <BaseBadge
+              estado={pedido.estado}
+              sx={{
+                maxWidth: '100%',
+                // En tarjetas angostas el rótulo se recorta en vez de desbordar.
+                '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
+              }}
+            />
+
+            {estadoImpresion.veces > 0 && (
+              <Tooltip
+                title={
+                  estadoImpresion.veces > 1
+                    ? `Comanda reimpresa (${estadoImpresion.veces} veces)`
+                    : 'Comanda impresa para cocina'
+                }
               >
-                {pedido.codigo_pedido || `#${pedido.rawId ?? pedido.id}`}
-              </Typography>
-
-              <BaseBadge estado={pedido.estado} />
-
-              {estadoImpresion.veces > 0 && (
-                <Tooltip
-                  title={
-                    estadoImpresion.veces > 1
-                      ? `Comanda reimpresa (${estadoImpresion.veces} veces)`
-                      : 'Comanda impresa para cocina'
-                  }
-                >
-                  <Chip
-                    size="small"
-                    icon={<PrintIcon sx={{ fontSize: '13px !important' }} />}
-                    label={estadoImpresion.veces > 1 ? `×${estadoImpresion.veces}` : 'Impresa'}
-                    sx={{
-                      height: 24,
-                      fontSize: '0.75rem',
-                      fontWeight: TYPOGRAPHY.fontWeightBold,
-                      backgroundColor: estadoImpresion.veces > 1 ? COLORS.warningBg : COLORS.surfaceAlt,
-                      color: estadoImpresion.veces > 1 ? COLORS.warning : COLORS.textSecondary,
-                    }}
-                  />
-                </Tooltip>
-              )}
-            </Stack>
-
-            <Typography variant="caption" sx={{ color: COLORS.textSecondary, display: 'block', mt: 0.5 }}>
-              {pedido.cafeteria_nombre || pedido.ubicacion || ''}
-            </Typography>
+                <Chip
+                  size="small"
+                  icon={<PrintIcon sx={{ fontSize: '13px !important' }} />}
+                  label={estadoImpresion.veces > 1 ? `×${estadoImpresion.veces}` : 'Impresa'}
+                  sx={{
+                    height: 24,
+                    fontSize: '0.75rem',
+                    fontWeight: TYPOGRAPHY.fontWeightBold,
+                    backgroundColor: estadoImpresion.veces > 1 ? COLORS.warningBg : COLORS.surfaceAlt,
+                    color: estadoImpresion.veces > 1 ? COLORS.warning : COLORS.textSecondary,
+                  }}
+                />
+              </Tooltip>
+            )}
           </Box>
 
           <TimeAgo
             pedido={pedido}
-            sx={{ fontSize: '1.15rem', fontWeight: TYPOGRAPHY.fontWeightExtraBold, color: COLORS.textPrimary }}
-          />
-        </Stack>
-
-        {/* Horario de retiro */}
-        <Stack direction="row" alignItems="center" spacing={SPACING.sm} sx={{ mt: SPACING.sm }}>
-          <AccessTimeIcon sx={{ fontSize: 22, color: horaRetiro ? configEstado.color : COLORS.textSecondary }} />
-          <Typography
             sx={{
-              fontSize: '1.15rem',
-              fontWeight: TYPOGRAPHY.fontWeightBold,
-              color: horaRetiro ? COLORS.textPrimary : COLORS.textSecondary,
+              flexShrink: 0,
+              ml: 'auto',
+              fontSize: { xs: '0.95rem', md: '1.15rem' },
+              fontWeight: TYPOGRAPHY.fontWeightExtraBold,
+              color: COLORS.textPrimary,
+            }}
+          />
+        </Box>
+
+        {/* Cafetería · horario de retiro (una sola línea, se recorta si no cabe) */}
+        <Box sx={{ ...filaFlex, gap: px(SPACING.xs), mt: px(SPACING.xs) }}>
+          <AccessTimeIcon
+            sx={{
+              flexShrink: 0,
+              fontSize: { xs: 16, md: 18 },
+              color: horaRetiro ? configEstado.color : COLORS.textSecondary,
+            }}
+          />
+          <Typography
+            variant="caption"
+            title={`${nombreCafeteria} · ${textoRetiro}`}
+            sx={{
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              color: COLORS.textSecondary,
+              fontWeight: TYPOGRAPHY.fontWeightMedium,
             }}
           >
-            {textoRetiro}
+            {nombreCafeteria ? `${nombreCafeteria} · ${textoRetiro}` : textoRetiro}
           </Typography>
-        </Stack>
+        </Box>
       </Box>
 
       <Divider sx={{ borderColor: COLORS.border }} />
 
-      {/* Productos: cantidad destacada + nombre */}
-      <Box sx={{ px: SPACING.lg, py: SPACING.md, maxHeight: 170, overflowY: 'auto' }}>
+      {/* Productos: cantidad destacada + nombre (máximo 2 líneas) */}
+      <Box
+        sx={{
+          boxSizing: 'border-box',
+          maxWidth: '100%',
+          px: px(SPACING.lg),
+          py: px(SPACING.sm),
+          maxHeight: { xs: 110, md: 170 },
+          overflowY: 'auto',
+          minWidth: 0,
+        }}
+      >
         {pedido.productos?.length ? (
           pedido.productos.map((item, idx) => (
-            <Stack key={idx} direction="row" alignItems="center" spacing={SPACING.sm} sx={{ py: 0.5 }}>
+            <Box key={idx} sx={{ ...filaFlex, alignItems: 'flex-start', py: '2px' }}>
               <Chip
                 label={`×${item.cantidad}`}
                 size="small"
                 sx={{
-                  minWidth: 44,
-                  height: 26,
                   flexShrink: 0,
+                  minWidth: 38,
+                  height: 24,
                   backgroundColor: configEstado.bg,
                   color: configEstado.color,
                   fontWeight: TYPOGRAPHY.fontWeightExtraBold,
-                  fontSize: '0.85rem',
+                  fontSize: '0.8rem',
                 }}
               />
               <Typography
-                sx={{ fontSize: '1.2rem', fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.textPrimary }}
+                sx={{
+                  minWidth: 0,
+                  fontSize: { xs: '0.95rem', md: '1.1rem' },
+                  fontWeight: TYPOGRAPHY.fontWeightBold,
+                  color: COLORS.textPrimary,
+                  lineHeight: 1.25,
+                  overflow: 'hidden',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                }}
               >
                 {item.nombre}
               </Typography>
-            </Stack>
+            </Box>
           ))
         ) : (
-          <Typography sx={{ color: COLORS.textSecondary }}>Sin productos</Typography>
+          <Typography variant="caption" sx={{ color: COLORS.textSecondary }}>
+            Sin productos
+          </Typography>
         )}
       </Box>
 
       {/* Acción disponible para el estado actual */}
-      <Box sx={{ px: SPACING.lg, pb: SPACING.lg }}>
+      <Box
+        sx={{
+          boxSizing: 'border-box',
+          maxWidth: '100%',
+          px: px(SPACING.lg),
+          pb: px(SPACING.md),
+        }}
+      >
         {accion ? (
           <BaseButton
             className={`variant-${accion.variante}`}
-            fullWidth
-            endIcon={<accion.Icono />}
+            endIcon={<accion.Icono sx={{ flexShrink: 0 }} />}
             onClick={(e) => onChangeEstado(pedido.rawId ?? pedido.id, accion.siguiente, e)}
             sx={{
-              minHeight: 60,
-              fontSize: '1.05rem',
+              width: '100%',
+              minHeight: { xs: 46, md: 56 },
+              px: px(SPACING.sm),
+              fontSize: { xs: '0.8rem', md: '1rem' },
               fontWeight: TYPOGRAPHY.fontWeightExtraBold,
-              letterSpacing: 0.5,
+              letterSpacing: { xs: 0, md: 0.4 },
+              lineHeight: 1.15,
+              textAlign: 'center',
+              // En columnas angostas el rótulo se parte en 2 líneas limpias
+              // (MUI corta el texto por defecto con white-space: nowrap).
+              whiteSpace: 'normal',
+              // El ícono se oculta en pantallas angostas: si no, el rótulo
+              // "PREPARACIÓN" no cabe y se cortaba.
+              '& .MuiButton-endIcon': { display: { xs: 'none', md: 'flex' } },
             }}
           >
             {accion.label}
@@ -192,13 +298,22 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
         ) : (
           <BaseButton
             className="variant-outlined"
-            fullWidth
-            startIcon={<VisibilityOutlinedIcon />}
+            startIcon={<VisibilityOutlinedIcon sx={{ flexShrink: 0 }} />}
             onClick={(e) => {
               e.stopPropagation();
               onOpen(pedido);
             }}
-            sx={{ minHeight: 52, fontSize: '1rem', fontWeight: TYPOGRAPHY.fontWeightBold }}
+            sx={{
+              width: '100%',
+              minHeight: 44,
+              px: px(SPACING.sm),
+              fontSize: { xs: '0.82rem', md: '0.95rem' },
+              fontWeight: TYPOGRAPHY.fontWeightBold,
+              lineHeight: 1.15,
+              textAlign: 'center',
+              whiteSpace: 'normal',
+              '& .MuiButton-startIcon': { display: { xs: 'none', md: 'flex' } },
+            }}
           >
             VER DETALLE
           </BaseButton>
