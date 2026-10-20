@@ -10,6 +10,10 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import BaseCard from '../ui/BaseCard';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER } from '../../design/tokens';
 
+// Nota: en `sx`, un número de SPACING se multiplica ×8 (theme.spacing), así que
+// un margen de 24px quedaría como 192px. Convertimos a string px explícito.
+const px = (valor) => `${valor}px`;
+
 const ICON_CONFIG = {
   ventas: { icon: <AttachMoneyIcon sx={{ fontSize: 32 }} />, bg: COLORS.successBg, color: COLORS.success, border: COLORS.success },
   pedidos: { icon: <ShoppingBagIcon sx={{ fontSize: 30 }} />, bg: COLORS.secondaryLight, color: COLORS.primary, border: COLORS.primary },
@@ -54,7 +58,7 @@ function KpiCards({ stats }) {
   ];
 
   return (
-    <Grid container spacing={3} sx={{ width: '100%', mb: SPACING.xxl }}>
+    <Grid container spacing={3} sx={{ width: '100%', mb: px(SPACING.xxl) }}>
       {cards.map((card) => (
         <Grid size={{ xs: 12, sm: 6, md: 6, lg: 3 }} key={card.id}>
           <BaseCard variant="elevated" padding="lg">
@@ -71,8 +75,8 @@ function KpiCards({ stats }) {
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'flex-start',
-                  gap: SPACING.sm,
-                  mb: SPACING.md,
+                  gap: px(SPACING.sm),
+                  mb: px(SPACING.md),
                 }}
               >
                 <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -92,7 +96,7 @@ function KpiCards({ stats }) {
                     fontWeight={TYPOGRAPHY.fontWeightExtraBold}
                     sx={{
                       color: COLORS.textPrimary,
-                      mt: SPACING.xs,
+                      mt: px(SPACING.xs),
                       letterSpacing: '-0.5px',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
@@ -101,7 +105,7 @@ function KpiCards({ stats }) {
                   >
                     {card.value}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: COLORS.textSecondary, mt: SPACING.xs }}>
+                  <Typography variant="caption" sx={{ color: COLORS.textSecondary, mt: px(SPACING.xs) }}>
                     {card.subtitle}
                   </Typography>
                 </Box>

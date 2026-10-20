@@ -15,6 +15,10 @@ import {
 import BaseBadge from '../ui/BaseBadge';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../design/tokens';
 
+// Nota: en `sx`, un número de SPACING se multiplica ×8 (theme.spacing), así que
+// un relleno de 16px quedaría como 128px. Convertimos a string px explícito.
+const px = (valor) => `${valor}px`;
+
 const ESTADO_CONFIG = {
   pendiente: { label: 'PENDIENTE', bg: COLORS.errorBg, color: COLORS.error },
   preparando: { label: 'EN PREPARACIÓN', bg: COLORS.warningBg, color: COLORS.warning },
@@ -58,7 +62,7 @@ function RecentOrdersTable({ pedidos }) {
         boxSizing: 'border-box',
       }}
     >
-      <Box sx={{ p: SPACING.lg, pb: SPACING.md }}>
+      <Box sx={{ p: px(SPACING.lg), pb: px(SPACING.md) }}>
         <Typography variant="h6" fontWeight={TYPOGRAPHY.fontWeightBold} sx={{ color: COLORS.textPrimary, fontSize: '1.1rem' }}>
           Últimos Pedidos Registrados
         </Typography>
@@ -81,7 +85,7 @@ function RecentOrdersTable({ pedidos }) {
         <BaseTableBody>
           {displayPedidos.length === 0 ? (
             <BaseTableRow>
-              <BaseTableCell colSpan={6} align="center" sx={{ py: SPACING.xl, color: COLORS.textMuted }}>
+              <BaseTableCell colSpan={6} align="center" sx={{ py: px(SPACING.xl), color: COLORS.textMuted }}>
                 No hay pedidos registrados recientemente.
               </BaseTableCell>
             </BaseTableRow>
