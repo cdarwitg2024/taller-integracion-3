@@ -27,7 +27,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import TimeAgo from './TimeAgo';
-import { horaRetiroPedido } from '../utils/dateUtils';
+import { origenRetiroPedido } from '../utils/dateUtils';
 import impresionService from '../services/impresionService';
 
 import BaseCard from './ui/BaseCard';
@@ -75,12 +75,31 @@ const filaFlex = {
 function PedidoCard({ pedido, onOpen, onChangeEstado }) {
   const configEstado = getEstadoConfig(pedido.estado);
   const accion = ACCION_POR_ESTADO[pedido.estado];
-  const horaRetiro = horaRetiroPedido(pedido);
   const estadoImpresion = impresionService.getEstadoImpresion(pedido.rawId ?? pedido.id);
   const nombreCafeteria = pedido.cafeteria_nombre || pedido.ubicacion || '';
 
-  // Texto del horario de retiro, con fallback claro cuando no hay hora exacta.
-  const textoRetiro = horaRetiro ? `Retiro ${horaRetiro}` : 'Sin hora de retiro';
+  // Origen del dato de retiro: la franja elegida por el estudiante (dato real
+  // del pedido) manda sobre la hora exacta, y ambas sobre el estimado. Así la
+  // tarjeta distingue una franja REAL de una hora inventada por nosotros.
+  const retiro = origenRetiroPedido(pedido);
+
+  // Texto del horario de retiro, con un rótulo que deja claro de dónde sale el
+  // dato y un fallback explícito cuando no hay información alguna.
+  const textoRetiro = (() => {
+    if (retiro.tipo === 'franja') return `Franja ${retiro.valor}`;
+    if (retiro.tipo === 'hora') return `Retiro ${retiro.valor}`;
+    if (retiro.tipo === 'estimado') return `Estimado ${retiro.valor}`;
+    return 'Sin franja de retiro';
+  })();
+
+  // El estimado usa un color más tenue: es un cálculo nuestro, no un dato del
+  // pedido, y conviene que no se confunda con la franja real.
+  const colorRetiro =
+    retiro.tipo === 'estimado'
+      ? COLORS.textSecondary
+      : retiro.tipo
+        ? configEstado.color
+        : COLORS.textSecondary;
 
   return (
     <BaseCard
@@ -188,7 +207,7 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
             sx={{
               flexShrink: 0,
               fontSize: { xs: 16, md: 18 },
-              color: horaRetiro ? configEstado.color : COLORS.textSecondary,
+              color: colorRetiro,
             }}
           />
           <Typography

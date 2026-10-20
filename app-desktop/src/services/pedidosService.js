@@ -109,6 +109,19 @@ export function normalizarPedido(fila) {
   // token de contingencia es una credencial y no debe viajar en la tarjeta.
   const idStr = String(fila.id);
 
+  // La hora de retiro puede venir vacía: `formatearHora` devolvería "--:--",
+  // que no es un dato real y se colaba hasta la tarjeta. Se deja en null para
+  // que la pantalla use la franja real del pedido o marque el estimado.
+  const horaRetiroNormalizada = (() => {
+    const hora = formatearHora(fila.hora_retiro);
+    return hora === '--:--' ? null : hora;
+  })();
+
+  // Franja de retiro elegida por el estudiante: se toma SIEMPRE del pedido real
+  // (columna franja_retiro) y se normaliza aquí, en el único punto por el que
+  // pasan tanto la carga inicial como las actualizaciones en tiempo real.
+  const franjaRetiro = typeof fila.franja_retiro === 'string' ? fila.franja_retiro.trim() : '';
+
   return {
     ...fila,
     id: idStr,
@@ -121,7 +134,8 @@ export function normalizarPedido(fila) {
     cafeteria_nombre: cafeObj?.nombre || 'Cafetería',
     cafeterias: cafeObj,
     hora: fila.hora || (fila.creado_en ? formatearHora(fila.creado_en) : undefined),
-    hora_retiro: formatearHora(fila.hora_retiro),
+    hora_retiro: horaRetiroNormalizada,
+    franja_retiro: franjaRetiro || null,
     creado_en: fila.creado_en,
     total: Number(fila.total) || 0,
     estado: fila.estado === 'preparando' ? 'en_preparacion' : fila.estado,

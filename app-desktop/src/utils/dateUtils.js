@@ -95,28 +95,50 @@ export function formatearHoraBucket(valor) {
 }
 
 /**
- * Hora de retiro de un pedido (KDS y panel de dueño).
+ * Franja de retiro elegida por el estudiante, tal como llega en el pedido real.
  *
- * Prioridad:
- *  1. hora exacta del pedido, si existe y se puede interpretar;
- *  2. franja de retiro elegida por el estudiante (ej: "12:00-12:15");
- *  3. estimación a partir de la creación del pedido (+15 min).
+ * Devuelve el texto de la franja (ej: "12:00-12:15") solo cuando el pedido
+ * trae una franja válida. Si viene vacía, con solo espacios o no es texto,
+ * devuelve null para que la pantalla no muestre un dato inexistente.
  *
- * Devuelve null cuando no hay ningún dato, para que cada pantalla muestre un
- * texto claro ("Sin hora de retiro") en lugar de un guion como "--:--".
- *
- * @param {{ hora_retiro?: string, franja_retiro?: string, creado_en?: string|Date }} pedido
+ * @param {{ franja_retiro?: string }} pedido
  * @returns {string|null}
  */
-export function horaRetiroPedido(pedido) {
+export function franjaRetiroPedido(pedido) {
+  const franja = pedido?.franja_retiro;
+  if (typeof franja !== 'string') return null;
+  const limpia = franja.trim();
+  return limpia ? limpia : null;
+}
+
+/**
+ * Origen del dato de retiro de un pedido, para poder distinguir en pantalla lo
+ * que es información REAL del pedido de lo que es una estimación nuestra:
+ *  - "franja": franja de retiro elegida por el estudiante (dato real);
+ *  - "hora":   hora exacta de retiro guardada en el pedido (dato real);
+ *  - "estimado": calculado a partir de la creación (+15 min), no es un dato real;
+ *  - null:     no hay ningún dato disponible.
+ *
+ * @param {{ hora_retiro?: string, franja_retiro?: string, creado_en?: string|Date }} pedido
+ * @returns {{ tipo: 'franja'|'hora'|'estimado'|null, valor: string|null }}
+ */
+export function origenRetiroPedido(pedido) {
+  // La franja elegida por el estudiante tiene prioridad: es el dato que el KDS
+  // debe mostrar, porque es el que el pedido realmente trae.
+  const franja = franjaRetiroPedido(pedido);
+  if (franja) return { tipo: 'franja', valor: franja };
+
   if (pedido?.hora_retiro) {
     const hora = formatearHora(pedido.hora_retiro);
-    if (hora !== '--:--') return hora;
+    if (hora !== '--:--') return { tipo: 'hora', valor: hora };
   }
-  if (pedido?.franja_retiro) return pedido.franja_retiro;
+
   if (pedido?.creado_en) {
     const fecha = parsearFecha(pedido.creado_en);
-    if (fecha) return formatearHora(new Date(fecha.getTime() + 15 * 60000));
+    if (fecha) {
+      return { tipo: 'estimado', valor: formatearHora(new Date(fecha.getTime() + 15 * 60000)) };
+    }
   }
-  return null;
+
+  return { tipo: null, valor: null };
 }
