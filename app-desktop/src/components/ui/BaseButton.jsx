@@ -8,10 +8,6 @@ const BORDER = {
   radiusMd: 10,
 };
 
-const SHADOWS = {
-  md: '0 6px 16px rgba(74, 55, 40, 0.08)',
-};
-
 export const BaseButton = styled(MuiButton)(({ theme }) => ({
   minHeight: COMPONENT.minHeightButton,
   minWidth: COMPONENT.minHeightButton,

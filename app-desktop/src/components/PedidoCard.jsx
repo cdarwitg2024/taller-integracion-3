@@ -10,7 +10,7 @@ import impresionService from '../services/impresionService';
 
 import BaseCard from './ui/BaseCard';
 import BaseButton from './ui/BaseButton';
-import { COLORS, SPACING, TYPOGRAPHY } from '../../design/tokens';
+import { COLORS, SPACING, TYPOGRAPHY } from '../design/tokens';
 
 const BORDER = {
   radiusMd: 10,

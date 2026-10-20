@@ -129,8 +129,4 @@ function KpiCards({ stats }) {
   );
 }
 
-const BORDER = {
-  radiusMd: 10,
-};
-
 export default KpiCards;
