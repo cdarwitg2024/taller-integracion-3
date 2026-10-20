@@ -93,3 +93,30 @@ export function formatearHoraBucket(valor) {
   const fecha = parsearFecha(valor) || new Date();
   return `${String(fecha.getHours()).padStart(2, '0')}:00`;
 }
+
+/**
+ * Hora de retiro de un pedido (KDS y panel de dueño).
+ *
+ * Prioridad:
+ *  1. hora exacta del pedido, si existe y se puede interpretar;
+ *  2. franja de retiro elegida por el estudiante (ej: "12:00-12:15");
+ *  3. estimación a partir de la creación del pedido (+15 min).
+ *
+ * Devuelve null cuando no hay ningún dato, para que cada pantalla muestre un
+ * texto claro ("Sin hora de retiro") en lugar de un guion como "--:--".
+ *
+ * @param {{ hora_retiro?: string, franja_retiro?: string, creado_en?: string|Date }} pedido
+ * @returns {string|null}
+ */
+export function horaRetiroPedido(pedido) {
+  if (pedido?.hora_retiro) {
+    const hora = formatearHora(pedido.hora_retiro);
+    if (hora !== '--:--') return hora;
+  }
+  if (pedido?.franja_retiro) return pedido.franja_retiro;
+  if (pedido?.creado_en) {
+    const fecha = parsearFecha(pedido.creado_en);
+    if (fecha) return formatearHora(new Date(fecha.getTime() + 15 * 60000));
+  }
+  return null;
+}

@@ -15,6 +15,7 @@ import kdsRealtime, {
 import vozKds, { VOZ_APAGADA, VOZ_SILENCIADA } from '../../services/vozKdsService';
 import { CAFETERIA_ID } from '../../services/backendApi';
 import { kdsColors } from '../../theme/theme';
+import { COLORS } from '../../design/tokens';
 
 // Estado vacío de una columna. Se define una sola vez para las tres columnas.
 function EstadoVacioColumna() {
@@ -34,10 +35,13 @@ function EstadoVacioColumna() {
   );
 }
 
+// Tinte de cada columna alineado a los tokens de estado (los mismos que usa
+// BaseBadge para el chip de la tarjeta), para que el color de la columna y el
+// de la tarjeta cuenten lo mismo.
 const COLUMNAS = [
-  { estado: 'pendiente', titulo: 'Pendiente', backgroundColor: '#F2ECE7' },
-  { estado: 'en_preparacion', titulo: 'En Preparación', backgroundColor: '#FFF3E0' },
-  { estado: 'listo', titulo: 'Listos para Retiro', backgroundColor: '#E8F5E9' },
+  { estado: 'pendiente', titulo: 'Pendiente', backgroundColor: COLORS.surfaceAlt },
+  { estado: 'en_preparacion', titulo: 'En Preparación', backgroundColor: COLORS.warningBg },
+  { estado: 'listo', titulo: 'Listos para Retiro', backgroundColor: COLORS.infoBg },
 ];
 
 function Comandas({ currentUser }) {

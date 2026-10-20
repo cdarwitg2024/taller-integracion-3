@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Typography } from '@mui/material';
 import { parsearFecha } from '../utils/dateUtils';
+import { COLORS } from '../design/tokens';
 
 function parseInicio(pedido) {
   if (pedido.creado_en) {
@@ -24,11 +25,20 @@ function parseInicio(pedido) {
   return Date.now();
 }
 
+/**
+ * Tiempo transcurrido desde que entró el pedido.
+ * Formato compacto para la tarjeta del KDS:
+ *   - menos de 1 hora → "MM:SS"
+ *   - 1 hora o más    → "H:MM h"
+ */
 function formatTimeAgo(inicio) {
   const segundos = Math.max(0, Math.floor((Date.now() - inicio) / 1000));
-  const mm = Math.floor(segundos / 60);
-  const ss = segundos % 60;
-  return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+  const horas = Math.floor(segundos / 3600);
+  const minutos = Math.floor((segundos % 3600) / 60);
+  const resto = segundos % 60;
+
+  if (horas > 0) return `${horas}:${String(minutos).padStart(2, '0')} h`;
+  return `${String(minutos).padStart(2, '0')}:${String(resto).padStart(2, '0')}`;
 }
 
 function TimeAgo({ pedido, sx }) {
@@ -44,13 +54,13 @@ function TimeAgo({ pedido, sx }) {
     <Typography
       fontWeight={800}
       sx={{
-        color: '#4A3B32',
+        color: COLORS.textPrimary,
         whiteSpace: 'nowrap',
         fontVariantNumeric: 'tabular-nums',
         ...sx,
       }}
     >
-      ⏱️ {texto} min
+      ⏱️ {texto}
     </Typography>
   );
 }
