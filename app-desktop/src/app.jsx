@@ -11,15 +11,13 @@ import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 
 import PageHeader from './components/dueno/PageHeader';
-import RoleSelector from './pages/auth/RoleSelector';
-import LoginDueno from './pages/dueno/LoginDueno';
+import Login from './pages/auth/Login';
 import Dashboard from './pages/dueno/Dashboard';
 import Productos from './pages/dueno/Productos';
 import Inventario from './pages/dueno/Inventario';
 import BotDueno from './pages/dueno/BotDueno';
 import GestorPrecioStock from './pages/dueno/GestorPrecioStock';
 import LogsValidacion from './pages/dueno/LogsValidacion';
-import LoginEmpleado from './pages/empleado/LoginEmpleado';
 import Comandas from './pages/empleado/Comandas';
 import StockEmpleado from './pages/empleado/Stock.jsx';
 import { supabase } from './service/supabase';
@@ -141,7 +139,8 @@ function buildDuenoHeader(pathname) {
 // Guardia de ruta para proteger accesos no autorizados
 function ProtectedRoute({ currentUser, isAuthenticated, requiredRole, children }) {
   if (!isAuthenticated || !currentUser) {
-    return <Navigate to={requiredRole === 'empleado' ? '/login/empleado' : '/login/dueno'} replace />;
+    // Sin sesión se vuelve al login unificado (ahora no hay selección de rol).
+    return <Navigate to="/" replace />;
   }
 
   const userRole = (currentUser?.roles?.nombre || currentUser?.rol || '').toLowerCase();
@@ -199,7 +198,9 @@ function App() {
     return String(rol).toLowerCase();
   }, [currentUser]);
 
-  const handleLoginDueno = (user) => {
+  // Handler único de login: el rol ya viene resuelto desde el backend
+  // (usuarios.login) y decide a qué panel enrutar sin selección manual.
+  const handleLogin = (user) => {
     if (!user) return;
     setCurrentUser(user);
     setIsAuthenticated(true);
@@ -207,18 +208,8 @@ function App() {
       localStorage.setItem('coffeefaster_authenticated', 'true');
       localStorage.setItem('coffeefaster_user', JSON.stringify(user));
     } catch {}
-    navigate('/dueno/dashboard');
-  };
-
-  const handleLoginEmpleado = (user) => {
-    if (!user) return;
-    setCurrentUser(user);
-    setIsAuthenticated(true);
-    try {
-      localStorage.setItem('coffeefaster_authenticated', 'true');
-      localStorage.setItem('coffeefaster_user', JSON.stringify(user));
-    } catch {}
-    navigate('/empleado/comandas');
+    const rol = String(user?.roles?.nombre || user?.rol || '').toLowerCase();
+    navigate(rol === 'empleado' ? '/empleado/comandas' : '/dueno/dashboard');
   };
 
   const handleLogout = async () => {
@@ -241,30 +232,13 @@ function App() {
     <>
       <CssBaseline />
       <Routes>
-        {/* 1. Ruta Principal: Menú de selección de usuario (abre siempre como principal) */}
-        <Route path="/" element={<RoleSelector />} />
+        {/* 1. Ruta Principal: Login unificado de escritorio (sin selección de rol) */}
+        <Route path="/" element={<Login onLogin={handleLogin} />} />
 
-        {/* 2. Login de Dueño (con URL /login/dueno y botón de regreso a /) */}
-        <Route
-          path="/login/dueno"
-          element={
-            <LoginDueno
-              onLogin={handleLoginDueno}
-              onBack={() => navigate('/')}
-            />
-          }
-        />
-
-        {/* 3. Login de Empleado (con URL /login/empleado y botón de regreso a /) */}
-        <Route
-          path="/login/empleado"
-          element={
-            <LoginEmpleado
-              onLogin={handleLoginEmpleado}
-              onBack={() => navigate('/')}
-            />
-          }
-        />
+        {/* URLs de login anteriores: redirigen al login unificado */}
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/login/dueno" element={<Navigate to="/" replace />} />
+        <Route path="/login/empleado" element={<Navigate to="/" replace />} />
 
         {/* 4. Rutas protegidas para Dueño (/dueno/*) */}
         <Route path="/dueno" element={<Navigate to="/dueno/dashboard" replace />} />

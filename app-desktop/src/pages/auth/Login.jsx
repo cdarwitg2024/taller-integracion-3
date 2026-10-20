@@ -8,7 +8,6 @@ import {
   Stack,
   IconButton,
   InputAdornment,
-  Link,
   CircularProgress,
   Alert,
   AlertTitle,
@@ -18,11 +17,12 @@ import {
 import { useNavigate } from 'react-router-dom';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import LocalCafeOutlinedIcon from '@mui/icons-material/LocalCafeOutlined';
 import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
 import { usuarios } from '../../service/usuarios';
 
+// Convierte los mensajes técnicos de autenticación en avisos claros para el
+// usuario (mismos criterios que usaban los antiguos login de Dueño/Empleado).
 const formatAuthError = (msg) => {
   if (!msg) return null;
   const raw = String(msg).trim();
@@ -39,7 +39,8 @@ const formatAuthError = (msg) => {
   ) {
     return {
       title: 'Error de conexión con el servidor',
-      message: 'No fue posible establecer comunicación con el servidor. Comprueba tu conexión a internet o intenta nuevamente en unos momentos.',
+      message:
+        'No fue posible establecer comunicación con el servidor. Comprueba tu conexión a internet o intenta nuevamente en unos momentos.',
     };
   }
 
@@ -50,14 +51,23 @@ const formatAuthError = (msg) => {
   ) {
     return {
       title: 'Credenciales inválidas',
-      message: 'El correo electrónico o la contraseña ingresados no son correctos. Por favor verifica tus datos de acceso.',
+      message:
+        'El correo electrónico o la contraseña ingresados no son correctos. Por favor verifica tus datos de acceso.',
     };
   }
 
   if (lower.includes('desactivada') || lower.includes('inactiva') || lower.includes('suspendida')) {
     return {
       title: 'Cuenta inactiva',
-      message: 'Esta cuenta se encuentra desactivada. Por favor contacta al administrador del sistema.',
+      message:
+        'Esta cuenta se encuentra desactivada. Por favor contacta al administrador del sistema.',
+    };
+  }
+
+  if (lower.includes('rol')) {
+    return {
+      title: 'Rol no asignado',
+      message: raw,
     };
   }
 
@@ -71,14 +81,16 @@ const formatAuthError = (msg) => {
   if (lower.includes('demasiados intentos') || lower.includes('429') || lower.includes('rate limit')) {
     return {
       title: 'Demasiados intentos fallidos',
-      message: 'Por motivos de seguridad, el acceso se ha pausado temporalmente. Espera unos minutos antes de reintentar.',
+      message:
+        'Por motivos de seguridad, el acceso se ha pausado temporalmente. Espera unos minutos antes de reintentar.',
     };
   }
 
   if (lower.includes('verificado') || lower.includes('confirmado')) {
     return {
       title: 'Cuenta pendiente de verificación',
-      message: 'El correo electrónico aún no ha sido verificado. Por favor revisa tu bandeja de entrada.',
+      message:
+        'El correo electrónico aún no ha sido verificado. Por favor revisa tu bandeja de entrada.',
     };
   }
 
@@ -95,21 +107,16 @@ const formatAuthError = (msg) => {
   };
 };
 
-function LoginEmpleado({ onLogin, onBack }) {
+// ─── Pantalla única de inicio de sesión (CoffeeFast) ─────────────────────────
+// Reemplazó la selección manual de rol (Dueño / Empleado). El usuario solo
+// ingresa credenciales; el rol se resuelve en el backend y la app lo enruta.
+function Login({ onLogin }) {
   const navigate = useNavigate();
-  // Upstream dejó el campo vacío a propósito y así se queda. Ojo: el
-  // correo de ejemplo anterior (empleado@coffeefaster.cl) no existe en
-  // Auth; la cuenta real es empleado@coffeefast.cl.
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-
-  const handleBack = () => {
-    if (onBack) onBack();
-    navigate('/');
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -139,14 +146,14 @@ function LoginEmpleado({ onLogin, onBack }) {
 
     setLoading(true);
     try {
-      const res = await usuarios.loginEmpleado(cleanEmail, password);
+      const res = await usuarios.login(cleanEmail, password);
       if (res.success) {
         if (onLogin) onLogin(res.user);
       } else {
         setErrorMsg(res.error || 'Credenciales inválidas.');
       }
     } catch (err) {
-      console.error('Error en login de empleado:', err);
+      console.error('Error en login unificado:', err);
       setErrorMsg('Error de conexión con el servidor. Inténtalo nuevamente.');
     } finally {
       setLoading(false);
@@ -169,7 +176,7 @@ function LoginEmpleado({ onLogin, onBack }) {
         elevation={0}
         sx={{
           width: '100%',
-          maxWidth: 820,
+          maxWidth: 860,
           minHeight: 460,
           borderRadius: '24px',
           overflow: 'hidden',
@@ -179,7 +186,7 @@ function LoginEmpleado({ onLogin, onBack }) {
           border: '1px solid #EAE2D8',
         }}
       >
-        {/* Panel Izquierdo: Café Oscuro con Marca y Orientación a Cocina/KDS */}
+        {/* Panel Izquierdo: Café Oscuro con Marca CoffeeFast */}
         <Box
           sx={{
             flex: { xs: 'none', md: '0 0 42%' },
@@ -205,7 +212,7 @@ function LoginEmpleado({ onLogin, onBack }) {
                   color: '#FFA07A',
                 }}
               >
-                <ReceiptLongOutlinedIcon fontSize="small" />
+                <LocalCafeOutlinedIcon fontSize="small" />
               </Box>
               <Typography
                 variant="caption"
@@ -217,20 +224,16 @@ function LoginEmpleado({ onLogin, onBack }) {
                   fontSize: '0.72rem',
                 }}
               >
-                Portal Empleado
+                CoffeeFast
               </Typography>
             </Box>
 
             <Typography
               variant="h5"
               fontWeight={800}
-              sx={{
-                letterSpacing: '-0.5px',
-                color: '#FFFFFF',
-                mb: 2.5,
-              }}
+              sx={{ letterSpacing: '-0.5px', color: '#FFFFFF', mb: 2.5 }}
             >
-              CoffeeFaster
+              Bienvenido
             </Typography>
 
             <Typography
@@ -242,20 +245,21 @@ function LoginEmpleado({ onLogin, onBack }) {
                 mb: 3,
               }}
             >
-              Terminal de Comandas (KDS). Gestiona pedidos entrantes en tiempo real, agiliza la preparación en barra y cocina, y atiende la entrega inmediata.
+              Inicia sesión con tus credenciales y el sistema te llevará automáticamente a tu panel:
+              administración para el dueño o la terminal de comandas (KDS) para el personal.
             </Typography>
 
             <Stack spacing={1.2}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CheckCircleOutlineRoundedIcon sx={{ fontSize: 16, color: '#C86237' }} />
                 <Typography variant="caption" sx={{ color: '#E0D4CA', fontSize: '0.8rem' }}>
-                  Flujo Kanban en tiempo real
+                  Acceso según tu rol asignado
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CheckCircleOutlineRoundedIcon sx={{ fontSize: 16, color: '#C86237' }} />
                 <Typography variant="caption" sx={{ color: '#E0D4CA', fontSize: '0.8rem' }}>
-                  Actualización instantánea de comandas
+                  Un solo inicio de sesión para toda la plataforma
                 </Typography>
               </Box>
             </Stack>
@@ -270,12 +274,12 @@ function LoginEmpleado({ onLogin, onBack }) {
                 display: 'block',
               }}
             >
-              Terminal exclusivo para personal operativo y cocina
+              Plataforma de gestión cafetería CoffeeFast
             </Typography>
           </Box>
         </Box>
 
-        {/* Panel Derecho: Formulario de Inicio de Sesión de Empleado */}
+        {/* Panel Derecho: Formulario Único de Inicio de Sesión */}
         <Box
           component="form"
           onSubmit={handleSubmit}
@@ -289,56 +293,18 @@ function LoginEmpleado({ onLogin, onBack }) {
             position: 'relative',
           }}
         >
-          {/* Botón para volver a selección de rol */}
-          <Button
-            startIcon={<ArrowBackIcon fontSize="small" />}
-            onClick={handleBack}
-            sx={{
-              alignSelf: 'flex-start',
-              mb: 2.5,
-              px: 1.8,
-              py: 0.8,
-              borderRadius: '10px',
-              backgroundColor: '#FAF7F5',
-              border: '1px solid #EAE2D8',
-              color: '#5B4A3E',
-              fontSize: '0.84rem',
-              fontWeight: 700,
-              textTransform: 'none',
-              boxShadow: 'none',
-              transition: 'all 0.2s ease',
-              '&:hover': {
-                backgroundColor: '#F0EAE1',
-                color: '#433225',
-                borderColor: '#C8B2A1',
-                transform: 'translateX(-2px)',
-              },
-            }}
-          >
-            Volver al menú principal
-          </Button>
-
           <Typography
             variant="h6"
             fontWeight={800}
-            sx={{
-              color: '#3E2D22',
-              fontSize: '1.3rem',
-              mb: 0.5,
-            }}
+            sx={{ color: '#3E2D22', fontSize: '1.3rem', mb: 0.5 }}
           >
             Iniciar Sesión
           </Typography>
           <Typography
             variant="caption"
-            sx={{
-              color: '#8C7A6F',
-              mb: 3,
-              display: 'block',
-              fontSize: '0.82rem',
-            }}
+            sx={{ color: '#8C7A6F', mb: 3, display: 'block', fontSize: '0.82rem' }}
           >
-            Ingresa tus credenciales para acceder a Comandas
+            Ingresa tu correo y contraseña para acceder
           </Typography>
 
           <Stack spacing={2.5}>
@@ -362,7 +328,7 @@ function LoginEmpleado({ onLogin, onBack }) {
                 size="small"
                 fullWidth
                 disabled={loading}
-                placeholder="empleado@coffeefast.cl"
+                placeholder="tu@coffeefast.cl"
                 autoCapitalize="none"
                 autoCorrect="off"
                 autoComplete="email"
@@ -373,15 +339,9 @@ function LoginEmpleado({ onLogin, onBack }) {
                     borderRadius: '10px',
                     backgroundColor: '#FAF7F5',
                     fontSize: '0.88rem',
-                    '& fieldset': {
-                      borderColor: '#E8E1DA',
-                    },
-                    '&:hover fieldset': {
-                      borderColor: '#C8B2A1',
-                    },
-                    '&.Mui-focused fieldset': {
-                      borderColor: '#C86237',
-                    },
+                    '& fieldset': { borderColor: '#E8E1DA' },
+                    '&:hover fieldset': { borderColor: '#C8B2A1' },
+                    '&.Mui-focused fieldset': { borderColor: '#C86237' },
                   },
                 }}
               />
@@ -436,36 +396,15 @@ function LoginEmpleado({ onLogin, onBack }) {
                     borderRadius: '10px',
                     backgroundColor: '#FAF7F5',
                     fontSize: '0.88rem',
-                    '& fieldset': {
-                      borderColor: '#E8E1DA',
-                    },
-                    '&:hover fieldset': {
-                      borderColor: '#C8B2A1',
-                    },
-                    '&.Mui-focused fieldset': {
-                      borderColor: '#C86237',
-                    },
+                    '& fieldset': { borderColor: '#E8E1DA' },
+                    '&:hover fieldset': { borderColor: '#C8B2A1' },
+                    '&.Mui-focused fieldset': { borderColor: '#C86237' },
                   },
                 }}
               />
             </Box>
 
-            {/* Olvidaste tu contraseña */}
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -0.5 }}>
-              <Link
-                href="#"
-                underline="hover"
-                onClick={(e) => e.preventDefault()}
-                sx={{
-                  color: '#C86237',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                }}
-              >
-                ¿Problemas para acceder?
-              </Link>
-            </Box>
-
+            {/* Mensaje de error */}
             <Collapse in={Boolean(errorMsg)}>
               {errorMsg && (() => {
                 const err = formatAuthError(errorMsg);
@@ -481,19 +420,9 @@ function LoginEmpleado({ onLogin, onBack }) {
                       py: 1.2,
                       px: 2,
                       boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)',
-                      '& .MuiAlert-icon': {
-                        color: '#E53E3E',
-                        mt: 0.25,
-                        fontSize: '1.35rem',
-                      },
-                      '& .MuiAlert-action': {
-                        pt: 0,
-                        alignItems: 'flex-start',
-                      },
-                      '& .MuiAlert-message': {
-                        width: '100%',
-                        overflow: 'hidden',
-                      },
+                      '& .MuiAlert-icon': { color: '#E53E3E', mt: 0.25, fontSize: '1.35rem' },
+                      '& .MuiAlert-action': { pt: 0, alignItems: 'flex-start' },
+                      '& .MuiAlert-message': { width: '100%', overflow: 'hidden' },
                     }}
                   >
                     <AlertTitle sx={{ fontWeight: 700, fontSize: '0.88rem', color: '#9B1C1C', mb: 0.3, lineHeight: 1.25 }}>
@@ -507,7 +436,7 @@ function LoginEmpleado({ onLogin, onBack }) {
               })()}
             </Collapse>
 
-            {/* Botón Ingresar a Comandas */}
+            {/* Botón Ingresar */}
             <Button
               type="submit"
               variant="contained"
@@ -523,19 +452,16 @@ function LoginEmpleado({ onLogin, onBack }) {
                 fontSize: '0.92rem',
                 textTransform: 'none',
                 boxShadow: 'none',
-                '&:hover': {
-                  backgroundColor: '#B2522B',
-                  boxShadow: 'none',
-                },
+                '&:hover': { backgroundColor: '#B2522B', boxShadow: 'none' },
               }}
             >
               {loading ? (
                 <Stack direction="row" alignItems="center" spacing={1}>
                   <CircularProgress size={18} color="inherit" />
-                  <span>Iniciando sesión...</span>
+                  <span>Verificando credenciales...</span>
                 </Stack>
               ) : (
-                'Ingresar a Comandas'
+                'Ingresar'
               )}
             </Button>
           </Stack>
@@ -545,4 +471,4 @@ function LoginEmpleado({ onLogin, onBack }) {
   );
 }
 
-export default LoginEmpleado;
+export default Login;
