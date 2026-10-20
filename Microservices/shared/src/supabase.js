@@ -20,11 +20,11 @@ function obtenerCliente() {
   if (cliente) return cliente;
 
   const url = process.env.SUPABASE_URL;
-  // Acepta los tres nombres que ya usa el repo historico. La service key es la
-  // unica que sirve: el cliente anon no puede escribir (RLS lo bloquea) y aqui
-  // los services leen, no escriben, pero un service se apoya en RLS de lectura.
+// Acepta las claves utilizadas por los distintos microservicios.
+// Para validar sesiones con auth.getUser(token), la publishable key es suficiente.
   const key =
     process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
     process.env.SUPABASE_KEY ||
     process.env.SUPABASE_ANON_KEY;
 
@@ -33,7 +33,7 @@ function obtenerCliente() {
   }
   if (!key) {
     throw new ConfigError(
-      'Falta la clave de Supabase: define SUPABASE_SERVICE_KEY (o SUPABASE_KEY)'
+      'Falta la clave de Supabase: define SUPABASE_SERVICE_KEY, SUPABASE_PUBLISHABLE_KEY, SUPABASE_KEY o SUPABASE_ANON_KEY'
     );
   }
 

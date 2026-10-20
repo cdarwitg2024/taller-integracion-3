@@ -57,9 +57,13 @@ async function authOpcional(req, res, next) {
     // Un Supabase caido NO es "anonimo": es infraestructura abajo. Se responde
     // 503 para que el cliente reintente, en vez de devolver datos sin filtrar.
     return next(
-      new HttpError(503, 'No se pudo validar la sesion con el proveedor de identidad', {
-        causa: err.message
-      })
+      new HttpError(
+        503,
+        'No se pudo validar la sesion con el proveedor de identidad',
+        {
+          causa: err.message
+        }
+      )
     );
   }
 }
@@ -71,7 +75,12 @@ async function exigirAuth(req, res, next) {
   const token = extraerToken(req);
 
   if (!token) {
-    return next(new HttpError(401, 'Falta el encabezado Authorization: Bearer <token>'));
+    return next(
+      new HttpError(
+        401,
+        'Falta el encabezado Authorization: Bearer <token>'
+      )
+    );
   }
 
   try {
@@ -86,38 +95,66 @@ async function exigirAuth(req, res, next) {
     req.accessToken = token;
     return next();
   } catch (err) {
-    if (err instanceof HttpError) return next(err);
+    if (err instanceof HttpError) {
+      return next(err);
+    }
+
     return next(
-      new HttpError(503, 'No se pudo validar la sesion con el proveedor de identidad', {
-        causa: err.message
-      })
+      new HttpError(
+        503,
+        'No se pudo validar la sesion con el proveedor de identidad',
+        {
+          causa: err.message
+        }
+      )
     );
   }
 }
 
-/** Lee el Bearer. Acepta `bearer` en cualquier caso (el header HTTP no distingue). */
+/**
+ * Lee el Bearer. Acepta `bearer` en cualquier caso
+ * (el header HTTP no distingue).
+ */
 function extraerToken(req) {
   const header = req.headers && req.headers.authorization;
-  if (!header || typeof header !== 'string') return null;
+
+  if (!header || typeof header !== 'string') {
+    return null;
+  }
 
   const partes = header.trim().split(/\s+/);
-  if (partes.length !== 2) return null;
-  if (partes[0].toLowerCase() !== 'bearer') return null;
+
+  if (partes.length !== 2) {
+    return null;
+  }
+
+  if (partes[0].toLowerCase() !== 'bearer') {
+    return null;
+  }
 
   return partes[1] || null;
 }
 
 /**
- * Reduce el usuario de Supabase a los campos que usa la app. `auth_user_id` es
- * el UUID de auth.users y es la llave con la que `usuarios` se engancha.
+ * Reduce el usuario de Supabase a los campos que usa la app.
+ * `auth_user_id` es el UUID de auth.users y es la llave con la que
+ * `usuarios` se engancha.
  */
 function normalizarUsuario(user) {
   return {
     id: user.id,
     authUserId: user.id,
     email: user.email || null,
-    activo: user.user_metadata ? user.user_metadata.activo !== false : true
+    activo: user.user_metadata
+      ? user.user_metadata.activo !== false
+      : true
   };
 }
 
-module.exports = { authOpcional, exigirAuth, extraerToken, normalizarUsuario, HttpError };
+module.exports = {
+  authOpcional,
+  exigirAuth,
+  extraerToken,
+  normalizarUsuario,
+  HttpError
+};

@@ -25,9 +25,24 @@ jest.mock('@coffeefaster/shared', () => {
 });
 
 // `createClient` se expone como jest.fn para poder inspeccionar con que
-// argumentos (incluido el JWT del estudiante) se construye el cliente de RPC.
+// argumentos (incluido el JWT del estudiante) se construye el cliente.
+//
+// El cliente autenticado YA NO solo ejecuta RPCs: `crearPedido` y
+// `listarPedidos` tambien consultan tablas con `from(...)`. Para no duplicar
+// toda la simulacion de Supabase, `from` DELEGA en el mismo cliente falso que
+// usa `supabase.obtenerCliente()` (supabaseFalso), asi que hereda exactamente
+// sus cadenas `select/eq/in/order/limit/maybeSingle/single/then` y su registro
+// de llamadas por tabla. `rpc` sigue siendo el `mockRpc` inspeccionable.
+//
+// Se lee `supabase.obtenerCliente()` de forma perezosa (dentro de `from`) para
+// que cada llamada vea el `mockImplementation` vigente: los tests reconfiguran
+// `supa.from` entre casos y el cliente autenticado debe reflejarlo.
 jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => ({ rpc: mockRpc }))
+  createClient: jest.fn(() => ({
+    from: (...args) =>
+      require('@coffeefaster/shared').supabase.obtenerCliente().from(...args),
+    rpc: mockRpc
+  }))
 }));
 
 const app = require('../src/app');
@@ -196,6 +211,18 @@ describe('ms-pedidos', () => {
     httpMock.post.mockResolvedValue(respuestaPrecios([producto({ id: 1, cafeteria_id: 1 })]));
     const res = await request(app).post('/api/pedidos').send(bodyPedido());
     expect(res.status).toBe(201);
+
+    // El cliente autenticado (el que consulta `usuarios` y ejecuta
+    // `procesar_pago` con el JWT del usuario) se construye con la URL, la
+    // publishable key y el Bearer; NUNCA con la service key.
+    expect(createClientMock).toHaveBeenCalledTimes(1);
+    const [url, key, opciones] = createClientMock.mock.calls[0];
+    expect(url).toBe(process.env.SUPABASE_URL);
+    expect(key).toBe('sb_publishable_test');
+    expect(key).not.toBe(process.env.SUPABASE_SERVICE_KEY);
+    expect(opciones.global.headers.Authorization).toBe('Bearer token123');
+    expect(opciones.auth.autoRefreshToken).toBe(false);
+    expect(opciones.auth.persistSession).toBe(false);
   });
 
   test('POST /api/pedidos permite varios productos de la misma cafeteria', async () => {
@@ -270,7 +297,18 @@ describe('ms-pedidos', () => {
     expect(httpMock.post.mock.calls[0][0]).toContain('/menus/precios');
   });
 
-  test('POST /api/pedidos 503 sin publishable key', async () => {
+  test('POST /api/pedidos construye el cliente autenticado con el fallback SUPABASE_ANON_KEY', async () => {
+    // Sin publishable key, el helper debe caer a SUPABASE_ANON_KEY (que el
+    // beforeEach deja definida). Se comprueba integrado en el unico test que
+    // ya forzaba este escenario.
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+    httpMock.post.mockResolvedValue(respuestaPrecios([producto({ id: 1, cafeteria_id: 1 })]));
+    const res = await request(app).post('/api/pedidos').send(bodyPedido());
+    expect(res.status).toBe(201);
+    expect(createClientMock.mock.calls[0][1]).toBe('sb_anon_test');
+  });
+
+  test('POST /api/pedidos 503 sin publishable key ni anon key', async () => {
     delete process.env.SUPABASE_PUBLISHABLE_KEY;
     delete process.env.SUPABASE_ANON_KEY;
     httpMock.post.mockResolvedValue(respuestaPrecios([producto({ id: 1, cafeteria_id: 1 })]));

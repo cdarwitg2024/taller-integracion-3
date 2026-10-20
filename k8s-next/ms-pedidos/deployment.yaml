@@ -46,7 +46,7 @@ spec:
 
       containers:
         - name: ms-pedidos
-          image: cdarwitg2024/ms-pedidos:v1.0.0
+          image: cdarwitg2024/ms-pedidos:v1.0.3
           # Si la imagen no esta en el registro, 'IfNotPresent' evita que K8s
           # intente descargarla y se quede en ErrImagePull para siempre.
           imagePullPolicy: IfNotPresent

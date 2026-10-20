@@ -26,6 +26,7 @@ import PerfilScreen from './src/screens/PerfilScreen';
 import { Cafeteria } from './src/types/cafeteria';
 import { CartProvider, useCart } from './src/context/CartContext';
 import { useCartTotals } from './src/hooks/useCartTotals';
+import { apiPost, ApiError } from './src/services/backendClient';
 
 const logo = require('./assets/icon.png');
 
@@ -74,6 +75,20 @@ type PagoResult = {
   franja_retiro?: string;
   qr_token?: string;
   codigo_retiro?: string;
+};
+
+/**
+ * Cuerpo de `POST /api/pedidos` (ver
+ * `Microservices/ms-pedidos/src/modules/pedidos/pedidos.service.js`).
+ *
+ * El servicio responde 201 con `{ ok: true, pedido }`, donde `pedido` es el
+ * retorno crudo de la RPC `procesar_pago`: el mismo objeto que antes la app
+ * recibía como `data`. Notar que `ok` del envoltorio siempre es `true` en un
+ * 201; el resultado real del pago está en `pedido.ok`.
+ */
+type RespuestaCrearPedido = {
+  ok: boolean;
+  pedido?: PagoResult | null;
 };
 
 type PedidoConfirmado = {
@@ -434,48 +449,37 @@ function AppContent() {
       return;
     }
 
-    // Guardia de reentrada: dos toques antes de que resuelva la RPC intentarian
-    // cobrar dos veces. El UNIQUE en pagos.pedido_id es la red real, pero esto
-    // evita siquiera intentarlo.
+    // Guardia de reentrada: dos toques antes de que resuelva el `POST
+    // /api/pedidos` intentarian cobrar dos veces. El UNIQUE en pagos.pedido_id
+    // es la red real, pero esto evita siquiera intentarlo.
     if (paying) return;
     setPaying(true);
 
     const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
 
     try {
-      // El total NO se manda. La RPC lo recalcula desde productos.precio: si
-      // se enviara, un cliente podria pagar $100 un sándwich de $2.000.
-      const { data, error } = await supabase.rpc('procesar_pago', {
-        p_cafeteria_id: cafeteriaId,
-        p_items: cart.map((item) => ({
+      // El total NO se manda. ms-pedidos lo cotiza contra ms-menus y la RPC
+      // `procesar_pago` lo recalcula desde productos.precio: si se enviara,
+      // un cliente podria pagar $100 un sándwich de $2.000.
+      const cuerpo = {
+        cafeteria_id: cafeteriaId,
+        items: cart.map((item) => ({
           producto_id: item.id,
           cantidad: item.quantity,
         })),
-        p_franja_retiro: franjaRetiro.franja,
-      });
+        franja_retiro: franjaRetiro.franja,
+      };
 
-      console.log('=== DEBUG procesar_pago ===');
-      console.log('Parámetros enviados:', {
-        p_cafeteria_id: cafeteriaId,
-        p_items: cart.map((item) => ({
-          producto_id: item.id,
-          cantidad: item.quantity,
-        })),
-        p_franja_retiro: franjaRetiro.franja,
-      });
-      console.log('Error:', error);
-      console.log('Data:', data);
-      console.log('=== FIN DEBUG ===');
+      const respuesta = await apiPost<RespuestaCrearPedido | null>(
+        '/api/pedidos',
+        cuerpo
+      );
 
-      if (error) {
-        Alert.alert(
-          'No se pudo procesar el pago',
-          'Revisa tu conexión e inténtalo nuevamente.'
-        );
-        return;
-      }
-
-      const resultado = data as PagoResult | null;
+      // El backend responde HTTP 201 con `{ ok: true, pedido: <retorno de
+      // procesar_pago> }`. Ojo: dentro de ese 201, `pedido` puede traer
+      // `ok: false` (p. ej. saldo insuficiente), así que el chequeo real es
+      // `resultado.ok` y no el código HTTP.
+      const resultado = respuesta?.pedido ?? null;
 
       if (!resultado || !resultado.ok) {
         if (resultado?.motivo === 'saldo_insuficiente') {
@@ -513,9 +517,14 @@ function AppContent() {
           `Saldo restante: ${formatCLP(Number(resultado.saldo_restante ?? 0))}.`
       );
     } catch (e) {
+      // `ApiError` cubre la misma falla que antes devolvía `error` de la RPC
+      // (red, API caída, sesión vencida), por lo que conserva su alerta; el
+      // resto es inesperado y conserva la suya.
       Alert.alert(
         'No se pudo procesar el pago',
-        'Ocurrio un error inesperado. Intentalo nuevamente.'
+        e instanceof ApiError
+          ? 'Revisa tu conexión e inténtalo nuevamente.'
+          : 'Ocurrio un error inesperado. Intentalo nuevamente.'
       );
     } finally {
       setPaying(false);

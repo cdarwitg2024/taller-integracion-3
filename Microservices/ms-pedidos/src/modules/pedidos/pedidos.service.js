@@ -4,11 +4,29 @@
 // historico a la interfaz plana: `shared` exporta `supabase`, `httpClient` y
 // `HttpError` de forma estable (ver shared/src/index.js).
 const { supabase, httpClient, HttpError } = require('@coffeefaster/shared');
+const { createClient } = require('@supabase/supabase-js');
 const {
   normalizarEstado,
   puedeTransicionar,
   transicionesDe
 } = require('./pedidos.maquina-estados');
+
+function crearClienteAutenticado(accessToken) {
+  if (!accessToken) throw new HttpError(401, 'Usuario no autenticado');
+
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    throw new HttpError(503, 'Configuracion de Supabase incompleta', {
+      causa: 'Se requieren SUPABASE_URL y SUPABASE_PUBLISHABLE_KEY o SUPABASE_ANON_KEY'
+    });
+  }
+
+  return createClient(url, key, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
+}
 
 /**
  * Valida el `cafeteria_id` recibido en el body. Mismo criterio que ms-cafeterias
@@ -203,7 +221,7 @@ async function crearPedido({ user, accessToken, body }) {
     throw new HttpError(400, 'franja_retiro requerida');
   }
 
-  const cliente = supabase.obtenerCliente();
+  const cliente = crearClienteAutenticado(accessToken);
 
   const { data: usuarioInterno, error: errUsuario } = await cliente
     .from('usuarios')
@@ -257,22 +275,10 @@ async function crearPedido({ user, accessToken, body }) {
   // autoridad transaccional del pago y obtiene los precios reales directamente
   // desde public.productos.
 
-  const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!publishableKey) {
-    throw new HttpError(503, 'No se pudo procesar el pago', { causa: 'SUPABASE_PUBLISHABLE_KEY/ANON_KEY no configuradas' });
-  }
   let pedidoResultado;
   const franjaRetiro = body?.franja_retiro ?? null;
   try {
-    const clienteConToken = require('@supabase/supabase-js').createClient(
-      process.env.SUPABASE_URL,
-      publishableKey,
-      {
-        global: { headers: { Authorization: 'Bearer ' + accessToken } },
-        auth: { autoRefreshToken: false, persistSession: false }
-      }
-    );
-    const { data: rpcData, error: rpcError } = await clienteConToken.rpc('procesar_pago', {
+    const { data: rpcData, error: rpcError } = await cliente.rpc('procesar_pago', {
       p_cafeteria_id: cafeteriaId,
       p_items: items,
       p_franja_retiro: franjaRetiro
@@ -297,9 +303,9 @@ async function crearPedido({ user, accessToken, body }) {
  * La consulta usa la proyeccion explicita `CAMPOS_PEDIDO_PUBLICOS`: la respuesta
  * NUNCA incluye `qr_token` ni `codigo_retiro_diario`.
  */
-async function listarPedidos({ user }) {
+async function listarPedidos({ user, accessToken }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
-  const cliente = supabase.obtenerCliente();
+  const cliente = crearClienteAutenticado(accessToken);
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
   const rol = Number(usuarioInterno.rol_id);
 

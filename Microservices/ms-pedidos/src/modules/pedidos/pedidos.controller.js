@@ -18,7 +18,7 @@ async function crearPedido(req, res, next) {
 
 async function listarPedidos(req, res, next) {
   try {
-    const resultado = await PedidosService.listarPedidos({ user: req.user });
+    const resultado = await PedidosService.listarPedidos({ user: req.user, accessToken: req.accessToken });
     res.json(resultado);
   } catch (e) {
     next(e);
