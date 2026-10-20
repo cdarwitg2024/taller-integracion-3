@@ -1,8 +1,21 @@
-import { Grid, Card, CardContent, Typography, Box } from '@mui/material';
+// ─── Componente: Tarjetas KPI (Panel Dueño) ─────────────────────────────────
+// Tarjetas de indicadores principales con diseño normalizado.
+
+import { Grid, Box, Typography } from '@mui/material';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+
+import BaseCard from '../ui/BaseCard';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../design/tokens';
+
+const ICON_CONFIG = {
+  ventas: { icon: <AttachMoneyIcon sx={{ fontSize: 32 }} />, bg: COLORS.successBg, color: COLORS.success, border: COLORS.success },
+  pedidos: { icon: <ShoppingBagIcon sx={{ fontSize: 30 }} />, bg: COLORS.secondaryLight, color: COLORS.primary, border: COLORS.primary },
+  pendientes: { icon: <PendingActionsIcon sx={{ fontSize: 30 }} />, bg: COLORS.warningBg, color: COLORS.warning, border: COLORS.warning },
+  tiempo: { icon: <AccessTimeIcon sx={{ fontSize: 30 }} />, bg: '#EFEBE9', color: COLORS.textSecondary, border: COLORS.border },
+};
 
 function KpiCards({ stats }) {
   const tiempoProm = stats?.tiempoPromedioMin && Number(stats.tiempoPromedioMin) > 0
@@ -11,67 +24,46 @@ function KpiCards({ stats }) {
 
   const cards = [
     {
+      id: 'ventas',
       title: 'Ventas del Día',
       value: `$${(stats?.totalVentas || 0).toLocaleString('es-CL')}`,
       subtitle: (stats?.totalVentas || 0) > 0 ? 'Total facturado en la jornada' : 'Sin ventas registradas hoy',
-      icon: <AttachMoneyIcon sx={{ fontSize: 32, color: '#2E7D32' }} />,
-      iconBg: '#E8F5E9',
-      borderColor: '#2E7D32',
+      ...ICON_CONFIG.ventas,
     },
     {
+      id: 'pedidos',
       title: 'Total Pedidos',
       value: stats?.totalPedidos || 0,
       subtitle: 'Registrados en el turno',
-      icon: <ShoppingBagIcon sx={{ fontSize: 30, color: '#4A3728' }} />,
-      iconBg: '#F5EBE1',
-      borderColor: '#4A3728',
+      ...ICON_CONFIG.pedidos,
     },
     {
+      id: 'pendientes',
       title: 'Pendientes / En Prep.',
       value: (stats?.pendientes || 0) + (stats?.preparando || 0),
       subtitle: `${stats?.pendientes || 0} pendientes • ${stats?.preparando || 0} en prep.`,
-      icon: <PendingActionsIcon sx={{ fontSize: 30, color: '#C86237' }} />,
-      iconBg: '#FBE9E7',
-      borderColor: '#C86237',
+      ...ICON_CONFIG.pendientes,
     },
     {
+      id: 'tiempo',
       title: 'Tiempo Prom. Prep.',
       value: tiempoProm,
       subtitle: 'Promedio real de atención',
-      icon: <AccessTimeIcon sx={{ fontSize: 30, color: '#8D6E63' }} />,
-      iconBg: '#EFEBE9',
-      borderColor: '#8D6E63',
+      ...ICON_CONFIG.tiempo,
     },
   ];
 
   return (
-    <Grid container spacing={3} sx={{ width: '100%', mb: 4 }}>
-      {cards.map((card, index) => (
-        <Grid size={{ xs: 12, sm: 6, md: 6, lg: 3 }} key={index}>
-          <Card
-            elevation={0}
-            sx={{
-              height: '100%',
-              borderRadius: '16px',
-              border: '1px solid #EFEAE6',
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 2px 10px rgba(74, 55, 40, 0.04)',
-              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: '0 6px 16px rgba(74, 55, 40, 0.08)',
-              },
-            }}
-          >
-            <CardContent
+    <Grid container spacing={3} sx={{ width: '100%', mb: SPACING.xxl }}>
+      {cards.map((card) => (
+        <Grid size={{ xs: 12, sm: 6, md: 6, lg: 3 }} key={card.id}>
+          <BaseCard variant="elevated" padding="lg">
+            <Box
               sx={{
-                p: 3,
-                '&:last-child': { pb: 3 },
-                height: '100%',
-                boxSizing: 'border-box',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
+                height: '100%',
               }}
             >
               <Box
@@ -79,28 +71,28 @@ function KpiCards({ stats }) {
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'flex-start',
-                  gap: 1.5,
+                  gap: SPACING.sm,
+                  mb: SPACING.md,
                 }}
               >
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography
                     variant="caption"
-                    fontWeight={700}
+                    fontWeight={TYPOGRAPHY.fontWeightBold}
                     sx={{
-                      color: '#8C7A6F',
+                      color: COLORS.textMuted,
                       textTransform: 'uppercase',
                       letterSpacing: '0.6px',
-                      display: 'block',
                     }}
                   >
                     {card.title}
                   </Typography>
                   <Typography
                     variant="h4"
-                    fontWeight={800}
+                    fontWeight={TYPOGRAPHY.fontWeightExtraBold}
                     sx={{
-                      color: '#3B291D',
-                      mt: 0.8,
+                      color: COLORS.textPrimary,
+                      mt: SPACING.xs,
                       letterSpacing: '-0.5px',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
@@ -109,7 +101,7 @@ function KpiCards({ stats }) {
                   >
                     {card.value}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: '#9E8D82', mt: 0.5, display: 'block' }}>
+                  <Typography variant="caption" sx={{ color: COLORS.textSecondary, mt: SPACING.xs }}>
                     {card.subtitle}
                   </Typography>
                 </Box>
@@ -118,8 +110,8 @@ function KpiCards({ stats }) {
                   sx={{
                     width: 48,
                     height: 48,
-                    borderRadius: '12px',
-                    backgroundColor: card.iconBg,
+                    borderRadius: BORDER.radiusMd,
+                    backgroundColor: card.bg,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -129,12 +121,16 @@ function KpiCards({ stats }) {
                   {card.icon}
                 </Box>
               </Box>
-            </CardContent>
-          </Card>
+            </Box>
+          </BaseCard>
         </Grid>
       ))}
     </Grid>
   );
 }
+
+const BORDER = {
+  radiusMd: 10,
+};
 
 export default KpiCards;

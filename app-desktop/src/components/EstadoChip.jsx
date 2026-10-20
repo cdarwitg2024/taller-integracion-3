@@ -1,23 +1,11 @@
-import { Chip } from '@mui/material';
+// ─── Componente: Badge de Estado ────────────────────────────────────────────
+// Badge normalizado para estados de pedido en todo el panel administrativo.
+// Usa BaseBadge y los tokens de diseño compartidos.
 
-const configEstado = {
-  pendiente: { label: 'Pendiente', color: 'error' },
-  preparando: { label: 'En Preparación', color: 'warning' },
-  en_preparacion: { label: 'En Preparación', color: 'warning' },
-  listo: { label: 'Listo para Retiro', color: 'info' },
-  entregado: { label: 'Entregado', color: 'success' },
-};
+import BaseBadge from '../ui/BaseBadge';
 
 function EstadoChip({ estado }) {
-  const config = configEstado[estado] || { label: estado, color: 'default' };
-
-  return (
-    <Chip
-      label={config.label}
-      color={config.color}
-      sx={{ minHeight: 32, fontWeight: 700 }}
-    />
-  );
+  return <BaseBadge estado={estado} />;
 }
 
 export default EstadoChip;

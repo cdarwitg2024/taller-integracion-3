@@ -1,31 +1,32 @@
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Divider,
-  Stack,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+// ─── Componente: Tarjeta de Pedido (KDS / Panel Dueño) ──────────────────────
+// Tarjeta de pedido normalizada para la cocina y panel administrativo.
+// Usa BaseCard, BaseButton, BaseBadge y tokens de diseño compartidos.
 
+import { Box, Chip, Divider, Stack, Tooltip, Typography } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import TimeAgo from './TimeAgo';
 import { parsearFecha, formatearHora } from '../utils/dateUtils';
 import impresionService from '../services/impresionService';
 
+import BaseCard from '../ui/BaseCard';
+import BaseButton from '../ui/BaseButton';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../design/tokens';
+
+const BORDER = {
+  radiusMd: 10,
+};
+
 const etiquetaPorEstado = {
-  pendiente: { fondo: '#F2ECE7', texto: '#4A3B32', label: 'PENDIENTE' },
-  preparando: { fondo: '#FFF3E0', texto: '#E65100', label: 'EN PREPARACIÓN' },
-  en_preparacion: { fondo: '#FFF3E0', texto: '#E65100', label: 'EN PREPARACIÓN' },
-  listo: { fondo: '#E8F5E9', texto: '#2E7D32', label: 'LISTO PARA RETIRO' },
+  pendiente: { fondo: COLORS.warningBg, texto: COLORS.warning, label: 'PENDIENTE' },
+  preparando: { fondo: COLORS.warningBg, texto: COLORS.warning, label: 'EN PREPARACIÓN' },
+  en_preparacion: { fondo: COLORS.warningBg, texto: COLORS.warning, label: 'EN PREPARACIÓN' },
+  listo: { fondo: COLORS.infoBg, texto: COLORS.info, label: 'LISTO PARA RETIRO' },
 };
 
 const botonPorEstado = {
-  pendiente: { label: 'COMENZAR PREPARACIÓN', background: '#4A3B32', siguiente: 'en_preparacion' },
-  preparando: { label: 'MARCAR COMO LISTO', background: '#E65100', siguiente: 'listo' },
-  en_preparacion: { label: 'MARCAR COMO LISTO', background: '#E65100', siguiente: 'listo' },
+  pendiente: { label: 'COMENZAR PREPARACIÓN', background: COLORS.primary, siguiente: 'en_preparacion' },
+  preparando: { label: 'MARCAR COMO LISTO', background: COLORS.warning, siguiente: 'listo' },
+  en_preparacion: { label: 'MARCAR COMO LISTO', background: COLORS.warning, siguiente: 'listo' },
 };
 
 function getHoraRetiro(pedido) {
@@ -46,24 +47,21 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
   const estadoImpresion = impresionService.getEstadoImpresion(pedido.rawId ?? pedido.id);
 
   return (
-    <Card
-      elevation={3}
+    <BaseCard
+      variant="elevated"
+      padding="none"
       sx={{
-        borderRadius: 3,
-        border: '1px solid #EFEAE6',
         cursor: 'pointer',
-        boxShadow: '0 8px 24px rgba(74, 59, 50, 0.14)',
         '&:active': { transform: 'scale(0.99)' },
-        '&:hover': { boxShadow: '0 12px 28px rgba(74, 59, 50, 0.2)' },
-        mb: 2,
+        mb: SPACING.md,
       }}
       onClick={() => onOpen(pedido)}
     >
-      <CardContent sx={{ p: 2.5 }}>
-        <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between', alignItems: 'center'}}>
+      <Box sx={{ p: SPACING.lg }}>
+        <Stack direction="row" sx={{ mb: SPACING.sm, justifyContent: 'space-between', alignItems: 'center' }}>
           <Box>
             <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="h5" fontWeight={800} sx={{ fontSize: { xs: '1.6rem', md: '1.9rem' } }}>
+              <Typography variant="h5" fontWeight={TYPOGRAPHY.fontWeightExtraBold} sx={{ fontSize: { xs: '1.6rem', md: '1.9rem' } }}>
                 {pedido.codigo_pedido || `#${pedido.rawId ?? pedido.id}`}
               </Typography>
               {estadoImpresion.veces > 0 && (
@@ -81,36 +79,34 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
                     sx={{
                       height: 22,
                       fontSize: '0.72rem',
-                      fontWeight: 700,
-                      backgroundColor: estadoImpresion.veces > 1 ? '#FFF3E0' : '#EFEBE9',
-                      color: estadoImpresion.veces > 1 ? '#E65100' : '#5D4037',
+                      fontWeight: TYPOGRAPHY.fontWeightBold,
+                      backgroundColor: estadoImpresion.veces > 1 ? COLORS.warningBg : '#EFEBE9',
+                      color: estadoImpresion.veces > 1 ? COLORS.warning : '#5D4037',
                     }}
                   />
                 </Tooltip>
               )}
             </Stack>
-            {/* El KDS muestra todas las cafeterias, asi que la comanda lleva el
-                nombre de donde salio para no entregar un pedido en la otra. */}
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            <Typography variant="caption" sx={{ color: COLORS.textSecondary }}>
               {pedido.cafeteria_nombre || pedido.ubicacion || ''}
               {pedido.franja_retiro ? ` · Retiro ${pedido.franja_retiro}` : ''}
             </Typography>
           </Box>
-            <TimeAgo pedido={pedido} sx={{ fontSize: '1.15rem', fontWeight: 800 }} />
+          <TimeAgo pedido={pedido} sx={{ fontSize: '1.15rem', fontWeight: TYPOGRAPHY.fontWeightExtraBold }} />
         </Stack>
 
-        <Stack direction="row" sx={{ mt: 1.5, justifyContent: 'space-between', alignItems: 'center'}}>
+        <Stack direction="row" sx={{ mt: SPACING.md, justifyContent: 'space-between', alignItems: 'center' }}>
           {etiqueta && (
             <Box
               sx={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 minHeight: 44,
-                px: 2.5,
-                borderRadius: 2,
+                px: SPACING.lg,
+                borderRadius: BORDER.radiusMd,
                 backgroundColor: etiqueta.fondo,
                 color: etiqueta.texto,
-                fontWeight: 900,
+                fontWeight: TYPOGRAPHY.fontWeightExtraBold,
                 letterSpacing: 0.5,
                 fontSize: '1.05rem',
               }}
@@ -120,52 +116,50 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
           )}
 
           <Typography
-            fontWeight={900}
-            sx={{ color: '#4A3B32', whiteSpace: 'nowrap', fontSize: '1.15rem' }}
+            fontWeight={TYPOGRAPHY.fontWeightExtraBold}
+            sx={{ color: COLORS.textPrimary, whiteSpace: 'nowrap', fontSize: '1.15rem' }}
           >
             🕐 {horaRetiro}
           </Typography>
         </Stack>
 
-        <Divider sx={{ my: 1.5 }} />
+        <Divider sx={{ my: SPACING.md }} />
 
         <Box sx={{ maxHeight: 170, overflowY: 'auto' }}>
           {pedido.productos?.map((item, idx) => (
             <Typography
               key={idx}
-              fontWeight={800}
-              sx={{ fontSize: '1.2rem', color: '#4A3B32', lineHeight: 1.6 }}
+              fontWeight={TYPOGRAPHY.fontWeightBold}
+              sx={{ fontSize: '1.2rem', color: COLORS.textPrimary, lineHeight: TYPOGRAPHY.lineHeightRelaxed }}
             >
               {item.nombre} × {item.cantidad}
             </Typography>
-          )) || <Typography sx={{ color: 'text.secondary' }}>Sin productos</Typography>}
+          )) || <Typography sx={{ color: COLORS.textSecondary }}>Sin productos</Typography>}
         </Box>
-      </CardContent>
+      </Box>
 
       {boton && (
-        <Box sx={{ px: 2.5, pb: 2.5, pt: 0 }}>
-          <Button
+        <Box sx={{ px: SPACING.lg, pb: SPACING.lg, pt: 0 }}>
+          <BaseButton
+            variant="primary"
             fullWidth
-            variant="contained"
             onClick={(e) => onChangeEstado(pedido.rawId ?? pedido.id, boton.siguiente, e)}
             sx={{
               minHeight: 56,
               minWidth: 56,
-              backgroundColor: boton.background,
               fontSize: '1.05rem',
-              fontWeight: 800,
+              fontWeight: TYPOGRAPHY.fontWeightExtraBold,
               letterSpacing: 0.5,
               '&:hover': {
-                backgroundColor: boton.background,
                 filter: 'brightness(0.92)',
               },
             }}
           >
             {boton.label}
-          </Button>
+          </BaseButton>
         </Box>
       )}
-    </Card>
+    </BaseCard>
   );
 }
 
