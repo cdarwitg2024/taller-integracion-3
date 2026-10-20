@@ -27,6 +27,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import DownloadIcon from '@mui/icons-material/Download';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import ReplayIcon from '@mui/icons-material/Replay';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 
 import EstadoChip from './EstadoChip';
 import { horaRetiroPedido } from '../utils/dateUtils';
@@ -239,9 +240,12 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
                     />
                   )}
                 </Stack>
-                <Typography fontWeight={800} sx={{ color: '#4A3B32' }}>
-                  🕐 Retiro: {horaRetiroPedido(pedidoActual) || 'Sin hora definida'}
-                </Typography>
+                <Stack direction="row" spacing={0.75} alignItems="center">
+                  <AccessTimeIcon sx={{ fontSize: 18, color: '#4A3B32' }} />
+                  <Typography fontWeight={800} sx={{ color: '#4A3B32' }}>
+                    Retiro: {horaRetiroPedido(pedidoActual) || 'Sin hora definida'}
+                  </Typography>
+                </Stack>
               </Stack>
 
               {/* Información comercial y de cliente (coherente con boleta M4) */}
