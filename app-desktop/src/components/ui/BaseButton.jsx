@@ -2,7 +2,7 @@
 // Normaliza tamaños, variantes y colores del panel administrativo.
 
 import { Button as MuiButton, styled } from '@mui/material';
-import { COLORS, SPACING, TYPOGRAPHY, COMPONENT } from '../../design/tokens';
+import { COLORS, SPACING, TYPOGRAPHY, COMPONENT, SHADOWS } from '../../design/tokens';
 
 const BORDER = {
   radiusMd: 10,

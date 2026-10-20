@@ -8,8 +8,8 @@ import TimeAgo from './TimeAgo';
 import { parsearFecha, formatearHora } from '../utils/dateUtils';
 import impresionService from '../services/impresionService';
 
-import BaseCard from '../ui/BaseCard';
-import BaseButton from '../ui/BaseButton';
+import BaseCard from './ui/BaseCard';
+import BaseButton from './ui/BaseButton';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../design/tokens';
 
 const BORDER = {

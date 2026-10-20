@@ -8,7 +8,7 @@ import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 
 import BaseCard from '../ui/BaseCard';
-import { COLORS, SPACING, TYPOGRAPHY } from '../../design/tokens';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER } from '../../design/tokens';
 
 const ICON_CONFIG = {
   ventas: { icon: <AttachMoneyIcon sx={{ fontSize: 32 }} />, bg: COLORS.successBg, color: COLORS.success, border: COLORS.success },
