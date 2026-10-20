@@ -324,6 +324,108 @@ export const usuarios = {
     }
   },
 
+  // Login unificado de escritorio: autentica con Supabase Auth y devuelve el
+  // perfil con el rol resuelto, SIN forzar un rol específico. Es la única vía
+  // de acceso ahora que existe una sola pantalla de login: el rol se detecta
+  // desde el perfil (tabla `usuarios` → `roles.nombre`) y la app enruta al
+  // usuario a su panel correspondiente. Mantiene las mismas validaciones que
+  // los antiguos loginDueno/loginEmpleado (cuenta activa, perfil existente).
+  async login(email, password) {
+    if (!isSupabaseConfigured) {
+      return {
+        success: false,
+        error: 'El servicio de autenticación Supabase no está configurado o no está disponible.',
+      };
+    }
+
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanPassword = String(password || '');
+
+    if (!cleanEmail || !cleanPassword) {
+      return {
+        success: false,
+        error: 'Por favor ingresa tanto el correo como la contraseña.',
+      };
+    }
+
+    try {
+      // 1. Autenticación estricta con Supabase Auth (GoTrue)
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
+      });
+
+      if (authError || !authData?.user) {
+        return { success: false, error: normalizeAuthError(authError) };
+      }
+
+      // 2. Consulta de perfil y rol en la tabla usuarios de Supabase
+      const { userProfile, cafeteriaAsignada, profileError } =
+        await fetchPerfilYCafeteria(authData.user.id);
+
+      if (profileError || !userProfile) {
+        await supabase.auth.signOut();
+        return {
+          success: false,
+          error: 'No se encontró el perfil de usuario registrado en la base de datos de Supabase.',
+        };
+      }
+
+      // 3. Verificación de estado de cuenta activa
+      if (userProfile.activo === false || userProfile.activo === 'false') {
+        await supabase.auth.signOut();
+        return {
+          success: false,
+          error: 'Esta cuenta se encuentra desactivada. Contacte al administrador.',
+        };
+      }
+
+      // 4. Resolución de rol (sin restringir): se acepta cualquier rol activo.
+      //    El nombre del rol viaja en el usuario para que la app decida a dónde
+      //    enrutar. Si el perfil no trajera rol, se usa metadata de Auth como
+      //    respaldo (mismo criterio que los flujos anteriores).
+      const rolNombre = (
+        userProfile?.roles?.nombre ||
+        authData.user?.user_metadata?.rol ||
+        ''
+      )
+        .trim()
+        .toLowerCase();
+
+      if (!rolNombre) {
+        await supabase.auth.signOut();
+        return {
+          success: false,
+          error: 'La cuenta no tiene un rol asignado. Contacte al administrador.',
+        };
+      }
+
+      // 5. Registrar última conexión
+      try {
+        await supabase
+          .from(TABLE)
+          .update({ ultima_conexion: new Date().toISOString() })
+          .eq('id', userProfile.id);
+      } catch (e) {
+        // No bloqueante
+      }
+
+      const usuarioFinal = {
+        ...userProfile,
+        rol: rolNombre,
+        cafeteria_id: cafeteriaAsignada || 1,
+      };
+
+      return { success: true, user: usuarioFinal };
+    } catch (err) {
+      console.error('Error en login unificado con Supabase:', err);
+      return {
+        success: false,
+        error: normalizeAuthError(err),
+      };
+    }
+  },
+
   async create(usuario) {
     const { data, error } = await supabase
       .from(TABLE)
