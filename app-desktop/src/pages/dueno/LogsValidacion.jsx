@@ -56,30 +56,6 @@ function LogsValidacion() {
 
   return (
     <Box>
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" fontWeight={800} sx={{ color: 'text.primary' }}>
-            Logs de Validación QR/Token
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            Registro de entregas y rechazos verificados por QR o Token. Solo visible para el Dueño.
-          </Typography>
-        </Box>
-        <Tooltip title="Actualizar registros">
-          <IconButton
-            onClick={cargarLogs}
-            disabled={loading}
-            sx={{
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-              '&:hover': { backgroundColor: '#F2ECE7' },
-            }}
-          >
-            <RefreshIcon />
-          </IconButton>
-        </Tooltip>
-      </Stack>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}

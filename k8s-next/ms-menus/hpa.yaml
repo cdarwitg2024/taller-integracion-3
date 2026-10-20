@@ -1,15 +1,12 @@
-# ms-menus — Horizontal Pod Autoscaler (basado en utilización de CPU).
+# ms-menus — Horizontal Pod Autoscaler basado en CPU.
 #
-# HPA mínimo y explicable para ms-menus. Requiere:
-#   1. Metrics API (metrics.k8s.io) operativa en el clúster;
-#   2. que el contenedor declare requests.cpu (actualmente 50m), que es la
-#      base del cálculo de "Utilization" (uso_actual / requests.cpu).
+# El HPA utiliza la métrica de CPU de los Pods y calcula la utilización
+# respecto de requests.cpu del contenedor (actualmente 50m).
 #
-# Este manifiesto vive en k8s-next/ a proposito, junto a deployment.yaml y
-# service.yaml (la arboleria k8s/ es la vieja, con backend-node).
+# Requiere que Metrics API (metrics.k8s.io) esté disponible en el clúster.
 #
-# Nota: NO se define "behavior" ni métricas de memoria todavia. Se empieza
-# con un HPA mínimo para poder demostrarlo y validar la obtención de métricas.
+# El servicio mantiene un mínimo de 1 Pod y puede escalar hasta un máximo
+# de 3 Pods totales según la utilización de CPU.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -24,10 +21,7 @@ spec:
     kind: Deployment
     name: ms-menus
   minReplicas: 1
-  # maxReplicas: 2 por análisis global de ResourceQuota (ver
-  # docs/kubernetes/configuracion-hpa-microservicios.md). Con los 3 MS a max 2
-  # + 3 Pods fijos el namespace llega a 9/12 Pods, conservando margen.
-  maxReplicas: 2
+  maxReplicas: 3
   metrics:
     - type: Resource
       resource:

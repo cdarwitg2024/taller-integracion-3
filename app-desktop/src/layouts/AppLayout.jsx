@@ -9,8 +9,11 @@ import { kdsColors } from '../theme/theme';
  * Así las pantallas del KDS reparten el alto disponible con `height: 100%` en
  * lugar de restar píxeles a mano (antes se usaba `calc(100vh - 128px)`, que se
  * rompía al cambiar el padding o la altura del header).
+ *
+ * `headerElement` (opcional) se renderiza encima de `children`: lo usa
+ * `app.jsx` para mostrar la cabecera de las pantallas del panel de dueño.
  */
-function AppLayout({ currentPage, onNavigate, onLogout, menuItems, subtitle, currentUser, children }) {
+function AppLayout({ currentPage, onNavigate, onLogout, menuItems, subtitle, currentUser, children, headerElement }) {
   return (
     <Box
       sx={{
@@ -43,6 +46,9 @@ function AppLayout({ currentPage, onNavigate, onLogout, menuItems, subtitle, cur
           boxSizing: 'border-box',
         }}
       >
+        {headerElement && (
+          <Box sx={{ mb: 3 }}>{headerElement}</Box>
+        )}
         {children}
       </Box>
     </Box>

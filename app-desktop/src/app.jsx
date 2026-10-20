@@ -10,6 +10,7 @@ import PriceChangeOutlinedIcon from '@mui/icons-material/PriceChangeOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 
+import PageHeader from './components/dueno/PageHeader';
 import RoleSelector from './pages/auth/RoleSelector';
 import LoginDueno from './pages/dueno/LoginDueno';
 import Dashboard from './pages/dueno/Dashboard';
@@ -88,10 +89,52 @@ function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
       menuItems={isEmpleado ? empleadoMenuItems : duenoMenuItems}
       subtitle={isEmpleado ? 'Terminal de Cocina' : 'Panel de Administración'}
       currentUser={currentUser}
+      headerElement={!isEmpleado ? buildDuenoHeader(location.pathname) : null}
     >
       <CssBaseline />
       {children}
     </AppLayout>
+  );
+};
+
+/**
+ * Cabecera (título + subtítulo) de cada pantalla del panel de dueño.
+ * Recibe `pathname` del `useLocation()` de AuthenticatedLayout: la ruta real
+ * vive en el hash (`#/dueno/dashboard`), por lo que `location` global de
+ * `window` no sirve aquí.
+ */
+function buildDuenoHeader(pathname) {
+  const duenoPageHeaders = {
+    '/dueno/dashboard': {
+      title: 'Dashboard Central',
+      subtitle: 'Métricas en tiempo real, pedidos activos y rendimiento de ventas de la cafetería.',
+    },
+    '/dueno/productos': {
+      title: 'Productos y Stock',
+      subtitle: 'Administra el catálogo de productos, precios y disponibilidad de la cafetería.',
+    },
+    '/dueno/inventario': {
+      title: 'Inventario',
+      subtitle: 'Control de stock de insumos y alertas de productos por debajo del mínimo.',
+    },
+    '/dueno/logs': {
+      title: 'Logs de Validación QR/Token',
+      subtitle: 'Registro de entregas y rechazos verificados por código QR o Token.',
+    },
+    '/dueno/bot': {
+      title: 'Asistente Bot del Dueño',
+      subtitle: 'Consola interactiva del Bot CoffeeFaster, diagnóstico de servicio y consultas de existencias.',
+    },
+  };
+
+  const headerInfo = duenoPageHeaders[pathname];
+  if (!headerInfo) return null;
+
+  return (
+    <PageHeader
+      title={headerInfo.title}
+      subtitle={headerInfo.subtitle}
+    />
   );
 }
 
