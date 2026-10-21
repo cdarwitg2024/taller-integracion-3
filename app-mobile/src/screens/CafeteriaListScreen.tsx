@@ -5,16 +5,16 @@ import {
   View,
   ActivityIndicator,
   Image,
-  ScrollView,
   RefreshControl,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import Container from '../components/Container';
+import Title from '../components/Title';
 import { colors } from '../theme/colors';
-import { spacing } from '../theme/spacing';
-import { typography } from '../theme/typography';
+import { spacing, radius } from '../theme/spacing';
+import { typography, lineHeight } from '../theme/typography';
 
 interface Cafeteria {
   /**
@@ -143,87 +143,101 @@ export const CafeteriaListScreen = ({
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Encabezado */}
-      <View style={styles.topHeader}>
-        <View style={{ width: 36 }} />
-        <Text style={styles.welcomeText}>Bienvenido {serverUserName || 'Usuario'}</Text>
-        <View style={styles.iconBadge}>
-          <Text style={{ fontSize: 18 }}>☕</Text>
-        </View>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
+    <Container
+      // S2-T2: la pantalla usa el contenedor reutilizable del design system,
+      // que ya aplica SafeAreaView + fondo + scroll, en vez de armarlos a mano.
+      // Se mantiene el blanco original de esta pantalla (el default del
+      // Container es colors.fondo, que es otro tono).
+      backgroundColor={colors.blanco}
+      scroll
+      scrollViewProps={{
+        showsVerticalScrollIndicator: false,
+        contentContainerStyle: styles.scrollContent,
+        refreshControl: (
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => fetchCafeterias(true)}
             tintColor={colors.cafeOscuro}
             colors={[colors.cafeOscuro]}
           />
-        }
-      >
-        {/* Banner Informativo Superior */}
-        <Card variant="elevated" padding="lg" style={styles.infoBanner}>
-          <Text style={styles.infoBannerText}>
-            Podras ver las cafeterias disponibles en este menu
-          </Text>
-        </Card>
+        ),
+      }}
+    >
+      {/* Encabezado */}
+      <View style={styles.topHeader}>
+        <View style={{ width: 36 }} />
+        <Title
+          // S2-T2: el saludo pasa a ser un Title normalizado (familia serif y
+          // peso del tema) para que el encabezado tenga la misma jerarquía que
+          // el resto de las pantallas.
+          title={`Bienvenido ${serverUserName || 'Usuario'}`}
+          variant="h2"
+          align="center"
+          style={styles.welcomeWrapper}
+          titleStyle={styles.welcomeText}
+        />
+        <View style={styles.iconBadge}>
+          <Text style={styles.iconBadgeText}>☕</Text>
+        </View>
+      </View>
+      {/* Banner Informativo Superior */}
+      <Card variant="elevated" padding="lg" style={styles.infoBanner}>
+        <Text style={styles.infoBannerText}>
+          Podras ver las cafeterias disponibles en este menu
+        </Text>
+      </Card>
 
-        {/* Lista de Cafeterías */}
-        {loading ? (
-          <View style={styles.loadingState}>
-            <ActivityIndicator size="large" color={colors.cafeOscuro} />
-            <Text style={styles.loadingText}>Cargando cafeterías…</Text>
+      {/* Lista de Cafeterías */}
+      {loading ? (
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={colors.cafeOscuro} />
+          <Text style={styles.loadingText}>Cargando cafeterías…</Text>
+        </View>
+      ) : errorMessage ? (
+        <View style={styles.errorState}>
+          <Text style={styles.errorStateIcon}>📡</Text>
+          <Text style={styles.errorStateTitle}>Sin conexión con el servidor</Text>
+          <Text style={styles.errorStateText}>{errorMessage}</Text>
+          <View style={styles.retryButtonWrapper}>
+            <Button
+              title="Reintentar"
+              onPress={() => fetchCafeterias()}
+            />
           </View>
-        ) : errorMessage ? (
-          <View style={styles.errorState}>
-            <Text style={styles.errorStateIcon}>📡</Text>
-            <Text style={styles.errorStateTitle}>Sin conexión con el servidor</Text>
-            <Text style={styles.errorStateText}>{errorMessage}</Text>
-            <View style={styles.retryButtonWrapper}>
-              <Button
-                title="Reintentar"
-                onPress={() => fetchCafeterias()}
-              />
-            </View>
-          </View>
-        ) : cafeterias.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>☕</Text>
-            <Text style={styles.emptyStateTitle}>Aún no hay cafeterías disponibles</Text>
-            <Text style={styles.emptyStateText}>
-              No hay cafeterías activas registradas en este momento. Vuelve más tarde para ver
-              el menú del campus.
-            </Text>
-            <View style={styles.retryButtonWrapper}>
-              <Button
-                title="Actualizar"
-                onPress={() => fetchCafeterias()}
-              />
-            </View>
-          </View>
-        ) : (
-          <View style={styles.listContainer}>
-            {cafeterias.map((item) => (
-              <React.Fragment key={item.id}>
-                {renderCafeteriaCard({ item })}
-              </React.Fragment>
-            ))}
-          </View>
-        )}
-
-        {/* Banner Informativo Inferior */}
-        <Card variant="elevated" padding="lg" style={styles.bottomBanner}>
-          <Text style={styles.bottomBannerText}>
-            Si no encuentras una cafeteria que te guste puedes pasar a ver directamente los menus
-            disponibles y se filtrara automaticamente a una cafeteria con este disponible
+        </View>
+      ) : cafeterias.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateIcon}>☕</Text>
+          <Text style={styles.emptyStateTitle}>Aún no hay cafeterías disponibles</Text>
+          <Text style={styles.emptyStateText}>
+            No hay cafeterías activas registradas en este momento. Vuelve más tarde para ver
+            el menú del campus.
           </Text>
-        </Card>
-      </ScrollView>
-    </SafeAreaView>
+          <View style={styles.retryButtonWrapper}>
+            <Button
+              title="Actualizar"
+              onPress={() => fetchCafeterias()}
+            />
+          </View>
+        </View>
+      ) : (
+        <View style={styles.listContainer}>
+          {cafeterias.map((item) => (
+            <React.Fragment key={item.id}>
+              {renderCafeteriaCard({ item })}
+            </React.Fragment>
+          ))}
+        </View>
+      )}
+
+      {/* Banner Informativo Inferior */}
+      <Card variant="elevated" padding="lg" style={styles.bottomBanner}>
+        <Text style={styles.bottomBannerText}>
+          Si no encuentras una cafeteria que te guste puedes pasar a ver directamente los menus
+          disponibles y se filtrara automaticamente a una cafeteria con este disponible
+        </Text>
+      </Card>
+    </Container>
   );
 };
 
@@ -249,9 +263,10 @@ const getDelayStyle = (minutos?: number) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.blanco,
+  // S2-T2: Container ya maneja fondo + SafeArea; solo queda el padding del
+  // contenido del scroll.
+  scrollContent: {
+    paddingBottom: 40,
   },
   topHeader: {
     flexDirection: 'row',
@@ -260,32 +275,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
   },
+  // El Title recibe el ancho flexible para que el saludo quede centrado entre
+  // el espaciador y el badge, sin romper el layout de la fila.
+  welcomeWrapper: {
+    flex: 1,
+  },
   welcomeText: {
     fontSize: 22,
-    fontWeight: typography.pesoBold,
     color: colors.cafeOscuro,
-    fontFamily: typography.familia,
   },
   iconBadge: {
     width: 38,
     height: 38,
-    borderRadius: 12,
+    borderRadius: radius.md,
     backgroundColor: colors.cafeOscuro,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  iconBadgeText: {
+    fontSize: 18,
   },
   infoBanner: {
     backgroundColor: colors.crema,
     marginHorizontal: spacing.xl,
     marginVertical: spacing.md,
-    borderRadius: 20,
+    borderRadius: radius.xl,
   },
   infoBannerText: {
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: typography.cuerpo,
     fontWeight: typography.pesoMedio,
     color: colors.cafeOscuro,
-    lineHeight: 20,
+    lineHeight: lineHeight.cuerpo,
   },
   listContainer: {
     paddingHorizontal: spacing.xl,
@@ -295,14 +316,14 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 24,
+    borderRadius: radius.xxl,
     borderWidth: 1,
     borderColor: colors.borde,
   },
   cardImage: {
     width: 90,
     height: 90,
-    borderRadius: 20,
+    borderRadius: radius.xl,
     backgroundColor: colors.borde,
   },
   cardImageFallback: {
@@ -326,7 +347,7 @@ const styles = StyleSheet.create({
   cardSubtitle: {
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,
-    marginVertical: 2,
+    marginVertical: spacing.xs / 2,
   },
   cardDelay: {
     fontSize: typography.cuerpoPequeno,
@@ -337,13 +358,13 @@ const styles = StyleSheet.create({
     fontSize: typography.cuerpoPequeno,
     fontWeight: typography.pesoBold,
     color: colors.textoSecundario,
-    marginTop: 2,
+    marginTop: spacing.xs / 2,
   },
   bottomBanner: {
     backgroundColor: colors.crema,
     marginHorizontal: spacing.xl,
     marginTop: spacing.xxl,
-    borderRadius: 20,
+    borderRadius: radius.xl,
   },
   bottomBannerText: {
     textAlign: 'center',
@@ -358,7 +379,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxxl,
     paddingHorizontal: spacing.xxl,
     backgroundColor: colors.crema,
-    borderRadius: 24,
+    borderRadius: radius.xxl,
   },
   emptyStateIcon: {
     fontSize: 40,
@@ -374,7 +395,7 @@ const styles = StyleSheet.create({
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: lineHeight.cuerpoPequeno,
     marginTop: spacing.sm,
   },
   loadingState: {
@@ -394,7 +415,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxxl,
     paddingHorizontal: spacing.xxl,
     backgroundColor: colors.rojoBg,
-    borderRadius: 24,
+    borderRadius: radius.xxl,
     borderWidth: 1,
     borderColor: colors.rojo,
   },
@@ -412,7 +433,7 @@ const styles = StyleSheet.create({
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: lineHeight.cuerpoPequeno,
     marginTop: spacing.sm,
   },
   retryButtonWrapper: {
