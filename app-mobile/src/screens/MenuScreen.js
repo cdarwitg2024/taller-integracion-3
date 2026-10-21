@@ -16,11 +16,12 @@ import ProductDetail from '../components/ProductDetail';
 import CategoryFilter from '../components/CategoryFilter';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import Title from '../components/Title';
 import { supabase } from '../lib/supabase';
 import { useDisponibilidadProductos } from '../hooks/useDisponibilidadProductos';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
-import { typography } from '../theme/typography';
+import { typography, lineHeight } from '../theme/typography';
 
 /**
  * Pantalla de Menú de una cafetería — FR-06
@@ -441,7 +442,16 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
             <Text style={styles.backText}>‹</Text>
           </TouchableOpacity>
 
-          <Text style={styles.title}>Menú</Text>
+          <Title
+            // S2-T2: el título de la pantalla pasa por el componente Title
+            // normalizado. Se mantiene el aspecto original (sans-serif, 18px,
+            // negrita) para no alterar la presentación.
+            title="Menú"
+            variant="h2"
+            align="center"
+            serif={false}
+            titleStyle={styles.titleText}
+          />
 
           <View style={styles.headerIcon}>
             <Text style={styles.headerIconText}>▣</Text>
@@ -584,7 +594,7 @@ const styles = StyleSheet.create({
     lineHeight: 32,
   },
 
-  title: {
+  titleText: {
     fontSize: 18,
     fontWeight: typography.pesoBold,
     color: colors.cafeOscuro,
@@ -768,7 +778,7 @@ const styles = StyleSheet.create({
     color: colors.textoSecundario,
     textAlign: 'center',
     marginTop: spacing.sm,
-    lineHeight: 18,
+    lineHeight: lineHeight.cuerpoPequeno,
   },
 });
 

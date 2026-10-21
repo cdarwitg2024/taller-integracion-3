@@ -20,6 +20,10 @@ export const radius = {
   md: 12,
   lg: 16,
   xl: 20,
+  // S2-T2: radio de 24px que ya usaban las tarjetas de cafetería y los
+  // estados (vacío/error). Se agrega como token aditivo para no dejar el
+  // número hardcodeado, sin cambiar ningún valor visual.
+  xxl: 24,
   pill: 999,
 };
 
