@@ -6,6 +6,9 @@ import {
   Image,
   StyleSheet,
 } from 'react-native';
+import { colors } from '../theme/colors';
+import { radius } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 /**
  * Tarjeta de un producto del menú.
@@ -148,14 +151,14 @@ const ProductCard = ({ product, onAdd, onPress }) => {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: colors.blanco,
+    borderRadius: radius.lg,
     padding: 10,
     marginBottom: 12,
 
     elevation: 3,
 
-    shadowColor: '#000000',
+    shadowColor: colors.sombra,
     shadowOffset: {
       width: 0,
       height: 3,
@@ -173,7 +176,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 13,
-    backgroundColor: '#F3E7DD',
+    backgroundColor: colors.superficieCrema,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -190,15 +193,15 @@ const styles = StyleSheet.create({
 
   soldOutOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(74, 51, 44, 0.55)',
+    backgroundColor: colors.overlayOscuro,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   soldOutText: {
-    color: '#FFFFFF',
-    fontSize: 8,
-    fontWeight: '800',
+    color: colors.textoBlanco,
+    fontSize: typography.micro,
+    fontWeight: typography.pesoExtraBold,
     letterSpacing: 0.5,
   },
 
@@ -209,14 +212,14 @@ const styles = StyleSheet.create({
   },
 
   name: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#3D2B26',
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoBold,
+    color: colors.textoOscuro,
   },
 
   description: {
-    fontSize: 10,
-    color: '#8A7B76',
+    fontSize: typography.etiqueta,
+    color: colors.textoSecundario,
     marginTop: 2,
   },
 
@@ -230,26 +233,26 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#5B8C5A',
+    backgroundColor: colors.verdeStock,
     marginRight: 5,
   },
 
   dotLow: {
-    backgroundColor: '#B8860B',
+    backgroundColor: colors.naranjaStock,
   },
 
   dotOut: {
-    backgroundColor: '#B05A4E',
+    backgroundColor: colors.rojoStock,
   },
 
   stockText: {
-    fontSize: 10,
-    color: '#5B8C5A',
-    fontWeight: '600',
+    fontSize: typography.etiqueta,
+    color: colors.verdeStock,
+    fontWeight: typography.pesoMedio,
   },
 
   stockTextLow: {
-    color: '#B8860B',
+    color: colors.naranjaStock,
   },
 
   bottomRow: {
@@ -260,26 +263,26 @@ const styles = StyleSheet.create({
   },
 
   price: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#4A332C',
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoBold,
+    color: colors.textoPrimario,
   },
 
   addButton: {
-    backgroundColor: '#F5F1EE',
+    backgroundColor: colors.cremaBoton,
     borderRadius: 14,
     paddingHorizontal: 11,
     paddingVertical: 7,
   },
 
   disabledButton: {
-    backgroundColor: '#D8D3D0',
+    backgroundColor: colors.deshabilitado,
   },
 
   addButtonText: {
-    color: '#4A332C',
+    color: colors.textoPrimario,
     fontSize: 9,
-    fontWeight: '700',
+    fontWeight: typography.pesoBold,
   },
 });
 

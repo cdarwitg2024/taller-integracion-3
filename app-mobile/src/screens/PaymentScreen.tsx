@@ -28,7 +28,7 @@ const TARJETAS_PRUEBA = [
     vencimiento: '12/28',
     cvv: '123',
     pin: '1234',
-    color: '#1A1F71',
+    color: colors.visa,
     saldo: 999999999,
   },
   {
@@ -39,7 +39,7 @@ const TARJETAS_PRUEBA = [
     vencimiento: '06/27',
     cvv: '456',
     pin: '5678',
-    color: '#EB001B',
+    color: colors.mastercard,
     saldo: 999999999,
   },
 ];
@@ -475,7 +475,7 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlayNegro,
     justifyContent: 'center',
     padding: spacing.xl,
   },

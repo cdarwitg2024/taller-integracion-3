@@ -1,16 +1,27 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
-import { spacing } from '../theme/spacing';
+import { spacing, radius } from '../theme/spacing';
 
 /**
- * Tarjeta base de CoffeeFast
- * 
+ * Tarjeta base de CoffeeFast.
+ *
+ * S2-T1: componente reutilizable normalizado. Úsala como contenedor blanco
+ * estándar (formularios, bloques de info, listas) para que el fondo, el borde,
+ * el radio y la sombra sean iguales en toda la app.
+ *
  * Props:
  * - children: Contenido de la tarjeta
  * - variant: 'default' | 'elevated' | 'outlined'
  * - padding: 'none' | 'sm' | 'md' | 'lg'
  * - style: Estilos adicionales
+ *
+ * @type {React.FC<{
+ *   children?: React.ReactNode,
+ *   variant?: 'default'|'elevated'|'outlined',
+ *   padding?: 'none'|'sm'|'md'|'lg',
+ *   style?: any,
+ * }>}
  */
 const Card = ({
   children,
@@ -31,7 +42,7 @@ const Card = ({
 const styles = StyleSheet.create({
   base: {
     backgroundColor: colors.blanco,
-    borderRadius: 16,
+    borderRadius: radius.lg,
   },
   default: {
     borderWidth: 1,
