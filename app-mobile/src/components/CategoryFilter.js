@@ -1,5 +1,8 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { colors } from '../theme/colors';
+import { radius } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 /**
  * Filtro por categoría — FR-07
@@ -51,7 +54,7 @@ const CategoryFilter = ({ categories, selected, onSelect, totalProducts }) => {
 
 const styles = StyleSheet.create({
   wrapper: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.blanco,
     paddingVertical: 8,
   },
 
@@ -63,31 +66,31 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3EEEA',
-    borderRadius: 16,
+    backgroundColor: colors.chipBg,
+    borderRadius: radius.lg,
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginRight: 7,
   },
 
   chipActive: {
-    backgroundColor: '#4A332C',
+    backgroundColor: colors.textoPrimario,
   },
 
   chipText: {
-    color: '#6B5850',
-    fontSize: 12,
-    fontWeight: '700',
+    color: colors.textoMedio,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
   },
 
   chipTextActive: {
-    color: '#FFFFFF',
+    color: colors.textoBlanco,
   },
 
   badge: {
     marginLeft: 6,
-    backgroundColor: '#E2D8D1',
-    borderRadius: 8,
+    backgroundColor: colors.chipBadgeBg,
+    borderRadius: radius.sm,
     minWidth: 18,
     paddingHorizontal: 5,
     paddingVertical: 1,
@@ -95,17 +98,17 @@ const styles = StyleSheet.create({
   },
 
   badgeActive: {
-    backgroundColor: 'rgba(255,255,255,0.28)',
+    backgroundColor: colors.blancoTranslucido,
   },
 
   badgeText: {
-    color: '#6B5850',
+    color: colors.textoMedio,
     fontSize: 9,
-    fontWeight: '800',
+    fontWeight: typography.pesoExtraBold,
   },
 
   badgeTextActive: {
-    color: '#FFFFFF',
+    color: colors.textoBlanco,
   },
 });
 

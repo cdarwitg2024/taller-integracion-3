@@ -6,6 +6,9 @@ import {
   StyleSheet,
   Modal,
 } from 'react-native';
+import { colors } from '../theme/colors';
+import { radius } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 const CartItem = ({
   item,
@@ -152,11 +155,11 @@ const CartItem = ({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: colors.blanco,
+    borderRadius: radius.lg,
     padding: 10,
     marginBottom: 12,
-    shadowColor: '#000',
+    shadowColor: colors.sombra,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -169,8 +172,8 @@ const styles = StyleSheet.create({
   imagePlaceholder: {
     width: 62,
     height: 62,
-    borderRadius: 12,
-    backgroundColor: '#F3E7DD',
+    borderRadius: radius.md,
+    backgroundColor: colors.superficieCrema,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -186,14 +189,14 @@ const styles = StyleSheet.create({
   },
 
   name: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#3D2B26',
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoBold,
+    color: colors.textoOscuro,
   },
 
   description: {
     fontSize: 11,
-    color: '#8A7B76',
+    color: colors.textoSecundario,
     marginTop: 3,
   },
 
@@ -202,14 +205,14 @@ const styles = StyleSheet.create({
   },
 
   unitPrice: {
-    fontSize: 10,
-    color: '#958781',
+    fontSize: typography.etiqueta,
+    color: colors.textoTenue,
   },
 
   subtotal: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#4A332C',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.textoPrimario,
     marginTop: 2,
   },
 
@@ -223,8 +226,8 @@ const styles = StyleSheet.create({
   quantityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F7F5F3',
-    borderRadius: 20,
+    backgroundColor: colors.fondoSuave,
+    borderRadius: radius.xl,
     paddingHorizontal: 4,
   },
 
@@ -242,18 +245,18 @@ const styles = StyleSheet.create({
 
   quantityButtonText: {
     fontSize: 17,
-    color: '#7C6B65',
+    color: colors.textoMedioClaro,
   },
 
   quantityButtonTextDisabled: {
-    color: '#B8AAA4',
+    color: colors.textoDeshabilitadoClaro,
   },
 
   quantity: {
     minWidth: 24,
     textAlign: 'center',
-    fontSize: 12,
-    color: '#4A332C',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoPrimario,
   },
 
   removeButton: {
@@ -263,14 +266,14 @@ const styles = StyleSheet.create({
   },
 
   removeButtonText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#8A6A60',
+    fontSize: typography.etiqueta,
+    fontWeight: typography.pesoMedio,
+    color: colors.textoMarron,
   },
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(61, 43, 38, 0.45)',
+    backgroundColor: colors.overlayModal,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 28,
@@ -278,13 +281,13 @@ const styles = StyleSheet.create({
 
   modalContainer: {
     width: '100%',
-    backgroundColor: '#FFFDFB',
-    borderRadius: 24,
+    backgroundColor: colors.superficieHueso,
+    borderRadius: radius.xxl,
     padding: 24,
     alignItems: 'center',
     elevation: 8,
 
-    shadowColor: '#000',
+    shadowColor: colors.sombra,
     shadowOffset: {
       width: 0,
       height: 5,
@@ -297,7 +300,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#F3E7DD',
+    backgroundColor: colors.superficieCrema,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
@@ -309,22 +312,22 @@ const styles = StyleSheet.create({
 
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#4A332C',
+    fontWeight: typography.pesoBold,
+    color: colors.textoPrimario,
     textAlign: 'center',
   },
 
   modalProductName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#6D554C',
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoBold,
+    color: colors.marronMedio,
     textAlign: 'center',
     marginTop: 6,
   },
 
   modalDescription: {
-    fontSize: 12,
-    color: '#8A7B76',
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
     textAlign: 'center',
     lineHeight: 18,
     marginTop: 10,
@@ -339,33 +342,33 @@ const styles = StyleSheet.create({
   cancelButton: {
     flex: 1,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: '#F3E7DD',
+    borderRadius: radius.md,
+    backgroundColor: colors.superficieCrema,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 6,
   },
 
   cancelButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#6D554C',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.marronMedio,
   },
 
   confirmButton: {
     flex: 1,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: '#4A332C',
+    borderRadius: radius.md,
+    backgroundColor: colors.textoPrimario,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 6,
   },
 
   confirmButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.textoBlanco,
   },
 });
 

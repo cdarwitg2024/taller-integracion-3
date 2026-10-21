@@ -5,17 +5,16 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
   Image,
   Platform,
   StyleSheet,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import Card from '../components/Card';
+import Title from '../components/Title';
+import Container from '../components/Container';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -110,30 +109,27 @@ export const LoginScreen = ({
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Badge Superior */}
-          <View style={styles.badgeContainer}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>PORTAL ESTUDIANTES • UCT</Text>
-            </View>
-          </View>
+    <Container keyboard scroll contentContainerStyle={styles.scrollContent}>
+      {/* Badge Superior */}
+      <View style={styles.badgeContainer}>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>PORTAL ESTUDIANTES • UCT</Text>
+        </View>
+      </View>
 
-          {/* Logo e Identidad */}
-          <View style={styles.header}>
-            <Image source={logo} style={styles.logoImage} accessibilityIgnoresInvertColors />
-            <Text style={styles.brandName}>CoffeeFast</Text>
-            <Text style={styles.title}>Iniciar Sesión</Text>
-            <Text style={styles.subtitle}>
-              Pide tu café entre clases y retira sin esperas ni filas
-            </Text>
+      {/* Logo e Identidad */}
+      <View style={styles.header}>
+        <Image source={logo} style={styles.logoImage} accessibilityIgnoresInvertColors />
+        <Text style={styles.brandName}>CoffeeFast</Text>
+        <Title
+          title="Iniciar Sesión"
+          subtitle="Pide tu café entre clases y retira sin esperas ni filas"
+          variant="h1"
+          align="center"
+          serif
+          titleStyle={{ marginBottom: spacing.xs }}
+          subtitleStyle={{ marginTop: 0, paddingHorizontal: spacing.xl }}
+        />
           </View>
 
           {/* Alerta de Error y Reenvío de Confirmación */}
@@ -266,20 +262,11 @@ export const LoginScreen = ({
               Conexión segura vía Red Campus UCT
             </Text>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    </Container>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.fondo,
-  },
-  keyboardView: {
-    flex: 1,
-  },
   scrollContent: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
@@ -317,20 +304,6 @@ const styles = StyleSheet.create({
     color: colors.cafeOscuro,
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
     marginBottom: spacing.xs,
-  },
-  title: {
-    fontSize: typography.tituloGrande,
-    fontWeight: typography.pesoExtraBold,
-    color: colors.cafeOscuro,
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    marginBottom: spacing.xs,
-  },
-  subtitle: {
-    fontSize: typography.cuerpoPequeno,
-    color: colors.textoSecundario,
-    textAlign: 'center',
-    paddingHorizontal: spacing.xl,
-    lineHeight: 18,
   },
   errorContainer: {
     flexDirection: 'column',
@@ -374,7 +347,7 @@ const styles = StyleSheet.create({
   forgotPassword: {
     fontSize: typography.cuerpoPequeno,
     fontWeight: typography.pesoMedio,
-    color: '#E07A5F',
+    color: colors.acento,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -398,7 +371,7 @@ const styles = StyleSheet.create({
   eyeIconText: {
     fontSize: typography.etiqueta,
     fontWeight: typography.pesoBold,
-    color: '#E07A5F',
+    color: colors.acento,
   },
   hintText: {
     fontSize: typography.micro,

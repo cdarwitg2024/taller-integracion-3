@@ -737,7 +737,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderColor: colors.blancoBordeTranslucido,
   },
   avatarImage: {
     width: 76,
@@ -768,7 +768,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   roleBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    backgroundColor: colors.blancoTenue,
     paddingHorizontal: spacing.md,
     paddingVertical: 5,
     borderRadius: 14,
@@ -943,7 +943,7 @@ const styles = StyleSheet.create({
   // ─── Modal de Edición ──────────────────────────────────────────────
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlayNegro,
     justifyContent: 'flex-end',
   },
   modalCard: {

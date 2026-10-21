@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, paddingVertical: 13, fontSize: typography.cuerpo, color: colors.cafeOscuro },
   eyeIcon: { paddingLeft: spacing.sm },
-  eyeIconText: { fontSize: 11, fontWeight: typography.pesoBold, color: '#E07A5F' },
+  eyeIconText: { fontSize: 11, fontWeight: typography.pesoBold, color: colors.acento },
 
   errorBox: {
     flexDirection: 'row',

@@ -725,7 +725,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(201, 169, 110, 0.15)',
+    backgroundColor: colors.doradoTranslucido,
   },
   balanceDecor2: {
     position: 'absolute',
@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: colors.blancoHumo,
   },
   balanceContent: {
     position: 'relative',
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.borde,
-    shadowColor: '#000',
+    shadowColor: colors.sombra,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -852,7 +852,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: colors.borde,
-    shadowColor: '#000',
+    shadowColor: colors.sombra,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
     shadowRadius: 4,
@@ -953,7 +953,7 @@ const styles = StyleSheet.create({
   // ─── Modal ──────────────────────────────────────────────────
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlayNegro,
     justifyContent: 'flex-end',
   },
   modalCard: {
