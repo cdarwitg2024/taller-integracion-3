@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { authEmailRedirectTo } from '../lib/authRedirect';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import Card from '../components/Card';
@@ -81,7 +82,7 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
         type: 'signup',
         email: registeredEmail,
         options: {
-          emailRedirectTo: 'coffeefast://auth/callback',
+          emailRedirectTo: authEmailRedirectTo,
         },
       });
 
@@ -117,7 +118,7 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
         email: email.trim().toLowerCase(),
         password: password,
         options: {
-          emailRedirectTo: 'coffeefast://auth/callback',
+          emailRedirectTo: authEmailRedirectTo,
           data: {
             first_name: firstName,
             last_name: lastName,
@@ -144,9 +145,22 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
           return;
         }
 
+        // Con la confirmación de correo habilitada, Supabase debe crear el
+        // usuario sin entregar una sesión hasta que abra el enlace del correo.
+        // Si llega una sesión desde signUp, la confirmación no está siendo
+        // exigida en el proyecto y no debemos dar el registro por completado.
+        if (data.session) {
+          await supabase.auth.signOut();
+          setErrorMessage(
+            'Supabase permitió crear la cuenta sin confirmar el correo. Se cerró la sesión. ' +
+              'El administrador debe activar la confirmación de correo y configurar el envío de emails en Supabase antes de registrar estudiantes.'
+          );
+          return;
+        }
+
         // Si Supabase requiere confirmación de correo (email confirmation activada),
         // no hay sesión activa inmediata (data.session === null).
-        const pendingConfirmation = !data.session && !data.user.confirmed_at;
+        const pendingConfirmation = !data.user.confirmed_at;
 
         if (pendingConfirmation) {
           // S2-T3: Mostrar estado visual dedicado "Revisa tu correo"

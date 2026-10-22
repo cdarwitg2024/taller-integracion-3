@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
@@ -103,6 +103,8 @@ function AppContent() {
   const [authScreen, setAuthScreen] = useState<
     'login' | 'register' | 'forgot' | 'reset'
   >('login');
+  const authScreenRef = useRef(authScreen);
+  authScreenRef.current = authScreen;
   const [isGuest, setIsGuest] = useState(false);
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
@@ -125,6 +127,15 @@ function AppContent() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      // signUp no debería abrir la app si Supabase exige confirmación. Evita
+      // mostrar momentáneamente la pantalla principal si el proyecto está
+      // mal configurado y devuelve una sesión durante el registro.
+      if (event === 'SIGNED_IN' && authScreenRef.current === 'register') {
+        setSession(null);
+        setLoading(false);
+        return;
+      }
+
       // FR-04: Supabase emite PASSWORD_RECOVERY cuando el código del correo
       // es canjeado. Ese momento es el único en que hay una sesión temporal
       // válida para guardar la contraseña nueva. La pantalla de código

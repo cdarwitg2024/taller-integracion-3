@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  Platform,
 } from 'react-native';
 
 import { supabase } from '../lib/supabase';
@@ -91,7 +92,7 @@ const mapPedido = (p) => ({
   codigo_retiro_diario: p.codigo_retiro_diario || null,
   franja_retiro: p.franja_retiro || null,
   cafeteria_nombre: p.cafeterias?.nombre || 'Cafetería',
-  cafeteria_direccion: p.cafeterias?.direccion || null,
+  cafeteria_direccion: p.cafeterias?.campus_sedes?.direccion || p.cafeterias?.direccion || null,
   cafeteria_telefono: p.cafeterias?.telefono || null,
   cafeteria_rut: p.cafeterias?.rut || null,
   metodo_pago: p.metodo_pago || null,
@@ -109,8 +110,15 @@ const mapPedido = (p) => ({
 });
 
 // URL del backend Node. Viene de EXPO_PUBLIC_API_URL (ver app-mobile/.env).
-// En un teléfono físico debe ser la IP de la PC, no 127.0.0.1.
-const API_URL = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '');
+let rawApiUrl = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '');
+if (rawApiUrl) {
+  if (Platform.OS === 'android') {
+    rawApiUrl = rawApiUrl.replace('127.0.0.1', '10.0.2.2').replace('localhost', '10.0.2.2');
+  } else if (Platform.OS === 'web') {
+    rawApiUrl = rawApiUrl.replace('10.0.2.2', '127.0.0.1');
+  }
+}
+const API_URL = rawApiUrl;
 
 // Pide el QR al backend, que es quien lo dibuja y lo registra. Si el backend no
 // responde (teléfono sin red contra la PC, API apagada) se degrada al QR local
@@ -204,7 +212,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
 
       const { data, error } = await supabase
         .from('pedidos')
-        .select('*, cafeterias(nombre, direccion, telefono, rut), detalles_pedido(productos(nombre, precio), cantidad)')
+        .select('*, cafeterias(nombre, telefono, campus_sedes(direccion)), detalles_pedido(productos(nombre, precio), cantidad)')
         .eq('usuario_id', usuarioId)
         .order('creado_en', { ascending: false });
 

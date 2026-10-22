@@ -164,7 +164,8 @@ additional_redirect_urls = [
   "coffeefast://**",
   "coffeefast://auth/callback",
   "http://localhost:8081/**",
-  "http://127.0.0.1:8081/**"
+  "http://127.0.0.1:8081/**",
+  "http://127.0.0.1:54324"
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
@@ -228,7 +229,7 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.

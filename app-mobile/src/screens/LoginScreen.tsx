@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { authEmailRedirectTo } from '../lib/authRedirect';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import Card from '../components/Card';
@@ -57,7 +58,7 @@ export const LoginScreen = ({
         type: 'signup',
         email: email.trim().toLowerCase(),
         options: {
-          emailRedirectTo: 'coffeefast://auth/callback',
+          emailRedirectTo: authEmailRedirectTo,
         },
       });
 
