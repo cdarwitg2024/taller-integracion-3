@@ -641,6 +641,7 @@ function AppContent() {
               session={session}
               isGuest={isGuest}
               onLogout={handleLogout}
+              onNavigateTab={handleTabPress}
             />
           )}
         </View>
