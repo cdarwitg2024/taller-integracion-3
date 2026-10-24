@@ -1,0 +1,10 @@
+import { firefox } from 'playwright-core';
+const b = await firefox.launch({ executablePath: '/home/elias/.cache/ms-playwright/firefox-1549/firefox/firefox', headless: true });
+const p = await b.newPage();
+await p.goto('http://localhost:5173/#/login/empleado', { waitUntil: 'domcontentloaded' });
+await p.waitForTimeout(2000);
+const inputs = await p.$$eval('input', els => els.map(e => ({type:e.type, name:e.name, placeholder:e.placeholder, id:e.id})));
+console.log(JSON.stringify(inputs));
+const btns = await p.$$eval('button', els => els.map(e => ({text:e.innerText.trim(), role:e.getAttribute('role')})));
+console.log(JSON.stringify(btns));
+await b.close();

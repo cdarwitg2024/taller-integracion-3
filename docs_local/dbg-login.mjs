@@ -1,0 +1,16 @@
+import { firefox } from 'playwright-core';
+const b = await firefox.launch({ executablePath: '/home/elias/.cache/ms-playwright/firefox-1549/firefox/firefox', headless: true });
+const p = await b.newPage();
+p.on('console', m => { if (m.type() === 'error') console.log('CONSOLA:', m.text().slice(0, 150)); });
+p.on('pageerror', e => console.log('PAGEERROR:', String(e).slice(0, 150)));
+p.on('requestfailed', r => console.log('FALLÓ:', r.url().slice(0, 90), r.failure()?.errorText));
+p.on('response', r => { if (/auth\/v1|functions/.test(r.url())) console.log('RED:', r.status(), r.url().slice(0, 80)); });
+await p.goto('http://localhost:5173/#/login/empleado', { waitUntil: 'domcontentloaded' });
+await p.waitForTimeout(3500);
+await p.locator('input[type="text"]').first().fill('empleado@cofeefast.cl');
+await p.locator('input[type="password"]').first().fill('123456');
+await p.getByRole('button', { name: /Ingresar a Comandas/i }).click({ force: true });
+await p.waitForTimeout(9000);
+console.log('URL final:', p.url());
+console.log('CUERPO:', (await p.locator('body').innerText()).replace(/\n+/g, ' | ').slice(0, 400));
+await b.close();

@@ -21,6 +21,7 @@ import Button from '../components/Button';
 import Card from '../components/Card';
 import Header from '../components/Header';
 import Input from '../components/Input';
+import Icon from '../components/Icon';
 
 /**
  * Formatea un rol interno a un nombre legible en la interfaz
@@ -465,8 +466,15 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
             style={styles.editButtonBadge}
             onPress={abrirModalEdicion}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Editar datos del perfil"
           >
-            <Text style={styles.editButtonText}>✏️ Editar Datos</Text>
+            {/* S2-T3: el emoji '✏️' pasa a ser icono vectorial. Va en una fila
+                con el texto para conservar el mismo contenido. */}
+            <View style={styles.editButtonRow}>
+              <Icon name="create-outline" size={16} color={colors.cafeOscuro} />
+              <Text style={styles.editButtonText}>Editar Datos</Text>
+            </View>
           </TouchableOpacity>
         </Card>
 
@@ -577,10 +585,13 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
 
         {/* Banner Informativo */}
         <View style={styles.infoBanner}>
-          <Text style={styles.infoBannerText}>
-            🔒 La edición de perfil se encuentra protegida por la política de seguridad RLS{' '}
-            <Text style={{ fontWeight: typography.pesoBold }}>usuarios_update_own</Text>.
-          </Text>
+          <View style={styles.rlsRow}>
+            <Icon name="lock-closed-outline" size={14} color={colors.rojo} />
+            <Text style={styles.rlsText}>
+              La edición de perfil se encuentra protegida por la política de seguridad RLS{' '}
+              <Text style={{ fontWeight: typography.pesoBold }}>usuarios_update_own</Text>.
+            </Text>
+          </View>
         </View>
 
         {/* Botón de Cerrar Sesión */}
@@ -609,8 +620,11 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
               <TouchableOpacity
                 onPress={() => setModalVisible(false)}
                 style={styles.modalCloseBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Cerrar edición de perfil"
               >
-                <Text style={styles.modalCloseText}>✕</Text>
+                {/* S2-T3: icono vectorial en vez del glifo '✕'. */}
+                <Icon name="close" size={20} color={colors.textoSecundario} />
               </TouchableOpacity>
             </View>
 
@@ -787,6 +801,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     elevation: 2,
   },
+  // S2-T3: el icono y el texto van en una fila para leerse como un control.
+  // El botón sigue centrado por el `alignItems: 'center'` de `profileCard`.
+  editButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   editButtonText: {
     color: colors.cafeOscuro,
     fontSize: typography.cuerpoPequeno,
@@ -926,6 +946,18 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginTop: 18,
   },
+  rlsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  rlsText: {
+    flex: 1,
+    fontSize: 11,
+    color: colors.rojo,
+    textAlign: 'left',
+    lineHeight: 16,
+  },
   infoBannerText: {
     fontSize: 11,
     color: colors.textoSecundario,
@@ -966,11 +998,6 @@ const styles = StyleSheet.create({
   },
   modalCloseBtn: {
     padding: spacing.xs,
-  },
-  modalCloseText: {
-    fontSize: 20,
-    color: colors.textoSecundario,
-    fontWeight: typography.pesoBold,
   },
   modalSubtitle: {
     fontSize: typography.cuerpoPequeno,

@@ -12,6 +12,7 @@ import Button from '../components/Button';
 import Card from '../components/Card';
 import Container from '../components/Container';
 import Title from '../components/Title';
+import Icon from '../components/Icon';
 import { colors } from '../theme/colors';
 import { spacing, radius } from '../theme/spacing';
 import { typography, lineHeight } from '../theme/typography';
@@ -105,7 +106,7 @@ export const CafeteriaListScreen = ({
     <Card variant="elevated" padding="md" style={styles.card}>
       {imagenesCaidas[item.id] || !item.imagen_url ? (
         <View style={[styles.cardImage, styles.cardImageFallback]}>
-          <Text style={styles.cardImageFallbackIcon}>☕</Text>
+          <Icon name="cafe-outline" size={32} color={colors.cafeOscuro} />
         </View>
       ) : (
         <Image
@@ -177,7 +178,7 @@ export const CafeteriaListScreen = ({
           titleStyle={styles.welcomeText}
         />
         <View style={styles.iconBadge}>
-          <Text style={styles.iconBadgeText}>☕</Text>
+          <Icon name="cafe" size={18} color={colors.blanco} />
         </View>
       </View>
       {/* Banner Informativo Superior */}
@@ -195,7 +196,7 @@ export const CafeteriaListScreen = ({
         </View>
       ) : errorMessage ? (
         <View style={styles.errorState}>
-          <Text style={styles.errorStateIcon}>📡</Text>
+          <Icon name="wifi-outline" size={40} color={colors.rojo} style={{ marginBottom: spacing.md }} />
           <Text style={styles.errorStateTitle}>Sin conexión con el servidor</Text>
           <Text style={styles.errorStateText}>{errorMessage}</Text>
           <View style={styles.retryButtonWrapper}>
@@ -207,7 +208,7 @@ export const CafeteriaListScreen = ({
         </View>
       ) : cafeterias.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyStateIcon}>☕</Text>
+          <Icon name="cafe-outline" size={40} color={colors.cafeOscuro} style={{ marginBottom: spacing.md }} />
           <Text style={styles.emptyStateTitle}>Aún no hay cafeterías disponibles</Text>
           <Text style={styles.emptyStateText}>
             No hay cafeterías activas registradas en este momento. Vuelve más tarde para ver

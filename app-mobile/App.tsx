@@ -26,6 +26,7 @@ import PerfilScreen from './src/screens/PerfilScreen';
 import { Cafeteria } from './src/types/cafeteria';
 import { CartProvider, useCart } from './src/context/CartContext';
 import { useCartTotals } from './src/hooks/useCartTotals';
+import Icon from './src/components/Icon';
 
 const logo = require('./assets/icon.png');
 
@@ -87,13 +88,23 @@ type PedidoConfirmado = {
   codigo_retiro?: string;
 };
 
-const TABS: { key: AppTab; label: string }[] = [
-  { key: 'cafeterias', label: 'Cafeterías' },
-  { key: 'pedidos', label: 'Pedidos' },
-  { key: 'carrito', label: 'Carrito' },
-  { key: 'wallet', label: 'Wallet' },
-  { key: 'perfil', label: 'Perfil' },
+const TABS: { key: AppTab; label: string; icon: string }[] = [
+  { key: 'cafeterias', label: 'Cafeterías', icon: 'cafe-outline' },
+  { key: 'pedidos', label: 'Pedidos', icon: 'receipt-outline' },
+  { key: 'carrito', label: 'Carrito', icon: 'cart-outline' },
+  { key: 'wallet', label: 'Wallet', icon: 'wallet-outline' },
+  { key: 'perfil', label: 'Perfil', icon: 'person-outline' },
 ];
+
+// S2-T3: variante rellena del icono para la pestaña activa, para que el estado
+// seleccionado se note también en el glifo y no solo en el color.
+const TAB_ICON_ACTIVE: Record<string, string> = {
+  cafeterias: 'cafe',
+  pedidos: 'receipt',
+  carrito: 'cart',
+  wallet: 'wallet',
+  perfil: 'person',
+};
 
 function AppContent() {
   const [session, setSession] = useState<Session | null>(null);
@@ -656,19 +667,15 @@ function AppContent() {
                 activeOpacity={0.7}
                 onPress={() => handleTabPress(tab.key)}
               >
-                <View>
-                  <Text
-                    style={[
-                      styles.navIcon,
-                      isActive && styles.activeNavIcon,
-                    ]}
-                  >
-                    {tab.key === 'cafeterias' && '🏪'}
-                    {tab.key === 'pedidos' && '📋'}
-                    {tab.key === 'carrito' && '🛒'}
-                    {tab.key === 'wallet' && '💳'}
-                    {tab.key === 'perfil' && '👤'}
-                  </Text>
+                <View style={styles.navItemContent}>
+                  {/* S2-T3: icono vectorial (Ionicons) en vez del emoji. Los
+                      emojis tenían anchos distintos y su glifo no quedaba
+                      centrado; los iconos vectoriales sí. */}
+                  <Icon
+                    name={isActive ? TAB_ICON_ACTIVE[tab.key] : tab.icon}
+                    size={22}
+                    color={isActive ? '#4A332C' : '#A39A96'}
+                  />
                   <Text
                     style={[
                       styles.navText,
@@ -781,11 +788,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  navIcon: {
-    fontSize: 20,
-  },
-  activeNavIcon: {
-    opacity: 1,
+  // S2-T3: el contenido (icono + texto + badge) se centra como bloque. Sin
+  // `alignItems: 'center'`, el icono y el texto quedaban alineados a la
+  // izquierda dentro de la celda y se veían corridos entre pestañas.
+  navItemContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   navText: {
     fontSize: 11,

@@ -9,6 +9,39 @@ import {
 import { colors } from '../theme/colors';
 import { radius } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import Icon from './Icon';
+
+const getProductIconName = (product) => {
+  const name = (product?.name || '').toLowerCase();
+  const category = (product?.category || '').toLowerCase();
+  const text = `${category} ${name}`;
+
+  if (/café|cafe|espresso|capuchino|americano|latte|moka|flat white/i.test(text)) {
+    return 'cafe-outline';
+  }
+  if (/té|te\b|chai|infusión|infusion|mate/i.test(text)) {
+    return 'leaf-outline';
+  }
+  if (/leche|lacteo|lácteo|yogur|malteada/i.test(text)) {
+    return 'beer-outline';
+  }
+  if (/sándwich|sandwich|panini|jamón|jamon|queso|tostada|baguette/i.test(text)) {
+    return 'restaurant-outline';
+  }
+  if (/empanada|pan\b|medialuna|croissant|bollo|hallulla|marraqueta/i.test(text)) {
+    return 'restaurant-outline';
+  }
+  if (/galleta|cookie|muffin|kuchen|torta|pastel|repost|brownie|donut|berlín|berlin/i.test(text)) {
+    return 'ice-cream-outline';
+  }
+  if (/jugo|bebida|refresco|agua|mineral|limonada|naranja|fruta/i.test(text)) {
+    return 'beer-outline';
+  }
+  if (/ensalada|wrap|bowl/i.test(text)) {
+    return 'nutrition-outline';
+  }
+  return 'fast-food-outline';
+};
 
 /**
  * Tarjeta de un producto del menú.
@@ -65,14 +98,14 @@ const ProductCard = ({ product, onAdd, onPress }) => {
       <View style={styles.imagePlaceholder}>
         {/*
          * Carga diferida + placeholder que no se vea roto:
-         * - El emoji queda siempre como capa base, así nunca hay un cuadro
+         * - El icono queda siempre como capa base, así nunca hay un cuadro
          *   vacío mientras la imagen baja.
          * - La <Image> se monta con opacidad 0 y aparece (fade) recién al
-         *   terminar de cargar (onLoad). Si falla, queda el emoji.
+         *   terminar de cargar (onLoad). Si falla, queda el icono.
          * - Esto + FlatList (que sólo renderiza las filas visibles de la
          *   ventana) evita cargar imágenes lejanas.
          */}
-        <Text style={styles.imageEmoji}>{product.emoji}</Text>
+        <Icon name={getProductIconName(product)} size={34} color={colors.cafeOscuro} />
 
         {product.imageUrl && !imagenCaida ? (
           <Image

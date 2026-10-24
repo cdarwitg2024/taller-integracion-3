@@ -1,0 +1,28 @@
+- generic [ref=f3e38]:
+  - generic [ref=f3e39]:
+    - generic [ref=f3e40]:
+      - generic [ref=f3e41]: Portal Empleado
+      - heading "CoffeeFaster" [level=5] [ref=f3e47]
+      - paragraph [ref=f3e48]: Terminal de Comandas (KDS). Gestiona pedidos entrantes en tiempo real, agiliza la preparación en barra y cocina, y atiende la entrega inmediata.
+      - generic [ref=f3e49]:
+        - generic [ref=f3e50]: Flujo Kanban en tiempo real
+        - generic [ref=f3e54]: Actualización instantánea de comandas
+    - generic [ref=f3e58]: Terminal exclusivo para personal operativo y cocina
+  - generic [ref=f3e60]:
+    - button [ref=f3e61] [cursor=pointer]
+    - heading "Iniciar Sesión" [level=6] [ref=f3e65]
+    - generic [ref=f3e66]: Ingresa con tu cuenta de empleado para acceder a las comandas
+    - generic [ref=f3e67]:
+      - generic [ref=f3e68]:
+        - generic [ref=f3e69]: Correo o número de teléfono
+        - generic [ref=f3e71]:
+          - textbox "empleado@coffeefaster.cl" [ref=f3e72]
+          - group [aria-hidden]
+      - generic [ref=f3e73]:
+        - generic [ref=f3e74]: Contraseña
+        - generic [ref=f3e76]:
+          - textbox "••••••••" [ref=f3e77]
+          - group [aria-hidden]
+      - link "¿Problemas para acceder?" [ref=f3e79] [cursor=pointer]:
+        - /url: "#"
+      - button "Ingresar a Comandas" [ref=f3e80] [cursor=pointer]

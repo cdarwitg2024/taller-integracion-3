@@ -9,6 +9,7 @@ import {
 import { colors } from '../theme/colors';
 import { radius } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import Icon from './Icon';
 
 const CartItem = ({
   item,
@@ -62,16 +63,15 @@ const CartItem = ({
               ]}
               onPress={() => onDecrease(item.id)}
               disabled={isMinimumQuantity}
+              accessibilityRole="button"
+              accessibilityLabel={`Quitar una unidad de ${item.name}`}
             >
-              <Text
-                style={[
-                  styles.quantityButtonText,
-                  isMinimumQuantity &&
-                    styles.quantityButtonTextDisabled,
-                ]}
-              >
-                −
-              </Text>
+              {/* S2-T3: icono vectorial en vez del glifo '−'. */}
+              <Icon
+                name="remove"
+                size={18}
+                color={isMinimumQuantity ? colors.textoDeshabilitadoClaro : colors.textoMedioClaro}
+              />
             </TouchableOpacity>
 
             <Text style={styles.quantity}>
@@ -81,10 +81,11 @@ const CartItem = ({
             <TouchableOpacity
               style={styles.quantityButton}
               onPress={() => onIncrease(item.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Agregar una unidad de ${item.name}`}
             >
-              <Text style={styles.quantityButtonText}>
-                +
-              </Text>
+              {/* S2-T3: icono vectorial en vez del glifo '+'. */}
+              <Icon name="add" size={18} color={colors.textoMedioClaro} />
             </TouchableOpacity>
           </View>
 
@@ -241,15 +242,6 @@ const styles = StyleSheet.create({
 
   quantityButtonDisabled: {
     opacity: 0.35,
-  },
-
-  quantityButtonText: {
-    fontSize: 17,
-    color: colors.textoMedioClaro,
-  },
-
-  quantityButtonTextDisabled: {
-    color: colors.textoDeshabilitadoClaro,
   },
 
   quantity: {

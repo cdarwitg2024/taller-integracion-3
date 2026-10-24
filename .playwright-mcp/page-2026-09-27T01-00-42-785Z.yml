@@ -1,0 +1,25 @@
+- generic [ref=f32e4]:
+  - generic [ref=f32e5]:
+    - generic [ref=f32e6]:
+      - generic [ref=f32e7]: Portal Dueño
+      - heading "CoffeeFaster" [level=5] [ref=f32e12]
+      - paragraph [ref=f32e13]: Bienvenido al Panel de Administración. Controla tus catálogos, gestiona el inventario y monitorea las métricas clave de tu cafetería en un solo lugar.
+    - generic [ref=f32e14]: Panel exclusivo para dueños y administradores
+  - generic [ref=f32e16]:
+    - button [ref=f32e17] [cursor=pointer]
+    - heading "Iniciar Sesión" [level=6] [ref=f32e21]
+    - generic [ref=f32e22]: Ingresa tus credenciales de Dueño o Administrador
+    - generic [ref=f32e23]:
+      - generic [ref=f32e24]:
+        - generic [ref=f32e25]: Correo o número de teléfono
+        - generic [ref=f32e27]:
+          - textbox "ejemplo@dominio.com" [ref=f32e28]
+          - group [aria-hidden]
+      - generic [ref=f32e29]:
+        - generic [ref=f32e30]: Contraseña
+        - generic [ref=f32e32]:
+          - textbox "••••••••" [ref=f32e33]
+          - group [aria-hidden]
+      - link "¿Olvidaste tu contraseña?" [ref=f32e35] [cursor=pointer]:
+        - /url: "#"
+      - button "Ingresar al Panel" [ref=f32e36] [cursor=pointer]

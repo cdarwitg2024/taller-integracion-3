@@ -13,6 +13,7 @@ import { useCartTotals } from '../hooks/useCartTotals';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import Header from '../components/Header';
+import Icon from '../components/Icon';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -70,7 +71,7 @@ const CartScreen = ({
 
       {cart.length === 0 ? (
         <Card padding="lg" style={styles.emptyCard}>
-          <Text style={styles.emptyEmoji}>🛒</Text>
+          <Icon name="cart-outline" size={40} color={colors.textoSecundario} style={{ alignSelf: 'center', marginBottom: spacing.md }} />
 
           <Text style={styles.emptyTitle}>
             Tu carrito está vacío

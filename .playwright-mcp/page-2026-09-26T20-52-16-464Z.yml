@@ -1,0 +1,83 @@
+- generic [ref=f19e1]:
+  - generic [ref=f19e3]:
+    - generic [ref=f19e5]:
+      - generic [ref=f19e6]:
+        - generic [ref=f19e7]:
+          - heading [level=5] [ref=f19e107]: CoffeeFaster
+          - generic [ref=f19e9]: Terminal de Cocina
+        - list [ref=f19e11]:
+          - button [ref=f19e108] [cursor=pointer]:
+            - generic [aria-hidden] [ref=f19e48]: "1"
+            - generic [ref=f19e18]: Comandas
+      - generic [ref=f19e20]:
+        - generic [ref=f19e21]:
+          - generic [ref=f19e22]: Juan Empleado
+          - generic [ref=f19e23]: empleado
+        - button [ref=f19e109] [cursor=pointer]:
+          - generic [ref=f19e28]: Cerrar Sesión
+    - main [ref=f19e30]:
+      - generic [ref=f19e31]:
+        - generic [ref=f19e33]:
+          - heading [level=4] [ref=f19e110]: CoffeeFast - KDS Cocina Central
+          - generic [ref=f19e35]:
+            - button [ref=f19e111] [cursor=pointer]: Escanear QR
+            - paragraph [ref=f19e42]: Reconectando…
+            - generic [ref=f19e43]: 05:51 PM
+        - generic [ref=f19e44]:
+          - generic [ref=f19e49]:
+            - generic [ref=f19e50]:
+              - heading [level=5] [ref=f19e112]: Pendiente
+              - generic [ref=f19e52]: "1"
+            - generic [ref=f19e55] [cursor=pointer]:
+              - generic [ref=f19e56]:
+                - generic [ref=f19e57]:
+                  - heading [level=6] [ref=f19e113]: "#0001"
+                  - paragraph [ref=f19e59]: ⏱️ 908:30 min
+                - generic [ref=f19e60]:
+                  - generic [ref=f19e61]: PENDIENTE
+                  - paragraph [ref=f19e62]: 🕐 03:02 AM
+                - separator [ref=f19e63]
+                - generic [ref=f19e64]:
+                  - paragraph [ref=f19e65]: Café Americano × 1
+                  - paragraph [ref=f19e66]: Té Verde × 2
+              - button [ref=f19e114]: COMENZAR PREPARACIÓN
+          - generic [ref=f19e69]:
+            - generic [ref=f19e70]:
+              - heading [level=5] [ref=f19e115]: En Preparación
+              - generic [ref=f19e72]: "1"
+            - generic [ref=f19e75] [cursor=pointer]:
+              - generic [ref=f19e76]:
+                - generic [ref=f19e77]:
+                  - heading [level=6] [ref=f19e116]: "#0002"
+                  - paragraph [ref=f19e79]: ⏱️ 908:30 min
+                - generic [ref=f19e80]:
+                  - generic [ref=f19e81]: EN PREPARACIÓN
+                  - paragraph [ref=f19e82]: 🕐 02:52 AM
+                - separator [ref=f19e83]
+                - generic [ref=f19e84]:
+                  - paragraph [ref=f19e85]: Capuchino × 1
+                  - paragraph [ref=f19e86]: Croissant de Almendra × 1
+                  - paragraph [ref=f19e87]: Sándwich Ave Mayo × 1
+              - button [ref=f19e117]: MARCAR COMO LISTO
+          - generic [ref=f19e90]:
+            - generic [ref=f19e91]:
+              - heading [level=5] [ref=f19e118]: Listos para Retiro
+              - generic [ref=f19e93]: "1"
+            - generic [ref=f19e97] [cursor=pointer]:
+              - generic [ref=f19e98]:
+                - heading [level=6] [ref=f19e119]: "#0003"
+                - paragraph [ref=f19e100]: ⏱️ 908:31 min
+              - generic [ref=f19e101]:
+                - generic [ref=f19e102]: LISTO PARA RETIRO
+                - paragraph [ref=f19e103]: 🕐 02:47 AM
+              - separator [ref=f19e104]
+              - paragraph [ref=f19e106]: Capuchino × 2
+  - dialog [active] [ref=f19e122]:
+    - heading [level=2] [ref=f19e123]:
+      - generic [ref=f19e124]:
+        - heading "Escanear QR de Entrega" [level=5] [ref=f19e125]
+        - button [ref=f19e126] [cursor=pointer]
+    - generic [ref=f19e129]: El QR debe corresponder a un pedido en estado "listo" de esta cafetería.
+    - generic [ref=f19e135]:
+      - generic [ref=f19e136]: "Cafetería #1"
+      - button "Cerrar" [ref=f19e138] [cursor=pointer]

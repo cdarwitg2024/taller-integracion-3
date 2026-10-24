@@ -1,0 +1,15 @@
+- generic [ref=e4]:
+  - heading "CoffeeFaster" [level=3] [ref=e6]
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e10]: ADMINISTRACIÓN
+        - heading "Portal Dueño" [level=5] [ref=e16]
+        - paragraph [ref=e17]: Acceso completo al panel administrativo. Gestiona el catálogo de productos, monitorea el stock e inventario y analiza las métricas de tu negocio.
+      - button [ref=e18] [cursor=pointer]
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e24]: COCINA & KDS
+        - heading "Portal Empleado" [level=5] [ref=e31]
+        - paragraph [ref=e32]: Terminal de comandas en tiempo real. Visualiza los pedidos entrantes, avanza los estados de preparación en cocina y realiza la entrega ágil a los clientes.
+      - button [ref=e33] [cursor=pointer]

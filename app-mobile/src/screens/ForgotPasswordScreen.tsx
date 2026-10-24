@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import Icon from '../components/Icon';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -284,8 +285,19 @@ const ForgotPasswordScreen = ({ onBack, onCodeVerified }: Props) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.8}>
-            <Text style={styles.backText}>‹ Volver</Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={onBack}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Volver"
+          >
+            {/* S2-T3: el glifo '‹' pasa a ser icono vectorial. Va dentro de una
+                fila con el texto "Volver" para conservar el mismo contenido. */}
+            <View style={styles.backRow}>
+              <Icon name="chevron-back" size={20} color={colors.textoSecundario} />
+              <Text style={styles.backText}>Volver</Text>
+            </View>
           </TouchableOpacity>
 
           <Text style={styles.title}>¿Olvidaste tu contraseña?</Text>
@@ -350,6 +362,9 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingHorizontal: spacing.xxl, paddingVertical: 28, justifyContent: 'center' },
 
   backButton: { alignSelf: 'flex-start', marginBottom: 18, paddingVertical: spacing.xs },
+  // S2-T3: el icono y la palabra "Volver" van en una fila para que se lean
+  // como un solo control.
+  backRow: { flexDirection: 'row', alignItems: 'center' },
   backText: { fontSize: typography.cuerpo, fontWeight: typography.pesoMedio, color: colors.textoSecundario },
 
   title: {

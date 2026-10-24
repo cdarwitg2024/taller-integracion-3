@@ -15,6 +15,7 @@ import Input from '../components/Input';
 import Card from '../components/Card';
 import Title from '../components/Title';
 import Container from '../components/Container';
+import Icon from '../components/Icon';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -217,7 +218,10 @@ export const LoginScreen = ({
               accessibilityState={{ checked: rememberMe }}
             >
               <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                {rememberMe && <Text style={styles.checkmark}>✓</Text>}
+                {rememberMe && (
+                  // S2-T3: icono vectorial en vez del glifo '✓'.
+                  <Icon name="checkmark" size={15} color={colors.textoBlanco} />
+                )}
               </View>
               <Text style={styles.checkboxLabel}>Recordar sesión en este dispositivo</Text>
             </TouchableOpacity>
@@ -396,11 +400,6 @@ const styles = StyleSheet.create({
   checkboxChecked: {
     backgroundColor: colors.cafeOscuro,
     borderColor: colors.cafeOscuro,
-  },
-  checkmark: {
-    color: colors.textoBlanco,
-    fontSize: typography.cuerpoPequeno,
-    fontWeight: '700',
   },
   checkboxLabel: {
     fontSize: typography.cuerpoPequeno,

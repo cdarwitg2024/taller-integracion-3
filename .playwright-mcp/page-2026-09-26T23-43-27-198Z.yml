@@ -1,0 +1,62 @@
+- generic [ref=f28e3]:
+  - generic [ref=f28e5]:
+    - generic [ref=f28e6]:
+      - generic [ref=f28e7]:
+        - heading "CoffeeFaster" [level=5] [ref=f28e8]
+        - generic [ref=f28e9]: Terminal de Cocina
+      - list [ref=f28e11]:
+        - button "Comandas" [ref=f28e12] [cursor=pointer]
+    - generic [ref=f28e20]:
+      - generic [ref=f28e21]:
+        - generic [ref=f28e22]: Juan Empleado
+        - generic [ref=f28e23]: empleado
+      - button "Cerrar Sesión" [ref=f28e24] [cursor=pointer]
+  - main [ref=f28e30]:
+    - generic [ref=f28e31]:
+      - generic [ref=f28e33]:
+        - heading "CoffeeFast - KDS Cocina Central" [level=4] [ref=f28e34]
+        - generic [ref=f28e35]:
+          - button [ref=f28e36] [cursor=pointer]
+          - paragraph [ref=f28e42]: Reconectando…
+          - generic [ref=f28e43]: 20:43
+      - generic [ref=f28e44]:
+        - generic [ref=f28e45]:
+          - generic [ref=f28e46]:
+            - heading "Pendiente" [level=5] [ref=f28e47]
+            - generic [ref=f28e48]: "1"
+          - generic [ref=f28e51] [cursor=pointer]:
+            - generic [ref=f28e52]:
+              - generic [ref=f28e53]:
+                - heading "#0001" [level=6] [ref=f28e54]
+                - paragraph [ref=f28e55]: ⏱️ 1080:54 min
+              - generic [ref=f28e56]:
+                - generic [ref=f28e57]: PENDIENTE
+                - paragraph [ref=f28e58]: 🕐 03:02
+              - separator [ref=f28e59]
+              - generic [ref=f28e60]:
+                - paragraph [ref=f28e61]: Café Americano × 1
+                - paragraph [ref=f28e62]: Té Verde × 2
+            - button "COMENZAR PREPARACIÓN" [ref=f28e64]
+        - generic [ref=f28e65]:
+          - generic [ref=f28e66]:
+            - heading "En Preparación" [level=5] [ref=f28e67]
+            - generic [ref=f28e68]: "1"
+          - generic [ref=f28e71] [cursor=pointer]:
+            - generic [ref=f28e72]:
+              - generic [ref=f28e73]:
+                - heading "#0002" [level=6] [ref=f28e74]
+                - paragraph [ref=f28e75]: ⏱️ 1080:54 min
+              - generic [ref=f28e76]:
+                - generic [ref=f28e77]: EN PREPARACIÓN
+                - paragraph [ref=f28e78]: 🕐 02:52
+              - separator [ref=f28e79]
+              - generic [ref=f28e80]:
+                - paragraph [ref=f28e81]: Capuchino × 1
+                - paragraph [ref=f28e82]: Croissant de Almendra × 1
+                - paragraph [ref=f28e83]: Sándwich Ave Mayo × 1
+            - button "MARCAR COMO LISTO" [ref=f28e85]
+        - generic [ref=f28e86]:
+          - generic [ref=f28e87]:
+            - heading "Listos para Retiro" [level=5] [ref=f28e88]
+            - generic [ref=f28e89]: "0"
+          - paragraph [ref=f28e93]: Sin comandas

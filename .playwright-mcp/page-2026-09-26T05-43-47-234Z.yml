@@ -1,0 +1,73 @@
+- generic [ref=f3e159]:
+  - generic [ref=f3e161]:
+    - generic [ref=f3e162]:
+      - generic [ref=f3e163]:
+        - heading "CoffeeFaster" [level=5] [ref=f3e164]
+        - generic [ref=f3e165]: Terminal de Cocina
+      - list [ref=f3e167]:
+        - button "Comandas" [ref=f3e168] [cursor=pointer]:
+          - generic [aria-hidden] [ref=f3e174]: "1"
+    - generic [ref=f3e177]:
+      - generic [ref=f3e178]:
+        - generic [ref=f3e179]: Juan Empleado
+        - generic [ref=f3e180]: empleado
+      - button "Cerrar Sesión" [ref=f3e181] [cursor=pointer]
+  - main [ref=f3e187]:
+    - generic [ref=f3e188]:
+      - generic [ref=f3e190]:
+        - heading "CoffeeFast - KDS Cocina Central" [level=4] [ref=f3e191]
+        - generic [ref=f3e192]:
+          - button [ref=f3e193] [cursor=pointer]
+          - paragraph [ref=f3e199]: Conectado
+          - generic [ref=f3e200]: 02:43 AM
+      - generic [ref=f3e201]:
+        - generic [ref=f3e202]:
+          - generic [ref=f3e203]:
+            - heading "Pendiente" [level=5] [ref=f3e204]
+            - generic [ref=f3e205]: "0"
+          - paragraph [ref=f3e261]: Sin comandas
+        - generic [ref=f3e222]:
+          - generic [ref=f3e223]:
+            - heading "En Preparación" [level=5] [ref=f3e224]
+            - generic [ref=f3e225]: "2"
+          - generic [ref=f3e227]:
+            - generic [ref=f3e228] [cursor=pointer]:
+              - generic [ref=f3e229]:
+                - generic [ref=f3e230]:
+                  - heading "#0002" [level=6] [ref=f3e231]
+                  - paragraph [ref=f3e232]: ⏱️ 01:13 min
+                - generic [ref=f3e233]:
+                  - generic [ref=f3e234]: EN PREPARACIÓN
+                  - paragraph [ref=f3e235]: 🕐 02:52 AM
+                - separator [ref=f3e236]
+                - generic [ref=f3e237]:
+                  - paragraph [ref=f3e238]: Capuchino × 1
+                  - paragraph [ref=f3e239]: Croissant de Almendra × 1
+                  - paragraph [ref=f3e240]: Sándwich Ave Mayo × 1
+              - button "MARCAR COMO LISTO" [ref=f3e242]
+            - generic [ref=f3e262] [cursor=pointer]:
+              - generic [ref=f3e263]:
+                - generic [ref=f3e264]:
+                  - heading "#0001" [level=6] [ref=f3e265]
+                  - paragraph [ref=f3e266]: ⏱️ 01:13 min
+                - generic [ref=f3e267]:
+                  - generic [ref=f3e268]: EN PREPARACIÓN
+                  - paragraph [ref=f3e269]: 🕐 03:02 AM
+                - separator [ref=f3e270]
+                - generic [ref=f3e271]:
+                  - paragraph [ref=f3e272]: Café Americano × 1
+                  - paragraph [ref=f3e273]: Té Verde × 2
+              - button "MARCAR COMO LISTO" [ref=f3e275]
+        - generic [ref=f3e243]:
+          - generic [ref=f3e244]:
+            - heading "Listos para Retiro" [level=5] [ref=f3e245]
+            - generic [ref=f3e246]: "1"
+          - generic [ref=f3e250] [cursor=pointer]:
+            - generic [ref=f3e251]:
+              - heading "#0003" [level=6] [ref=f3e252]
+              - paragraph [ref=f3e253]: ⏱️ 01:13 min
+            - generic [ref=f3e254]:
+              - generic [ref=f3e255]: LISTO PARA RETIRO
+              - paragraph [ref=f3e256]: 🕐 02:47 AM
+            - separator [ref=f3e257]
+            - paragraph [ref=f3e259]: Capuchino × 2

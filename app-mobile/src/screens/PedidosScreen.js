@@ -15,6 +15,7 @@ import QrCode from '../lib/QrCode';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import Header from '../components/Header';
+import Icon from '../components/Icon';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -384,7 +385,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
             ListEmptyComponent={
               tab === 'activos' ? (
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyEmoji}>📦</Text>
+                  <Icon name="cube-outline" size={40} color={colors.textoSecundario} style={{ marginBottom: spacing.md }} />
                   <Text style={styles.emptyTitle}>No tienes pedidos activos</Text>
                   <Text style={styles.emptyDescription}>
                     Cuando tengas un pedido pendiente, en preparación o listo para retiro, aparecerá aquí con su QR y token.
@@ -398,7 +399,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 </View>
               ) : (
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyEmoji}>🗂️</Text>
+                  <Icon name="document-text-outline" size={40} color={colors.textoSecundario} style={{ marginBottom: spacing.md }} />
                   <Text style={styles.emptyTitle}>Todavía no tienes historial</Text>
                   <Text style={styles.emptyDescription}>
                     Cuando un pedido quede entregado o cancelado, aparecerá aquí y podrás ver su boleta.
@@ -429,8 +430,11 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                   <TouchableOpacity
                     style={styles.modalClose}
                     onPress={onConfirmacionVista}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cerrar confirmación"
                   >
-                    <Text style={styles.modalCloseText}>✕</Text>
+                    {/* S2-T3: icono vectorial en vez del glifo '✕'. */}
+                    <Icon name="close" size={20} color={colors.cafeOscuro} />
                   </TouchableOpacity>
                 </View>
 
@@ -518,8 +522,11 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                   <TouchableOpacity
                     style={styles.modalClose}
                     onPress={cerrarPedido}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cerrar detalle del pedido"
                   >
-                    <Text style={styles.modalCloseText}>✕</Text>
+                    {/* S2-T3: icono vectorial en vez del glifo '✕'. */}
+                    <Icon name="close" size={20} color={colors.cafeOscuro} />
                   </TouchableOpacity>
                 </View>
 
@@ -777,7 +784,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalCloseText: { color: colors.cafeOscuro, fontWeight: typography.pesoExtraBold },
   detalleLista: { marginTop: 18, backgroundColor: colors.fondo, borderRadius: 16, padding: 14 },
   detalleRow: {
     flexDirection: 'row',

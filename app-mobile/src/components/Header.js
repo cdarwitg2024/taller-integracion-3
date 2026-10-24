@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import Icon from './Icon';
 
 /**
  * Encabezado base de CoffeeFast
@@ -12,6 +13,13 @@ import { typography } from '../theme/typography';
  * - onBack: Función para retroceder (opcional)
  * - rightElement: Elemento a la derecha (opcional)
  * - variant: 'default' | 'transparent'
+ *
+ * @type {React.FC<{
+ *   title: string,
+ *   onBack?: () => void,
+ *   rightElement?: React.ReactNode,
+ *   variant?: 'default' | 'transparent',
+ * }>}
  */
 const Header = ({
   title,
@@ -22,8 +30,14 @@ const Header = ({
   return (
     <View style={[styles.container, variant === 'transparent' && styles.transparent]}>
       {onBack ? (
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backText}>‹</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Volver"
+        >
+          {/* S2-T3: icono vectorial en vez del glifo '‹'. */}
+          <Icon name="chevron-back" size={26} color={colors.textoPrimario} />
         </TouchableOpacity>
       ) : (
         <View style={styles.placeholder} />
@@ -52,12 +66,8 @@ const styles = StyleSheet.create({
   backButton: {
     width: 35,
     height: 35,
+    alignItems: 'center',
     justifyContent: 'center',
-  },
-  backText: {
-    fontSize: 32,
-    color: colors.textoPrimario,
-    lineHeight: 32,
   },
   title: {
     fontSize: typography.subtitulo,

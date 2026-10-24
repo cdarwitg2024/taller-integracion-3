@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paleta Mocha & Cream - Pro</title>
+  
+  <!-- Importación de fuentes tipográficas premium -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-app: #FAF7F5;
+      --mocha-dark: #4A3B32;
+      --mocha-medium: #78665B;
+      --cream-accent: #C8B2A1;
+      --cream-soft: #F2ECE7;
+      --white-pure: #FFFFFF;
+      --border-color: #EFEAE6;
+      --green-ready: #2E7D32;
+      --green-bg: #E8F5E9;
+      --orange-prep: #E65100;
+      --orange-bg: #FFF3E0;
+    }
+
+    body { 
+      font-family: 'Plus Jakarta Sans', sans-serif; 
+      background: var(--bg-app); 
+      color: var(--mocha-dark);
+      padding: 40px 20px; 
+      display: flex; 
+      justify-content: center; 
+      margin: 0;
+    }
+
+    .card { 
+      background: var(--white-pure); 
+      padding: 28px; 
+      border-radius: 20px; 
+      box-shadow: 0 10px 30px rgba(74, 59, 50, 0.05); 
+      border: 1px solid var(--border-color);
+      max-width: 440px; 
+      width: 100%; 
+    }
+
+    .header {
+      background: var(--mocha-dark);
+      color: var(--white-pure);
+      padding: 18px 24px;
+      border-radius: 14px 14px 0 0;
+      margin: -28px -28px 24px -28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .header-tag {
+      background: rgba(255, 255, 255, 0.15); 
+      padding: 4px 10px; 
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
+
+    p {
+      font-size: 13px;
+      color: var(--mocha-medium);
+      line-height: 1.5;
+    }
+
+    .grid { 
+      display: grid; 
+      grid-template-columns: repeat(5, 1fr); 
+      gap: 10px; 
+      margin: 20px 0; 
+    }
+
+    .swatch { 
+      height: 50px; 
+      border-radius: 8px; 
+      transition: transform 0.2s;
+    }
+
+    .swatch:hover {
+      transform: translateY(-2px);
+    }
+
+    .info { 
+      font-size: 10px; 
+      font-weight: 700; 
+      text-align: center; 
+      margin-top: 6px; 
+      color: var(--mocha-medium);
+    }
+
+    /* Componentes con Animación y Efectos */
+    .btn-primary {
+      background: var(--mocha-dark);
+      color: var(--white-pure);
+      border: none;
+      padding: 14px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      width: 100%;
+      margin-bottom: 10px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(74, 59, 50, 0.15);
+    }
+
+    .btn-primary:hover {
+      background: #3B2E27;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--cream-soft);
+      color: var(--mocha-dark);
+      border: 1px solid var(--border-color);
+      padding: 12px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+      background: #E8DFD7;
+    }
+
+    .status-badge {
+      padding: 8px 14px;
+      border-radius: 30px;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-badge.ready {
+      background: var(--green-bg);
+      color: var(--green-ready);
+    }
+
+    .status-badge.prep {
+      background: var(--orange-bg);
+      color: var(--orange-prep);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="header">
+      <span class="header-title">☕ Campus Specialty Coffee</span>
+      <span class="header-tag">MOCHA UI</span>
+    </div>
+
+    <h3>Estilo Mocha & Cream</h3>
+    <p>Paleta optimizada con tipografía <strong>Playfair Display</strong> y <strong>Plus Jakarta Sans</strong> para darle elegancia a tu app.</p>
+    
+    <div class="grid">
+      <div><div class="swatch" style="background: #4A3B32;"></div><div class="info">#4A3B32</div></div>
+      <div><div class="swatch" style="background: #C8B2A1;"></div><div class="info">#C8B2A1</div></div>
+      <div><div class="swatch" style="background: #FFFFFF; border: 1px solid #ddd;"></div><div class="info">#FFFFFF</div></div>
+      <div><div class="swatch" style="background: #388E3C;"></div><div class="info">#388E3C</div></div>
+      <div><div class="swatch" style="background: #F57C00;"></div><div class="info">#F57C00</div></div>
+    </div>
+
+    <hr style="border:0; border-top: 1px solid var(--border-color); margin: 24px 0;">
+
+    <button class="btn-primary">Ordenar Capuchino ($3.500)</button>
+    <button class="btn-secondary">Agregar al Carrito</button>
+
+    <div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;">
+      <span class="status-badge ready">● Listo para Retirar</span>
+      <span class="status-badge prep">● En Preparación</span>
+    </div>
+  </div>
+
+</body>
+</html>

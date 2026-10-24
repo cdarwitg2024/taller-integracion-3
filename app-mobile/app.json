@@ -10,6 +10,7 @@
     "backgroundColor": "#F8ECDA"
   },
   "android": {
+    "package": "com.coffeefastapp",
     "adaptiveIcon": {
       "foregroundImage": "./assets/adaptive-icon.png",
       "backgroundColor": "#F8ECDA"
@@ -22,6 +23,7 @@
     "favicon": "./assets/icon.png"
   },
   "plugins": [
-    "expo-asset"
+    "expo-asset",
+    "expo-font"
   ]
 }

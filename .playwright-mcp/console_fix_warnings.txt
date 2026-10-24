@@ -1,0 +1,107 @@
+Total messages: 9 (Errors: 2, Warnings: 4)
+Returning 6 messages for level "warning"
+
+[WARNING] [JavaScript Warning: "Source map error: No sources are declared in this source map.
+Resource URL: http://localhost:5173/node_modules/.vite/deps/react.js?v=ac5bc6eb
+Source Map URL: react.js.map"] @ :0
+[WARNING] [JavaScript Warning: "Source map error: No sources are declared in this source map.
+Resource URL: http://localhost:5173/node_modules/.vite/deps/chunk-ZC22LKFR.js?v=ac5bc6eb
+Source Map URL: chunk-ZC22LKFR.js.map"] @ :0
+[WARNING] [JavaScript Warning: "Source map error: No sources are declared in this source map.
+Resource URL: http://localhost:5173/node_modules/.vite/deps/@mui_material_styles.js?v=ac5bc6eb
+Source Map URL: @mui_material_styles.js.map"] @ :0
+[WARNING] [JavaScript Warning: "Source map error: No sources are declared in this source map.
+Resource URL: http://localhost:5173/node_modules/.vite/deps/chunk-ALKGQJXP.js?v=ac5bc6eb
+Source Map URL: chunk-ALKGQJXP.js.map"] @ :0
+[ERROR] Warning: React does not recognize the `justifyContent` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `justifycontent` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Grid2@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:7470:38
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+CardContent2@http://localhost:5173/node_modules/.vite/deps/@mui_material.js?v=ac5bc6eb:14470:32
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Paper2@http://localhost:5173/node_modules/.vite/deps/@mui_material.js?v=ac5bc6eb:1895:32
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Card2@http://localhost:5173/node_modules/.vite/deps/@mui_material.js?v=ac5bc6eb:14124:32
+PedidoCard@http://localhost:5173/src/components/PedidoCard.jsx?t=1790463765569:50:20
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Box3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:4779:35
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Box3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:4779:35
+KanbanColumn@http://localhost:5173/src/components/KanbanColumn.jsx:18:22
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Box3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:4779:35
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Box3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:4779:35
+Comandas@http://localhost:5173/src/pages/empleado/Comandas.jsx?t=1790464114037:36:18
+main
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Box3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:4779:35
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Box3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:4779:35
+AuthenticatedLayout@http://localhost:5173/src/app.jsx?t=1790464114037:36:29
+ProtectedRoute@http://localhost:5173/src/app.jsx?t=1790464114037:161:24
+RenderedRoute@http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=ac5bc6eb:6771:23
+Routes@http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=ac5bc6eb:7715:16
+App@http://localhost:5173/src/app.jsx?t=1790464114037:182:20
+Router@http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=ac5bc6eb:7654:16
+HashRouter@http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=ac5bc6eb:11037:20
+DefaultPropsProvider@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:5455:30
+RtlProvider@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:5431:21
+ThemeProvider2@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:5390:7
+ThemeProvider3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:5611:7
+ThemeProviderNoVars@http://localhost:5173/node_modules/.vite/deps/chunk-S7ONQXPH.js?v=ac5bc6eb:2014:29
+ThemeProvider@http://localhost:5173/node_modules/.vite/deps/chunk-S7ONQXPH.js?v=ac5bc6eb:2163:23 @ http://localhost:5173/node_modules/.vite/deps/chunk-EBS264LV.js?v=ac5bc6eb:520
+[ERROR] Warning: React does not recognize the `alignItems` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `alignitems` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Grid2@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:7470:38
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+CardContent2@http://localhost:5173/node_modules/.vite/deps/@mui_material.js?v=ac5bc6eb:14470:32
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Paper2@http://localhost:5173/node_modules/.vite/deps/@mui_material.js?v=ac5bc6eb:1895:32
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Card2@http://localhost:5173/node_modules/.vite/deps/@mui_material.js?v=ac5bc6eb:14124:32
+PedidoCard@http://localhost:5173/src/components/PedidoCard.jsx?t=1790463765569:50:20
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Box3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:4779:35
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Box3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:4779:35
+KanbanColumn@http://localhost:5173/src/components/KanbanColumn.jsx:18:22
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Box3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:4779:35
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Box3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:4779:35
+Comandas@http://localhost:5173/src/pages/empleado/Comandas.jsx?t=1790464114037:36:18
+main
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Box3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:4779:35
+div
+withEmotionCache2/<@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:1762:45
+Box3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:4779:35
+AuthenticatedLayout@http://localhost:5173/src/app.jsx?t=1790464114037:36:29
+ProtectedRoute@http://localhost:5173/src/app.jsx?t=1790464114037:161:24
+RenderedRoute@http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=ac5bc6eb:6771:23
+Routes@http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=ac5bc6eb:7715:16
+App@http://localhost:5173/src/app.jsx?t=1790464114037:182:20
+Router@http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=ac5bc6eb:7654:16
+HashRouter@http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=ac5bc6eb:11037:20
+DefaultPropsProvider@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:5455:30
+RtlProvider@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:5431:21
+ThemeProvider2@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:5390:7
+ThemeProvider3@http://localhost:5173/node_modules/.vite/deps/chunk-M6XPDBT6.js?v=ac5bc6eb:5611:7
+ThemeProviderNoVars@http://localhost:5173/node_modules/.vite/deps/chunk-S7ONQXPH.js?v=ac5bc6eb:2014:29
+ThemeProvider@http://localhost:5173/node_modules/.vite/deps/chunk-S7ONQXPH.js?v=ac5bc6eb:2163:23 @ http://localhost:5173/node_modules/.vite/deps/chunk-EBS264LV.js?v=ac5bc6eb:520

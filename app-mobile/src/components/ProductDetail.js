@@ -10,6 +10,7 @@ import {
 import { colors } from '../theme/colors';
 import { radius } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import Icon from './Icon';
 
 /**
  * Detalle de un producto — FR-08
@@ -21,6 +22,13 @@ import { typography } from '../theme/typography';
  * Contrato del producto:
  *   id, name, description, price, imageUrl, emoji, stock, stockMin,
  *   available, category, cafeteriaName, modifications (array de strings)
+ *
+ * @type {React.FC<{
+ *   product: any,
+ *   onAdd: (producto: any, cantidad: number, modificaciones?: string[]) => void,
+ *   onClose: () => void,
+ *   cafeteriaName?: string,
+ * }>}
  */
 const ProductDetail = ({ product, onAdd, onClose, cafeteriaName }) => {
   // Si la URL de la imagen existe pero no carga (404, host caído), caemos al
@@ -67,7 +75,8 @@ const ProductDetail = ({ product, onAdd, onClose, cafeteriaName }) => {
             accessibilityRole="button"
             accessibilityLabel="Cerrar detalle"
           >
-            <Text style={styles.closeText}>✕</Text>
+            {/* S2-T3: icono vectorial en vez del glifo '✕'. */}
+            <Icon name="close" size={22} color={colors.textoPrimario} />
           </TouchableOpacity>
         </View>
 
@@ -242,13 +251,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.blancoOverlay,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  closeText: {
-    color: colors.textoPrimario,
-    fontSize: typography.subtitulo,
-    fontWeight: typography.pesoBold,
-    lineHeight: 18,
   },
 
   body: {

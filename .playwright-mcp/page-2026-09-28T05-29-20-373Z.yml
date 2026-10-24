@@ -1,0 +1,40 @@
+- generic [active] [ref=f7e1]:
+  - generic [ref=f7e2]:
+    - heading "▶ Prueba del aviso de voz del KDS" [level=1] [ref=f7e3]
+    - paragraph [ref=f7e4]: Crea pedidos reales en la base local para probar el aviso sonoro del KDS.
+    - generic [ref=f7e5]:
+      - strong [ref=f7e6]: "Antes de apretar:"
+      - text: deja el KDS abierto en otra pestaña (
+      - code [ref=f7e7]: http://localhost:5173/#/empleado/comandas
+      - text: ) con la sesión de
+      - code [ref=f7e8]: empleado@cofeefast.cl
+      - text: iniciada y el botón
+      - strong [ref=f7e9]: Activar voz
+      - text: "apretado. Esta página inserta el pedido: el KDS lo recibe por Realtime y lo anuncia."
+    - generic [ref=f7e10]:
+      - button "▶ Crear 1 comanda" [ref=f7e11] [cursor=pointer]
+      - button "⚡ Crear 3 de golpe" [ref=f7e12] [cursor=pointer]
+      - button "🧹 Borrar comandas de prueba" [ref=f7e13] [cursor=pointer]
+    - generic [ref=f7e14]: 3 comandas creadas. El KDS debería agruparlas en un aviso.
+    - generic [ref=f7e15]: "[2:29:19 a. m.] token: PRUEBA-MUKT5AEI-KR7J [2:29:19 a. m.] Pedido #58 (código 967) creado: Café Americano, Capuchino [2:29:19 a. m.] token: PRUEBA-MUKT5ADJ-NE0D [2:29:19 a. m.] Pedido #57 (código 384) creado: Café Americano, Capuchino [2:29:19 a. m.] token: PRUEBA-MUKT5ACH-4LVH [2:29:19 a. m.] Pedido #56 (código 466) creado: Café Americano, Capuchino, Croissant de Almendra [2:29:19 a. m.] Creando 3 comandas seguidas… [2:25:04 a. m.] token: PRUEBA-MUKSZU3E-4KGA [2:25:04 a. m.] Pedido #55 (código 108) creado: Café Americano, Capuchino, Croissant de Almendra [2:25:04 a. m.] token: PRUEBA-MUKSZU21-7B1J [2:25:04 a. m.] Pedido #54 (código 597) creado: Café Americano, Capuchino, Croissant de Almendra [2:25:04 a. m.] token: PRUEBA-MUKSZU0J-K4N8 [2:25:04 a. m.] Pedido #53 (código 353) creado: Café Americano, Capuchino [2:25:04 a. m.] Creando 3 comandas seguidas… [2:22:32 a. m.] token: PRUEBA-MUKSWKJV-4C2A [2:22:32 a. m.] Pedido #52 (código 317) creado: Café Americano, Capuchino, Croissant de Almendra [2:22:32 a. m.] token: PRUEBA-MUKSWKIZ-NBAQ [2:22:32 a. m.] Pedido #51 (código 614) creado: Café Americano, Capuchino, Croissant de Almendra [2:22:32 a. m.] token: PRUEBA-MUKSWKH8-YPKU [2:22:32 a. m.] Pedido #50 (código 550) creado: Café Americano, Capuchino [2:22:32 a. m.] Creando 3 comandas seguidas… [2:20:20 a. m.] token: PRUEBA-MUKSTQPG-FL82 [2:20:20 a. m.] Pedido #49 (código 638) creado: Café Americano, Capuchino [2:20:20 a. m.] token: PRUEBA-MUKSTQOB-2HGA [2:20:20 a. m.] Pedido #48 (código 564) creado: Café Americano, Capuchino [2:20:20 a. m.] token: PRUEBA-MUKSTQMJ-THXX [2:20:20 a. m.] Pedido #47 (código 576) creado: Café Americano, Capuchino [2:20:20 a. m.] Creando 3 comandas seguidas… [2:19:06 a. m.] token: PRUEBA-MUKSS5NB-1LA4 [2:19:06 a. m.] Pedido #46 (código 425) creado: Café Americano, Capuchino, Croissant de Almendra [2:19:06 a. m.] token: PRUEBA-MUKSS5M3-A4JR [2:19:06 a. m.] Pedido #45 (código 296) creado: Café Americano, Capuchino, Croissant de Almendra [2:19:06 a. m.] token: PRUEBA-MUKSS5KG-5W1L [2:19:06 a. m.] Pedido #44 (código 566) creado: Café Americano, Capuchino, Croissant de Almendra [2:19:06 a. m.] Creando 3 comandas seguidas… [2:18:54 a. m.] token: PRUEBA-MUKSRWJH-MNDC [2:18:54 a. m.] Pedido #43 (código 470) creado: Café Americano, Capuchino, Croissant de Almendra [2:17:39 a. m.] token: PRUEBA-MUKSQA99-Q8Z5 [2:17:39 a. m.] Pedido #42 (código 687) creado: Café Americano, Capuchino, Croissant de Almendra [2:17:39 a. m.] token: PRUEBA-MUKSQA88-JMX9 [2:17:39 a. m.] Pedido #41 (código 637) creado: Café Americano, Capuchino, Croissant de Almendra [2:17:39 a. m.] token: PRUEBA-MUKSQA6Y-WG3U [2:17:39 a. m.] Pedido #40 (código 526) creado: Café Americano, Capuchino, Croissant de Almendra [2:17:39 a. m.] Creando 3 comandas seguidas… [2:17:17 a. m.] token: PRUEBA-MUKSPT2Y-TDAL [2:17:17 a. m.] Pedido #39 (código 323) creado: Café Americano, Capuchino [2:17:00 a. m.] 7 comanda(s) de prueba borradas. [2:16:56 a. m.] token: PRUEBA-MUKSPCZX-AGDU [2:16:56 a. m.] Pedido #38 (código 148) creado: Café Americano, Capuchino [2:16:39 a. m.] token: PRUEBA-MUKSOZSF-LEVH [2:16:39 a. m.] Pedido #37 (código 705) creado: Café Americano, Capuchino, Croissant de Almendra [2:12:01 a. m.] token: PRUEBA-MUKSJ1VQ-TZDI [2:12:01 a. m.] Pedido #36 (código 297) creado: Café Americano, Capuchino [2:10:28 a. m.] token: PRUEBA-MUKSH1PV-AP8T [2:10:28 a. m.] Pedido #35 (código 669) creado: Café Americano, Capuchino, Croissant de Almendra [2:10:28 a. m.] token: PRUEBA-MUKSH1O0-KNJQ [2:10:28 a. m.] Pedido #34 (código 935) creado: Café Americano, Capuchino, Croissant de Almendra [2:10:28 a. m.] token: PRUEBA-MUKSH1N8-254A [2:10:28 a. m.] Pedido #33 (código 217) creado: Café Americano, Capuchino [2:10:28 a. m.] Creando 3 comandas seguidas…"
+  - generic [ref=f7e16]:
+    - heading "Qué se está probando" [level=2] [ref=f7e17]
+    - list [ref=f7e18]:
+      - listitem [ref=f7e19]:
+        - text: El
+        - strong [ref=f7e20]: INSERT
+        - text: en
+        - code [ref=f7e21]: pedidos
+        - text: dispara el Realtime del KDS.
+      - listitem [ref=f7e22]:
+        - text: El KDS pinta la tarjeta y llama a
+        - code [ref=f7e23]: vozKds.anunciar()
+        - text: .
+      - listitem [ref=f7e24]:
+        - text: La Edge Function
+        - code [ref=f7e25]: voz-pedido
+        - text: valida la sesión y genera el audio (una sola vez por pedido).
+      - listitem [ref=f7e26]:
+        - text: Si ElevenLabs no responde, cae a la voz del sistema y el pedido
+        - strong [ref=f7e27]: igual
+        - text: aparece en pantalla.

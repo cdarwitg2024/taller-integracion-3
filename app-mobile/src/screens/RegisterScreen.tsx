@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import Card from '../components/Card';
+import Icon from '../components/Icon';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -200,7 +201,8 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
               }}
               accessibilityLabel="Volver al formulario de registro"
             >
-              <Text style={styles.backArrow}>←</Text>
+              {/* S2-T3: icono vectorial en vez del glifo '←'. */}
+              <Icon name="arrow-back" size={22} color={colors.cafeOscuro} />
             </TouchableOpacity>
             <View style={styles.brandContainer}>
               <Image source={logo} style={styles.logoBadge} accessibilityIgnoresInvertColors />
@@ -329,8 +331,13 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         {/* Encabezado Superior / Brand */}
         <View style={styles.topHeader}>
-          <TouchableOpacity style={styles.backButton} onPress={onNavigateToLogin}>
-            <Text style={styles.backArrow}>←</Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={onNavigateToLogin}
+            accessibilityLabel="Volver al inicio de sesión"
+          >
+            {/* S2-T3: icono vectorial en vez del glifo '←'. */}
+            <Icon name="arrow-back" size={22} color={colors.cafeOscuro} />
           </TouchableOpacity>
           <View style={styles.brandContainer}>
             <Image source={logo} style={styles.logoBadge} accessibilityIgnoresInvertColors />
@@ -447,7 +454,10 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
             accessibilityState={{ checked: acceptedTerms }}
           >
             <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
-              {acceptedTerms && <Text style={styles.checkmark}>✓</Text>}
+              {acceptedTerms && (
+                // S2-T3: icono vectorial en vez del glifo '✓'.
+                <Icon name="checkmark" size={15} color={colors.textoBlanco} />
+              )}
             </View>
             <Text style={styles.termsText}>
               Acepto los <Text style={styles.termsBold}>términos de uso</Text> y políticas de la red del campus
@@ -494,10 +504,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     padding: spacing.xs,
-  },
-  backArrow: {
-    fontSize: 22,
-    color: colors.cafeOscuro,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   brandContainer: {
     flexDirection: 'row',
@@ -618,11 +626,6 @@ const styles = StyleSheet.create({
   checkboxChecked: {
     backgroundColor: colors.cafeOscuro,
     borderColor: colors.cafeOscuro,
-  },
-  checkmark: {
-    color: colors.textoBlanco,
-    fontSize: typography.cuerpoPequeno,
-    fontWeight: 'bold',
   },
   termsText: {
     flex: 1,

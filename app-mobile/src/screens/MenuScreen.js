@@ -17,6 +17,7 @@ import CategoryFilter from '../components/CategoryFilter';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import Title from '../components/Title';
+import Icon from '../components/Icon';
 import { supabase } from '../lib/supabase';
 import { useDisponibilidadProductos } from '../hooks/useDisponibilidadProductos';
 import { colors } from '../theme/colors';
@@ -39,24 +40,6 @@ import { typography, lineHeight } from '../theme/typography';
  * otras cafeterías, además de mandar ids tipo 'fallback-1' a una columna
  * bigint en el checkout.
  */
-
-const DEFAULT_EMOJI = '🍽';
-
-const EMOJI_RULES = [
-  { cv: /café|cafe|espresso|capuchino|americano|latte/i, emoji: '☕' },
-  { cv: /té|\bte\b|chai|infusión|infusion/i, emoji: '🍵' },
-  { cv: /leche|lácteo|lacteo|yogur/i, emoji: '🥛' },
-  { cv: /sándwich|sandwich|ave |jamón|jamon|queso|croissant/i, emoji: '🥪' },
-  { cv: /empanada|pan|medialuna|bollo/i, emoji: '🥐' },
-  { cv: /muffin|galleta|cookie|kuchen|torta|pastel|reposter/i, emoji: '🧁' },
-  { cv: /jugo|bebida|refresco|agua|limonada/i, emoji: '🧃' },
-];
-
-/** Elige un emoji a partir del nombre, la categoría y la descripción. */
-export const getEmoji = ({ name = '', description = '', category = '' }) => {
-  const rule = EMOJI_RULES.find((r) => r.cv.test(`${category} ${name} ${description}`));
-  return rule ? rule.emoji : DEFAULT_EMOJI;
-};
 
 /**
  * Convierte una fila de `productos` al formato que consume la UI y el carrito.
@@ -87,11 +70,6 @@ export const mapProduct = (raw) => {
     // FR-07: el filtro trabaja por id, no por nombre. Guardamos ambos.
     categoryId: Number.isFinite(Number(raw.categoria_id)) ? Number(raw.categoria_id) : null,
     category: raw.categorias?.nombre || 'General',
-    emoji: getEmoji({
-      name: raw.nombre || '',
-      description: raw.descripcion || '',
-      category: raw.categorias?.nombre || '',
-    }),
   };
 };
 
@@ -321,7 +299,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     if (error) {
       return (
         <View style={styles.stateContainer}>
-          <Text style={styles.stateEmoji}>📡</Text>
+          <Icon name="wifi-outline" size={48} color={colors.textoSecundario} style={{ marginBottom: spacing.lg }} />
           <Text style={styles.stateTitle}>Sin conexión con el menú</Text>
           <Text style={styles.stateText}>{error}</Text>
           <Button
@@ -338,7 +316,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     if (products.length === 0) {
       return (
         <View style={styles.stateContainer}>
-          <Text style={styles.stateEmoji}>☕</Text>
+          <Icon name="cafe-outline" size={48} color={colors.cafeOscuro} style={{ marginBottom: spacing.lg }} />
           <Text style={styles.stateTitle}>Esta cafetería no tiene menú</Text>
           <Text style={styles.stateText}>
             Todavía no hay productos cargados en {cafeteria?.nombre || 'esta cafetería'}.
@@ -360,7 +338,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
       if (busquedaDebounced) {
         return (
           <View style={styles.stateContainer}>
-            <Text style={styles.stateEmoji}>🔍</Text>
+            <Icon name="search-outline" size={48} color={colors.textoSecundario} style={{ marginBottom: spacing.lg }} />
             <Text style={styles.stateTitle}>Sin resultados</Text>
             <Text style={styles.stateText}>
               No encontramos productos que coincidan con “{busquedaDebounced}”.
@@ -381,7 +359,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
       const catNombre = categories.find((c) => String(c.id) === String(categoriaActiva))?.nombre;
       return (
         <View style={styles.stateContainer}>
-          <Text style={styles.stateEmoji}>🔍</Text>
+          <Icon name="search-outline" size={48} color={colors.textoSecundario} style={{ marginBottom: spacing.lg }} />
           <Text style={styles.stateTitle}>Sin productos en esta categoría</Text>
           <Text style={styles.stateText}>
             No hay productos disponibles en {catNombre || 'la categoría seleccionada'}.
@@ -439,7 +417,8 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
             accessibilityRole="button"
             accessibilityLabel="Volver a las cafeterías"
           >
-            <Text style={styles.backText}>‹</Text>
+            {/* S2-T3: icono vectorial en vez del glifo '‹'. */}
+            <Icon name="chevron-back" size={28} color={colors.cafeOscuro} />
           </TouchableOpacity>
 
           <Title
@@ -492,8 +471,14 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
           accessibilityLabel="Buscar producto"
         />
         {busqueda.length > 0 && (
-          <TouchableOpacity onPress={() => setBusqueda('')} style={styles.searchClear}>
-            <Text style={styles.searchClearText}>✕</Text>
+          <TouchableOpacity
+            onPress={() => setBusqueda('')}
+            style={styles.searchClear}
+            accessibilityRole="button"
+            accessibilityLabel="Limpiar búsqueda"
+          >
+            {/* S2-T3: icono vectorial en vez del glifo '✕'. */}
+            <Icon name="close-circle" size={20} color={colors.textoSecundario} />
           </TouchableOpacity>
         )}
       </View>
@@ -585,13 +570,8 @@ const styles = StyleSheet.create({
     left: 0,
     width: 36,
     height: 36,
+    alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  backText: {
-    fontSize: 32,
-    color: colors.cafeOscuro,
-    lineHeight: 32,
   },
 
   titleText: {
@@ -678,10 +658,6 @@ const styles = StyleSheet.create({
   },
   searchClear: {
     padding: spacing.sm,
-  },
-  searchClearText: {
-    fontSize: 16,
-    color: colors.textoSecundario,
   },
 
   // FR-15: orden

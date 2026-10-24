@@ -1,0 +1,94 @@
+- generic [ref=f37e3]:
+  - generic [ref=f37e5]:
+    - generic [ref=f37e6]:
+      - generic [ref=f37e7]:
+        - heading "CoffeeFaster" [level=5] [ref=f37e8]
+        - generic [ref=f37e9]: Terminal de Cocina
+      - list [ref=f37e11]:
+        - button "Comandas" [ref=f37e12] [cursor=pointer]:
+          - generic [aria-hidden] [ref=f37e116]: "3"
+    - generic [ref=f37e20]:
+      - generic [ref=f37e21]:
+        - generic [ref=f37e22]: Juan Empleado
+        - generic [ref=f37e23]: empleado
+      - button "Cerrar Sesión" [ref=f37e24] [cursor=pointer]
+  - main [ref=f37e30]:
+    - generic [ref=f37e31]:
+      - generic [ref=f37e33]:
+        - heading "CoffeeFast - KDS Cocina Central" [level=4] [ref=f37e34]
+        - generic [ref=f37e35]:
+          - button [ref=f37e36] [cursor=pointer]
+          - paragraph [ref=f37e42]: Conectado
+          - generic [ref=f37e43]: 13:04
+      - generic [ref=f37e44]:
+        - generic [ref=f37e45]:
+          - generic [ref=f37e46]:
+            - heading "Pendiente" [level=5] [ref=f37e47]
+            - generic [ref=f37e48]: "3"
+          - generic [ref=f37e50]:
+            - generic [ref=f37e51] [cursor=pointer]:
+              - generic [ref=f37e52]:
+                - generic [ref=f37e53]:
+                  - heading "#0001" [level=6] [ref=f37e54]
+                  - paragraph [ref=f37e55]: ⏱️ 2061:40 min
+                - generic [ref=f37e56]:
+                  - generic [ref=f37e57]: PENDIENTE
+                  - paragraph [ref=f37e58]: 🕐 03:02
+                - separator [ref=f37e59]
+                - generic [ref=f37e60]:
+                  - paragraph [ref=f37e61]: Café Americano × 1
+                  - paragraph [ref=f37e62]: Té Verde × 2
+              - button "COMENZAR PREPARACIÓN" [ref=f37e64]
+            - generic [ref=f37e65] [cursor=pointer]:
+              - generic [ref=f37e66]:
+                - generic [ref=f37e67]:
+                  - heading "#0999" [level=6] [ref=f37e68]
+                  - paragraph [ref=f37e69]: ⏱️ 02:15 min
+                - generic [ref=f37e70]:
+                  - generic [ref=f37e71]: PENDIENTE
+                  - paragraph [ref=f37e72]: 🕐 13:26
+                - separator [ref=f37e73]
+                - paragraph [ref=f37e75]: Café Americano × 1
+              - button "COMENZAR PREPARACIÓN" [ref=f37e77]
+            - generic [ref=f37e117] [cursor=pointer]:
+              - generic [ref=f37e118]:
+                - generic [ref=f37e119]:
+                  - heading "#1000" [level=6] [ref=f37e120]
+                  - paragraph [ref=f37e121]: ⏱️ 00:19 min
+                - generic [ref=f37e122]:
+                  - generic [ref=f37e123]: PENDIENTE
+                  - paragraph [ref=f37e124]: 🕐 13:33
+                - separator [ref=f37e125]
+                - paragraph [ref=f37e127]: Capuchino × 1
+              - button "COMENZAR PREPARACIÓN" [ref=f37e129]
+        - generic [ref=f37e78]:
+          - generic [ref=f37e79]:
+            - heading "En Preparación" [level=5] [ref=f37e80]
+            - generic [ref=f37e81]: "1"
+          - generic [ref=f37e84] [cursor=pointer]:
+            - generic [ref=f37e85]:
+              - generic [ref=f37e86]:
+                - heading "#0002" [level=6] [ref=f37e87]
+                - paragraph [ref=f37e88]: ⏱️ 2061:40 min
+              - generic [ref=f37e89]:
+                - generic [ref=f37e90]: EN PREPARACIÓN
+                - paragraph [ref=f37e91]: 🕐 02:52
+              - separator [ref=f37e92]
+              - generic [ref=f37e93]:
+                - paragraph [ref=f37e94]: Capuchino × 1
+                - paragraph [ref=f37e95]: Croissant de Almendra × 1
+                - paragraph [ref=f37e96]: Sándwich Ave Mayo × 1
+            - button "MARCAR COMO LISTO" [ref=f37e98]
+        - generic [ref=f37e99]:
+          - generic [ref=f37e100]:
+            - heading "Listos para Retiro" [level=5] [ref=f37e101]
+            - generic [ref=f37e102]: "1"
+          - generic [ref=f37e106] [cursor=pointer]:
+            - generic [ref=f37e107]:
+              - heading "#0003" [level=6] [ref=f37e108]
+              - paragraph [ref=f37e109]: ⏱️ 2061:40 min
+            - generic [ref=f37e110]:
+              - generic [ref=f37e111]: LISTO PARA RETIRO
+              - paragraph [ref=f37e112]: 🕐 02:47
+            - separator [ref=f37e113]
+            - paragraph [ref=f37e115]: Capuchino × 2

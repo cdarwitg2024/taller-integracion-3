@@ -1,0 +1,22 @@
+- generic [ref=f22e3]:
+  - generic [ref=f22e5]:
+    - generic [ref=f22e6]:
+      - generic [ref=f22e7]:
+        - heading "CoffeeFaster" [level=5] [ref=f22e8]
+        - generic [ref=f22e9]: Terminal de Cocina
+      - list [ref=f22e11]:
+        - button "Comandas" [ref=f22e12] [cursor=pointer]
+    - generic [ref=f22e20]:
+      - generic [ref=f22e21]:
+        - generic [ref=f22e22]: Juan Empleado
+        - generic [ref=f22e23]: empleado
+      - button "Cerrar Sesión" [ref=f22e24] [cursor=pointer]
+  - main [ref=f22e30]:
+    - generic [ref=f22e31]:
+      - generic [ref=f22e33]:
+        - heading "CoffeeFast - KDS Cocina Central" [level=4] [ref=f22e34]
+        - generic [ref=f22e35]:
+          - button [ref=f22e36] [cursor=pointer]
+          - paragraph [ref=f22e42]: Reconectando…
+          - generic [ref=f22e43]: 20:04
+      - progressbar [ref=f22e45]

@@ -1,0 +1,75 @@
+- generic [ref=f14e85]:
+  - generic [ref=f14e87]:
+    - generic [ref=f14e88]:
+      - generic [ref=f14e89]:
+        - heading "CoffeeFaster" [level=5] [ref=f14e90]
+        - generic [ref=f14e91]: Terminal de Cocina
+      - list [ref=f14e93]:
+        - button "Comandas" [ref=f14e94] [cursor=pointer]:
+          - generic [aria-hidden] [ref=f14e100]: "1"
+    - generic [ref=f14e103]:
+      - generic [ref=f14e104]:
+        - generic [ref=f14e105]: Juan Empleado
+        - generic [ref=f14e106]: empleado
+      - button "Cerrar Sesión" [ref=f14e107] [cursor=pointer]
+  - main [ref=f14e113]:
+    - generic [ref=f14e114]:
+      - generic [ref=f14e116]:
+        - generic [ref=f14e117]:
+          - heading "CoffeeFast - KDS Cocina Central" [level=4] [ref=f14e118]
+          - paragraph [ref=f14e119]: "Avisos de voz desactivados: los pedidos solo se ven en pantalla."
+        - generic [ref=f14e120]:
+          - button [ref=f14e121] [cursor=pointer]
+          - generic "Activar avisos de voz (un clic es necesario para que el navegador permita el sonido)" [ref=f14e125]:
+            - button [ref=f14e126] [cursor=pointer]
+          - paragraph [ref=f14e132]: Conectado
+          - generic [ref=f14e133]: 02:08
+      - generic [ref=f14e134]:
+        - generic [ref=f14e135]:
+          - generic [ref=f14e136]:
+            - heading "Pendiente" [level=5] [ref=f14e137]
+            - generic [ref=f14e138]: "1"
+          - generic [ref=f14e141] [cursor=pointer]:
+            - generic [ref=f14e142]:
+              - generic [ref=f14e143]:
+                - heading "#0001" [level=6] [ref=f14e144]
+                - paragraph [ref=f14e145]: ⏱️ 2845:57 min
+              - generic [ref=f14e146]:
+                - generic [ref=f14e147]: PENDIENTE
+                - paragraph [ref=f14e148]: 🕐 03:02
+              - separator [ref=f14e149]
+              - generic [ref=f14e150]:
+                - paragraph [ref=f14e151]: Café Americano × 1
+                - paragraph [ref=f14e152]: Té Verde × 2
+            - button "COMENZAR PREPARACIÓN" [ref=f14e154]
+        - generic [ref=f14e155]:
+          - generic [ref=f14e156]:
+            - heading "En Preparación" [level=5] [ref=f14e157]
+            - generic [ref=f14e158]: "1"
+          - generic [ref=f14e161] [cursor=pointer]:
+            - generic [ref=f14e162]:
+              - generic [ref=f14e163]:
+                - heading "#0002" [level=6] [ref=f14e164]
+                - paragraph [ref=f14e165]: ⏱️ 2845:57 min
+              - generic [ref=f14e166]:
+                - generic [ref=f14e167]: EN PREPARACIÓN
+                - paragraph [ref=f14e168]: 🕐 02:52
+              - separator [ref=f14e169]
+              - generic [ref=f14e170]:
+                - paragraph [ref=f14e171]: Capuchino × 1
+                - paragraph [ref=f14e172]: Croissant de Almendra × 1
+                - paragraph [ref=f14e173]: Sándwich Ave Mayo × 1
+            - button "MARCAR COMO LISTO" [ref=f14e175]
+        - generic [ref=f14e176]:
+          - generic [ref=f14e177]:
+            - heading "Listos para Retiro" [level=5] [ref=f14e178]
+            - generic [ref=f14e179]: "1"
+          - generic [ref=f14e183] [cursor=pointer]:
+            - generic [ref=f14e184]:
+              - heading "#0003" [level=6] [ref=f14e185]
+              - paragraph [ref=f14e186]: ⏱️ 2845:57 min
+            - generic [ref=f14e187]:
+              - generic [ref=f14e188]: LISTO PARA RETIRO
+              - paragraph [ref=f14e189]: 🕐 02:47
+            - separator [ref=f14e190]
+            - paragraph [ref=f14e192]: Capuchino × 2

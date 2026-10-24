@@ -1,11 +1,14 @@
 buildscript {
     ext {
-        buildToolsVersion = "37.0.0"
+        // Versiones alineadas a React Native 0.76.9 / Expo 52.
+        // (antes: buildTools 37 / compileSdk 37 / targetSdk 36 / ndk 27 / kotlin 2.2.0,
+        //  combinacion que AGP 8.6.0 y Gradle 8.10.2 no soportan)
+        buildToolsVersion = "35.0.0"
         minSdkVersion = 24
-        compileSdkVersion = 37
-        targetSdkVersion = 36
-        ndkVersion = "27.1.12297006"
-        kotlinVersion = "2.2.0"
+        compileSdkVersion = 35
+        targetSdkVersion = 35
+        ndkVersion = "26.1.10909125"
+        kotlinVersion = "1.9.25"
     }
     repositories {
         google()

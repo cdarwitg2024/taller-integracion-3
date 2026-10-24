@@ -84,6 +84,11 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        // El AndroidManifest usa ${usesCleartextTraffic}. Normalmente lo inyecta
+        // el prebuild de Expo, pero este android/ es manual, asi que lo definimos:
+        //   debug   -> true  (permite http://10.0.2.2:54321 del Supabase local)
+        //   release -> false (solo HTTPS en produccion)
+        manifestPlaceholders = [usesCleartextTraffic: "true"]
     }
     signingConfigs {
         debug {
@@ -98,6 +103,8 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
+            // En release no permitimos trafico en claro (solo HTTPS).
+            manifestPlaceholders = [usesCleartextTraffic: "false"]
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
@@ -116,4 +123,9 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Modulos nativos de Expo. El proyecto :expo trae expo-modules-core y genera
+    // la lista ExpoModulesPackageList que usa MainApplication.
+    implementation project(':expo-modules-core')
+    implementation project(':expo')
 }

@@ -1,0 +1,17 @@
+import { firefox } from 'playwright-core';
+const b = await firefox.launch({ executablePath: '/home/elias/.cache/ms-playwright/firefox-1549/firefox/firefox', headless: false, env: { ...process.env, MOZ_ENABLE_WAYLAND: '0' } });
+const ctx = await b.newContext({ viewport:{width:1500,height:940} });
+const kds = await ctx.newPage();
+await kds.goto('http://localhost:5173/#/login/empleado', {waitUntil:'domcontentloaded'});
+await kds.waitForSelector('input[placeholder="empleado@coffeefast.cl"]', {timeout:5000});
+await kds.locator('input[placeholder="empleado@coffeefast.cl"]').fill('empleado@coffeefast.cl');
+await kds.locator('input[type="password"]').fill('123456');
+await kds.getByRole('button', { name:/Ingresar a Comandas/i }).click({force:true});
+await kds.waitForURL(/empleado\/comandas|\/comandas/, {timeout:15000}).catch(async()=>{await kds.waitForTimeout(3000);});
+console.log(kds.url());
+const panel = await ctx.newPage();
+await panel.goto('http://localhost:5173/prueba-voz.html', {waitUntil:'domcontentloaded'});
+await panel.waitForSelector('#estado', {timeout:15000});
+console.log('panel ok');
+await kds.bringToFront();
+await new Promise(()=>{});

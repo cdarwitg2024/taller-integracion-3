@@ -1,0 +1,22 @@
+- generic [ref=f33e3]:
+  - generic [ref=f33e5]:
+    - generic [ref=f33e6]:
+      - generic [ref=f33e7]:
+        - heading "CoffeeFaster" [level=5] [ref=f33e8]
+        - generic [ref=f33e9]: Panel de Administración
+      - list [ref=f33e11]:
+        - button "Dashboard" [ref=f33e12] [cursor=pointer]
+        - button "Productos y Stock" [ref=f33e18] [cursor=pointer]
+        - button "Inventario" [ref=f33e25] [cursor=pointer]
+        - button "Logs Validación" [ref=f33e32] [cursor=pointer]
+    - generic [ref=f33e38]:
+      - generic [ref=f33e39]:
+        - generic [ref=f33e40]: Carlos Dueño
+        - generic [ref=f33e41]: dueño
+      - button "Cerrar Sesión" [ref=f33e42] [cursor=pointer]
+  - main [ref=f33e48]:
+    - generic [ref=f33e49]:
+      - generic [ref=f33e50]:
+        - heading "Logs de Validación QR/Token" [level=4] [ref=f33e51]
+        - paragraph [ref=f33e52]: Registro de entregas y rechazos verificados por QR o Token. Solo visible para el Dueño.
+      - progressbar [ref=f33e54]

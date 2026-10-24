@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import Button from '../components/Button';
+import Icon from '../components/Icon';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -267,8 +268,13 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Pago con tarjeta</Text>
-            <TouchableOpacity onPress={onCancelar}>
-              <Text style={styles.headerClose}>✕</Text>
+            <TouchableOpacity
+              onPress={onCancelar}
+              accessibilityRole="button"
+              accessibilityLabel="Cancelar pago"
+            >
+              {/* S2-T3: icono vectorial en vez del glifo '✕'. */}
+              <Icon name="close" size={20} color={colors.textoSecundario} />
             </TouchableOpacity>
           </View>
 
@@ -446,9 +452,12 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
                 },
               ]}
             >
-              <Text style={styles.estadoErrorTexto}>
-                ✕ Pago rechazado. Verifica los datos.
-              </Text>
+              <View style={styles.errorRow}>
+                <Icon name="close-circle" size={16} color={colors.rojo} />
+                <Text style={styles.estadoErrorTexto}>
+                  Pago rechazado. Verifica los datos.
+                </Text>
+              </View>
             </Animated.View>
           )}
 
@@ -463,7 +472,10 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
           />
 
           <Text style={styles.notaSeguridad}>
-            🔒 Pago simulado - No se procesará ningún cargo real
+            <View style={styles.simuladoRow}>
+              <Icon name="lock-closed-outline" size={14} color={colors.textoSecundario} />
+              <Text style={styles.simuladoText}>Pago simulado - No se procesará ningún cargo real</Text>
+            </View>
           </Text>
         </ScrollView>
       </Animated.View>
@@ -495,12 +507,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: typography.pesoExtraBold,
     color: colors.cafeOscuro,
-  },
-  headerClose: {
-    fontSize: 18,
-    color: colors.textoSecundario,
-    fontWeight: typography.pesoBold,
-    padding: spacing.xs,
   },
   montoBox: {
     backgroundColor: colors.crema,
@@ -646,10 +652,28 @@ const styles = StyleSheet.create({
     backgroundColor: colors.rojoBg,
     borderRadius: 12,
   },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    justifyContent: 'center',
+  },
   estadoErrorTexto: {
     fontSize: typography.cuerpo,
     fontWeight: typography.pesoBold,
     color: colors.rojo,
+    textAlign: 'center',
+  },
+  simuladoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    justifyContent: 'center',
+    marginTop: spacing.md,
+  },
+  simuladoText: {
+    fontSize: 11,
+    color: colors.textoSecundario,
     textAlign: 'center',
   },
   notaSeguridad: {

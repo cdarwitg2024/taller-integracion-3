@@ -1,0 +1,40 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - heading "▶ Prueba del aviso de voz del KDS" [level=1] [ref=f1e3]
+    - paragraph [ref=f1e4]: Crea pedidos reales en la base local para probar el aviso sonoro del KDS.
+    - generic [ref=f1e5]:
+      - strong [ref=f1e6]: "Antes de apretar:"
+      - text: deja el KDS abierto en otra pestaña (
+      - code [ref=f1e7]: http://localhost:5173/#/empleado/comandas
+      - text: ) con la sesión de
+      - code [ref=f1e8]: empleado@cofeefast.cl
+      - text: iniciada y el botón
+      - strong [ref=f1e9]: Activar voz
+      - text: "apretado. Esta página inserta el pedido: el KDS lo recibe por Realtime y lo anuncia."
+    - generic [ref=f1e10]:
+      - button "▶ Crear 1 comanda" [ref=f1e11] [cursor=pointer]
+      - button "⚡ Crear 3 de golpe" [ref=f1e12] [cursor=pointer]
+      - button "🧹 Borrar comandas de prueba" [ref=f1e13] [cursor=pointer]
+    - generic [ref=f1e14]: Listo. Supabase configurado. Cafetería 1.
+    - generic [ref=f1e15]: — sin movimientos —
+  - generic [ref=f1e16]:
+    - heading "Qué se está probando" [level=2] [ref=f1e17]
+    - list [ref=f1e18]:
+      - listitem [ref=f1e19]:
+        - text: El
+        - strong [ref=f1e20]: INSERT
+        - text: en
+        - code [ref=f1e21]: pedidos
+        - text: dispara el Realtime del KDS.
+      - listitem [ref=f1e22]:
+        - text: El KDS pinta la tarjeta y llama a
+        - code [ref=f1e23]: vozKds.anunciar()
+        - text: .
+      - listitem [ref=f1e24]:
+        - text: La Edge Function
+        - code [ref=f1e25]: voz-pedido
+        - text: valida la sesión y genera el audio (una sola vez por pedido).
+      - listitem [ref=f1e26]:
+        - text: Si ElevenLabs no responde, cae a la voz del sistema y el pedido
+        - strong [ref=f1e27]: igual
+        - text: aparece en pantalla.

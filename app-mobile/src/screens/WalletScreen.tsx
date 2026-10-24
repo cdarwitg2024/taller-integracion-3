@@ -21,6 +21,7 @@ import PaymentScreen from './PaymentScreen';
 import MovimientoItem from './MovimientoItem';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import Icon from '../components/Icon';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -379,7 +380,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           <Text style={styles.headerTitle}>Mi Wallet</Text>
         </View>
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>🔒</Text>
+          <Icon name="lock-closed-outline" size={40} color={colors.textoSecundario} style={{ marginBottom: spacing.md }} />
           <Text style={styles.emptyTitle}>Inicia sesión</Text>
           <Text style={styles.emptyDescription}>
             Necesitas una cuenta para ver tu saldo y movimientos.
@@ -413,10 +414,19 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Mi Wallet</Text>
-        <TouchableOpacity onPress={onRefresh} disabled={refreshing}>
-          <Text style={[styles.refreshIcon, refreshing && styles.refreshing]}>
-            ↻
-          </Text>
+        <TouchableOpacity
+          onPress={onRefresh}
+          disabled={refreshing}
+          accessibilityRole="button"
+          accessibilityLabel="Actualizar saldo"
+        >
+          {/* S2-T3: icono vectorial en vez del glifo '↻'. */}
+          <Icon
+            name="refresh"
+            size={24}
+            color={colors.cafeOscuro}
+            style={[styles.refreshIcon, refreshing && styles.refreshing]}
+          />
         </TouchableOpacity>
       </View>
 
@@ -499,13 +509,21 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
                 { transform: [{ scale: recargaScale }] },
               ]}
             >
-              <Text style={styles.actionIcon}>+</Text>
+              {/* S2-T3: icono vectorial en vez del glifo '+'. */}
+              <Icon name="add" size={20} color={colors.blanco} />
             </Animated.View>
             <Text style={styles.actionText}>Recargar</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={onRefresh} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={onRefresh}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Actualizar movimientos"
+          >
             <View style={[styles.actionIconContainer, styles.actionIconAlt]}>
-              <Text style={styles.actionIcon}>↻</Text>
+              {/* S2-T3: icono vectorial en vez del glifo '↻'. */}
+              <Icon name="refresh" size={18} color={colors.blanco} />
             </View>
             <Text style={styles.actionText}>Actualizar</Text>
           </TouchableOpacity>
@@ -547,7 +565,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
 
           {movimientos.length === 0 ? (
             <Card variant="outlined" padding="none" style={styles.emptyMovimientos}>
-              <Text style={styles.emptyEmoji}>💳</Text>
+              <Icon name="wallet-outline" size={40} color={colors.textoSecundario} style={{ marginBottom: spacing.md }} />
               <Text style={styles.emptyTitle}>Sin movimientos todavía</Text>
               <Text style={styles.emptyDescription}>
                 Tus recargas y compras aparecerán aquí para que lleves el control de tu saldo.
@@ -579,8 +597,13 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Selecciona el monto</Text>
-              <TouchableOpacity onPress={() => setMontoSeleccionado(0)}>
-                <Text style={styles.modalClose}>✕</Text>
+              <TouchableOpacity
+                onPress={() => setMontoSeleccionado(0)}
+                accessibilityRole="button"
+                accessibilityLabel="Cerrar selección de monto"
+              >
+                {/* S2-T3: icono vectorial en vez del glifo '✕'. */}
+                <Icon name="close" size={20} color={colors.textoSecundario} />
               </TouchableOpacity>
             </View>
 
@@ -676,10 +699,10 @@ const styles = StyleSheet.create({
     fontWeight: typography.pesoMedio as '600',
     color: colors.cafeOscuro,
   },
+  // S2-T3: el refresh es un icono vectorial; el tamaño y el color los define
+  // el propio <Icon>. Queda solo la opacidad del estado "refrescando".
   refreshIcon: {
-    fontSize: 24,
-    color: colors.cafeOscuro,
-    fontWeight: typography.pesoBold as '700',
+    opacity: 1,
   },
   refreshing: {
     opacity: 0.4,
@@ -791,11 +814,6 @@ const styles = StyleSheet.create({
   },
   actionIconAlt: {
     backgroundColor: colors.crema,
-  },
-  actionIcon: {
-    color: colors.blanco,
-    fontSize: 18,
-    fontWeight: typography.pesoExtraBold as '800',
   },
   actionText: {
     fontSize: 13,
@@ -973,12 +991,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: typography.pesoExtraBold as '800',
     color: colors.cafeOscuro,
-  },
-  modalClose: {
-    fontSize: 18,
-    color: colors.textoSecundario,
-    fontWeight: typography.pesoBold as '700',
-    padding: spacing.xs,
   },
   modalLabel: {
     fontSize: typography.cuerpoPequeno,
