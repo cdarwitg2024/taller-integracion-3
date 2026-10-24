@@ -108,6 +108,11 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
   const [telefonoEdit, setTelefonoEdit] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [errorEdit, setErrorEdit] = useState('');
+  const [erroresCampos, setErroresCampos] = useState({
+    nombre: '',
+    apellido: '',
+    telefono: '',
+  });
 
   // Modales de Políticas y Ayuda
   const [modalPoliticaVisible, setModalPoliticaVisible] = useState(false);
@@ -329,9 +334,51 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
     cargarPerfil();
   };
 
-  // ─── Edición de Datos Personales ──────────────────────────────────
+  // ─── Edición de Datos Personales (S2-T7) ──────────────────────────
+  const validarCamposEdicion = () => {
+    const errs = { nombre: '', apellido: '', telefono: '' };
+    let esValido = true;
+
+    const nombreLimpio = nombreEdit.trim();
+    if (!nombreLimpio) {
+      errs.nombre = 'El nombre es obligatorio.';
+      esValido = false;
+    } else if (nombreLimpio.length < 2) {
+      errs.nombre = 'El nombre debe tener al menos 2 caracteres.';
+      esValido = false;
+    } else if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/.test(nombreLimpio)) {
+      errs.nombre = 'El nombre solo debe contener letras.';
+      esValido = false;
+    }
+
+    const apellidoLimpio = apellidoEdit.trim();
+    if (!apellidoLimpio) {
+      errs.apellido = 'El apellido es obligatorio.';
+      esValido = false;
+    } else if (apellidoLimpio.length < 2) {
+      errs.apellido = 'El apellido debe tener al menos 2 caracteres.';
+      esValido = false;
+    } else if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/.test(apellidoLimpio)) {
+      errs.apellido = 'El apellido solo debe contener letras.';
+      esValido = false;
+    }
+
+    const telLimpio = telefonoEdit.trim();
+    if (telLimpio) {
+      const digitos = telLimpio.replace(/[\s\-\(\)\+]/g, '');
+      if (!/^\+?[0-9\s\-()]{8,18}$/.test(telLimpio) || digitos.length < 8) {
+        errs.telefono = 'Formato inválido. Ej: +56 9 1234 5678 o 912345678';
+        esValido = false;
+      }
+    }
+
+    setErroresCampos(errs);
+    return esValido;
+  };
+
   const abrirModalEdicion = () => {
     setErrorEdit('');
+    setErroresCampos({ nombre: '', apellido: '', telefono: '' });
     setNombreEdit(usuarioData?.nombre || '');
     setApellidoEdit(usuarioData?.apellido || '');
     setTelefonoEdit(usuarioData?.telefono || '');
@@ -339,61 +386,118 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
   };
 
   const guardarEdicion = async () => {
-    if (!nombreEdit.trim()) {
-      setErrorEdit('El nombre no puede estar vacío.');
+    setErrorEdit('');
+
+    if (!validarCamposEdicion()) {
       return;
     }
 
+    const nombreLimpio = nombreEdit.trim();
+    const apellidoLimpio = apellidoEdit.trim();
+    const telLimpio = telefonoEdit.trim();
+
+    const actualNombre = (usuarioData?.nombre || '').trim();
+    const actualApellido = (usuarioData?.apellido || '').trim();
+    const actualTel = (usuarioData?.telefono || '').trim();
+
+    // Si no hubo cambios en ninguno de los campos autorizados, avisar y no hacer peticiones innecesarias
+    if (
+      nombreLimpio === actualNombre &&
+      apellidoLimpio === actualApellido &&
+      telLimpio === actualTel
+    ) {
+      Alert.alert('Sin cambios', 'No se realizaron modificaciones en tus datos.');
+      setModalEdicionVisible(false);
+      return;
+    }
+
+    // Whitelist estricta de atributos autorizados para modificación (previene mass-assignment)
+    const payloadAutorizado = {
+      nombre: nombreLimpio,
+      apellido: apellidoLimpio,
+      telefono: telLimpio || null,
+    };
+
     setGuardando(true);
-    setErrorEdit('');
 
     try {
-      const updates = {
-        nombre: nombreEdit.trim(),
-        apellido: apellidoEdit.trim(),
-        telefono: telefonoEdit.trim() || null,
-      };
+      let usuarioGuardadoId = usuarioData?.id;
 
-      let updateQuery = supabase.from('usuarios').update(updates);
-      if (usuarioData?.id) {
-        updateQuery = updateQuery.eq('id', usuarioData.id);
+      // 1. Persistir cambios en la tabla public.usuarios
+      if (usuarioGuardadoId) {
+        const { error: updateError } = await supabase
+          .from('usuarios')
+          .update(payloadAutorizado)
+          .eq('id', usuarioGuardadoId);
+
+        if (updateError) throw updateError;
       } else if (authUserId) {
-        updateQuery = updateQuery.eq('auth_user_id', authUserId);
+        const { data: updateData, error: updateError } = await supabase
+          .from('usuarios')
+          .update(payloadAutorizado)
+          .eq('auth_user_id', authUserId)
+          .select('id');
+
+        if (updateError) throw updateError;
+
+        if (updateData && updateData.length > 0) {
+          usuarioGuardadoId = updateData[0].id;
+        } else {
+          // Si no existía registro previo en public.usuarios, crearlo con datos autorizados
+          const nuevoUsuario = {
+            ...payloadAutorizado,
+            auth_user_id: authUserId,
+            email: user?.email || '',
+            rol_id: 1, // Rol 'estudiante' por defecto
+            activo: true,
+          };
+          const { data: insertData, error: insertError } = await supabase
+            .from('usuarios')
+            .insert(nuevoUsuario)
+            .select('id')
+            .single();
+
+          if (insertError) throw insertError;
+          if (insertData) usuarioGuardadoId = insertData.id;
+        }
       } else {
-        throw new Error('No se identificó el identificador de usuario para actualizar.');
+        throw new Error('No se identificó la sesión del usuario.');
       }
 
-      const { error } = await updateQuery;
-      if (error) throw error;
-
-      setUsuarioData((prev) => ({
-        ...prev,
-        nombre: nombreEdit.trim(),
-        apellido: apellidoEdit.trim(),
-        telefono: telefonoEdit.trim() || '',
-      }));
-
+      // 2. Persistir sincronización en los metadatos de Supabase Auth
       try {
         await supabase.auth.updateUser({
           data: {
-            first_name: nombreEdit.trim(),
-            last_name: apellidoEdit.trim(),
-            full_name: `${nombreEdit.trim()} ${apellidoEdit.trim()}`.trim(),
-            telefono: telefonoEdit.trim() || null,
+            first_name: nombreLimpio,
+            last_name: apellidoLimpio,
+            full_name: `${nombreLimpio} ${apellidoLimpio}`.trim(),
+            telefono: telLimpio || null,
           },
         });
-      } catch {
-        // no bloqueante
+      } catch (authErr) {
+        console.warn('[PerfilScreen] Aviso al sincronizar auth.users:', authErr?.message);
       }
 
+      // 3. Actualizar estado local inmediatamente para reflejar cambios en la UI
+      setUsuarioData((prev) => ({
+        ...prev,
+        id: usuarioGuardadoId || prev?.id,
+        nombre: nombreLimpio,
+        apellido: apellidoLimpio,
+        telefono: telLimpio || '',
+      }));
+
       setModalEdicionVisible(false);
-      Alert.alert('¡Perfil actualizado!', 'Tus datos fueron guardados exitosamente.');
+      Alert.alert(
+        '¡Perfil actualizado!',
+        'Tus datos personales fueron modificados y persistidos correctamente.'
+      );
     } catch (err) {
-      console.error('Error al actualizar perfil:', err);
+      console.error('Error al persistir cambios de perfil:', err);
       setErrorEdit(
         err.message?.includes('policy')
-          ? 'Error de permisos: la política usuarios_update_own no permitió la modificación.'
-          : err.message || 'No se pudieron guardar los cambios.'
+          ? 'Error de seguridad: la directiva del sistema no autorizó la operación.'
+          : err.message || 'No fue posible guardar los cambios. Inténtalo nuevamente.'
       );
     } finally {
       setGuardando(false);
@@ -748,11 +852,20 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
               <Text style={styles.roleChipIcon}>🎓</Text>
               <Text style={styles.roleChipText}>{rolLegible}</Text>
             </View>
-            {Boolean(usuarioData?.telefono) && (
+            {Boolean(usuarioData?.telefono) ? (
               <View style={styles.phoneChip}>
                 <Text style={styles.phoneChipIcon}>📞</Text>
                 <Text style={styles.phoneChipText}>{usuarioData.telefono}</Text>
               </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.addPhoneChip}
+                onPress={abrirModalEdicion}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.phoneChipIcon}>📞</Text>
+                <Text style={styles.addPhoneChipText}>+ Agregar teléfono</Text>
+              </TouchableOpacity>
             )}
           </View>
 
@@ -943,7 +1056,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
         />
       </ScrollView>
 
-      {/* ─── MODAL DE EDICIÓN DE DATOS PERSONALES ───────────────────── */}
+      {/* ─── MODAL DE EDICIÓN DE DATOS PERSONALES (S2-T7) ───────────── */}
       <Modal
         visible={modalEdicionVisible}
         animationType="slide"
@@ -951,12 +1064,12 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
         onRequestClose={() => setModalEdicionVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Editar Perfil</Text>
+              <Text style={styles.modalTitle}>Editar Datos Personales</Text>
               <TouchableOpacity
                 onPress={() => setModalEdicionVisible(false)}
                 style={styles.modalCloseBtn}
@@ -966,39 +1079,86 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
             </View>
 
             <Text style={styles.modalSubtitle}>
-              Actualiza tu nombre, apellido y teléfono institucional.
+              Modifica únicamente los datos autorizados. Los datos de cuenta institucional están protegidos.
             </Text>
 
-            {Boolean(errorEdit) && (
-              <View style={styles.modalErrorBox}>
-                <Text style={styles.modalErrorText}>{errorEdit}</Text>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.modalEditScroll}
+              contentContainerStyle={styles.modalEditScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {Boolean(errorEdit) && (
+                <View style={styles.modalErrorBox}>
+                  <Text style={styles.modalErrorText}>{errorEdit}</Text>
+                </View>
+              )}
+
+              {/* Campos autorizados para edición */}
+              <Input
+                label="Nombre *"
+                placeholder="Ej. Diego"
+                value={nombreEdit}
+                onChangeText={(val) => {
+                  setNombreEdit(val);
+                  if (erroresCampos.nombre) setErroresCampos((prev) => ({ ...prev, nombre: '' }));
+                }}
+                autoCapitalize="words"
+                error={erroresCampos.nombre}
+              />
+
+              <Input
+                label="Apellido *"
+                placeholder="Ej. Vásquez"
+                value={apellidoEdit}
+                onChangeText={(val) => {
+                  setApellidoEdit(val);
+                  if (erroresCampos.apellido) setErroresCampos((prev) => ({ ...prev, apellido: '' }));
+                }}
+                autoCapitalize="words"
+                error={erroresCampos.apellido}
+              />
+
+              <Input
+                label="Teléfono de contacto (Opcional)"
+                placeholder="+56 9 1234 5678"
+                value={telefonoEdit}
+                onChangeText={(val) => {
+                  setTelefonoEdit(val);
+                  if (erroresCampos.telefono) setErroresCampos((prev) => ({ ...prev, telefono: '' }));
+                }}
+                keyboardType="phone-pad"
+                error={erroresCampos.telefono}
+              />
+
+              {/* Datos protegidos por el sistema (Solo lectura) */}
+              <View style={styles.protectedSection}>
+                <View style={styles.protectedHeaderRow}>
+                  <Text style={styles.protectedHeaderIcon}>🔒</Text>
+                  <Text style={styles.protectedHeaderText}>Datos protegidos por el sistema</Text>
+                </View>
+
+                <View style={styles.protectedItem}>
+                  <Text style={styles.protectedItemLabel}>Correo institucional (Solo lectura):</Text>
+                  <Text style={styles.protectedItemValue}>{usuarioData?.correo || 'Sin correo asignado'}</Text>
+                  <Text style={styles.protectedItemHint}>
+                    Tu cuenta @alu.uct.cl es tu identidad oficial y no puede modificarse.
+                  </Text>
+                </View>
+
+                <View style={styles.protectedDivider} />
+
+                <View style={styles.protectedItem}>
+                  <Text style={styles.protectedItemLabel}>Rol asignado (Solo lectura):</Text>
+                  <Text style={styles.protectedItemValue}>{rolLegible}</Text>
+                  <Text style={styles.protectedItemHint}>
+                    Los roles y permisos son gestionados centralmente por la institución.
+                  </Text>
+                </View>
               </View>
-            )}
+            </ScrollView>
 
-            <Input
-              label="Nombre"
-              placeholder="Ej. Juan"
-              value={nombreEdit}
-              onChangeText={setNombreEdit}
-              autoCapitalize="words"
-            />
-
-            <Input
-              label="Apellido"
-              placeholder="Ej. Pérez"
-              value={apellidoEdit}
-              onChangeText={setApellidoEdit}
-              autoCapitalize="words"
-            />
-
-            <Input
-              label="Teléfono de contacto"
-              placeholder="+56 9 1234 5678"
-              value={telefonoEdit}
-              onChangeText={setTelefonoEdit}
-              keyboardType="phone-pad"
-            />
-
+            {/* Acciones fijas al fondo: siempre visibles y sin cortes */}
             <View style={styles.modalActionsRow}>
               <Button
                 title="Cancelar"
@@ -1012,6 +1172,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
                 variant="primary"
                 onPress={guardarEdicion}
                 disabled={guardando}
+                loading={guardando}
                 style={{ flex: 1 }}
               />
             </View>
@@ -1185,6 +1346,23 @@ const styles = StyleSheet.create({
     fontSize: typography.etiqueta,
     fontWeight: typography.pesoMedio,
     color: colors.textoSecundario,
+  },
+  addPhoneChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.crema,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.bordeOscuro,
+    borderStyle: 'dashed',
+  },
+  addPhoneChipText: {
+    fontSize: typography.etiqueta,
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
   },
   editProfileBtn: {
     marginTop: spacing.lg,
@@ -1495,8 +1673,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.blanco,
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
-    padding: spacing.xl,
-    maxHeight: '85%',
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: Platform.OS === 'ios' ? 80 : 72,
+    marginBottom: -56,
+    maxHeight: '92%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1521,6 +1702,12 @@ const styles = StyleSheet.create({
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,
     marginBottom: spacing.md,
+  },
+  modalEditScroll: {
+    flexShrink: 1,
+  },
+  modalEditScrollContent: {
+    paddingBottom: spacing.sm,
   },
   modalScroll: {
     marginVertical: spacing.sm,
@@ -1551,7 +1738,58 @@ const styles = StyleSheet.create({
   },
   modalActionsRow: {
     flexDirection: 'row',
-    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borde,
+    marginTop: spacing.xs,
+  },
+  protectedSection: {
+    backgroundColor: colors.fondo,
+    borderRadius: 14,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borde,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  protectedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  protectedHeaderIcon: {
+    fontSize: 14,
+  },
+  protectedHeaderText: {
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+  },
+  protectedItem: {
+    paddingVertical: 2,
+  },
+  protectedItemLabel: {
+    fontSize: 11,
+    fontWeight: typography.pesoBold,
+    color: colors.textoSecundario,
+  },
+  protectedItemValue: {
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
+    marginTop: 1,
+  },
+  protectedItemHint: {
+    fontSize: 10,
+    color: colors.textoDeshabilitado,
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  protectedDivider: {
+    height: 1,
+    backgroundColor: colors.borde,
+    marginVertical: spacing.sm,
   },
   contactItemBox: {
     backgroundColor: colors.fondo,
