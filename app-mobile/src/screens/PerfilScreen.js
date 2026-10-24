@@ -346,6 +346,9 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
     } else if (nombreLimpio.length < 2) {
       errs.nombre = 'El nombre debe tener al menos 2 caracteres.';
       esValido = false;
+    } else if (nombreLimpio.length > 50) {
+      errs.nombre = 'El nombre no puede superar los 50 caracteres.';
+      esValido = false;
     } else if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/.test(nombreLimpio)) {
       errs.nombre = 'El nombre solo debe contener letras.';
       esValido = false;
@@ -358,6 +361,9 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
     } else if (apellidoLimpio.length < 2) {
       errs.apellido = 'El apellido debe tener al menos 2 caracteres.';
       esValido = false;
+    } else if (apellidoLimpio.length > 50) {
+      errs.apellido = 'El apellido no puede superar los 50 caracteres.';
+      esValido = false;
     } else if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/.test(apellidoLimpio)) {
       errs.apellido = 'El apellido solo debe contener letras.';
       esValido = false;
@@ -366,7 +372,10 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
     const telLimpio = telefonoEdit.trim();
     if (telLimpio) {
       const digitos = telLimpio.replace(/[\s\-\(\)\+]/g, '');
-      if (!/^\+?[0-9\s\-()]{8,18}$/.test(telLimpio) || digitos.length < 8) {
+      if (telLimpio.length > 20) {
+        errs.telefono = 'El teléfono no puede superar los 20 caracteres.';
+        esValido = false;
+      } else if (!/^\+?[0-9\s\-()]{8,20}$/.test(telLimpio) || digitos.length < 8) {
         errs.telefono = 'Formato inválido. Ej: +56 9 1234 5678 o 912345678';
         esValido = false;
       }
@@ -425,18 +434,31 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
 
       // 1. Persistir cambios en la tabla public.usuarios
       if (usuarioGuardadoId) {
+        const payloadConAuth = {
+          ...payloadAutorizado,
+          ...(authUserId ? { auth_user_id: authUserId } : {}),
+        };
         const { error: updateError } = await supabase
           .from('usuarios')
-          .update(payloadAutorizado)
+          .update(payloadConAuth)
           .eq('id', usuarioGuardadoId);
 
         if (updateError) throw updateError;
       } else if (authUserId) {
-        const { data: updateData, error: updateError } = await supabase
+        let updateQ = supabase
           .from('usuarios')
-          .update(payloadAutorizado)
-          .eq('auth_user_id', authUserId)
-          .select('id');
+          .update({
+            ...payloadAutorizado,
+            auth_user_id: authUserId,
+          });
+
+        if (user?.email) {
+          updateQ = updateQ.or(`auth_user_id.eq.${authUserId},email.eq.${user.email}`);
+        } else {
+          updateQ = updateQ.eq('auth_user_id', authUserId);
+        }
+
+        const { data: updateData, error: updateError } = await updateQ.select('id');
 
         if (updateError) throw updateError;
 
@@ -448,6 +470,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
             ...payloadAutorizado,
             auth_user_id: authUserId,
             email: user?.email || '',
+            password_hash: 'supabase_auth_managed',
             rol_id: 1, // Rol 'estudiante' por defecto
             activo: true,
           };
@@ -801,18 +824,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
 
   return (
     <View style={styles.container}>
-      <Header
-        title="Mi Perfil"
-        rightElement={
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={abrirModalEdicion}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.headerIconText}>✏️</Text>
-          </TouchableOpacity>
-        }
-      />
+      <Header title="Mi Perfil" />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -852,20 +864,11 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
               <Text style={styles.roleChipIcon}>🎓</Text>
               <Text style={styles.roleChipText}>{rolLegible}</Text>
             </View>
-            {Boolean(usuarioData?.telefono) ? (
+            {Boolean(usuarioData?.telefono) && (
               <View style={styles.phoneChip}>
                 <Text style={styles.phoneChipIcon}>📞</Text>
                 <Text style={styles.phoneChipText}>{usuarioData.telefono}</Text>
               </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.addPhoneChip}
-                onPress={abrirModalEdicion}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.phoneChipIcon}>📞</Text>
-                <Text style={styles.addPhoneChipText}>+ Agregar teléfono</Text>
-              </TouchableOpacity>
             )}
           </View>
 
@@ -1097,24 +1100,26 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
               {/* Campos autorizados para edición */}
               <Input
                 label="Nombre *"
-                placeholder="Ej. Diego"
+                placeholder="Ej. Juan"
                 value={nombreEdit}
                 onChangeText={(val) => {
                   setNombreEdit(val);
                   if (erroresCampos.nombre) setErroresCampos((prev) => ({ ...prev, nombre: '' }));
                 }}
+                maxLength={50}
                 autoCapitalize="words"
                 error={erroresCampos.nombre}
               />
 
               <Input
                 label="Apellido *"
-                placeholder="Ej. Vásquez"
+                placeholder="Ej. Pérez"
                 value={apellidoEdit}
                 onChangeText={(val) => {
                   setApellidoEdit(val);
                   if (erroresCampos.apellido) setErroresCampos((prev) => ({ ...prev, apellido: '' }));
                 }}
+                maxLength={50}
                 autoCapitalize="words"
                 error={erroresCampos.apellido}
               />
@@ -1127,6 +1132,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
                   setTelefonoEdit(val);
                   if (erroresCampos.telefono) setErroresCampos((prev) => ({ ...prev, telefono: '' }));
                 }}
+                maxLength={20}
                 keyboardType="phone-pad"
                 error={erroresCampos.telefono}
               />
@@ -1222,17 +1228,6 @@ const styles = StyleSheet.create({
     color: colors.textoSecundario,
     textAlign: 'center',
     marginBottom: spacing.lg,
-  },
-  headerIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.crema,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerIconText: {
-    fontSize: 16,
   },
 
   // ─── 1. Tarjeta Hero Estudiante ──────────────────────────────────
@@ -1346,23 +1341,6 @@ const styles = StyleSheet.create({
     fontSize: typography.etiqueta,
     fontWeight: typography.pesoMedio,
     color: colors.textoSecundario,
-  },
-  addPhoneChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.crema,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.bordeOscuro,
-    borderStyle: 'dashed',
-  },
-  addPhoneChipText: {
-    fontSize: typography.etiqueta,
-    fontWeight: typography.pesoMedio,
-    color: colors.cafeOscuro,
   },
   editProfileBtn: {
     marginTop: spacing.lg,
@@ -1675,8 +1653,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 26,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xl,
-    paddingBottom: Platform.OS === 'ios' ? 80 : 72,
-    marginBottom: -56,
+    paddingBottom: Platform.OS === 'ios' ? 88 : 80,
+    marginBottom: -64,
     maxHeight: '92%',
   },
   modalHeader: {
