@@ -334,55 +334,53 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
     cargarPerfil();
   };
 
-  // ─── Edición de Datos Personales (S2-T7) ──────────────────────────
+  // ─── Validaciones de Edición de Perfil (S2-T8) ────────────────────
+  const validarNombre = (val) => {
+    const limpio = (val || '').trim();
+    if (!limpio) return 'El nombre es obligatorio.';
+    if (limpio.length < 2) return 'El nombre debe tener al menos 2 caracteres.';
+    if (limpio.length > 50) return 'El nombre no puede superar los 50 caracteres.';
+    if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/.test(limpio)) {
+      return 'El nombre solo debe contener letras.';
+    }
+    return '';
+  };
+
+  const validarApellido = (val) => {
+    const limpio = (val || '').trim();
+    if (!limpio) return 'El apellido es obligatorio.';
+    if (limpio.length < 2) return 'El apellido debe tener al menos 2 caracteres.';
+    if (limpio.length > 50) return 'El apellido no puede superar los 50 caracteres.';
+    if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/.test(limpio)) {
+      return 'El apellido solo debe contener letras.';
+    }
+    return '';
+  };
+
+  const validarTelefono = (val) => {
+    const limpio = (val || '').trim();
+    if (!limpio) return ''; // Campo opcional
+    if (limpio.length > 20) return 'El teléfono no puede superar los 20 caracteres.';
+    const digitos = limpio.replace(/[\s\-\(\)\+]/g, '');
+    if (!/^\+?[0-9\s\-()]{8,20}$/.test(limpio) || digitos.length < 8) {
+      return 'Formato inválido. Ej: +56 9 1234 5678 o 912345678';
+    }
+    return '';
+  };
+
   const validarCamposEdicion = () => {
-    const errs = { nombre: '', apellido: '', telefono: '' };
-    let esValido = true;
+    const errNombre = validarNombre(nombreEdit);
+    const errApellido = validarApellido(apellidoEdit);
+    const errTelefono = validarTelefono(telefonoEdit);
 
-    const nombreLimpio = nombreEdit.trim();
-    if (!nombreLimpio) {
-      errs.nombre = 'El nombre es obligatorio.';
-      esValido = false;
-    } else if (nombreLimpio.length < 2) {
-      errs.nombre = 'El nombre debe tener al menos 2 caracteres.';
-      esValido = false;
-    } else if (nombreLimpio.length > 50) {
-      errs.nombre = 'El nombre no puede superar los 50 caracteres.';
-      esValido = false;
-    } else if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/.test(nombreLimpio)) {
-      errs.nombre = 'El nombre solo debe contener letras.';
-      esValido = false;
-    }
-
-    const apellidoLimpio = apellidoEdit.trim();
-    if (!apellidoLimpio) {
-      errs.apellido = 'El apellido es obligatorio.';
-      esValido = false;
-    } else if (apellidoLimpio.length < 2) {
-      errs.apellido = 'El apellido debe tener al menos 2 caracteres.';
-      esValido = false;
-    } else if (apellidoLimpio.length > 50) {
-      errs.apellido = 'El apellido no puede superar los 50 caracteres.';
-      esValido = false;
-    } else if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/.test(apellidoLimpio)) {
-      errs.apellido = 'El apellido solo debe contener letras.';
-      esValido = false;
-    }
-
-    const telLimpio = telefonoEdit.trim();
-    if (telLimpio) {
-      const digitos = telLimpio.replace(/[\s\-\(\)\+]/g, '');
-      if (telLimpio.length > 20) {
-        errs.telefono = 'El teléfono no puede superar los 20 caracteres.';
-        esValido = false;
-      } else if (!/^\+?[0-9\s\-()]{8,20}$/.test(telLimpio) || digitos.length < 8) {
-        errs.telefono = 'Formato inválido. Ej: +56 9 1234 5678 o 912345678';
-        esValido = false;
-      }
-    }
+    const errs = {
+      nombre: errNombre,
+      apellido: errApellido,
+      telefono: errTelefono,
+    };
 
     setErroresCampos(errs);
-    return esValido;
+    return !errNombre && !errApellido && !errTelefono;
   };
 
   const abrirModalEdicion = () => {
@@ -426,6 +424,14 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
       apellido: apellidoLimpio,
       telefono: telLimpio || null,
     };
+
+    // Bloqueo explícito contra manipulación de datos de autenticación o roles (S2-T8)
+    const camposSensibles = ['email', 'correo', 'rol', 'rol_id', 'password_hash', 'saldo', 'saldo_actual', 'activo'];
+    for (const campo of camposSensibles) {
+      if (campo in payloadAutorizado) {
+        throw new Error(`Modificación rechazada: el dato "${campo}" está protegido por el sistema.`);
+      }
+    }
 
     setGuardando(true);
 
@@ -1104,7 +1110,12 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
                 value={nombreEdit}
                 onChangeText={(val) => {
                   setNombreEdit(val);
-                  if (erroresCampos.nombre) setErroresCampos((prev) => ({ ...prev, nombre: '' }));
+                  if (erroresCampos.nombre) {
+                    setErroresCampos((prev) => ({ ...prev, nombre: validarNombre(val) }));
+                  }
+                }}
+                onBlur={() => {
+                  setErroresCampos((prev) => ({ ...prev, nombre: validarNombre(nombreEdit) }));
                 }}
                 maxLength={50}
                 autoCapitalize="words"
@@ -1117,7 +1128,12 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
                 value={apellidoEdit}
                 onChangeText={(val) => {
                   setApellidoEdit(val);
-                  if (erroresCampos.apellido) setErroresCampos((prev) => ({ ...prev, apellido: '' }));
+                  if (erroresCampos.apellido) {
+                    setErroresCampos((prev) => ({ ...prev, apellido: validarApellido(val) }));
+                  }
+                }}
+                onBlur={() => {
+                  setErroresCampos((prev) => ({ ...prev, apellido: validarApellido(apellidoEdit) }));
                 }}
                 maxLength={50}
                 autoCapitalize="words"
@@ -1130,7 +1146,12 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
                 value={telefonoEdit}
                 onChangeText={(val) => {
                   setTelefonoEdit(val);
-                  if (erroresCampos.telefono) setErroresCampos((prev) => ({ ...prev, telefono: '' }));
+                  if (erroresCampos.telefono) {
+                    setErroresCampos((prev) => ({ ...prev, telefono: validarTelefono(val) }));
+                  }
+                }}
+                onBlur={() => {
+                  setErroresCampos((prev) => ({ ...prev, telefono: validarTelefono(telefonoEdit) }));
                 }}
                 maxLength={20}
                 keyboardType="phone-pad"
