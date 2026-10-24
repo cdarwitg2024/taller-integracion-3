@@ -279,6 +279,14 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     fetchProducts({ silent: true });
   };
 
+  const [cartToast, setCartToast] = useState(null);
+
+  useEffect(() => {
+    if (!cartToast) return undefined;
+    const t = setTimeout(() => setCartToast(null), 1200);
+    return () => clearTimeout(t);
+  }, [cartToast]);
+
   const handleAdd = (product) => {
     // Cinturón de seguridad también del lado del carrito: nunca agregar
     // un producto que no sea de esta cafetería o que esté agotado.
@@ -287,6 +295,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     // Se pasa la cafetería para que el carrito sepa a qué pedido pertenece
     // cada ítem y no mezcle productos de dos menus distintos.
     onAddToCart?.(product, cafeteria);
+    setCartToast(product?.name || 'Producto');
     // Si venía desde el detalle, se cierra para volver al menú
     setProductoDetalle(null);
   };
@@ -513,6 +522,15 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
             onAdd={handleAdd}
             onClose={() => setProductoDetalle(null)}
           />
+        </View>
+      )}
+
+      {cartToast && (
+        <View style={styles.cartToast} pointerEvents="none">
+          <Icon name="checkmark-circle" size={18} color={colors.blanco} />
+          <Text style={styles.cartToastText} numberOfLines={1}>
+            Agregado al carrito · {cartToast}
+          </Text>
         </View>
       )}
     </View>
@@ -755,6 +773,32 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.sm,
     lineHeight: lineHeight.cuerpoPequeno,
+  },
+
+  cartToast: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.cafeOscuro,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    shadowColor: colors.sombra,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  cartToastText: {
+    color: colors.blanco,
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoMedio,
+    flexShrink: 1,
   },
 });
 
