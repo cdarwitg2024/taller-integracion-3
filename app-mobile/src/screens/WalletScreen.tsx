@@ -18,7 +18,7 @@ import {
 
 import { supabase } from '../lib/supabase';
 import PaymentScreen from './PaymentScreen';
-import MovimientoItem from './MovimientoItem';
+import MovimientoItem, { Movimiento } from './MovimientoItem';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { colors } from '../theme/colors';
@@ -26,14 +26,6 @@ import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
 // ─── Tipos ───────────────────────────────────────────────────────
-interface Movimiento {
-  id: string;
-  tipo: 'recarga' | 'compra' | 'reembolso';
-  monto: number;
-  descripcion: string;
-  creado_en: string;
-}
-
 interface Wallet {
   id: string;
   usuario_id: string;
@@ -350,6 +342,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           monto: monto,
           descripcion: 'Recarga de saldo',
           creado_en: new Date().toISOString(),
+          pedido_id: null,
         },
         ...prev,
       ]);

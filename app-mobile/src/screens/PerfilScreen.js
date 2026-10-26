@@ -184,6 +184,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
               monto: m.monto,
               esIngreso: m.tipo === 'recarga' || m.tipo === 'reembolso',
               fecha: m.creado_en,
+              pedido_id: m.pedido_id || null,
             });
           });
         }
@@ -950,7 +951,14 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
                     <View style={styles.activityMainInfo}>
                       <Text style={styles.activityTitle} numberOfLines={1}>{item.titulo}</Text>
                       <Text style={styles.activitySub} numberOfLines={1}>{item.descripcion}</Text>
-                      <Text style={styles.activityDate}>{formatFecha(item.fecha)}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <Text style={styles.activityDate}>{formatFecha(item.fecha)}</Text>
+                        {item.pedido_id && (
+                          <View style={styles.activityPedidoBadge}>
+                            <Text style={styles.activityPedidoText}>📦 #{item.pedido_id}</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                     {item.monto !== null && item.monto !== undefined && (
                       <Text style={[styles.activityAmount, item.esIngreso ? styles.amountPositive : styles.amountNegative]}>
@@ -1514,7 +1522,19 @@ const styles = StyleSheet.create({
   activityDate: {
     fontSize: 10,
     color: colors.textoDeshabilitado,
-    marginTop: 2,
+  },
+  activityPedidoBadge: {
+    backgroundColor: colors.crema,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.bordeOscuro,
+  },
+  activityPedidoText: {
+    fontSize: 9,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
   },
   activityAmount: {
     fontSize: typography.cuerpoPequeno,
