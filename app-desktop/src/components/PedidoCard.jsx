@@ -26,8 +26,9 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import TimeAgo from './TimeAgo';
-import { origenRetiroPedido } from '../utils/dateUtils';
+import { minutosHastaRetiro, origenRetiroPedido } from '../utils/dateUtils';
 import impresionService from '../services/impresionService';
 
 import BaseCard from './ui/BaseCard';
@@ -101,6 +102,14 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
         ? configEstado.color
         : COLORS.textSecondary;
 
+  // S2-T8: Indicador visual para pedidos LISTO cercanos a su horario de retiro
+  const minFaltan = minutosHastaRetiro(pedido);
+  const retiroProximo =
+    pedido.estado === 'listo' &&
+    minFaltan !== null &&
+    minFaltan <= 15 &&
+    minFaltan >= -10;
+
   return (
     <BaseCard
       padding="none"
@@ -128,24 +137,49 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
           px: px(SPACING.lg),
           pt: px(SPACING.md),
           pb: px(SPACING.sm),
+          // S2-T8: Resaltar visualmente los pedidos LISTO próximos a retirar
+          ...(retiroProximo && {
+            background: `linear-gradient(90deg, ${COLORS.warningBg} 0%, transparent 70%)`,
+            borderTopLeftRadius: 12,
+            borderTopRightRadius: 12,
+          }),
         }}
       >
         <Box sx={{ ...filaFlex, justifyContent: 'space-between' }}>
-          <Typography
-            variant="h5"
-            sx={{
-              minWidth: 0,
-              fontSize: { xs: '1.2rem', md: '1.55rem' },
-              fontWeight: TYPOGRAPHY.fontWeightExtraBold,
-              color: COLORS.textPrimary,
-              lineHeight: 1.15,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {pedido.codigo_pedido || `#${pedido.rawId ?? pedido.id}`}
-          </Typography>
+          <Box sx={{ ...filaFlex, minWidth: 0, gap: px(SPACING.xs) }}>
+            <Typography
+              variant="h5"
+              sx={{
+                minWidth: 0,
+                fontSize: { xs: '1.2rem', md: '1.55rem' },
+                fontWeight: TYPOGRAPHY.fontWeightExtraBold,
+                color: COLORS.textPrimary,
+                lineHeight: 1.15,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {pedido.codigo_pedido || `#${pedido.rawId ?? pedido.id}`}
+            </Typography>
+            {retiroProximo && (
+              <Tooltip title={minFaltan <= 0 ? 'Horario de retiro alcanzado o pasado' : `Faltan ${minFaltan} min para retirar`}>
+                <Chip
+                  size="small"
+                  icon={<WarningAmberIcon sx={{ fontSize: '14px !important' }} />}
+                  label={minFaltan <= 0 ? 'RETIRAR YA' : `RETIRAR EN ${minFaltan} MIN`}
+                  sx={{
+                    height: 22,
+                    fontSize: '0.7rem',
+                    fontWeight: TYPOGRAPHY.fontWeightExtraBold,
+                    backgroundColor: COLORS.warning,
+                    color: '#fff',
+                    '& .MuiChip-icon': { color: '#fff' },
+                  }}
+                />
+              </Tooltip>
+            )}
+          </Box>
 
           <Box
             sx={{
@@ -207,7 +241,7 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
             sx={{
               flexShrink: 0,
               fontSize: { xs: 16, md: 18 },
-              color: colorRetiro,
+              color: retiroProximo ? COLORS.warning : colorRetiro,
             }}
           />
           <Typography
@@ -218,8 +252,8 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              color: COLORS.textSecondary,
-              fontWeight: TYPOGRAPHY.fontWeightMedium,
+              color: retiroProximo ? COLORS.warning : COLORS.textSecondary,
+              fontWeight: retiroProximo ? TYPOGRAPHY.fontWeightBold : TYPOGRAPHY.fontWeightMedium,
             }}
           >
             {nombreCafeteria ? `${nombreCafeteria} · ${textoRetiro}` : textoRetiro}
@@ -228,6 +262,23 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
       </Box>
 
       <Divider sx={{ borderColor: COLORS.border }} />
+      {retiroProximo && (
+        <Box
+          sx={{
+            px: px(SPACING.lg),
+            py: px(SPACING.xs),
+            backgroundColor: COLORS.warningBg,
+            display: 'flex',
+            alignItems: 'center',
+            gap: px(SPACING.xs),
+          }}
+        >
+          <WarningAmberIcon sx={{ fontSize: 16, color: COLORS.warning }} />
+          <Typography sx={{ fontSize: '0.75rem', fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.warning }}>
+            {minFaltan <= 0 ? 'Listo para retirar - Retiro ya' : `Retiro próximo - Faltan ${minFaltan} min`}
+          </Typography>
+        </Box>
+      )}
 
       {/* Productos: cantidad destacada + nombre (máximo 2 líneas) */}
       <Box
