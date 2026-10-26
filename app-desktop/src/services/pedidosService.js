@@ -166,8 +166,24 @@ function aInstanteRetiro(pedido) {
   const retiroTs = parsearFecha(pedido.hora_retiro);
   if (retiroTs) return retiroTs.getTime();
 
-  const minutos = aMinutosDelDia(pedido.hora_retiro);
+  let minutos = aMinutosDelDia(pedido.hora_retiro);
   const creado = parsearFecha(pedido.creado_en);
+
+  // S2-T7: Priorizar la franja de retiro elegida por el estudiante.
+  // Se toma la HORA DE INICIO de la franja (ej. "12:30" de "12:30-12:45")
+  // para ordenar los pedidos por el momento en que realmente deben retirarse.
+  if (minutos === null && pedido?.franja_retiro) {
+    const franja = String(pedido.franja_retiro).trim();
+    if (franja) {
+      // Extraer inicio de la franja: puede venir como "12:30-12:45", "12:30 - 12:45"
+      const inicio = franja.split(/[-–—]/)[0].trim();
+      minutos = aMinutosDelDia(inicio);
+      if (minutos === null) {
+        // Fallback: intentar parsear la franja completa por si viene en otro formato
+        minutos = aMinutosDelDia(franja);
+      }
+    }
+  }
 
   if (minutos !== null) {
     if (creado) {
@@ -187,9 +203,9 @@ function aInstanteRetiro(pedido) {
 }
 
 function comparadorPrioridad(a, b) {
-  // Ordenar por minutos del día no servía: dos pedidos del mismo minuto
-  // quedaban "empate" y el kanban se veía desordenado. Se compara el
-  // instante real (epoch) y, ante empate, la hora de creación.
+  // Ordenar por el instante real de retiro (franja/hora/estimado).
+  // Los pedidos que deben retirarse antes aparecen primero.
+  // Ante empate se mantiene el criterio por hora de creación.
   const tA = aInstanteRetiro(a);
   const tB = aInstanteRetiro(b);
   if (tA !== null && tB !== null && tA !== tB) return tA - tB;
