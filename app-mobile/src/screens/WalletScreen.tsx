@@ -87,6 +87,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMovimientos, setErrorMovimientos] = useState<string | null>(null);
   const [recargaVisible, setRecargaVisible] = useState(false);
   const [montoRecarga, setMontoRecarga] = useState('');
   const [procesandoRecarga, setProcesandoRecarga] = useState(false);
@@ -168,9 +169,11 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
     }
   }, [userId]);
 
-  // ─── Cargar saldo ─────────────────────────────────────────────
+  // ─── Cargar saldo y movimientos de forma segura ────────────────
   const cargarSaldo = useCallback(async () => {
     try {
+      setErrorMovimientos(null);
+
       if (!userId) {
         setWallet(null);
         setMovimientos([]);
@@ -184,7 +187,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
         return;
       }
 
-      // Cargar o crear wallet
+      // Cargar o crear wallet del usuario autenticado
       let { data: walletData, error: walletError } = await supabase
         .from('wallets')
         .select('*')
@@ -201,6 +204,8 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
 
         if (!createError && nueva) {
           walletData = nueva;
+        } else if (createError) {
+          throw createError;
         }
       } else if (walletError) {
         throw walletError;
@@ -208,7 +213,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
 
       setWallet(walletData as Wallet | null);
 
-      // Cargar movimientos
+      // Cargar movimientos pertenecientes de forma estricta a la wallet del usuario
       if (walletData) {
         const { data: movs, error: movsError } = await supabase
           .from('movimientos_wallet')
@@ -217,12 +222,18 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           .order('creado_en', { ascending: false })
           .limit(20);
 
-        if (!movsError && movs) {
+        if (movsError) {
+          console.error('[WalletScreen] Error al consultar movimientos:', movsError);
+          setErrorMovimientos(
+            'No se pudieron cargar tus movimientos de forma segura. Por favor, reintenta.'
+          );
+        } else if (movs) {
           setMovimientos(movs as Movimiento[]);
         }
       }
     } catch (err) {
-      console.warn('Error cargando saldo:', err);
+      console.warn('[WalletScreen] Error cargando saldo o movimientos:', err);
+      setErrorMovimientos('Ocurrió un problema de conexión al consultar tus movimientos.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -538,7 +549,21 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
         >
           <Text style={styles.sectionTitle}>Últimos movimientos</Text>
 
-          {movimientos.length === 0 ? (
+          {errorMovimientos ? (
+            <Card variant="outlined" padding="none" style={styles.errorMovimientos}>
+              <Text style={styles.errorEmoji}>⚠️</Text>
+              <Text style={styles.errorTitle}>Error al cargar movimientos</Text>
+              <Text style={styles.errorDescription}>{errorMovimientos}</Text>
+              <Button
+                title="Reintentar consulta"
+                variant="secondary"
+                size="sm"
+                onPress={onRefresh}
+                loading={refreshing}
+                style={styles.retryButton}
+              />
+            </Card>
+          ) : movimientos.length === 0 ? (
             <Card variant="outlined" padding="none" style={styles.emptyMovimientos}>
               <Text style={styles.emptyEmoji}>💳</Text>
               <Text style={styles.emptyTitle}>Sin movimientos todavía</Text>
@@ -899,6 +924,38 @@ const styles = StyleSheet.create({
   },
   movimientoAmountRefund: {
     color: colors.dorado,
+  },
+
+  // ─── Error State de Movimientos ──────────────────────────────
+  errorMovimientos: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: spacing.xl,
+    backgroundColor: colors.crema,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.rojo,
+  },
+  errorEmoji: {
+    fontSize: 36,
+    marginBottom: spacing.xs,
+  },
+  errorTitle: {
+    fontSize: 15,
+    fontWeight: typography.pesoBold as '700',
+    color: colors.cafeOscuro,
+    textAlign: 'center',
+  },
+  errorDescription: {
+    fontSize: 12,
+    color: colors.textoSecundario,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: spacing.md,
+    lineHeight: 18,
+  },
+  retryButton: {
+    paddingHorizontal: spacing.lg,
   },
 
   // ─── Empty State ────────────────────────────────────────────
