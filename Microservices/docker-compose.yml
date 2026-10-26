@@ -95,6 +95,7 @@ services:
     environment:
       PORT: 3005
       SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY}
+      MS_MENUS_URL: http://ms-menus:3003
     ports:
       - "${MS_PEDIDOS_PORT:-3005}:3005"
     extra_hosts:

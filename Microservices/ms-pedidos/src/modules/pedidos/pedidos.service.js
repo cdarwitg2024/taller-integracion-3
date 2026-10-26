@@ -11,6 +11,18 @@ const {
   transicionesDe
 } = require('./pedidos.maquina-estados');
 
+function obtenerMsMenusUrl() {
+  const url = process.env.MS_MENUS_URL;
+
+  if (!url) {
+    throw new HttpError(503, 'Configuracion de ms-menus incompleta', {
+      causa: 'Se requiere MS_MENUS_URL'
+    });
+  }
+
+  return url.replace(/\/+$/, '');
+}
+
 function crearClienteAutenticado(accessToken) {
   if (!accessToken) throw new HttpError(401, 'Usuario no autenticado');
 
@@ -238,7 +250,11 @@ async function crearPedido({ user, accessToken, body }) {
 
   let preciosResp;
   try {
-    preciosResp = await httpClient.post('http://ms-menus:3003/api/menus/precios', { items }, { timeoutMs: 3000, nombre: 'ms-menus:precios' });
+  preciosResp = await httpClient.post(
+    `${obtenerMsMenusUrl()}/api/menus/precios`,
+    { items },
+    { timeoutMs: 3000, nombre: 'ms-menus:precios' }
+  );
   } catch (e) {
     if (e.status >= 400 && e.status < 500) {
       throw new HttpError(e.status, e.message, { detalle: e.detalle });
