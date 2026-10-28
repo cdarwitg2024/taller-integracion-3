@@ -9,8 +9,12 @@ import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import PriceChangeOutlinedIcon from '@mui/icons-material/PriceChangeOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 
 import PageHeader from './components/dueno/PageHeader';
+import Promociones from './pages/dueno/Promociones';
+import ConfiguracionCafeteria from './pages/dueno/ConfiguracionCafeteria';
 import Login from './pages/auth/Login';
 import AccesoNoAutorizado from './components/AccesoNoAutorizado';
 import Dashboard from './pages/dueno/Dashboard';
@@ -63,6 +67,18 @@ function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
       path: '/dueno/bot',
       label: 'Asistente Bot',
       icon: <SmartToyOutlinedIcon fontSize="small" />,
+    },
+    {
+      id: 'promociones',
+      path: '/dueno/promociones',
+      label: 'Promociones',
+      icon: <LocalOfferOutlinedIcon fontSize="small" />,
+    },
+    {
+      id: 'configuracion',
+      path: '/dueno/configuracion',
+      label: 'Configuración de Cafetería',
+      icon: <SettingsOutlinedIcon fontSize="small" />,
     },
   ];
 
@@ -124,6 +140,14 @@ function buildDuenoHeader(pathname) {
     '/dueno/bot': {
       title: 'Asistente Bot del Dueño',
       subtitle: 'Consola interactiva del Bot CoffeeFaster, diagnóstico de servicio y consultas de existencias.',
+    },
+    '/dueno/promociones': {
+      title: 'Promociones',
+      subtitle: 'Administra las promociones vigentes de la cafetería.',
+    },
+    '/dueno/configuracion': {
+      title: 'Configuración de Cafetería',
+      subtitle: 'Administra los datos generales de tu cafetería.',
     },
   };
 
@@ -384,6 +408,28 @@ function App() {
             <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
               <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
                 <BotDueno currentUser={currentUser} />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dueno/promociones"
+          element={
+            <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
+              <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
+                <Promociones currentUser={currentUser} />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dueno/configuracion"
+          element={
+            <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
+              <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
+                <ConfiguracionCafeteria currentUser={currentUser} />
               </AuthenticatedLayout>
             </ProtectedRoute>
           }
