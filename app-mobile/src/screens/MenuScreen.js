@@ -312,11 +312,17 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     // un producto que no sea de esta cafetería o que esté agotado.
     if (!product?.available) return;
     if (Number(product.cafeteriaId) !== Number(cafeteriaId)) return;
+    // Pequeña transición/feedback de carga moderado al agregar desde catálogo
+    const pid = product?.id;
+    if (pid != null) {
+      setAddingId(pid);
+      setTimeout(() => setAddingId(null), 250);
+    }
     // Se pasa la cafetería para que el carrito sepa a qué pedido pertenece
     // cada ítem y no mezcle productos de dos menus distintos.
     onAddToCart?.(product, cafeteria);
-    // Si venía desde el detalle, se cierra para volver al menú
-    setProductoDetalle(null);
+    // Dar tiempo a ver el feedback "Agregando..." antes de cerrar el detalle
+    setTimeout(() => setProductoDetalle(null), 300);
   };
 
   const renderBody = () => {

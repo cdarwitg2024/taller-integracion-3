@@ -131,9 +131,13 @@ const ProductCard = ({ product, onAdd, onPress }) => {
             disabled={!available}
             accessibilityRole="button"
             accessibilityLabel={
-              available ? `Agregar ${product.name} al carrito` : `${product.name} no disponible`
+              adding
+                ? `Agregando ${product.name} al carrito`
+                : available
+                ? `Agregar ${product.name} al carrito`
+                : `${product.name} no disponible`
             }
-            accessibilityState={{ disabled: !available }}
+            accessibilityState={{ disabled: !available || adding, busy: adding }}
           >
             <Text style={styles.addButtonText}>
               {available ? 'Añadir al carrito' : 'No disponible'}
