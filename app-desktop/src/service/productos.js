@@ -21,7 +21,7 @@ function asegurarConexion() {
 
 export const productos = {
   /**
-   * Obtiene todos los productos activos directamente de la base de datos Supabase.
+   * Obtiene todos los productos (activos e inactivos) desde Supabase.
    * Lanza un error estricto si la base de datos está apagada o inaccesible.
    */
   async getAll() {
@@ -70,8 +70,7 @@ export const productos = {
       .from(TABLE)
       .select('*, cafeterias(*)')
       .eq('categoria_id', categoriaId)
-      .eq('activo', true)
-      
+      .eq('activo', true);
 
     if (error) {
       console.error('Error consultando categoría en Supabase:', error);
@@ -152,19 +151,51 @@ export const productos = {
   },
 
   /**
-   * Elimina lógicamente un producto en Supabase.
+   * Elimina un producto en Supabase.
+   * Si el producto ya está inactivo, se elimina físicamente de la tabla.
+   * Si está activo, se marca como inactivo (borrado lógico).
    */
   async delete(id) {
     asegurarConexion();
 
-    const { error } = await supabase
+    // Primero obtener el producto actual para saber si ya está inactivo
+    const { data: productoExistente, error: errorFetch } = await supabase
       .from(TABLE)
-      .update({ activo: false,  })
-      .eq('id', id);
+      .select('activo')
+      .eq('id', id)
+      .single();
 
-    if (error) {
-      console.error('Error al eliminar en Supabase:', error);
-      throw new Error(`No se pudo eliminar el producto en la base de datos: ${error.message || 'Sin conexión'}`);
+    if (errorFetch) {
+      console.error('Error al obtener producto para eliminar:', errorFetch);
+      throw new Error(`No se pudo obtener el producto: ${errorFetch.message || 'Sin conexión'}`);
+    }
+
+    if (!productoExistente) {
+      throw new Error('Producto no encontrado');
+    }
+
+    if (!productoExistente.activo) {
+      // Ya está inactivo: eliminar físicamente de la tabla
+      const { error } = await supabase
+        .from(TABLE)
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error al eliminar producto en Supabase:', error);
+        throw new Error(`No se pudo eliminar el producto en la base de datos: ${error.message || 'Sin conexión'}`);
+      }
+    } else {
+      // Está activo: borrado lógico (marcar como inactivo)
+      const { error } = await supabase
+        .from(TABLE)
+        .update({ activo: false })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error al eliminar en Supabase:', error);
+        throw new Error(`No se pudo eliminar el producto en la base de datos: ${error.message || 'Sin conexión'}`);
+      }
     }
 
     return true;
@@ -210,7 +241,7 @@ export const productos = {
     }
 
     return this.update(id, payload);
-  }
+  },
 };
 
 export const productosService = productos;
