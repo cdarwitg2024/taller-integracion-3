@@ -67,6 +67,8 @@ export const useDisponibilidadProductos = (cafeteriaId) => {
               stock: Number(nuevo.stock) || 0,
               activo: nuevo.activo,
               eliminadoEn: nuevo.eliminado_en ?? null,
+              // Precio recibido por Realtime: se propaga para actualizar solo este producto
+              precio: nuevo.precio != null ? Number(nuevo.precio) : undefined,
               ts: Date.now(),
             },
             // Solo guardamos los últimos cambios: la pantalla consume el

@@ -141,22 +141,29 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     }
 
     if (Number.isFinite(pendiente.id)) {
-      setProducts((prev) =>
-        prev.map((p) => {
+      setProducts((prev) => {
+        const stock = pendiente.stock;
+        const activo = pendiente.activo;
+        const eliminado = Boolean(pendiente.eliminadoEn);
+        const precio = pendiente.precio;
+
+        // Si lo dejaron inactivo o lo borraron, sale de la lista
+        if (!activo || eliminado) {
+          return prev.filter((x) => x.id !== pendiente.id);
+        }
+
+        // Actualiza solo el producto correspondiente, conserva otros campos.
+        // No recarga menú; Realtime dispara actualización de estado.
+        // Nota: esto NO revaloriza transaccionalmente un carrito ya creado.
+        return prev.map((p) => {
           if (p.id !== pendiente.id) return p;
-
-          const stock = pendiente.stock;
-          const activo = pendiente.activo;
-          const eliminado = Boolean(pendiente.eliminadoEn);
-
-          // Si lo dejaron inactivo o lo borraron, sale de la lista
-          if (!activo || eliminado) {
-            return prev.filter((x) => x.id !== pendiente.id);
+          const next = { ...p, stock, available: stock > 0 };
+          if (precio != null && Number.isFinite(precio)) {
+            next.price = precio;
           }
-
-          return { ...p, stock, available: stock > 0 };
-        })
-      );
+          return next;
+        });
+      });
     }
   }, [cambios]);
 
