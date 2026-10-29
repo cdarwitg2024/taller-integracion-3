@@ -30,8 +30,7 @@ export const productos = {
     const { data, error } = await supabase
       .from(TABLE)
       .select('*, cafeterias(*)')
-      .eq('activo', true)
-            .order('id', { ascending: true });
+      .order('id', { ascending: true });
 
     if (error) {
       console.error('Error consultando productos en Supabase:', error);
