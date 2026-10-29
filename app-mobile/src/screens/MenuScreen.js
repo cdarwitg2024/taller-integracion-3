@@ -141,6 +141,11 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     }
 
     if (Number.isFinite(pendiente.id)) {
+      // Evento Realtime → actualización de estado (sin recargar menú)
+      // - Solo actualiza el producto con id coincidente
+      // - No modifica productos de otra cafetería (filtro por cafeteria_id en hook)
+      // - Conserva campos no modificados
+      // - No revaloriza transaccionalmente un carrito ya creado
       setProducts((prev) => {
         const stock = pendiente.stock;
         const activo = pendiente.activo;
