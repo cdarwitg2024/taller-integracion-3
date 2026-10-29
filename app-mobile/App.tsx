@@ -499,6 +499,34 @@ function AppContent() {
         return;
       }
 
+      // Validar explícitamente que el pedido tenga un identificador válido.
+      // Sin un id numerico mayor a cero no sabemos a que pedido se refiere la
+      // respuesta, por lo que no se puede confirmar el pago ni vaciar el carrito.
+      if (
+        !resultado.pedido_id ||
+        typeof resultado.pedido_id !== 'number' ||
+        resultado.pedido_id <= 0
+      ) {
+        Alert.alert(
+          'Error inesperado',
+          'La respuesta del servidor no incluye un identificador de pedido valido.'
+        );
+        return;
+      }
+
+      // Validar que los campos minimos esperados esten presentes antes de
+      // vaciar el carrito. Una respuesta incompleta no debe borrar el carrito.
+      if (
+        resultado.total === undefined ||
+        resultado.saldo_restante === undefined
+      ) {
+        Alert.alert(
+          'Error inesperado',
+          'La respuesta del servidor esta incompleta.'
+        );
+        return;
+      }
+
       // Solo aca se vacia el carrito: el pago se aprobo y el saldo se debito.
       clearCart();
       setPedidoConfirmado({
