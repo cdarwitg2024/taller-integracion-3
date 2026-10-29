@@ -154,6 +154,10 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
 
         // Si lo dejaron inactivo o lo borraron, sale de la lista
         if (!activo || eliminado) {
+          // Si el detalle abierto corresponde a este producto, se cierra
+          setProductoDetalle((actual) =>
+            actual && actual.id === pendiente.id ? null : actual
+          );
           return prev.filter((x) => x.id !== pendiente.id);
         }
 
@@ -534,7 +538,9 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
       {productoDetalle && (
         <View style={styles.detailOverlay}>
           <ProductDetail
-            product={productoDetalle}
+            product={
+              products.find((p) => p.id === productoDetalle.id) || productoDetalle
+            }
             cafeteriaName={cafeteria?.nombre}
             onAdd={handleAdd}
             onClose={() => setProductoDetalle(null)}
