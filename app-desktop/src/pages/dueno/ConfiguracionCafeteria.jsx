@@ -9,7 +9,7 @@
 //   4. AppLayout inyecta automáticamente el header consistente.
 
 import React, { useState } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, Snackbar, Alert } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 
 import BaseButton from '../../components/ui/BaseButton';
@@ -27,13 +27,25 @@ export default function ConfiguracionCafeteria({ currentUser }) {
     horarioCierre: '20:00',
   });
 
+  // Estado para la notificación flotante (Snackbar)
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
   const handleChange = (key) => (e) => {
     setConfig({ ...config, [key]: e.target.value });
   };
 
   const handleSave = () => {
     // Aquí se enviaría la actualización al backend
-    alert('Configuración guardada correctamente.');
+    setSnackbar({
+      open: true,
+      message: 'Configuración guardada correctamente.',
+      severity: 'success',
+    });
+  };
+
+  const handleCloseSnackbar = (event, reason) => {
+    if (reason === 'clickaway') return;
+    setSnackbar({ ...snackbar, open: false });
   };
 
   return (
@@ -121,6 +133,19 @@ export default function ConfiguracionCafeteria({ currentUser }) {
         </Box>
 
       </CardComponent>
+
+      {/* Snackbar flotante moderno en lugar del alert nativo */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3500}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%', borderRadius: '10px' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+
     </Box>
   );
 }
