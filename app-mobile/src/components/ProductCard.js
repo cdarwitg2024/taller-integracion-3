@@ -23,7 +23,7 @@ import {
  * `onAdd` se dispara únicamente si el producto está disponible. Quien lo use
  * (hoy el carrito, mañana el checkout) no tiene que volver a validar nada.
  */
-const ProductCard = ({ product, onAdd, onPress }) => {
+const ProductCard = ({ product, onAdd, onPress, adding = false }) => {
   const { available, stock, stockMin = 0 } = product;
 
   // Si la URL de la imagen existe pero no carga (404, host caído), caemos al
@@ -41,7 +41,7 @@ const ProductCard = ({ product, onAdd, onPress }) => {
   }, [product.imageUrl]);
 
   const handleAdd = () => {
-    if (!available) return;
+    if (!available || adding) return;
     onAdd?.(product);
   };
 
@@ -126,17 +126,17 @@ const ProductCard = ({ product, onAdd, onPress }) => {
           <Text style={styles.price}>${product.price.toLocaleString('es-CL')}</Text>
 
           <TouchableOpacity
-            style={[styles.addButton, !available && styles.disabledButton]}
+            style={[styles.addButton, (!available || adding) && styles.disabledButton]}
             onPress={handleAdd}
-            disabled={!available}
+            disabled={!available || adding}
             accessibilityRole="button"
             accessibilityLabel={
               available ? `Agregar ${product.name} al carrito` : `${product.name} no disponible`
             }
-            accessibilityState={{ disabled: !available }}
+            accessibilityState={{ disabled: !available || adding }}
           >
             <Text style={styles.addButtonText}>
-              {available ? 'Añadir al carrito' : 'No disponible'}
+              {available ? (adding ? 'Añadiendo...' : 'Añadir al carrito') : 'No disponible'}
             </Text>
           </TouchableOpacity>
         </View>

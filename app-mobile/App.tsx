@@ -303,18 +303,22 @@ function AppContent() {
     setActiveTab('cafeterias');
   };
 
+  const [navigating, setNavigating] = useState(false);
+
   const handleTabPress = (tab: AppTab) => {
     // Tocar la pestaña que ya está activa no debe hacer nada. Antes, tocar
     // "Cafeterías" estando dentro del menú de una cafetería ejecutaba el
     // setSelectedCafeteria(null) y te expulsaba al listado sin avisar.
-    if (tab === activeTab) {
+    if (tab === activeTab || navigating) {
       return;
     }
 
     // Cambiar de pestaña NO borra la cafetería seleccionada: si el usuario
     // estaba leyendo el menú de una cafetería, vuelve exactamente donde
     // estaba. Para salir del menú está el botón "‹" y el gesto de atrás.
+    setNavigating(true);
     setActiveTab(tab);
+    setTimeout(() => setNavigating(false), 150);
   };
 
   /**
@@ -604,7 +608,7 @@ function AppContent() {
         </SafeAreaView>
 
         {/* Contenido principal según la pestaña activa */}
-        <View style={styles.content}>
+        <View style={[styles.content, navigating && styles.contentNavigating]}>
           {activeTab === 'cafeterias' &&
             (selectedCafeteria ? (
               <MenuScreen
@@ -775,6 +779,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentNavigating: {
+    opacity: 0.96,
   },
   bottomNavigation: {
     height: 64,
