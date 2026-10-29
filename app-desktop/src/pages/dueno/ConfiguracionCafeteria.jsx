@@ -9,22 +9,13 @@
 //   4. AppLayout inyecta automáticamente el header consistente.
 
 import React, { useState } from 'react';
-import {
-  Box,
-  Typography,
-  Button,
-  Card,
-  CardContent,
-  TextField,
-  Chip,
-} from '@mui/material';
-import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import { Box, Typography, Snackbar, Alert } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 
-import Button from '../components/Button';
-import Input from '../components/Input';
-import CardComponent from '../components/Card';
-import { colors, spacing, typography } from '../theme';
+import BaseButton from '../../components/ui/BaseButton';
+import Input from '../../components/ui/BaseInput';
+import CardComponent from '../../components/ui/BaseCard';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../design/tokens';
 
 export default function ConfiguracionCafeteria({ currentUser }) {
   const [config, setConfig] = useState({
@@ -36,111 +27,125 @@ export default function ConfiguracionCafeteria({ currentUser }) {
     horarioCierre: '20:00',
   });
 
+  // Estado para la notificación flotante (Snackbar)
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
   const handleChange = (key) => (e) => {
     setConfig({ ...config, [key]: e.target.value });
   };
 
   const handleSave = () => {
     // Aquí se enviaría la actualización al backend
-    alert('Configuración guardada correctamente.');
+    setSnackbar({
+      open: true,
+      message: 'Configuración guardada correctamente.',
+      severity: 'success',
+    });
+  };
+
+  const handleCloseSnackbar = (event, reason) => {
+    if (reason === 'clickaway') return;
+    setSnackbar({ ...snackbar, open: false });
   };
 
   return (
-    <Box sx={{ padding: spacing.lg }}>
-      {/* Cabecera de la sección */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: spacing.sm, mb: spacing.lg }}>
-        <SettingsOutlinedIcon sx={{ fontSize: 32, color: colors.cafeOscuro }} />
-        <Box>
-          <Typography variant="h5" fontWeight={typography.pesoBold} color={colors.cafeOscuro}>
-            Configuración de Cafetería
-          </Typography>
-          <Typography variant="cuerpoPequeno" color={colors.textoSecundario}>
-            Administra los datos generales de tu cafetería.
-          </Typography>
-        </Box>
-      </Box>
-
-      <CardComponent variant="elevated" padding="lg">
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: spacing.lg }}>
-          <Box>
-            <Typography variant="cuerpoPequeno" color={colors.textoSecundario} mb={spacing.xs}>
+    <Box sx={{ padding: SPACING.sm, maxWidth: '950px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+      
+      {/* Tarjeta contenedora centrada y compacta */}
+      <CardComponent variant="outlined" padding="md">
+        
+        {/* Grilla compacta de inputs (3 arriba, 3 abajo) */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: SPACING.md, mb: SPACING.md, mt: 0.5 }}>
+          
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Typography variant="body2" fontWeight={600} color={COLORS.textPrimary} sx={{ fontSize: '0.85rem' }}>
               Nombre de la Cafetería
             </Typography>
             <Input
-              label="Nombre"
               placeholder="Cafetería Central"
               value={config.nombreCafeteria}
-              onChangeText={handleChange('nombreCafeteria')}
+              onChange={(e) => setConfig({ ...config, nombreCafeteria: e.target.value })}
             />
           </Box>
 
-          <Box>
-            <Typography variant="cuerpoPequeno" color={colors.textoSecundario} mb={spacing.xs}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Typography variant="body2" fontWeight={600} color={COLORS.textPrimary} sx={{ fontSize: '0.85rem' }}>
               Dirección
             </Typography>
             <Input
-              label="Dirección"
               placeholder="Av. Siempre Viva 123, Campus UCT"
               value={config.direccion}
-              onChangeText={handleChange('direccion')}
+              onChange={(e) => setConfig({ ...config, direccion: e.target.value })}
             />
           </Box>
 
-          <Box>
-            <Typography variant="cuerpoPequeno" color={colors.textoSecundario} mb={spacing.xs}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Typography variant="body2" fontWeight={600} color={COLORS.textPrimary} sx={{ fontSize: '0.85rem' }}>
               Teléfono
             </Typography>
             <Input
-              label="Teléfono"
               placeholder="+56 2 2345 6789"
               value={config.telefono}
-              onChangeText={handleChange('telefono')}
+              onChange={(e) => setConfig({ ...config, telefono: e.target.value })}
             />
           </Box>
 
-          <Box>
-            <Typography variant="cuerpoPequeno" color={colors.textoSecundario} mb={spacing.xs}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Typography variant="body2" fontWeight={600} color={COLORS.textPrimary} sx={{ fontSize: '0.85rem' }}>
               Correo Electrónico
             </Typography>
             <Input
-              label="Correo"
               placeholder="contacto@cafeteriacentral.cl"
               value={config.email}
-              onChangeText={handleChange('email')}
+              onChange={(e) => setConfig({ ...config, email: e.target.value })}
             />
           </Box>
 
-          <Box>
-            <Typography variant="cuerpoPequeno" color={colors.textoSecundario} mb={spacing.xs}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Typography variant="body2" fontWeight={600} color={COLORS.textPrimary} sx={{ fontSize: '0.85rem' }}>
               Hora de Apertura
             </Typography>
             <Input
-              label="Hora"
               placeholder="07:00"
               value={config.horarioApertura}
-              onChangeText={handleChange('horarioApertura')}
+              onChange={(e) => setConfig({ ...config, horarioApertura: e.target.value })}
             />
           </Box>
 
-          <Box>
-            <Typography variant="cuerpoPequeno" color={colors.textoSecundario} mb={spacing.xs}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Typography variant="body2" fontWeight={600} color={COLORS.textPrimary} sx={{ fontSize: '0.85rem' }}>
               Hora de Cierre
             </Typography>
             <Input
-              label="Hora"
               placeholder="20:00"
               value={config.horarioCierre}
-              onChangeText={handleChange('horarioCierre')}
+              onChange={(e) => setConfig({ ...config, horarioCierre: e.target.value })}
             />
           </Box>
+
         </Box>
 
-        <Box sx={{ mt: spacing.lg, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button variant="contained" color="primary" startIcon={<SaveIcon />} onClick={handleSave}>
+        {/* Botón inferior alineado */}
+        <Box sx={{ pt: SPACING.xs, borderTop: `1px solid rgba(0, 0, 0, 0.06)`, display: 'flex', justifyContent: 'flex-end' }}>
+          <BaseButton variant="contained" color="primary" size="sm" startIcon={<SaveIcon />} onClick={handleSave}>
             Guardar Cambios
-          </Button>
+          </BaseButton>
         </Box>
+
       </CardComponent>
+
+      {/* Snackbar flotante moderno en lugar del alert nativo */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3500}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%', borderRadius: '10px' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+
     </Box>
   );
 }

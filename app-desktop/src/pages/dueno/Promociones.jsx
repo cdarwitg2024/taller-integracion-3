@@ -1,38 +1,15 @@
 // ─── Pantalla: Promociones (Panel Dueño) ──────────────────────────────────────
 // Gestión de promociones activas de la cafetería.
 // Accesible solo para usuarios con rol "dueño".
-//
-// Flujo:
-//   1. app.jsx define la ruta /dueno/promociones y el ítem del menú.
-//   2. Sidebar renderiza el ítem "Promociones".
-//   3. Al hacer clic, se renderiza este componente dentro de AppLayout.
-//   4. AppLayout inyecta automáticamente el header consistente (título/subtítulo).
 
 import React, { useState } from 'react';
-import {
-  Box,
-  Typography,
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-} from '@mui/material';
+import { Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 
-import Button from '../components/Button';
-import Input from '../components/Input';
-import Card from '../components/Card';
-import { colors, spacing, typography } from '../theme';
+import BaseButton from '../../components/ui/BaseButton';
+import Input from '../../components/ui/BaseInput';
+import Card from '../../components/ui/BaseCard';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../design/tokens';
 
 const initialPromociones = [
   { id: 1, nombre: 'Café Americano 2x1', descripcion: 'Lunes y martes de 7:00 a 10:00', descuento: '50%', activo: true },
@@ -45,6 +22,10 @@ export default function Promociones({ currentUser }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ nombre: '', descripcion: '', descuento: '', activo: true });
+
+  const total = promociones.length;
+  const activas = promociones.filter((p) => p.activo).length;
+  const inactivas = total - activas;
 
   const handleOpenDialog = () => {
     setForm({ nombre: '', descripcion: '', descuento: '', activo: true });
@@ -66,11 +47,8 @@ export default function Promociones({ currentUser }) {
 
   const handleSave = () => {
     if (!form.nombre || !form.descuento) return;
-
     if (editing) {
-      setPromociones(
-        promociones.map((p) => (p.id === form.id ? { ...p, ...form } : p))
-      );
+      setPromociones(promociones.map((p) => (p.id === form.id ? { ...p, ...form } : p)));
     } else {
       const newId = Math.max(...promociones.map((p) => p.id), 0) + 1;
       setPromociones([...promociones, { ...form, id: newId }]);
@@ -79,28 +57,28 @@ export default function Promociones({ currentUser }) {
   };
 
   return (
-    <Box sx={{ padding: spacing.lg }}>
-      {/* Cabecera de la sección */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: spacing.lg }}>
-        <Box>
-          <Typography variant="h5" fontWeight={typography.pesoBold} color={colors.cafeOscuro}>
-            Promociones
-          </Typography>
-          <Typography variant="cuerpoPequeno" color={colors.textoSecundario}>
-            Administra las promociones activas de la cafetería.
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          size="sm"
-          startIcon={<AddIcon />}
-          onClick={handleOpenDialog}
-        >
+    <Box sx={{ padding: SPACING.lg }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: SPACING.lg }}>
+        <BaseButton variant="contained" size="sm" startIcon={<AddIcon />} onClick={handleOpenDialog}>
           Agregar Promoción
-        </Button>
+        </BaseButton>
       </Box>
 
-      {/* Tarjeta con lista de promociones */}
+      <Box sx={{ display: 'flex', gap: SPACING.md, mb: SPACING.lg, flexWrap: 'wrap' }}>
+        <Card variant="outlined" padding="md" sx={{ flex: 1, minWidth: 160 }}>
+          <Typography variant="body2" color={COLORS.textSecondary}>Total</Typography>
+          <Typography variant="h4" fontWeight={TYPOGRAPHY.fontWeightBold} color={COLORS.primary}>{total}</Typography>
+        </Card>
+        <Card variant="outlined" padding="md" sx={{ flex: 1, minWidth: 160 }}>
+          <Typography variant="body2" color={COLORS.textSecondary}>Activas</Typography>
+          <Typography variant="h4" fontWeight={TYPOGRAPHY.fontWeightBold} color={COLORS.success}>{activas}</Typography>
+        </Card>
+        <Card variant="outlined" padding="md" sx={{ flex: 1, minWidth: 160 }}>
+          <Typography variant="body2" color={COLORS.textSecondary}>Inactivas</Typography>
+          <Typography variant="h4" fontWeight={TYPOGRAPHY.fontWeightBold} color={COLORS.error}>{inactivas}</Typography>
+        </Card>
+      </Box>
+
       <Card variant="outlined" padding="lg">
         <TableContainer component={Paper}>
           <Table size="small">
@@ -123,66 +101,44 @@ export default function Promociones({ currentUser }) {
               ) : (
                 promociones.map((p) => (
                   <TableRow key={p.id}>
-                    <TableCell component="th" scope="row">
-                      {p.nombre}
-                    </TableCell>
+                    <TableCell component="th" scope="row">{p.nombre}</TableCell>
                     <TableCell>{p.descripcion}</TableCell>
                     <TableCell>{p.descuento}</TableCell>
                     <TableCell>
-                      <span style={{ color: p.activo ? colors.verde : colors.rojo }}>
+                      <span style={{ color: p.activo ? COLORS.success : COLORS.error }}>
                         {p.activo ? 'Activo' : 'Inactivo'}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Button size="sm" onClick={() => handleEdit(p)}>
-                        Editar
-                      </Button>
-                      <Button size="sm" onClick={() => handleDelete(p.id)}>
-                        Eliminar
-                      </Button>
+                      <BaseButton size="sm" onClick={() => handleEdit(p)}>Editar</BaseButton>
+                      <BaseButton size="sm" onClick={() => handleDelete(p.id)}>Eliminar</BaseButton>
                     </TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
-          </TableContainer>
-        </Card>
+          </Table>
+        </TableContainer>
+      </Card>
 
-        {/* Diálogo para crear/editar promoción */}
-        <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm">
-          <DialogTitle>{editing ? 'Editar Promoción' : 'Nueva Promoción'}</DialogTitle>
-          <DialogContent>
-            <Input
-              label="Nombre"
-              placeholder="Ej. Café Americano 2x1"
-              value={form.nombre}
-              onChangeText={(t) => setForm({ ...form, nombre: t })}
-            />
-            <Input
-              label="Descripción"
-              placeholder="Ej. Lunes y martes de 7:00 a 10:00"
-              value={form.descripcion}
-              onChangeText={(t) => setForm({ ...form, descripcion: t })}
-            />
-            <Input
-              label="Descuento"
-              placeholder="Ej. 50%"
-              value={form.descuento}
-              onChangeText={(t) => setForm({ ...form, descuento: t })}
-            />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: spacing.sm, mt: spacing.sm }}>
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm">
+        <DialogTitle>{editing ? 'Editar Promoción' : 'Nueva Promoción'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm, mt: SPACING.sm }}>
+            <Input label="Nombre" placeholder="Ej. Café Americano 2x1" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+            <Input label="Descripción" placeholder="Ej. Lunes y martes de 7:00 a 10:00" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
+            <Input label="Descuento" placeholder="Ej. 50%" value={form.descuento} onChange={(e) => setForm({ ...form, descuento: e.target.value })} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
               <input type="checkbox" checked={form.activo} onChange={(e) => setForm({ ...form, activo: e.target.checked })} />
-              <Typography variant="cuerpoPequeno">Activo</Typography>
+              <Typography variant="body2">Activo</Typography>
             </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button variant="contained" color="primary" onClick={handleSave}>
-              Guardar
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <BaseButton onClick={() => setDialogOpen(false)}>Cancelar</BaseButton>
+          <BaseButton variant="contained" color="primary" onClick={handleSave}>Guardar</BaseButton>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
