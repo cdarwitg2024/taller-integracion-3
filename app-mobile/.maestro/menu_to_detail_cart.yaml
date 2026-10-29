@@ -1,0 +1,23 @@
+appId: com.coffeefastapp
+---
+- launchApp
+- waitForAnimationToEnd
+- takeScreenshot: s2t5_01_menu
+# Try to tap first product/card if visible
+- tapOn:
+    id: ".*product.*"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: s2t5_02_detail
+# Try to add to cart
+- tapOn:
+    text: ".*Agregar.*"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: s2t5_03_after_add
+# Navigate to cart
+- tapOn:
+    text: ".*Carrito.*"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: s2t5_04_cart

@@ -1,0 +1,15 @@
+appId: com.coffeefastapp
+---
+- launchApp
+- waitForAnimationToEnd
+- takeScreenshot: s2t5_menu
+- tapOn:
+    text: ".*Añadir.*|.*Agregar.*"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: s2t5_after_tap
+- tapOn:
+    text: "Carrito"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: s2t5_cart
