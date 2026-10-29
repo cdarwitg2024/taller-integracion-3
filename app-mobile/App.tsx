@@ -337,12 +337,17 @@ function AppContent() {
     cart.length > 0 ? { id: cart[0].cafeteriaId, nombre: cart[0].cafeteriaNombre } : null;
 
   /** Agrega un producto al carrito. Sin preguntas: la cafetería ya coincide. */
+  const MAX_CANTIDAD_POR_ITEM = 999;
+
   const agregarProducto = (product: Product, cafeteria: Cafeteria) => {
     const cafeteriaId = Number(cafeteria.id);
 
     setCart((currentCart: CartItem[]) => {
       const existing = currentCart.find((item) => item.id === product.id);
       if (existing) {
+        if (existing.quantity >= MAX_CANTIDAD_POR_ITEM) {
+          return currentCart;
+        }
         return currentCart.map((item) =>
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
@@ -396,15 +401,27 @@ function AppContent() {
       return;
     }
 
+    // Limitar cantidad al máximo del contrato backend
+    const existing = cart.find((item) => item.id === product.id);
+    if (existing && existing.quantity >= MAX_CANTIDAD_POR_ITEM) {
+      Alert.alert('Límite alcanzado', `Máximo ${MAX_CANTIDAD_POR_ITEM} unidades por producto.`);
+      return;
+    }
+
     agregarProducto(product, cafeteria);
   };
 
   const increaseQuantity = (id: number) => {
-    setCart((currentCart: CartItem[]) =>
-      currentCart.map((item) =>
-        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
-      )
-    );
+    setCart((currentCart: CartItem[]) => {
+      const item = currentCart.find((i) => i.id === id);
+      if (item && item.quantity >= MAX_CANTIDAD_POR_ITEM) {
+        Alert.alert('Límite alcanzado', `Máximo ${MAX_CANTIDAD_POR_ITEM} unidades por producto.`);
+        return currentCart;
+      }
+      return currentCart.map((i) =>
+        i.id === id ? { ...i, quantity: i.quantity + 1 } : i
+      );
+    });
   };
 
   const decreaseQuantity = (id: number) => {
