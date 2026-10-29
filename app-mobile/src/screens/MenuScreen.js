@@ -300,11 +300,19 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     fetchProducts({ silent: true });
   };
 
+  const [addingId, setAddingId] = useState(null);
+
   const handleAdd = (product) => {
     // Cinturón de seguridad también del lado del carrito: nunca agregar
     // un producto que no sea de esta cafetería o que esté agotado.
     if (!product?.available) return;
     if (Number(product.cafeteriaId) !== Number(cafeteriaId)) return;
+    // Pequeña transición/feedback de carga moderado al agregar desde catálogo
+    const pid = product?.id;
+    if (pid != null) {
+      setAddingId(pid);
+      setTimeout(() => setAddingId(null), 250);
+    }
     // Se pasa la cafetería para que el carrito sepa a qué pedido pertenece
     // cada ítem y no mezcle productos de dos menus distintos.
     onAddToCart?.(product, cafeteria);
@@ -420,6 +428,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
                 product={product}
                 onAdd={handleAdd}
                 onPress={setProductoDetalle}
+                adding={addingId != null && String(addingId) === String(product.id)}
               />
             ))}
           </View>

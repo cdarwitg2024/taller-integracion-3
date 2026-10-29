@@ -204,6 +204,7 @@ const CartScreen = ({
                 title={paying ? 'Procesando pago...' : 'Proceder al Pago'}
                 onPress={handleCheckout}
                 disabled={paying || !franjaSeleccionada}
+                loading={paying}
               />
 
               <Text style={styles.footerText}>
