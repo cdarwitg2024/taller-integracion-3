@@ -141,22 +141,20 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     }
 
     if (Number.isFinite(pendiente.id)) {
-      setProducts((prev) =>
-        prev.map((p) => {
-          if (p.id !== pendiente.id) return p;
+      setProducts((prev) => {
+        const stock = pendiente.stock;
+        const activo = pendiente.activo;
+        const eliminado = Boolean(pendiente.eliminadoEn);
 
-          const stock = pendiente.stock;
-          const activo = pendiente.activo;
-          const eliminado = Boolean(pendiente.eliminadoEn);
+        // Si lo dejaron inactivo o lo borraron, sale de la lista
+        if (!activo || eliminado) {
+          return prev.filter((x) => x.id !== pendiente.id);
+        }
 
-          // Si lo dejaron inactivo o lo borraron, sale de la lista
-          if (!activo || eliminado) {
-            return prev.filter((x) => x.id !== pendiente.id);
-          }
-
-          return { ...p, stock, available: stock > 0 };
-        })
-      );
+        return prev.map((p) =>
+          p.id === pendiente.id ? { ...p, stock, available: stock > 0 } : p
+        );
+      });
     }
   }, [cambios]);
 
