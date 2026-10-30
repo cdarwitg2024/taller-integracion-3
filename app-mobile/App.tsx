@@ -26,7 +26,6 @@ import PerfilScreen from './src/screens/PerfilScreen';
 import { Cafeteria } from './src/types/cafeteria';
 import { CartProvider, useCart } from './src/context/CartContext';
 import { useCartTotals } from './src/hooks/useCartTotals';
-import { apiPost, ApiError } from './src/services/backendClient';
 
 const logo = require('./assets/icon.png');
 
@@ -462,32 +461,33 @@ function AppContent() {
     const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
 
     try {
-      // El total NO se manda. ms-pedidos lo cotiza contra ms-menus y la RPC
-      // `procesar_pago` lo recalcula desde productos.precio: si se enviara,
-      // un cliente podria pagar $100 un sándwich de $2.000.
-      const cuerpo = {
-        cafeteria_id: cafeteriaId,
-        items: cart.map((item) => ({
+      // El total NO se manda. La RPC procesar_pago en Supabase lo recalcula
+      // desde productos.precio para garantizar precios autoritativos.
+      const { data, error } = await supabase.rpc('procesar_pago', {
+        p_cafeteria_id: cafeteriaId,
+        p_items: cart.map((item) => ({
           producto_id: item.id,
           cantidad: item.quantity,
         })),
-        franja_retiro: franjaRetiro.franja,
-      };
+        p_franja_retiro: franjaRetiro.franja,
+      });
 
-      const respuesta = await apiPost<RespuestaCrearPedido | null>(
-        '/api/pedidos',
-        cuerpo
-      );
+      if (error) {
+        // DEBUG TEMPORAL — eliminar antes del PR final
+        console.error('[checkout] supabase.rpc error:', JSON.stringify(error));
+        Alert.alert(
+          'No se pudo procesar el pago',
+          `[DEBUG] ${error.message ?? error.code ?? JSON.stringify(error)}`
+        );
+        return;
+      }
 
-      // El backend responde HTTP 201 con `{ ok: true, pedido: <retorno de
-      // procesar_pago> }`. Ojo: dentro de ese 201, `pedido` puede traer
-      // `ok: false` (p. ej. saldo insuficiente), así que el chequeo real es
-      // `resultado.ok` y no el código HTTP.
-      const resultado = respuesta?.pedido ?? null;
+      const resultado = data as PagoResult | null;
 
+      // 1. Validar explícitamente el resultado exitoso
       if (!resultado || !resultado.ok) {
         if (resultado?.motivo === 'saldo_insuficiente') {
-          // Carrito intacto a proposito: el usuario recarga y reintenta.
+          // Carrito intacto a propósito: el usuario recarga y reintenta.
           Alert.alert(
             'Saldo insuficiente en la Wallet',
             `Tu pedido cuesta ${formatCLP(resultado.total ?? 0)} y te ` +
@@ -503,40 +503,44 @@ function AppContent() {
         return;
       }
 
-      // Validar explícitamente que el pedido tenga un identificador válido.
-      // Sin un id numerico mayor a cero no sabemos a que pedido se refiere la
-      // respuesta, por lo que no se puede confirmar el pago ni vaciar el carrito.
+      // 2. Validar identificador de pedido válido (> 0 e integer). No mostrar #0 ficticio.
       if (
         !resultado.pedido_id ||
         typeof resultado.pedido_id !== 'number' ||
+        !Number.isInteger(resultado.pedido_id) ||
         resultado.pedido_id <= 0
       ) {
         Alert.alert(
           'Error inesperado',
-          'La respuesta del servidor no incluye un identificador de pedido valido.'
+          'La respuesta del servidor no incluye un identificador de pedido válido.'
         );
         return;
       }
 
-      // Validar que los campos minimos esperados esten presentes antes de
-      // vaciar el carrito. Una respuesta incompleta no debe borrar el carrito.
+      // 3. Validar que los campos mínimos esperados estén presentes y completos.
       if (
         resultado.total === undefined ||
-        resultado.saldo_restante === undefined
+        resultado.total === null ||
+        typeof resultado.total !== 'number' ||
+        isNaN(resultado.total) ||
+        resultado.saldo_restante === undefined ||
+        resultado.saldo_restante === null ||
+        typeof resultado.saldo_restante !== 'number' ||
+        isNaN(resultado.saldo_restante)
       ) {
         Alert.alert(
           'Error inesperado',
-          'La respuesta del servidor esta incompleta.'
+          'La respuesta del servidor está incompleta.'
         );
         return;
       }
 
-      // Solo aca se vacia el carrito: el pago se aprobo y el saldo se debito.
+      // 4. Solo un resultado confirmado y completo limpia el carrito:
       clearCart();
       setPedidoConfirmado({
-        pedido_id: resultado.pedido_id ?? 0,
-        total: resultado.total ?? 0,
-        saldo_restante: resultado.saldo_restante ?? 0,
+        pedido_id: resultado.pedido_id,
+        total: resultado.total,
+        saldo_restante: resultado.saldo_restante,
         franja_retiro: resultado.franja_retiro,
         estado: resultado.estado,
         pago_estado: resultado.pago_estado,
@@ -546,17 +550,12 @@ function AppContent() {
       Alert.alert(
         'Pago aprobado',
         `Tu pedido fue pagado con Wallet.\n` +
-          `Saldo restante: ${formatCLP(Number(resultado.saldo_restante ?? 0))}.`
+          `Saldo restante: ${formatCLP(resultado.saldo_restante)}.`
       );
     } catch (e) {
-      // `ApiError` cubre la misma falla que antes devolvía `error` de la RPC
-      // (red, API caída, sesión vencida), por lo que conserva su alerta; el
-      // resto es inesperado y conserva la suya.
       Alert.alert(
         'No se pudo procesar el pago',
-        e instanceof ApiError
-          ? 'Revisa tu conexión e inténtalo nuevamente.'
-          : 'Ocurrio un error inesperado. Intentalo nuevamente.'
+        'Ocurrio un error inesperado. Intentalo nuevamente.'
       );
     } finally {
       setPaying(false);
