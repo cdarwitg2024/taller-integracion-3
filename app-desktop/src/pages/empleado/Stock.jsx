@@ -47,11 +47,25 @@ function StockEmpleado({ currentUser }) {
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
+  const cafeteriaIdEmpleado = Number(
+    currentUser?.cafeteria_id ??
+    currentUser?.cafeteriaId ??
+    currentUser?.usuario?.cafeteria_id ??
+    currentUser?.perfil?.cafeteria_id
+  );
+  const sinCafeteriaAsociada = !Number.isFinite(cafeteriaIdEmpleado);
+
   const cargarProductos = async () => {
+    if (sinCafeteriaAsociada) {
+      setProductos([]);
+      setError('Este empleado no tiene una cafetería asociada. No es posible consultar productos ni solicitudes de stock.');
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError('');
-      const data = await productosService.getAll();
+      const data = await productosService.getAll(cafeteriaIdEmpleado);
       setProductos(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error cargando productos:', err);
@@ -63,7 +77,7 @@ function StockEmpleado({ currentUser }) {
 
   useEffect(() => {
     cargarProductos();
-  }, []);
+  }, [cafeteriaIdEmpleado, sinCafeteriaAsociada]);
 
   const filteredProductos = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -128,13 +142,21 @@ function StockEmpleado({ currentUser }) {
   };
 
   const handleRegistrarSolicitud = async (cantidadSolicitada) => {
+    if (sinCafeteriaAsociada) {
+      setSnackbar({
+        open: true,
+        message: 'Este empleado no tiene una cafetería asociada. No es posible registrar solicitudes de stock.',
+        severity: 'error',
+      });
+      return;
+    }
     if (!productoSeleccionado || !cantidadSolicitada || cantidadSolicitada <= 0) return;
     try {
       await solicitudesStockService.crearSolicitud({
         producto_id: productoSeleccionado.id,
         nombre_producto: productoSeleccionado.nombre,
         cantidad_solicitada: cantidadSolicitada,
-        cafeteria_id: productoSeleccionado.cafeteria_id || null,
+        cafeteria_id: cafeteriaIdEmpleado,
         usuario_id: currentUser?.id || currentUser?.user_id || null,
         observaciones: 'Solicitud desde módulo de Stock (Empleado)',
       });
@@ -303,18 +325,16 @@ function StockEmpleado({ currentUser }) {
       )}
 
       {/* Diálogo reutilizado para solicitar cantidad */}
-      {productoSeleccionado && (
-        <ModificarStockDialog
-          open={dialogOpen}
-          onClose={handleDialogClose}
-          producto={productoSeleccionado}
-          modoSolicitud
-          titulo="Solicitar reposición de stock"
-          subtitulo={`Solicitar stock para ${productoSeleccionado.nombre}`}
-          textoBotonGuardar="Registrar solicitud"
-          onSolicitar={handleRegistrarSolicitud}
-        />
-      )}
+      <ModificarStockDialog
+        open={dialogOpen && !!productoSeleccionado}
+        onClose={handleDialogClose}
+        producto={productoSeleccionado}
+        modoSolicitud
+        titulo="Solicitar reposición de stock"
+        subtitulo={productoSeleccionado ? `Solicitar stock para ${productoSeleccionado.nombre}` : ''}
+        textoBotonGuardar="Registrar solicitud"
+        onSolicitar={handleRegistrarSolicitud}
+      />
 
       {/* Snackbar */}
       <Snackbar

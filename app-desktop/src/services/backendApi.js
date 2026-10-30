@@ -2,7 +2,7 @@ export const BASE_BACKEND =
   import.meta.env?.VITE_BACKEND || 'http://localhost:3000';
 
 export const CAFETERIA_ID =
-  (import.meta.env?.VITE_CAFETERIA_ID && Number(import.meta.env.VITE_CAFETERIA_ID)) || 1;
+  import.meta.env?.VITE_CAFETERIA_ID ? Number(import.meta.env.VITE_CAFETERIA_ID) : null;
 
 async function request(url, options = {}) {
   const res = await fetch(url, {

@@ -24,13 +24,22 @@ export const productos = {
    * Obtiene todos los productos (activos e inactivos) desde Supabase.
    * Lanza un error estricto si la base de datos está apagada o inaccesible.
    */
-  async getAll() {
+  async getAll(cafeteriaId = null, soloActivos = false) {
     asegurarConexion();
+    const cid = cafeteriaId !== null && cafeteriaId !== undefined ? Number(cafeteriaId) : null;
+    if (cafeteriaId !== null && cafeteriaId !== undefined && !Number.isFinite(cid)) {
+      throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
+    }
 
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*, cafeterias(*)')
-      .order('id', { ascending: true });
+    let query = supabase.from(TABLE).select('*, cafeterias(*)');
+    if (Number.isFinite(cid)) {
+      query = query.eq('cafeteria_id', cid);
+    }
+    if (soloActivos) {
+      query = query.eq('activo', true);
+    }
+
+    const { data, error } = await query.order('id', { ascending: true });
 
     if (error) {
       console.error('Error consultando productos en Supabase:', error);

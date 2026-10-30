@@ -219,11 +219,16 @@ export const pedidosService = {
     if (!isSupabaseConfigured) {
       throw new Error('Supabase no está configurado en el cliente');
     }
+    const cid = cafeteriaId !== null && cafeteriaId !== undefined ? Number(cafeteriaId) : null;
+    if (cafeteriaId !== null && cafeteriaId !== undefined && !Number.isFinite(cid)) {
+      throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
+    }
     let query = supabase
       .from('pedidos')
       .select('*, usuarios(nombre, apellido), cafeterias(*), detalles_pedido(*, productos(*))');
-
-    if (cafeteriaId) query = query.eq('cafeteria_id', cafeteriaId);
+    if (Number.isFinite(cid)) {
+      query = query.eq('cafeteria_id', cid);
+    }
 
     const { data, error } = await query.order('creado_en', { ascending: false });
 
@@ -342,7 +347,7 @@ export const pedidosService = {
    * token no coincide, el token de contingencia del mismo pedido lo entrega; y
    * al reves, si el token fue borrado o mal tipeado, el QR lo entrega.
    */
-  async validarQrEntrega(textoQr, idUsuario = null) {
+  async validarQrEntrega(textoQr, idUsuario = null, cafeteriaIdValidacion = null) {
     const candidatas = extraerCredenciales(textoQr);
     if (candidatas.length === 0) {
       return { valido: false, razon: 'QR vacío o ilegible, intenta nuevamente.' };
@@ -365,7 +370,8 @@ export const pedidosService = {
         await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'rechazado', detalle: 'QR no reconocido.', usuarioId: idUsuario });
         return { valido: false, razon: 'QR no reconocido. Verifica que corresponda a un pedido de CofeeFaster.' };
       }
-      if (Number(pedido.cafeteria_id) !== CAFETERIA_ID) {
+      const cidVal = cafeteriaIdValidacion !== null && cafeteriaIdValidacion !== undefined ? Number(cafeteriaIdValidacion) : (CAFETERIA_ID !== null && CAFETERIA_ID !== undefined ? Number(CAFETERIA_ID) : null);
+      if (Number.isFinite(cidVal) && Number(pedido.cafeteria_id) !== cidVal) {
         const razon = `El pedido #${pedido.id} no pertenece a esta cafetería.`;
         await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
         return { valido: false, razon };
