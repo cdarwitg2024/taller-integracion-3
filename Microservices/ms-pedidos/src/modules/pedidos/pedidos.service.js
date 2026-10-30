@@ -698,38 +698,33 @@ async function obtenerQr({ user, id }) {
 
 async function obtenerTokenContingencia({ user, id }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
+  const pedidoId = validarPedidoId(id);
   const cliente = supabase.obtenerCliente();
-  const { data: pedido, error } = await cliente.from('pedidos').select('id, usuario_id, cafeteria_id').eq('id', id).maybeSingle();
+  const { data: pedido, error } = await cliente.from('pedidos')
+    .select('id, usuario_id, cafeteria_id, estado, codigo_retiro_diario')
+    .eq('id', pedidoId).maybeSingle();
   if (error) throw new HttpError(503, error.message);
   if (!pedido) throw new HttpError(404, 'Pedido no encontrado');
 
-  const usuarioIdInterno = await (async () => {
-    const { data: ui } = await cliente.from('usuarios').select('id').eq('auth_user_id', user.authUserId).maybeSingle();
-    return ui?.id || null;
-  })();
-
-  let autorizado = false;
-  if (usuarioIdInterno && pedido.usuario_id && usuarioIdInterno === pedido.usuario_id) {
-    autorizado = true;
-  } else {
-    try {
-      const { data: cu } = await cliente
-        .from('cafeteria_usuarios')
-        .select('id')
-        .eq('usuario_id', usuarioIdInterno)
-        .eq('cafeteria_id', pedido.cafeteria_id)
-        .maybeSingle();
-      if (cu) autorizado = true;
-    } catch (e) {
-      autorizado = false;
-    }
-  }
+  const usuarioInterno = await resolverUsuarioInterno(cliente, user.authUserId);
+  const autorizado = usuarioInterno && (
+    Number(usuarioInterno.id) === Number(pedido.usuario_id) ||
+    await perteneceACafeteria(cliente, usuarioInterno.id, pedido.cafeteria_id)
+  );
 
   if (!autorizado) {
     throw new HttpError(403, 'No autorizado para obtener token de contingencia');
   }
 
-  return { token: pedido.qr_token || 'token-contingencia' };
+  // Autorizar antes de revelar disponibilidad. Igual que QR, solo se entrega
+  // la credencial persistida de un pedido activo; nunca se genera un respaldo.
+  if (!ESTADOS_QR_DISPONIBLE.includes(normalizarEstado(pedido.estado))) {
+    throw new HttpError(409, 'El token de contingencia no esta disponible en su estado actual');
+  }
+  if (!pedido.codigo_retiro_diario) {
+    throw new HttpError(409, 'El pedido no tiene un token de contingencia disponible');
+  }
+  return { token: pedido.codigo_retiro_diario };
 }
 
 async function validarQr({ user, body }) {
