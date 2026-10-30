@@ -151,51 +151,20 @@ export const productos = {
   },
 
   /**
-   * Elimina un producto en Supabase.
-   * Si el producto ya está inactivo, se elimina físicamente de la tabla.
-   * Si está activo, se marca como inactivo (borrado lógico).
+   * Elimina lógicamente un producto en Supabase (marca activo = false).
+   * Mantiene la integridad referencial con pedidos históricos e inventario.
    */
   async delete(id) {
     asegurarConexion();
 
-    // Primero obtener el producto actual para saber si ya está inactivo
-    const { data: productoExistente, error: errorFetch } = await supabase
+    const { error } = await supabase
       .from(TABLE)
-      .select('activo')
-      .eq('id', id)
-      .single();
+      .update({ activo: false })
+      .eq('id', id);
 
-    if (errorFetch) {
-      console.error('Error al obtener producto para eliminar:', errorFetch);
-      throw new Error(`No se pudo obtener el producto: ${errorFetch.message || 'Sin conexión'}`);
-    }
-
-    if (!productoExistente) {
-      throw new Error('Producto no encontrado');
-    }
-
-    if (!productoExistente.activo) {
-      // Ya está inactivo: eliminar físicamente de la tabla
-      const { error } = await supabase
-        .from(TABLE)
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        console.error('Error al eliminar producto en Supabase:', error);
-        throw new Error(`No se pudo eliminar el producto en la base de datos: ${error.message || 'Sin conexión'}`);
-      }
-    } else {
-      // Está activo: borrado lógico (marcar como inactivo)
-      const { error } = await supabase
-        .from(TABLE)
-        .update({ activo: false })
-        .eq('id', id);
-
-      if (error) {
-        console.error('Error al eliminar en Supabase:', error);
-        throw new Error(`No se pudo eliminar el producto en la base de datos: ${error.message || 'Sin conexión'}`);
-      }
+    if (error) {
+      console.error('Error al desactivar en Supabase:', error);
+      throw new Error(`No se pudo desactivar el producto en la base de datos: ${error.message || 'Sin conexión'}`);
     }
 
     return true;

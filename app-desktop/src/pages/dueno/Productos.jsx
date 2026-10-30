@@ -421,11 +421,13 @@ function CatalogoProductos() {
       // Eliminar producto en Supabase (FR-45)
       await productosService.delete(productoToDelete.id);
 
-      // Actualizar la lista tras eliminar
-      setProductos((prev) => prev.filter((p) => p.id !== productoToDelete.id));
+      // Actualizar la lista marcando el producto como inactivo (borrado lógico)
+      setProductos((prev) =>
+        prev.map((p) => (p.id === productoToDelete.id ? { ...p, activo: false } : p))
+      );
       setSnackbar({
         open: true,
-        message: `Producto "${productoToDelete.nombre}" eliminado exitosamente.`,
+        message: `Producto "${productoToDelete.nombre}" desactivado exitosamente.`,
         severity: 'success',
       });
       handleCloseDelete();
