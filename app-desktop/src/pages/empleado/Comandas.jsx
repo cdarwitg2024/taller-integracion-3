@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Alert, Box, CircularProgress, Typography } from '@mui/material';
 
 import KdsTopBar from '../../components/KdsTopBar';
 import KanbanColumn from '../../components/KanbanColumn';
@@ -133,6 +133,10 @@ function Comandas({ currentUser }) {
   }, [sinCafeteriaAsociada, cafeteriaIdEmpleado]);
 
   const actualizarPedidoRealTime = useCallback((comanda) => {
+    if (sinCafeteriaAsociada) return;
+    if (Number.isFinite(cafeteriaIdEmpleado) && comanda?.cafeteria_id != null && Number(comanda.cafeteria_id) !== cafeteriaIdEmpleado) {
+      return;
+    }
     const id = String(comanda.id);
     pedidosRealtime.current.set(id, comanda);
     setPedidos(prev => {
@@ -140,7 +144,7 @@ function Comandas({ currentUser }) {
       return ordenarPedidos(prev.map(p => (String(p.id) === id ? comanda : p)));
     });
     setSelectedPedido(prev => (prev && String(prev.id) === id ? { ...prev, ...comanda } : prev));
-  }, []);
+  }, [sinCafeteriaAsociada, cafeteriaIdEmpleado]);
 
   useEffect(() => {
     fetchPedidos();

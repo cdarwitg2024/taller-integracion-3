@@ -65,7 +65,7 @@ function StockEmpleado({ currentUser }) {
     try {
       setLoading(true);
       setError('');
-      const data = await productosService.getAll(cafeteriaIdEmpleado);
+      const data = await productosService.getAll(cafeteriaIdEmpleado, true);
       setProductos(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error cargando productos:', err);
