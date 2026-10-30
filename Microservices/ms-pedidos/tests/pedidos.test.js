@@ -537,6 +537,46 @@ describe('PATCH /api/pedidos/:id/estado', () => {
 });
 
 describe('PATCH /api/pedidos/:id/estado — autorizacion KDS (D.3)', () => {
+  test.each([
+    ['estudiante', { usuarioInterno: { id: 10, rol_id: 1 } }, 403, 'Solo un empleado puede cambiar el estado del pedido'],
+    ['dueño', { usuarioInterno: { id: 10, rol_id: 3 } }, 403, 'Solo un empleado puede cambiar el estado del pedido'],
+    ['empleado de otra cafeteria', { pertenece: false }, 403, 'El empleado no pertenece a la cafeteria del pedido'],
+    ['sin cuenta interna', { usuarioInterno: null }, 404, 'Usuario no encontrado']
+  ])('S2-T9: %s no obtiene el pedido por estado identico', async (_actor, opciones, status, error) => {
+    const updateMock = configurarPedido(
+      { id: 5, estado: 'pendiente', cafeteria_id: 1, qr_token: 'qr-privado-de-prueba' },
+      opciones
+    );
+    const res = await request(app).patch('/api/pedidos/5/estado')
+      .send({ estado: 'pendiente', rol_id: 2, cafeteria_id: 1 });
+    expect(res.status).toBe(status);
+    expect(res.body).toEqual({ error, servicio: 'ms-pedidos' });
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  test.each(['pendiente', 'en_preparacion', 'listo', 'entregado', 'Preparando'])(
+    'S2-T9: empleado autorizado reintenta %s sin efectos ni datos sensibles', async (estado) => {
+      const publico = { id: 5, estado, cafeteria_id: 1, total: 5000 };
+      const updateMock = configurarPedido({
+        ...publico,
+        qr_token: 'qr-privado-de-prueba', access_token: 'access-de-prueba',
+        refresh_token: 'refresh-de-prueba', Authorization: 'Bearer prueba',
+        credenciales: { password: 'prueba' }, session: { user: 'prueba' },
+        service_key: 'key-de-prueba', auth: { interno: true }
+      });
+      for (let intento = 0; intento < 2; intento += 1) {
+        const res = await request(app).patch('/api/pedidos/5/estado').send({ estado });
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual(publico);
+      }
+      expect(supabaseMock.obtenerCliente().from).toHaveBeenCalledWith('usuarios');
+      expect(supabaseMock.obtenerCliente().from).toHaveBeenCalledWith('cafeteria_usuarios');
+      expect(updateMock).not.toHaveBeenCalled();
+      expect(mockRpc).not.toHaveBeenCalled();
+    }
+  );
+
   test('empleado autorizado: pendiente -> en_preparacion = 200', async () => {
     const updateMock = configurarPedido({ id: 5, estado: 'pendiente', cafeteria_id: 1 });
     const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'en_preparacion' });
@@ -595,13 +635,16 @@ describe('PATCH /api/pedidos/:id/estado — autorizacion KDS (D.3)', () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  test('estudiante: listo -> entregado = 409 (requiere QR) y NO actualiza', async () => {
+  test('estudiante: listo -> entregado = 403 (autorizacion antes de transicion) y NO actualiza', async () => {
     const updateMock = configurarPedido(
       { id: 5, estado: 'listo', cafeteria_id: 1 },
       { usuarioInterno: { id: 10, rol_id: 1 } }
     );
     const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'entregado' });
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({
+      error: 'Solo un empleado puede cambiar el estado del pedido', servicio: 'ms-pedidos'
+    });
     expect(updateMock).not.toHaveBeenCalled();
   });
 

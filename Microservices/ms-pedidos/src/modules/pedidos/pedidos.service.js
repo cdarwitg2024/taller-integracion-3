@@ -587,23 +587,28 @@ async function actualizarEstado({ user, accessToken, id, body }) {
   if (error) throw new HttpError(503, error.message);
   if (!pedido) throw new HttpError(404, 'Pedido no encontrado');
 
-  // 5. Normalizar el estado actual para comparar (tolera datos historicos).
+  // 5. Autorizar ANTES de comparar estados o devolver datos: service_role
+  //    salta RLS. Incluso un reintento exige empleado de la cafeteria real.
+  await autorizarTransicionKds(cliente, user.authUserId || user.id, pedido);
+
+  // 6. Normalizar el estado actual para comparar (tolera datos historicos).
   const actual = normalizarEstado(pedido.estado);
   if (!actual) {
     throw new HttpError(409, `El pedido tiene un estado desconocido ('${pedido.estado}'); no se puede validar la transicion.`);
   }
 
-  // 6. Idempotencia: si ya esta en el estado solicitado, se responde el pedido
-  //    actual SIN ejecutar UPDATE (tolera doble clic, reintentos, duplicados).
-  //    No hay cambio de estado, por lo que no se requiere autorizacion KDS.
+  // 7. Reintento autorizado: SIN UPDATE y solo campos publicos. La fila
+  //    completa puede contener qr_token u otros datos internos.
   if (actual === solicitado) {
-    return pedido;
+    return Object.fromEntries(
+      CAMPOS_PEDIDO_PUBLICOS.split(', ').filter((campo) =>
+        Object.prototype.hasOwnProperty.call(pedido, campo)
+      ).map((campo) => [campo, pedido[campo]])
+    );
   }
 
-  // 7. Validar la transicion contra la matriz. Cubre tambien los estados
-  //    terminales (sin destinos) -> 409. Se ejecuta ANTES de autorizar para que
-  //    una transicion imposible devuelva 409 sin filtrar el resultado de la
-  //    autorizacion.
+  // 8. Validar la transicion contra la matriz, ya autorizado. Cubre tambien
+  //    los estados terminales (sin destinos) -> 409.
   if (!puedeTransicionar(actual, solicitado)) {
     const permitidas = transicionesDe(actual);
     const mensaje = permitidas.length === 0
@@ -612,20 +617,14 @@ async function actualizarEstado({ user, accessToken, id, body }) {
     throw new HttpError(409, mensaje);
   }
 
-  // 8. La ENTREGA (`listo -> entregado`) queda reservada para la validacion QR
+  // 9. La ENTREGA (`listo -> entregado`) queda reservada para la validacion QR
   //    (D.4). El PATCH generico NO puede ejecutarla, ni siquiera para un
-  //    empleado. Se rechaza ANTES de autorizar para que cualquier actor reciba
-  //    un 409 coherente.
+  //    empleado autorizado: responde 409 y no ejecuta UPDATE.
   if (solicitado === 'entregado') {
     throw new HttpError(409, 'La entrega del pedido requiere validacion QR', {
       detalle: "El estado 'entregado' solo se produce al validar el QR o token de retiro."
     });
   }
-
-  // 9. Autorizacion de negocio ANTES de cualquier UPDATE: empleado de la
-  //    cafeteria del pedido. (service_role saltaria RLS: la unica barrera es
-  //    esta validacion en Node.)
-  await autorizarTransicionKds(cliente, user.authUserId || user.id, pedido);
 
   // 10. Guardar UNICAMENTE el slug canonico, ya autorizado. Sin timestamps en
   //     esta etapa.
