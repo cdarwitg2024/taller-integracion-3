@@ -6,7 +6,9 @@ const normalizeProducto = (p) => ({
   ...p,
   minimo: p.stock_minimo ?? p.minimo ?? 0,
   stock_minimo: p.stock_minimo ?? p.minimo ?? 0,
-  categoria: p.categoria || p.categorias?.nombre || 'GENERAL',
+  // La categoría real viene de la relación con la tabla categorías (categorías.*)
+  // No usamos p.categoria porque es un ID numérico (categoria_id), no el nombre
+  categoria: p.categorias?.nombre || 'Sin categoría',
   cafeteria_nombre: p.cafeterias?.nombre || p.cafeteria_nombre || 'Cafetería Central',
   unidad: p.unidad || 'un',
   catColor: p.catColor || '#8D6E63',
@@ -29,7 +31,7 @@ export const productos = {
 
     const { data, error } = await supabase
       .from(TABLE)
-      .select('*, cafeterias(*)')
+      .select('*, cafeterias(*), categorias(*)')  // ← Incluir relación con categorías
       .order('id', { ascending: true });
 
     if (error) {
@@ -68,7 +70,7 @@ export const productos = {
 
     const { data, error } = await supabase
       .from(TABLE)
-      .select('*, cafeterias(*)')
+      .select('*, cafeterias(*), categorias(*)')  // ← Incluir relación con categorías
       .eq('categoria_id', categoriaId)
       .eq('activo', true);
 
