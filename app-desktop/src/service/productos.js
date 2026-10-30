@@ -96,6 +96,7 @@ export const productos = {
       stock_minimo: Number(nuevoProducto.stock_minimo || nuevoProducto.minimo || 0),
       imagen_url: nuevoProducto.imagen_url || null,
       activo: nuevoProducto.activo !== undefined ? Boolean(nuevoProducto.activo) : true,
+      unidad: nuevoProducto.unidad?.trim() || 'un',
     };
 
     const { data, error } = await supabase
@@ -129,6 +130,7 @@ export const productos = {
     if (updates.cafeteria_id !== undefined) dbPayload.cafeteria_id = Number(updates.cafeteria_id);
     if (updates.categoria_id !== undefined) dbPayload.categoria_id = updates.categoria_id ? Number(updates.categoria_id) : null;
     if (updates.activo !== undefined) dbPayload.activo = Boolean(updates.activo);
+    if (updates.unidad !== undefined) dbPayload.unidad = updates.unidad?.trim() || 'un';
     dbPayload.actualizado_en = new Date().toISOString();
 
     const { data, error } = await supabase
