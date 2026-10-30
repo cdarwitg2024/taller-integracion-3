@@ -47,8 +47,8 @@ spec:
       containers:
         - name: ms-pedidos
           image: cdarwitg2024/ms-pedidos:v1.0.3
-          # Si la imagen no esta en el registro, 'IfNotPresent' evita que K8s
-          # intente descargarla y se quede en ErrImagePull para siempre.
+          # Usa cache local si existe; si falta, intenta descargar del registro.
+          # El tag declarado no demuestra que el registro contenga este checkout.
           imagePullPolicy: IfNotPresent
 
           ports:
@@ -72,6 +72,14 @@ spec:
                 secretKeyRef:
                   name: coffeesecret-supabase
                   key: SUPABASE_PUBLISHABLE_KEY
+            # Cliente servidor sin JWT: requiere autorizacion de negocio en Node.
+            # Antes de desplegar verificar las claves del Secret; esta referencia
+            # no demuestra su existencia. Si falta una, el Pod puede no iniciar.
+            - name: SUPABASE_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: coffeesecret-supabase
+                  key: SUPABASE_SERVICE_KEY
             # Para ambiente local contra el Docker de Supabase.
             # Cambiar por la URL cloud cuando se apunte a Supabase cloud.
             # - name: SUPABASE_URL

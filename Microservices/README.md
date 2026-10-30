@@ -42,6 +42,12 @@ docker compose up --build
 
 Parar: `docker compose down`
 
+## Identidad de ms-pedidos
+
+La [matriz Local / Compose / Kubernetes](../docs/seguridad/ms-pedidos-entornos-s2-t14.md)
+documenta los dos clientes. Configurar tambien `SUPABASE_PUBLISHABLE_KEY`:
+crear/listar pedidos y cancelar usan JWT del usuario, no service_role.
+
 ## SUPABASE_SERVICE_KEY es la clave de servidor del proyecto
 
 `SUPABASE_SERVICE_KEY` es el nombre de la **clave de servidor (`service_role`)** 
@@ -60,12 +66,10 @@ Por qué los servicios la necesitan y las apps no:
 | `publishable` / `anon` | `anon` | se aplica | `app-mobile`, `app-desktop` |
 | `service_role` | `service_role` | **se salta** | estos microservicios |
 
-`service_role` salta la RLS. Es lo correcto acá porque los servicios son la
-capa de confianza del backend: corren detrás del gateway, no se exponen al
-usuario final, y sus consultas no dependen de que exista una política de RLS
-para cada tabla nueva. La contraprestada es que **esta clave jamás debe salir del
-backend**: si llega a un cliente, cualquiera puede leer y escribir la base
-entera saltándose la RLS.
+`service_role` omite RLS: las operaciones con ese cliente requieren autorizacion
+de negocio antes de devolver o modificar informacion. Estar detras del gateway
+no concede permisos; Compose publica puertos de depuracion. **Esta clave jamas
+debe salir del backend.** Los clientes JWT conservan identidad para RLS/RPC.
 
 Por eso:
 
