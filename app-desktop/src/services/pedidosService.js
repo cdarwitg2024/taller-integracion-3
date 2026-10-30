@@ -109,7 +109,7 @@ export function normalizarPedido(fila) {
   // token de contingencia es una credencial y no debe viajar en la tarjeta.
   const idStr = String(fila.id);
 
-  // La hora de retiro puede venir vacía: `formatearHora` devolvería "--:--",
+  // La hora de retiro puede venir vacia: `formatearHora` devolvería "--:--",
   // que no es un dato real y se colaba hasta la tarjeta. Se deja en null para
   // que la pantalla use la franja real del pedido o marque el estimado.
   const horaRetiroNormalizada = (() => {
@@ -118,7 +118,7 @@ export function normalizarPedido(fila) {
   })();
 
   // Franja de retiro elegida por el estudiante: se toma SIEMPRE del pedido real
-  // (columna franja_retiro) y se normaliza aquí, en el único punto por el que
+  // (columna franja_retiro) y se normaliza aqui, en el unico punto por el que
   // pasan tanto la carga inicial como las actualizaciones en tiempo real.
   const franjaRetiro = typeof fila.franja_retiro === 'string' ? fila.franja_retiro.trim() : '';
 
@@ -171,12 +171,12 @@ function aInstanteRetiro(pedido) {
 
   if (minutos !== null) {
     if (creado) {
-      // "HH:mm" sobre el día en que se creó el pedido.
+      // "HH:mm" sobre el dia en que se creo el pedido.
       const base = new Date(creado);
       base.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
       return base.getTime();
     }
-    // Sin fecha de creación: se asume hoy.
+    // Sin fecha de creacion: se asume hoy.
     const hoy = new Date();
     hoy.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
     return hoy.getTime();
@@ -187,7 +187,7 @@ function aInstanteRetiro(pedido) {
 }
 
 function comparadorPrioridad(a, b) {
-  // Ordenar por minutos del día no servía: dos pedidos del mismo minuto
+  // Ordenar por minutos del dia no servía: dos pedidos del mismo minuto
   // quedaban "empate" y el kanban se veía desordenado. Se compara el
   // instante real (epoch) y, ante empate, la hora de creación.
   const tA = aInstanteRetiro(a);
@@ -290,11 +290,11 @@ export const pedidosService = {
     //    (pendiente -> en_preparacion -> listo -> entregado).
     const actual = await this.getById(id);
     if (actual && !esTransicionValida(actual.estado, nuevoEstado)) {
-      console.warn(`Transición inválida de estado: ${actual.estado} -> ${nuevoEstado} (pedido ${id})`);
+      console.warn(`Transicion invalida de estado: ${actual.estado} -> ${nuevoEstado} (pedido ${id})`);
       return actual;
     }
 
-    // 1. Vía MS Comercio (PATCH /pedidos/:id/estado) — valida la secuencia
+    // 1. Via MS Comercio (PATCH /pedidos/:id/estado) — valida la secuencia
     //    pendiente -> en_preparacion -> listo en el backend.
     try {
       await backendApi.cambiarEstadoPedido(id, nuevoEstado);
@@ -363,7 +363,7 @@ export const pedidosService = {
 
       if (!pedido) {
         await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'rechazado', detalle: 'QR no reconocido.', usuarioId: idUsuario });
-        return { valido: false, razon: 'QR no reconocido. Verifica que corresponda a un pedido de CofeeFaster.' };
+        return { valido: false, razon: 'QR no reconocido. Verifica que corresponda a un pedido de CoffeFaster.' };
       }
       if (Number(pedido.cafeteria_id) !== CAFETERIA_ID) {
         const razon = `El pedido #${pedido.id} no pertenece a esta cafetería.`;
@@ -440,25 +440,34 @@ export const pedidosService = {
 
   async getEstadisticas() {
     const pedidos = await this.getAll();
-    const totalVentas = pedidos
-      .filter(p => p.estado === 'entregado' || p.estado === 'listo' || p.estado === 'preparando' || p.estado === 'en_preparacion')
+
+    // Filtrar solo pedidos del día actual (hora local del cliente)
+    const hoyStr = new Date().toDateString();
+    const pedidosHoy = pedidos.filter((p) => {
+      const f = parsearFecha(p.creado_en);
+      return f && f.toDateString() === hoyStr;
+    });
+
+    const totalVentas = pedidosHoy
+      .filter((p) => p.estado === 'entregado' || p.estado === 'listo' || p.estado === 'preparando' || p.estado === 'en_preparacion')
       .reduce((sum, p) => sum + (Number(p.total) || 0), 0);
 
-    const pendientes = pedidos.filter(p => p.estado === 'pendiente').length;
-    const preparando = pedidos.filter(p => p.estado === 'preparando' || p.estado === 'en_preparacion').length;
-    const listos = pedidos.filter(p => p.estado === 'listo').length;
-    const entregados = pedidos.filter(p => p.estado === 'entregado').length;
+    const pendientes = pedidosHoy.filter((p) => p.estado === 'pendiente').length;
+    const preparando = pedidosHoy.filter((p) => p.estado === 'preparando' || p.estado === 'en_preparacion').length;
+    const listos = pedidosHoy.filter((p) => p.estado === 'listo').length;
+    const entregados = pedidosHoy.filter((p) => p.estado === 'entregado').length;
 
-    const tiempos = pedidos
-      .filter(p => p.tiempo_real_min && Number(p.tiempo_real_min) > 0)
-      .map(p => Number(p.tiempo_real_min));
-    const tiempoPromedioMin = tiempos.length > 0
-      ? Number((tiempos.reduce((a, b) => a + b, 0) / tiempos.length).toFixed(1))
-      : 0;
+    const tiempos = pedidosHoy
+      .filter((p) => p.tiempo_real_min && Number(p.tiempo_real_min) > 0)
+      .map((p) => Number(p.tiempo_real_min));
+    const tiempoPromedioMin =
+      tiempos.length > 0
+        ? Number((tiempos.reduce((a, b) => a + b, 0) / tiempos.length).toFixed(1))
+        : 0;
 
     return {
       totalVentas,
-      totalPedidos: pedidos.length,
+      totalPedidos: pedidosHoy.length,
       pendientes,
       preparando,
       listos,
@@ -475,8 +484,9 @@ export const pedidosService = {
       return f && f.toDateString() === hoyStr;
     });
 
-    // Si hay pedidos en la jornada de hoy usamos hoy; si no (ej. datos de prueba en otra fecha), usamos el total disponible
-    const pedidosParaGrafico = pedidosHoy.length > 0 ? pedidosHoy : list;
+    // SOLO usamos pedidos de hoy. Si no hay pedidos hoy, no devolvemos datos
+    // históricos: el gráfico debe mostrar ceros/cero ventas para hoy.
+    const pedidosParaGrafico = pedidosHoy;
 
     const now = new Date();
     const currentHour = now.getHours();
