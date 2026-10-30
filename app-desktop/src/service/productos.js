@@ -21,7 +21,7 @@ function asegurarConexion() {
 
 export const productos = {
   /**
-   * Obtiene todos los productos activos directamente de la base de datos Supabase.
+   * Obtiene todos los productos (activos e inactivos) desde Supabase.
    * Lanza un error estricto si la base de datos está apagada o inaccesible.
    */
   async getAll() {
@@ -30,8 +30,7 @@ export const productos = {
     const { data, error } = await supabase
       .from(TABLE)
       .select('*, cafeterias(*)')
-      .eq('activo', true)
-            .order('id', { ascending: true });
+      .order('id', { ascending: true });
 
     if (error) {
       console.error('Error consultando productos en Supabase:', error);
@@ -71,8 +70,7 @@ export const productos = {
       .from(TABLE)
       .select('*, cafeterias(*)')
       .eq('categoria_id', categoriaId)
-      .eq('activo', true)
-      
+      .eq('activo', true);
 
     if (error) {
       console.error('Error consultando categoría en Supabase:', error);
@@ -153,19 +151,20 @@ export const productos = {
   },
 
   /**
-   * Elimina lógicamente un producto en Supabase.
+   * Elimina lógicamente un producto en Supabase (marca activo = false).
+   * Mantiene la integridad referencial con pedidos históricos e inventario.
    */
   async delete(id) {
     asegurarConexion();
 
     const { error } = await supabase
       .from(TABLE)
-      .update({ activo: false,  })
+      .update({ activo: false })
       .eq('id', id);
 
     if (error) {
-      console.error('Error al eliminar en Supabase:', error);
-      throw new Error(`No se pudo eliminar el producto en la base de datos: ${error.message || 'Sin conexión'}`);
+      console.error('Error al desactivar en Supabase:', error);
+      throw new Error(`No se pudo desactivar el producto en la base de datos: ${error.message || 'Sin conexión'}`);
     }
 
     return true;
@@ -211,7 +210,7 @@ export const productos = {
     }
 
     return this.update(id, payload);
-  }
+  },
 };
 
 export const productosService = productos;

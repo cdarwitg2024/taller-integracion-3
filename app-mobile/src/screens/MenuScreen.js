@@ -141,22 +141,20 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     }
 
     if (Number.isFinite(pendiente.id)) {
-      setProducts((prev) =>
-        prev.map((p) => {
-          if (p.id !== pendiente.id) return p;
+      setProducts((prev) => {
+        const stock = pendiente.stock;
+        const activo = pendiente.activo;
+        const eliminado = Boolean(pendiente.eliminadoEn);
 
-          const stock = pendiente.stock;
-          const activo = pendiente.activo;
-          const eliminado = Boolean(pendiente.eliminadoEn);
+        // Si lo dejaron inactivo o lo borraron, sale de la lista
+        if (!activo || eliminado) {
+          return prev.filter((x) => x.id !== pendiente.id);
+        }
 
-          // Si lo dejaron inactivo o lo borraron, sale de la lista
-          if (!activo || eliminado) {
-            return prev.filter((x) => x.id !== pendiente.id);
-          }
-
-          return { ...p, stock, available: stock > 0 };
-        })
-      );
+        return prev.map((p) =>
+          p.id === pendiente.id ? { ...p, stock, available: stock > 0 } : p
+        );
+      });
     }
   }, [cambios]);
 
@@ -300,11 +298,19 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     fetchProducts({ silent: true });
   };
 
+  const [addingId, setAddingId] = useState(null);
+
   const handleAdd = (product) => {
     // Cinturón de seguridad también del lado del carrito: nunca agregar
     // un producto que no sea de esta cafetería o que esté agotado.
     if (!product?.available) return;
     if (Number(product.cafeteriaId) !== Number(cafeteriaId)) return;
+    // Pequeña transición/feedback de carga moderado al agregar desde catálogo
+    const pid = product?.id;
+    if (pid != null) {
+      setAddingId(pid);
+      setTimeout(() => setAddingId(null), 250);
+    }
     // Se pasa la cafetería para que el carrito sepa a qué pedido pertenece
     // cada ítem y no mezcle productos de dos menus distintos.
     onAddToCart?.(product, cafeteria);
@@ -420,6 +426,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
                 product={product}
                 onAdd={handleAdd}
                 onPress={setProductoDetalle}
+                adding={addingId != null && String(addingId) === String(product.id)}
               />
             ))}
           </View>

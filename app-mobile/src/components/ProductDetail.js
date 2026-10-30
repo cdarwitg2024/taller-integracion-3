@@ -24,6 +24,7 @@ const ProductDetail = ({ product, onAdd, onClose, cafeteriaName }) => {
   // emoji en vez de dejar el hueco vacío sin explicación. El hook va antes
   // del `return null` de abajo para respetar el orden de los hooks.
   const [imagenCaida, setImagenCaida] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     setImagenCaida(false);
@@ -174,14 +175,19 @@ const ProductDetail = ({ product, onAdd, onClose, cafeteriaName }) => {
         </View>
 
         <TouchableOpacity
-          style={[styles.addButton, !available && styles.addButtonDisabled]}
-          onPress={() => available && onAdd?.(product)}
-          disabled={!available}
+          style={[styles.addButton, (!available || adding) && styles.addButtonDisabled]}
+          onPress={() => {
+            if (!available || adding) return;
+            setAdding(true);
+            setTimeout(() => setAdding(false), 250);
+            onAdd?.(product);
+          }}
+          disabled={!available || adding}
           accessibilityRole="button"
-          accessibilityState={{ disabled: !available }}
+          accessibilityState={{ disabled: !available || adding }}
         >
           <Text style={styles.addButtonText}>
-            {available ? 'Añadir al carrito' : 'No disponible'}
+            {available ? (adding ? 'Agregando...' : 'Añadir al carrito') : 'No disponible'}
           </Text>
         </TouchableOpacity>
       </View>
