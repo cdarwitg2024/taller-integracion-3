@@ -521,9 +521,14 @@ function AppContent() {
       }
 
       // Solo aca se vacia el carrito: el pago se aprobo y el saldo se debito.
+      const pedidoId = resultado.pedido_id;
+      if (!pedidoId) {
+        Alert.alert('Error', 'Respuesta incompleta del servidor. No se pudo obtener el ID del pedido.');
+        return;
+      }
       clearCart();
       setPedidoConfirmado({
-        pedido_id: resultado.pedido_id ?? 0,
+        pedido_id: pedidoId,
         total: resultado.total ?? 0,
         saldo_restante: resultado.saldo_restante ?? 0,
         franja_retiro: resultado.franja_retiro,
@@ -534,7 +539,8 @@ function AppContent() {
       });
       Alert.alert(
         'Pago aprobado',
-        `Tu pedido fue pagado con Wallet.\n` +
+        `Pedido #${pedidoId} confirmado.\n` +
+          `Tu pedido fue pagado con Wallet.\n` +
           `Saldo restante: ${formatCLP(Number(resultado.saldo_restante ?? 0))}.`
       );
     } catch (e) {
