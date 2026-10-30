@@ -149,9 +149,9 @@ const CartScreen = ({
           renderItem={({ item }) => (
             <CartItem
               item={item}
-              onIncrease={onIncrease}
-              onDecrease={onDecrease}
-              onRemove={onRemove}
+              onIncrease={paying ? undefined : onIncrease}
+              onDecrease={paying ? undefined : onDecrease}
+              onRemove={paying ? undefined : onRemove}
             />
           )}
           ListFooterComponent={

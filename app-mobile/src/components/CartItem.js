@@ -17,10 +17,12 @@ const CartItem = ({
 
   const subtotal = item.price * item.quantity;
   const isMinimumQuantity = item.quantity === 1;
+  const disabled = !onIncrease && !onDecrease && !onRemove;
 
   const handleRemove = () => {
+    if (disabled) return;
     setShowDeleteModal(false);
-    onRemove(item.id);
+    onRemove?.(item.id);
   };
 
   return (
@@ -55,10 +57,10 @@ const CartItem = ({
             <TouchableOpacity
               style={[
                 styles.quantityButton,
-                isMinimumQuantity && styles.quantityButtonDisabled,
+                (isMinimumQuantity || disabled) && styles.quantityButtonDisabled,
               ]}
-              onPress={() => onDecrease(item.id)}
-              disabled={isMinimumQuantity}
+              onPress={() => onDecrease?.(item.id)}
+              disabled={isMinimumQuantity || disabled}
             >
               <Text
                 style={[
@@ -76,8 +78,9 @@ const CartItem = ({
             </Text>
 
             <TouchableOpacity
-              style={styles.quantityButton}
-              onPress={() => onIncrease(item.id)}
+              style={[styles.quantityButton, disabled && styles.quantityButtonDisabled]}
+              onPress={() => onIncrease?.(item.id)}
+              disabled={disabled}
             >
               <Text style={styles.quantityButtonText}>
                 +
@@ -86,8 +89,9 @@ const CartItem = ({
           </View>
 
           <TouchableOpacity
-            style={styles.removeButton}
-            onPress={() => setShowDeleteModal(true)}
+            style={[styles.removeButton, disabled && { opacity: 0.4 }]}
+            onPress={() => !disabled && setShowDeleteModal(true)}
+            disabled={disabled}
           >
             <Text style={styles.removeButtonText}>
               Eliminar
