@@ -74,7 +74,7 @@ const filaFlex = {
   minWidth: 0,
 };
 
-function PedidoCard({ pedido, onOpen, onChangeEstado }) {
+function PedidoCard({ pedido, onOpen, onChangeEstado, procesando = false }) {
   const [ahora, setAhora] = useState(Date.now());
   const configEstado = getEstadoConfig(pedido.estado);
   const accion = ACCION_POR_ESTADO[pedido.estado];
@@ -355,8 +355,12 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
         {accion ? (
           <BaseButton
             className={`variant-${accion.variante}`}
-            endIcon={<accion.Icono sx={{ flexShrink: 0 }} />}
-            onClick={(e) => onChangeEstado(pedido.rawId ?? pedido.id, accion.siguiente, e)}
+            endIcon={procesando ? null : <accion.Icono sx={{ flexShrink: 0 }} />}
+            disabled={procesando}
+            onClick={(e) => {
+              if (procesando) { e.stopPropagation(); return; }
+              onChangeEstado(pedido.rawId ?? pedido.id, accion.siguiente, e);
+            }}
             sx={{
               width: '100%',
               minHeight: { xs: 46, md: 56 },
@@ -372,9 +376,10 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
               // El ícono se oculta en pantallas angostas: si no, el rótulo
               // "PREPARACIÓN" no cabe y se cortaba.
               '& .MuiButton-endIcon': { display: { xs: 'none', md: 'flex' } },
+              opacity: procesando ? 0.7 : 1,
             }}
           >
-            {accion.label}
+            {procesando ? 'PROCESANDO...' : accion.label}
           </BaseButton>
         ) : (
           <BaseButton
