@@ -5,6 +5,7 @@ import { Box, CssBaseline } from '@mui/material';
 import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import PriceChangeOutlinedIcon from '@mui/icons-material/PriceChangeOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
@@ -20,6 +21,7 @@ import AccesoNoAutorizado from './components/AccesoNoAutorizado';
 import Dashboard from './pages/dueno/Dashboard';
 import Productos from './pages/dueno/Productos';
 import Inventario from './pages/dueno/Inventario';
+import SolicitudesReposicion from './pages/dueno/SolicitudesReposicion';
 import BotDueno from './pages/dueno/BotDueno';
 import GestorPrecioStock from './pages/dueno/GestorPrecioStock';
 import LogsValidacion from './pages/dueno/LogsValidacion';
@@ -55,6 +57,12 @@ function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
       path: '/dueno/inventario',
       label: 'Inventario',
       icon: <Inventory2OutlinedIcon fontSize="small" />,
+    },
+    {
+      id: 'solicitudes-reposicion',
+      path: '/dueno/solicitudes-reposicion',
+      label: 'Solicitudes de Reposición',
+      icon: <AssignmentOutlinedIcon fontSize="small" />,
     },
     {
       id: 'logs',
@@ -132,6 +140,10 @@ function buildDuenoHeader(pathname) {
     '/dueno/inventario': {
       title: 'Inventario',
       subtitle: 'Control de stock de insumos y alertas de productos por debajo del mínimo.',
+    },
+    '/dueno/solicitudes-reposicion': {
+      title: 'Solicitudes de Reposición',
+      subtitle: 'Consulta de solo lectura de las solicitudes de reposición generadas por los empleados de tu cafetería.',
     },
     '/dueno/logs': {
       title: 'Logs de Validación QR/Token',
@@ -386,6 +398,17 @@ function App() {
             <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
               <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
                 <Inventario currentUser={currentUser} />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dueno/solicitudes-reposicion"
+          element={
+            <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
+              <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
+                <SolicitudesReposicion currentUser={currentUser} />
               </AuthenticatedLayout>
             </ProtectedRoute>
           }

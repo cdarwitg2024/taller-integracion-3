@@ -59,6 +59,44 @@ export const solicitudesStock = {
   },
 
   /**
+   * Lista las solicitudes de reposición de una cafetería (solo lectura).
+   *
+   * S2-T17: el panel del Dueño consulta únicamente las solicitudes de su
+   * cafetería autorizada. Esta consulta no procesa solicitudes ni modifica
+   * inventario: solo lee lo que el sistema ya persistió.
+   *
+   * @param {number|string} cafeteriaId
+   * @returns {Promise<Array>}
+   */
+  async listarPorCafeteria(cafeteriaId) {
+    const cid =
+      cafeteriaId !== null && cafeteriaId !== undefined
+        ? Number(cafeteriaId)
+        : NaN;
+
+    if (!Number.isFinite(cid)) {
+      throw new Error(
+        'No se pudo determinar la cafetería autorizada para consultar solicitudes.'
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('solicitudes_stock')
+      .select('*')
+      .eq('cafeteria_id', cid)
+      .order('fecha_solicitud', { ascending: false });
+
+    if (error) {
+      console.error('Error al listar solicitudes de stock:', error);
+      throw new Error(
+        error.message || 'No se pudieron obtener las solicitudes de reposición.'
+      );
+    }
+
+    return data || [];
+  },
+
+  /**
    * Listar solicitudes (opcional para empleado; no requerido por T17)
    */
   async listarSolicitudes() {
