@@ -28,11 +28,11 @@ export async function cambiarEstadoPedido(pedidoId, estado) {
 }
 
 /** POST /api/pedidos/validar-qr en backend-node (escaneo de entrega desde el KDS) */
-export async function validarQr(token) {
+export async function validarQr(token, cafeteriaId = null) {
   const res = await fetch(`${BASE_BACKEND}/api/pedidos/validar-qr`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: String(token) }),
+    body: JSON.stringify({ token: String(token), cafeteria_id: cafeteriaId ?? null }),
   });
   const body = await res.json().catch(() => null);
   if (body && typeof body.valido !== 'undefined') return body;

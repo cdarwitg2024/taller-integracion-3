@@ -629,7 +629,7 @@ const PedidosService = {
    * el Token de contingencia es de un solo uso; al validar la entrega queda
    * marcado como utilizado (el pedido pasa a 'Retirado' y no puede reutilizarse).
    */
-async validarEntrega(tokenString) {
+async validarEntrega(tokenString, cafeteriaId = null) {
     if (!tokenString) throw new Error('Token o código QR no proporcionado');
     let tokenLimpio = tokenString.trim();
 
@@ -648,7 +648,7 @@ async validarEntrega(tokenString) {
       const razon = 'Código QR o Token no proporcionado';
       // Un QR con JSON sin `qr_token` es un escaneo fallido: también auditable.
       await this.registrarLogValidacion({
-        pedido: {}, token: tokenString, resultado: 'rechazado', motivoRechazo: razon
+        pedido: {}, token: tokenString, resultado: 'rechazado', motivoRechazo: razon, cafeteriaId
       });
       return { valido: false, razon };
     }
@@ -703,9 +703,21 @@ async validarEntrega(tokenString) {
       // retiro queda registrado: es justo el caso que se quiere auditar.
       await this.registrarLogValidacion({
         pedido: {}, token: tokenLimpio, resultado: 'rechazado',
-        motivoRechazo: 'Código QR o Token no encontrado'
+        motivoRechazo: 'Código QR o Token no encontrado', cafeteriaId
       });
       return { valido: false, razon: 'Código QR o Token no encontrado' };
+    }
+
+    // El KDS solo puede entregar pedidos de su propia cafetería.
+    const cafeteriaEsperada = cafeteriaId !== null && cafeteriaId !== undefined && String(cafeteriaId).trim() !== ''
+      ? String(cafeteriaId).trim()
+      : null;
+    if (cafeteriaEsperada && String(pedido.cafeteria_id) !== cafeteriaEsperada) {
+      const razon = `El pedido #${pedido.id} no pertenece a esta cafetería`;
+      await this.registrarLogValidacion({
+        pedido, token: tokenLimpio, resultado: 'rechazado', motivoRechazo: razon, cafeteriaId: cafeteriaEsperada
+      });
+      return { valido: false, razon, pedido };
     }
 
     // Determina si se valido con el token de contingencia (que se persiste en
@@ -720,7 +732,7 @@ async validarEntrega(tokenString) {
     if (esEstadoTerminal(pedido.estado)) {
       const razon = 'El pedido ya fue entregado previamente (token de un solo uso)';
       await this.registrarLogValidacion({
-        pedido, token: tokenLimpio, resultado: 'rechazado', motivoRechazo: razon
+        pedido, token: tokenLimpio, resultado: 'rechazado', motivoRechazo: razon, cafeteriaId: cafeteriaEsperada
       });
       return { valido: false, razon, pedido };
     }
@@ -728,7 +740,7 @@ async validarEntrega(tokenString) {
     if (normalizarEstado(pedido.estado) !== 'Listo') {
       const razon = 'El pedido aún no está listo para retiro';
       await this.registrarLogValidacion({
-        pedido, token: tokenLimpio, resultado: 'rechazado', motivoRechazo: razon
+        pedido, token: tokenLimpio, resultado: 'rechazado', motivoRechazo: razon, cafeteriaId: cafeteriaEsperada
       });
       return { valido: false, razon, pedido };
     }
@@ -740,7 +752,8 @@ async validarEntrega(tokenString) {
       pedido,
       token: tokenLimpio,
       resultado: 'aprobado',
-      motivoRechazo: null
+      motivoRechazo: null,
+      cafeteriaId: cafeteriaEsperada
     });
 
     // Marcar como entregado/retirado. El token consumido no puede reutilizarse.
@@ -757,13 +770,16 @@ async validarEntrega(tokenString) {
 
   // Inserta un registro en `logs_validacion_qr`. Un fallo de auditoría nunca
   // debe impedir la entrega: se avisa por consola y se sigue.
-  async registrarLogValidacion({ pedido, token, resultado, motivoRechazo }) {
+  async registrarLogValidacion({ pedido, token, resultado, motivoRechazo, cafeteriaId = null }) {
     try {
       const ahora = new Date().toISOString();
+      const cafeteriaLog = cafeteriaId !== null && cafeteriaId !== undefined && String(cafeteriaId).trim() !== ''
+        ? cafeteriaId
+        : (pedido.cafeteria_id ?? null);
       const { error } = await supabase
         .from('logs_validacion_qr')
         .insert({
-          cafeteria_id: pedido.cafeteria_id ?? null,
+          cafeteria_id: cafeteriaLog,
           usuario_id: pedido.usuario_id ?? null,
           pedido_id: pedido.id ?? null,
           qr_token: pedido.qr_token ?? null,

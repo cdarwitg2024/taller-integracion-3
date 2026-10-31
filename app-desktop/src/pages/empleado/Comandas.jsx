@@ -209,7 +209,7 @@ function Comandas({ currentUser }) {
       <Box sx={{ mb: 2, flexShrink: 0 }}>
         <KdsTopBar
           conexion={conexion}
-          onEscanear={() => setEscaneando(true)}
+          onEscanear={sinCafeteriaAsociada ? undefined : () => setEscaneando(true)}
           estadoVoz={estadoVoz}
           onActivarVoz={() => vozKds.activar()}
           onSilenciarVoz={() => vozKds.silenciar()}

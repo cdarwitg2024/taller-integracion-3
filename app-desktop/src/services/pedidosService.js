@@ -353,7 +353,17 @@ export const pedidosService = {
       return { valido: false, razon: 'QR vacío o ilegible, intenta nuevamente.' };
     }
 
+    let cidVal = null;
     try {
+      const cidIngresado = cafeteriaIdValidacion !== null && cafeteriaIdValidacion !== undefined && String(cafeteriaIdValidacion).trim() !== ''
+        ? Number(cafeteriaIdValidacion)
+        : null;
+      const cidEnv = CAFETERIA_ID !== null && CAFETERIA_ID !== undefined ? Number(CAFETERIA_ID) : null;
+      cidVal = Number.isFinite(cidIngresado) ? cidIngresado : (Number.isFinite(cidEnv) ? cidEnv : null);
+      if (!Number.isFinite(cidVal)) {
+        return { valido: false, razon: 'No se pudo determinar la cafetería autorizada. Inicia sesión nuevamente.' };
+      }
+
       let pedido = null;
       let credencialUsada = candidatas[0];
 
@@ -367,30 +377,29 @@ export const pedidosService = {
       }
 
       if (!pedido) {
-        await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'rechazado', detalle: 'QR no reconocido.', usuarioId: idUsuario });
+        await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'rechazado', detalle: 'QR no reconocido.', usuarioId: idUsuario, cafeteriaId: cidVal });
         return { valido: false, razon: 'QR no reconocido. Verifica que corresponda a un pedido de CofeeFaster.' };
       }
-      const cidVal = cafeteriaIdValidacion !== null && cafeteriaIdValidacion !== undefined ? Number(cafeteriaIdValidacion) : (CAFETERIA_ID !== null && CAFETERIA_ID !== undefined ? Number(CAFETERIA_ID) : null);
-      if (Number.isFinite(cidVal) && Number(pedido.cafeteria_id) !== cidVal) {
+      if (Number(pedido.cafeteria_id) !== cidVal) {
         const razon = `El pedido #${pedido.id} no pertenece a esta cafetería.`;
-        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
+        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario, cafeteriaId: cidVal });
         return { valido: false, razon };
       }
       if (pedido.estado === 'entregado') {
         const razon = `El pedido #${pedido.id} ya fue entregado.`;
-        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
+        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario, cafeteriaId: cidVal });
         return { valido: false, razon };
       }
       if (pedido.estado !== 'listo') {
         const razon = `El pedido #${pedido.id} aún no está listo para retiro (estado: ${pedido.estado}).`;
-        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
+        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario, cafeteriaId: cidVal });
         return { valido: false, razon };
       }
 
       const entregado = await this.updateEstado(pedido.rawId ?? pedido.id, 'entregado');
       if (!entregado || entregado.estado !== 'entregado') {
         const razon = `El pedido #${pedido.id} no pudo marcarse como entregado.`;
-        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
+        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario, cafeteriaId: cidVal });
         return { valido: false, razon };
       }
       await this._registrarLogValidacion({
@@ -399,6 +408,7 @@ export const pedidosService = {
         resultado: 'entregado',
         detalle: `Pedido #${pedido.id} marcado como entregado por QR/Token.`,
         usuarioId: idUsuario,
+        cafeteriaId: cidVal,
       });
       return {
         valido: true,
@@ -408,12 +418,12 @@ export const pedidosService = {
       };
     } catch (err) {
       console.warn('validarQrEntrega:', err);
-      await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'error', detalle: 'No se pudo validar el QR en este momento.', usuarioId: idUsuario });
+      await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'error', detalle: 'No se pudo validar el QR en este momento.', usuarioId: idUsuario, cafeteriaId: cidVal });
       return { valido: false, razon: 'No se pudo validar el QR en este momento.' };
     }
   },
 
-  async _registrarLogValidacion({ pedidoId = null, qrToken = null, resultado, detalle, usuarioId = null }) {
+  async _registrarLogValidacion({ pedidoId = null, qrToken = null, resultado, detalle, usuarioId = null, cafeteriaId = null }) {
     if (!isSupabaseConfigured) return;
     try {
       let finalUsuarioId = usuarioId && !isNaN(Number(usuarioId)) ? Number(usuarioId) : null;
@@ -428,11 +438,14 @@ export const pedidosService = {
           finalUsuarioId = usuario?.id ?? null;
         }
       }
+      const cid = cafeteriaId !== null && cafeteriaId !== undefined && String(cafeteriaId).trim() !== ''
+        ? Number(cafeteriaId)
+        : (CAFETERIA_ID !== null && CAFETERIA_ID !== undefined ? Number(CAFETERIA_ID) : null);
       const { error } = await supabase
         .from('logs_validacion_qr')
         .insert({
           pedido_id: pedidoId,
-          cafeteria_id: CAFETERIA_ID,
+          cafeteria_id: Number.isFinite(cid) ? cid : null,
           usuario_id: finalUsuarioId,
           qr_token_leido: qrToken,
           resultado,

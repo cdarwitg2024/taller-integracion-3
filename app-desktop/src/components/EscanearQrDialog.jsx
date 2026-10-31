@@ -125,6 +125,7 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
   const animFrameRef = useRef(null);
   const fileInputRef = useRef(null);
   const usuarioIdRef = useRef(usuarioId);
+  const cafeteriaIdRef = useRef(cafeteriaId);
   const resultadoRef = useRef(null);
 
   const [modo, setModo] = useState('qr'); // 'qr' | 'token'
@@ -138,6 +139,10 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
   useEffect(() => {
     usuarioIdRef.current = usuarioId;
   }, [usuarioId]);
+
+  useEffect(() => {
+    cafeteriaIdRef.current = cafeteriaId;
+  }, [cafeteriaId]);
 
   useEffect(() => {
     resultadoRef.current = resultado;
@@ -204,6 +209,18 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
     // Si ya mostró resultado para este mismo texto, evitar repetición continua
     if (ultimoToken.current === textoLimpio && resultadoRef.current) return;
 
+    const cafeteriaIdValidacion = cafeteriaIdRef.current == null || String(cafeteriaIdRef.current).trim() === ''
+      ? NaN
+      : Number(cafeteriaIdRef.current);
+    if (!Number.isFinite(cafeteriaIdValidacion)) {
+      setResultado({
+        valido: false,
+        razon: 'No se pudo determinar la cafetería autorizada. Inicia sesión nuevamente.',
+      });
+      reproducirSonidoRechazo();
+      return;
+    }
+
     procesando.current = true;
     ultimoToken.current = textoLimpio;
     setErrorConexion('');
@@ -231,11 +248,11 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
       let fuePorBackend = false;
 
       try {
-        res = await backendApi.validarQr(token);
+        res = await backendApi.validarQr(token, cafeteriaIdValidacion);
         fuePorBackend = true;
       } catch (backendErr) {
         console.warn('[KDS Escáner] MS Comercio no disponible para validar QR, fallback a Supabase:', backendErr.message);
-        res = await pedidosService.validarQrEntrega(token, usuarioIdRef.current);
+        res = await pedidosService.validarQrEntrega(token, usuarioIdRef.current, cafeteriaIdValidacion);
       }
 
       // Si el MS Comercio rechazó (ej. no tenía el token en memoria), verificar en Supabase
@@ -244,10 +261,11 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
         res &&
         res.valido === false &&
         !res.razon?.includes('ya fue entregado') &&
-        !res.razon?.includes('no está listo')
+        !res.razon?.includes('no está listo') &&
+        !res.razon?.includes('no pertenece a esta cafetería')
       ) {
         try {
-          const porSupabase = await pedidosService.validarQrEntrega(token, usuarioIdRef.current);
+          const porSupabase = await pedidosService.validarQrEntrega(token, usuarioIdRef.current, cafeteriaIdValidacion);
           if (porSupabase && porSupabase.valido) {
             console.warn('[KDS Escáner] MS Comercio rechazó la credencial, Supabase sí la aceptó:', res.razon);
             res = porSupabase;
@@ -834,7 +852,7 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
 
       <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          Cafetería #{cafeteriaId}
+          {Number.isFinite(Number(cafeteriaId)) ? `Cafetería #${cafeteriaId}` : 'Sin cafetería asignada'}
         </Typography>
         <Stack direction="row" spacing={1}>
           {resultado && (

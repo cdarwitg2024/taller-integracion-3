@@ -122,6 +122,26 @@ describe('FR-22 - Generación de QR dinámico', () => {
     expect(validacion.body.pedido.id).toBe(pedido.id);
   });
 
+  test('Criterio 5: Rechaza el QR de otra cafetería sin consumir el token', async () => {
+    const pedido = await crearPedido();
+    await ponerListo(pedido);
+
+    const otraCafeteria = await request(app)
+      .post('/api/pedidos/validar-qr')
+      .send({ token: pedido.qr_token, cafeteria_id: 'cafe-central-02' });
+    expect(otraCafeteria.status).toBe(400);
+    expect(otraCafeteria.body.valido).toBe(false);
+    expect(otraCafeteria.body.razon).toMatch(/no pertenece a esta cafetería/i);
+
+    // El rechazo no debe marcar el pedido como retirado ni consumir el token.
+    const correcta = await request(app)
+      .post('/api/pedidos/validar-qr')
+      .send({ token: pedido.qr_token, cafeteria_id: 'cafe-central-01' });
+    expect(correcta.status).toBe(200);
+    expect(correcta.body.valido).toBe(true);
+    expect(correcta.body.pedido.id).toBe(pedido.id);
+  });
+
   test('Criterio 3: No reutilización - un token solo puede usarse una vez', async () => {
     const pedido = await crearPedido();
     const qr = await request(app).get(`/api/pedidos/${pedido.id}/qr`);

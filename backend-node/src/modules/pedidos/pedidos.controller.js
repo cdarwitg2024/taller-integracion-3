@@ -181,12 +181,12 @@ async function obtenerTokenContingencia(req, res, next) {
  */
 async function validarQR(req, res, next) {
   try {
-    const { token } = req.body;
+    const { token, cafeteria_id } = req.body;
     if (!token) {
       return res.status(400).json({ error: 'Debe proporcionar el token o código QR a validar.' });
     }
 
-    const resultado = await PedidosService.validarEntrega(token);
+    const resultado = await PedidosService.validarEntrega(token, cafeteria_id ?? null);
     if (!resultado.valido) {
       return res.status(400).json(resultado);
     }
