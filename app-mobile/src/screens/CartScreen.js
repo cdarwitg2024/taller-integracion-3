@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -19,13 +19,16 @@ import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
 const FRANJAS = [
-  { id: '12:00-12:15', label: '12:00 - 12:15' },
-  { id: '12:15-12:30', label: '12:15 - 12:30' },
-  { id: '12:30-12:45', label: '12:30 - 12:45' },
-  { id: '12:45-13:00', label: '12:45 - 13:00' },
-  { id: '13:00-13:15', label: '13:00 - 13:15' },
-  { id: '13:15-13:30', label: '13:15 - 13:30' },
+  { id: '12:00-12:15', label: '12:00 - 12:15', inicio: '12:00', fin: '12:15' },
+  { id: '12:15-12:30', label: '12:15 - 12:30', inicio: '12:15', fin: '12:30' },
+  { id: '12:30-12:45', label: '12:30 - 12:45', inicio: '12:30', fin: '12:45' },
+  { id: '12:45-13:00', label: '12:45 - 13:00', inicio: '12:45', fin: '13:00' },
+  { id: '13:00-13:15', label: '13:00 - 13:15', inicio: '13:00', fin: '13:15' },
+  { id: '13:15-13:30', label: '13:15 - 13:30', inicio: '13:15', fin: '13:30' },
 ];
+
+// Referencia horaria explícita utilizada para validar vencimiento
+const getReferenciaHoraria = () => new Date();
 
 const CartScreen = ({
   cart,
@@ -47,11 +50,51 @@ const CartScreen = ({
   // es un dato de ESTE pedido, y una franja vieja guardada podría estar
   // obsoleta (ya pasó la hora o el carrito cambió). Se elige en cada pedido.
   const [franjaSeleccionada, setFranjaSeleccionada] = useState(null);
+  const [ahora, setAhora] = useState(() => getReferenciaHoraria());
   const { totalProducts, subtotal, total } = useCartTotals(cart);
 
+  // Actualizar referencia horaria mientras la pantalla esté visible
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setAhora(getReferenciaHoraria());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const franjasDisponibles = useMemo(() => {
+    const referencia = ahora;
+    const hoy = new Date(referencia.getFullYear(), referencia.getMonth(), referencia.getDate());
+    return FRANJAS.map((f) => {
+      const [hI, mI] = f.inicio.split(':').map((n) => parseInt(n, 10));
+      const [hF, mF] = f.fin.split(':').map((n) => parseInt(n, 10));
+      const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), hI, mI, 0, 0);
+      const fin = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), hF, mF, 0, 0);
+      // Franja vencida si la hora de fin ya pasó respecto a la referencia horaria explícita
+      const vencida = fin.getTime() <= referencia.getTime();
+      return { ...f, vencida };
+    });
+  }, [ahora]);
+
+  // Si la franja seleccionada vence antes del checkout/estado actual, deja de ser válida
+  useEffect(() => {
+    if (!franjaSeleccionada) return;
+    const actual = franjasDisponibles.find((f) => f.id === franjaSeleccionada);
+    if (actual && actual.vencida) {
+      setFranjaSeleccionada(null);
+    }
+  }, [franjaSeleccionada, franjasDisponibles]);
+
+  const hayFranjasDisponibles = franjasDisponibles.some((f) => !f.vencida);
+
   const handleCheckout = () => {
-    if (!franjaSeleccionada) {
-      alert('Por favor selecciona una franja horaria para el retiro.');
+    const actual = franjasDisponibles.find((f) => f.id === franjaSeleccionada);
+    if (!franjaSeleccionada || !actual || actual.vencida) {
+      alert('La franja horaria seleccionada ya no está disponible. Selecciona una franja vigente.');
+      if (actual && actual.vencida) setFranjaSeleccionada(null);
+      return;
+    }
+    if (!hayFranjasDisponibles) {
+      alert('No hay franjas de retiro disponibles en este momento.');
       return;
     }
     onCheckout({ franja: franjaSeleccionada });
@@ -121,21 +164,29 @@ const CartScreen = ({
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.franjaContainer}
                 >
-                  {FRANJAS.map((item) => {
+                  {franjasDisponibles.map((item) => {
                     const isSelected = franjaSeleccionada === item.id;
+                    const disabled = item.vencida;
                     return (
                       <TouchableOpacity
                         key={item.id}
                         style={[
                           styles.franjaChip,
                           isSelected && styles.franjaChipSelected,
+                          disabled && styles.franjaChipDisabled,
                         ]}
-                        onPress={() => setFranjaSeleccionada(item.id)}
+                        onPress={() => {
+                          if (disabled) return;
+                          setFranjaSeleccionada(item.id);
+                        }}
+                        disabled={disabled}
+                        accessibilityState={{ disabled }}
                       >
                         <Text
                           style={[
                             styles.franjaText,
                             isSelected && styles.franjaTextSelected,
+                            disabled && styles.franjaTextDisabled,
                           ]}
                         >
                           {item.label}
@@ -144,6 +195,11 @@ const CartScreen = ({
                     );
                   })}
                 </ScrollView>
+                {!hayFranjasDisponibles && (
+                  <Text style={styles.franjaEmptyText}>
+                    No hay franjas de retiro disponibles en este momento.
+                  </Text>
+                )}
               </View>
             </>
           }
@@ -204,7 +260,7 @@ const CartScreen = ({
               <Button
                 title={paying ? 'Procesando pago...' : 'Proceder al Pago'}
                 onPress={handleCheckout}
-                disabled={paying || !franjaSeleccionada}
+                disabled={paying || !franjaSeleccionada || !hayFranjasDisponibles}
                 loading={paying}
               />
 
@@ -322,6 +378,12 @@ const styles = StyleSheet.create({
     borderColor: colors.cafeOscuro,
   },
 
+  franjaChipDisabled: {
+    backgroundColor: colors.fondo,
+    borderColor: colors.borde,
+    opacity: 0.5,
+  },
+
   franjaText: {
     fontSize: 11,
     fontWeight: typography.pesoMedio,
@@ -330,6 +392,16 @@ const styles = StyleSheet.create({
 
   franjaTextSelected: {
     color: colors.blanco,
+  },
+
+  franjaTextDisabled: {
+    color: colors.textoSecundario,
+  },
+
+  franjaEmptyText: {
+    marginTop: spacing.sm,
+    fontSize: 10,
+    color: colors.textoSecundario,
   },
 
   readyCard: {
