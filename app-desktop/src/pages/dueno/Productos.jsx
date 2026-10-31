@@ -306,12 +306,11 @@ function CatalogoProductos() {
       return;
     }
 
-    if (createForm.stock_minimo !== '' && createForm.stock_minimo !== null) {
-      const errorMin = validarStock(createForm.stock_minimo, 'Stock mínimo');
-      if (errorMin) {
-        setCreateFormError(errorMin);
-        return;
-      }
+    // Stock mínimo: obligatorio (como el stock). Siempre pasa por validarStock().
+    const errorMin = validarStock(createForm.stock_minimo, 'Stock mínimo');
+    if (errorMin) {
+      setCreateFormError(errorMin);
+      return;
     }
 
     if (!createForm.cafeteria_id) {
@@ -395,12 +394,11 @@ function CatalogoProductos() {
       return;
     }
 
-    if (editForm.minimo !== '' && editForm.minimo !== null) {
-      const errorMin = validarStock(editForm.minimo, 'Stock mínimo');
-      if (errorMin) {
-        setFormError(errorMin);
-        return;
-      }
+    // Stock mínimo: obligatorio (como el stock). Siempre pasa por validarStock().
+    const errorMin = validarStock(editForm.minimo, 'Stock mínimo');
+    if (errorMin) {
+      setFormError(errorMin);
+      return;
     }
 
     setSaving(true);
@@ -1756,7 +1754,7 @@ function CatalogoProductos() {
 
               <Box sx={{ flex: 1 }}>
                 <Typography variant="caption" fontWeight={700} sx={{ color: '#78665B', display: 'block', mb: 0.5 }}>
-                  Stock Mínimo Alerta
+                  Stock Mínimo Alerta *
                 </Typography>
                 <TextField
                   size="small"
@@ -2039,7 +2037,7 @@ function CatalogoProductos() {
 
               <Box sx={{ flex: 1 }}>
                 <Typography variant="caption" fontWeight={700} sx={{ color: '#78665B', display: 'block', mb: 0.5 }}>
-                  Stock Mínimo
+                  Stock Mínimo *
                 </Typography>
                 <TextField
                   size="small"
