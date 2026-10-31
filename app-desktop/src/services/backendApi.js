@@ -4,7 +4,7 @@ export const BASE_BACKEND =
 export const CAFETERIA_ID =
   import.meta.env?.VITE_CAFETERIA_ID ? Number(import.meta.env.VITE_CAFETERIA_ID) : null;
 
-import { supabase } from './supabase';
+import { supabase } from '../service/supabase';
 
 async function getAccessToken() {
   try {
