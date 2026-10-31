@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Alert, Box, CircularProgress, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material';
 
 import KdsTopBar from '../../components/KdsTopBar';
 import KanbanColumn from '../../components/KanbanColumn';
@@ -100,7 +100,7 @@ function Comandas({ currentUser }) {
     });
   }, []);
 
-  const fetchPedidos = useCallback(async () => {
+  const fetchPedidos = useCallback(async (isRetry = false) => {
     if (sinCafeteriaAsociada) {
       setPedidos([]);
       setErrorComandas('Este empleado no tiene una cafetería asociada. No es posible consultar comandas.');
@@ -108,16 +108,25 @@ function Comandas({ currentUser }) {
       return;
     }
     try {
-      setErrorComandas('');
+      if (!isRetry) {
+        setErrorComandas('');
+      }
       const data = await pedidosService.getAll({ cafeteriaId: cafeteriaIdEmpleado });
+      setErrorComandas('');
       mergeConSnapshot(data);
     } catch (err) {
       console.error('Error cargando comandas:', err);
-      setErrorComandas(err.message || 'Error al cargar comandas');
+      const mensaje = err?.message || 'Error al cargar comandas';
+      // Si ya hay comandas visibles, no las borramos por un error temporal
+      if (pedidos.length > 0) {
+        setErrorComandas(mensaje);
+      } else {
+        setErrorComandas(mensaje);
+      }
     } finally {
       setLoading(false);
     }
-  }, [mergeConSnapshot, cafeteriaIdEmpleado, sinCafeteriaAsociada]);
+  }, [mergeConSnapshot, cafeteriaIdEmpleado, sinCafeteriaAsociada, pedidos.length]);
 
   const agregarComandaRealTime = useCallback((comanda) => {
     if (sinCafeteriaAsociada) return;
@@ -147,7 +156,8 @@ function Comandas({ currentUser }) {
   }, [sinCafeteriaAsociada, cafeteriaIdEmpleado]);
 
   useEffect(() => {
-    fetchPedidos();
+    setLoading(true);
+    fetchPedidos(false);
   }, [fetchPedidos]);
 
   useEffect(() => {
@@ -163,9 +173,13 @@ function Comandas({ currentUser }) {
     if (sinCafeteriaAsociada) return;
     const poll = setInterval(() => {
       pedidosService.getAll({ cafeteriaId: cafeteriaIdEmpleado })
-        .then(mergeConSnapshot)
+        .then((data) => {
+          setErrorComandas('');
+          mergeConSnapshot(data);
+        })
         .catch((err) => {
           console.error('Error en polling de comandas:', err);
+          // No eliminar comandas ya visibles ante fallo temporal
         });
     }, 10000);
     return () => clearInterval(poll);
@@ -217,15 +231,24 @@ function Comandas({ currentUser }) {
         />
       </Box>
 
-      {errorComandas ? (
-        <Box sx={{ flexGrow: 1 }}>
-          <Alert severity="error">{errorComandas}</Alert>
-        </Box>
-      ) : loading ? (
+      {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1 }}>
           <CircularProgress size={56} />
         </Box>
       ) : (
+        <>
+          {errorComandas && (
+            <Box sx={{ mb: 2 }}>
+              <Alert severity="warning" action={<Button color="inherit" size="small" onClick={() => { setLoading(true); fetchPedidos(true); }}>Reintentar</Button>}>
+                {errorComandas}
+              </Alert>
+            </Box>
+          )}
+          {errorComandas && pedidosOperativos.length === 0 ? (
+            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+              <Typography color="text.secondary">No hay comandas para mostrar</Typography>
+            </Box>
+          ) : (
         <Box
           sx={{
             display: 'grid',
@@ -261,6 +284,8 @@ function Comandas({ currentUser }) {
             );
           })}
         </Box>
+          )}
+        </>
       )}
 
       <DetallePedidoDialog
