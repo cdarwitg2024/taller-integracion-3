@@ -61,6 +61,19 @@ export const useDisponibilidadProductos = (cafeteriaId) => {
         (payload) => {
           const nuevo = payload.new;
           if (!nuevo) return;
+          const activo = nuevo.activo !== false && nuevo.activo !== null;
+          const eliminado = Boolean(nuevo.eliminado_en);
+          // Si se reactiva un producto (pasa a activo y sin eliminación),
+          // no está en la lista actual filtrada por activo=true. Forzamos recarga
+          // para incorporarlo sin duplicados y con toda su información.
+          if (activo && !eliminado) {
+            const anterior = payload.old || {};
+            const estabaInactivo = anterior.activo === false || anterior.activo === null || Boolean(anterior.eliminado_en);
+            if (estabaInactivo) {
+              setCambios((prev) => [{ recargar: true, ts: Date.now() }, ...prev.slice(0, 19)]);
+              return;
+            }
+          }
           setCambios((prev) => [
             {
               id: Number(nuevo.id),

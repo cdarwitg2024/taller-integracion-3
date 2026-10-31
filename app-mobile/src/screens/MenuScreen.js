@@ -134,7 +134,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     if (!cambios.length) return;
     const pendiente = cambios[0];
 
-    // Producto nuevo o eliminado en cascada: recargamos la lista
+    // Producto nuevo, reactivado o eliminado en cascada: recargamos la lista
     if (pendiente.recargar || pendiente.eliminadoId) {
       fetchProducts({ silent: true });
       return;
@@ -143,7 +143,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     if (Number.isFinite(pendiente.id)) {
       setProducts((prev) => {
         const stock = pendiente.stock;
-        const activo = pendiente.activo;
+        const activo = pendiente.activo !== false && pendiente.activo !== null;
         const eliminado = Boolean(pendiente.eliminadoEn);
 
         // Si lo dejaron inactivo o lo borraron, sale de la lista
@@ -151,9 +151,16 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
           return prev.filter((x) => x.id !== pendiente.id);
         }
 
-        return prev.map((p) =>
-          p.id === pendiente.id ? { ...p, stock, available: stock > 0 } : p
-        );
+        // Si ya existe en la lista, solo actualizamos stock/disponibilidad
+        if (prev.some((x) => x.id === pendiente.id)) {
+          return prev.map((p) =>
+            p.id === pendiente.id ? { ...p, stock, available: stock > 0 } : p
+          );
+        }
+
+        // Si no existe y ahora está activo, recargamos para traerlo con info completa
+        fetchProducts({ silent: true });
+        return prev;
       });
     }
   }, [cambios]);
