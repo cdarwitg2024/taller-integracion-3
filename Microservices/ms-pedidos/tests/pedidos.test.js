@@ -88,6 +88,7 @@ beforeEach(() => {
 
   process.env.SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_test';
   process.env.SUPABASE_ANON_KEY = 'sb_anon_test';
+  process.env.MS_MENUS_URL = 'http://menus-test:9999';
   delete process.env.SUPABASE_SERVICE_KEY;
 });
 
@@ -294,7 +295,7 @@ describe('ms-pedidos', () => {
     const res = await request(app).post('/api/pedidos').send(bodyPedido());
     expect(res.status).toBe(201);
     expect(httpMock.post).toHaveBeenCalledTimes(1);
-    expect(httpMock.post.mock.calls[0][0]).toContain('/menus/precios');
+    expect(httpMock.post.mock.calls[0][0]).toBe('http://menus-test:9999/api/menus/precios');
   });
 
   test('POST /api/pedidos construye el cliente autenticado con el fallback SUPABASE_ANON_KEY', async () => {

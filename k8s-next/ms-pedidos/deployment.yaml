@@ -60,6 +60,8 @@ spec:
               value: '3005'
             - name: NODE_ENV
               value: 'production'
+            - name: MS_MENUS_URL
+              value: 'http://ms-menus:3003'
             - name: SUPABASE_URL
               valueFrom:
                 secretKeyRef:
