@@ -21,14 +21,17 @@ function Dashboard() {
     if (showLoading) setLoading(true);
     setDbError(null);
     try {
-      const [resStats, resPedidos, resSales, resTop] = await Promise.all([
-        pedidosService.getEstadisticas(),
-        pedidosService.getAll(),
-        pedidosService.getVentasPorHora(),
-        pedidosService.getTopProductos(),
+      // Snapshot comun de pedidos (S2-T12): un solo getAll; los indicadores derivan sus metricas
+      const pedidos = await pedidosService.getAll();
+
+      const [resStats, resSales, resTop] = await Promise.all([
+        pedidosService.getEstadisticas(pedidos),
+        pedidosService.getVentasPorHora(pedidos),
+        pedidosService.getTopProductos(pedidos),
       ]);
+
       setStats(resStats);
-      setPedidos(resPedidos);
+      setPedidos(pedidos);
       setSalesData(resSales);
       setTopProducts(resTop);
     } catch (err) {

@@ -533,11 +533,11 @@ export const pedidosService = {
     }
   },
 
-  async getEstadisticas() {
-    const pedidos = await this.getAll();
+  async getEstadisticas(pedidos = null) {
+    const lista = pedidos ?? (await this.getAll());
 
     // Criterio comun de ventas (S2-T11): periodo 'hoy' y conjunto de ventas validas
-    const pedidosDelDia = obtenerPedidosDelDia(pedidos);
+    const pedidosDelDia = obtenerPedidosDelDia(lista);
     const totalVentas = obtenerVentasDelDia(pedidosDelDia);
 
     const pendientes = pedidosDelDia.filter((p) => p.estado === 'pendiente').length;
@@ -564,9 +564,9 @@ export const pedidosService = {
     };
   },
 
-  async getVentasPorHora() {
-    const list = await this.getAll();
-    const pedidosDelDia = obtenerPedidosDelDia(list);
+  async getVentasPorHora(pedidos = null) {
+    const lista = pedidos ?? (await this.getAll());
+    const pedidosDelDia = obtenerPedidosDelDia(lista);
 
     // SOLO usamos pedidos de hoy. Si no hay pedidos hoy, no devolvemos datos
     // históricos: el gráfico debe mostrar ceros/cero ventas para hoy.
@@ -608,11 +608,11 @@ export const pedidosService = {
     return Object.values(hourlyMap).sort((a, b) => a.hora.localeCompare(b.hora));
   },
 
-  async getTopProductos() {
-    const list = await this.getAll();
+  async getTopProductos(pedidos = null) {
+    const lista = pedidos ?? (await this.getAll());
     const productCountMap = {};
 
-    const pedidosDelDia = obtenerPedidosDelDia(list);
+    const pedidosDelDia = obtenerPedidosDelDia(lista);
     const pedidosDeVentas = obtenerPedidosDeVentasDelDia(pedidosDelDia);
 
     pedidosDeVentas.forEach((p) => {
