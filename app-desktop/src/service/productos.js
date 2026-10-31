@@ -6,7 +6,9 @@ const normalizeProducto = (p) => ({
   ...p,
   minimo: p.stock_minimo ?? p.minimo ?? 0,
   stock_minimo: p.stock_minimo ?? p.minimo ?? 0,
-  categoria: p.categoria || p.categorias?.nombre || 'GENERAL',
+  // La categoría real viene de la relación con la tabla categorías (categorías.*)
+  // No usamos p.categoria porque es un ID numérico (categoria_id), no el nombre
+  categoria: p.categorias?.nombre || 'Sin categoría',
   cafeteria_nombre: p.cafeterias?.nombre || p.cafeteria_nombre || 'Cafetería Central',
   unidad: p.unidad || 'un',
   catColor: p.catColor || '#8D6E63',
@@ -31,6 +33,10 @@ export const productos = {
       throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
     }
 
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select('*, cafeterias(*), categorias(*)')  // ← Incluir relación con categorías
+      .order('id', { ascending: true });
     let query = supabase.from(TABLE).select('*, cafeterias(*)');
     if (Number.isFinite(cid)) {
       query = query.eq('cafeteria_id', cid);
@@ -57,7 +63,7 @@ export const productos = {
 
     const { data, error } = await supabase
       .from(TABLE)
-      .select('*, cafeterias(*)')
+      .select('*, cafeterias(*), categorias(*)')
       .eq('id', id)
       .single();
 
@@ -77,7 +83,7 @@ export const productos = {
 
     const { data, error } = await supabase
       .from(TABLE)
-      .select('*, cafeterias(*)')
+      .select('*, cafeterias(*), categorias(*)')  // ← Incluir relación con categorías
       .eq('categoria_id', categoriaId)
       .eq('activo', true);
 
@@ -111,7 +117,7 @@ export const productos = {
     const { data, error } = await supabase
       .from(TABLE)
       .insert(dbPayload)
-      .select('*, cafeterias(*)')
+      .select('*, cafeterias(*), categorias(*)')
       .single();
 
     if (error) {
@@ -146,7 +152,7 @@ export const productos = {
       .from(TABLE)
       .update(dbPayload)
       .eq('id', id)
-      .select('*, cafeterias(*)')
+      .select('*, cafeterias(*), categorias(*)')
       .single();
 
     if (error) {
