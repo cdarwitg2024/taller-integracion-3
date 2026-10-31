@@ -150,8 +150,30 @@ function StockEmpleado({ currentUser }) {
       });
       return;
     }
-    if (!productoSeleccionado || !cantidadSolicitada || cantidadSolicitada <= 0) return;
+    if (!productoSeleccionado || !cantidadSolicitada || cantidadSolicitada <= 0) {
+      setSnackbar({
+        open: true,
+        message: 'La cantidad solicitada debe ser mayor a 0.',
+        severity: 'error',
+      });
+      return;
+    }
     try {
+      // shortcut: la verificación no es atómica; dos envíos concurrentes aún pueden insertar
+      // duplicados. Migrar a un índice único parcial sobre (producto_id, cafeteria_id) si se requiere.
+      const yaExistePendiente = await solicitudesStockService.existeSolicitudPendiente({
+        producto_id: productoSeleccionado.id,
+        cafeteria_id: cafeteriaIdEmpleado,
+      });
+      if (yaExistePendiente) {
+        setSnackbar({
+          open: true,
+          message: `Ya existe una solicitud de reposición pendiente para "${productoSeleccionado.nombre}" en esta cafetería. No se crea una nueva solicitud.`,
+          severity: 'warning',
+        });
+        return;
+      }
+
       await solicitudesStockService.crearSolicitud({
         producto_id: productoSeleccionado.id,
         nombre_producto: productoSeleccionado.nombre,
