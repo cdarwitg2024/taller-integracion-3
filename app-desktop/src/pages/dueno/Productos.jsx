@@ -263,6 +263,29 @@ function CatalogoProductos() {
     setCreateFormError('');
   };
 
+  // ─── Validación compartida de stock (T3) ────────────────────────────────
+  // Valida que un campo numérico de stock sea: número válido, finito, no negativo y entero.
+  // Retorna null si todo está bien, o un string con el mensaje de error.
+  const validarStock = (valor, nombreCampo) => {
+    if (valor === '' || valor === undefined || valor === null) {
+      return `${nombreCampo} es obligatorio.`;
+    }
+    const num = Number(valor);
+    if (isNaN(num)) {
+      return `${nombreCampo} debe ser un número válido.`;
+    }
+    if (!Number.isFinite(num)) {
+      return `${nombreCampo} no puede ser un valor infinito o no numérico.`;
+    }
+    if (!Number.isInteger(num)) {
+      return `${nombreCampo} debe ser un número entero (sin decimales).`;
+    }
+    if (num < 0) {
+      return `${nombreCampo} no puede ser negativo.`;
+    }
+    return null;
+  };
+
   const handleSaveCreate = async () => {
     setCreateFormError('');
 
@@ -277,17 +300,18 @@ function CatalogoProductos() {
       return;
     }
 
-    if (createForm.stock === '' || isNaN(Number(createForm.stock)) || Number(createForm.stock) < 0) {
-      setCreateFormError('El stock inicial debe ser un número mayor o igual a 0.');
+    const errorStock = validarStock(createForm.stock, 'Stock inicial');
+    if (errorStock) {
+      setCreateFormError(errorStock);
       return;
     }
 
-    if (
-      createForm.stock_minimo !== '' &&
-      (isNaN(Number(createForm.stock_minimo)) || Number(createForm.stock_minimo) < 0)
-    ) {
-      setCreateFormError('El stock mínimo debe ser un número mayor o igual a 0.');
-      return;
+    if (createForm.stock_minimo !== '' && createForm.stock_minimo !== null) {
+      const errorMin = validarStock(createForm.stock_minimo, 'Stock mínimo');
+      if (errorMin) {
+        setCreateFormError(errorMin);
+        return;
+      }
     }
 
     if (!createForm.cafeteria_id) {
@@ -364,13 +388,19 @@ function CatalogoProductos() {
       setFormError('El precio debe ser un número válido mayor a 0.');
       return;
     }
-    if (editForm.stock === '' || isNaN(Number(editForm.stock)) || Number(editForm.stock) < 0) {
-      setFormError('El stock no puede ser un valor negativo.');
+
+    const errorStock = validarStock(editForm.stock, 'Stock');
+    if (errorStock) {
+      setFormError(errorStock);
       return;
     }
-    if (editForm.minimo !== '' && (isNaN(Number(editForm.minimo)) || Number(editForm.minimo) < 0)) {
-      setFormError('El stock mínimo no puede ser un valor negativo.');
-      return;
+
+    if (editForm.minimo !== '' && editForm.minimo !== null) {
+      const errorMin = validarStock(editForm.minimo, 'Stock mínimo');
+      if (errorMin) {
+        setFormError(errorMin);
+        return;
+      }
     }
 
     setSaving(true);

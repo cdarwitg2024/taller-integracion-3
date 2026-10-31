@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Grid, Alert, Button } from '@mui/material';
+import { Box, Grid, Alert, Button, LinearProgress, Typography } from '@mui/material';
 
 import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 import pedidosService from '../../services/pedidosService';
@@ -16,21 +16,28 @@ function Dashboard() {
   const [topProducts, setTopProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState(null);
+  const [ultimaActualizacionExitosa, setUltimaActualizacionExitosa] = useState(null);
 
   const loadData = async (showLoading = true) => {
     if (showLoading) setLoading(true);
     setDbError(null);
     try {
-      const [resStats, resPedidos, resSales, resTop] = await Promise.all([
-        pedidosService.getEstadisticas(),
-        pedidosService.getAll(),
-        pedidosService.getVentasPorHora(),
-        pedidosService.getTopProductos(),
+      // Snapshot comun de pedidos (S2-T12): un solo getAll; los indicadores derivan sus metricas
+      const pedidos = await pedidosService.getAll();
+
+      const [resStats, resSales, resTop] = await Promise.all([
+        pedidosService.getEstadisticas(pedidos),
+        pedidosService.getVentasPorHora(pedidos),
+        pedidosService.getTopProductos(pedidos),
       ]);
+
       setStats(resStats);
-      setPedidos(resPedidos);
+      setPedidos(pedidos);
       setSalesData(resSales);
       setTopProducts(resTop);
+
+      // Última actualización exitosa (S2-T13): solo se registra en una carga exitosa
+      setUltimaActualizacionExitosa(new Date().toISOString());
     } catch (err) {
       console.error('Error cargando datos del dashboard:', err);
       setDbError(
@@ -76,6 +83,20 @@ function Dashboard() {
 
   return (
     <Box sx={{ width: '100%', maxWidth: '100%', pb: 4, boxSizing: 'border-box' }}>
+      {/* Estado de Carga */}
+      {loading && (
+        <Box sx={{ mb: 3 }}>
+          <LinearProgress color="primary" />
+        </Box>
+      )}
+
+      {/* Última actualización exitosa (S2-T13) */}
+      {!loading && !dbError && ultimaActualizacionExitosa && (
+        <Typography variant="caption" sx={{ color: '#8C7A6F', display: 'block', mb: 2 }}>
+          Última actualización: {new Date(ultimaActualizacionExitosa).toLocaleTimeString()}
+        </Typography>
+      )}
+
       {/* Alerta de Error de Base de Datos */}
       {dbError && (
         <Alert
