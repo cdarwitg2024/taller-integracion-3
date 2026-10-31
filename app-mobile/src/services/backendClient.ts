@@ -167,3 +167,54 @@ export async function apiPost<T>(ruta: string, cuerpo: unknown): Promise<T> {
 
   return json as T;
 }
+
+/**
+ * `GET` autenticado contra el backend (S2-T14).
+ *
+ * Utiliza el JWT de la sesión activa de Supabase Auth en `Authorization: Bearer <token>`.
+ * Retorna el cuerpo JSON tipado y lanza `ApiError` con el código HTTP correspondiente
+ * (401 No autenticado, 404 No encontrado / rol no autorizado, 409 Estado no disponible)
+ * o status 0 ante fallos de red / timeout.
+ *
+ * @param ruta ruta relativa, p. ej. `/api/pedidos/123/qr`.
+ * @param opciones configuración opcional, como `timeoutMs`.
+ */
+export async function apiGet<T>(ruta: string, opciones?: { timeoutMs?: number }): Promise<T> {
+  const url = `${urlBase()}${normalizarRuta(ruta)}`;
+  const token = await tokenActual();
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opciones?.timeoutMs ?? 6000);
+
+  let respuesta: Response;
+  try {
+    respuesta = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      throw new ApiError(`Tiempo de espera agotado al consultar el backend (${ruta}).`, 0);
+    }
+    throw new ApiError(`No se pudo contactar con el backend (${ruta}): ${textoDe(e)}`, 0);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const texto = await respuesta.text().catch(() => '');
+  const json = cuerpoJson(texto);
+
+  if (!respuesta.ok) {
+    throw new ApiError(
+      mensajeDeError(json) ?? `El backend respondió HTTP ${respuesta.status} en ${ruta}.`,
+      respuesta.status,
+      detalleDeError(json)
+    );
+  }
+
+  return json as T;
+}

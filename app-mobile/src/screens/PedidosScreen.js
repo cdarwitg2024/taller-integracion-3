@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { supabase } from '../lib/supabase';
+import { apiGet, ApiError } from '../services/backendClient';
 import QrCode from '../lib/QrCode';
 import Button from '../components/Button';
 import Card from '../components/Card';
@@ -116,27 +117,22 @@ const mapPedido = (p) => ({
   }),
 });
 
-// URL del backend Node. Viene de EXPO_PUBLIC_API_URL (ver app-mobile/.env).
-// En un teléfono físico debe ser la IP de la PC, no 127.0.0.1.
-const API_URL = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '');
-
-// Pide el QR al backend, que es quien lo dibuja y lo registra. Si el backend no
-// responde (teléfono sin red contra la PC, API apagada) se degrada al QR local
-// con el token crudo, que el KDS también acepta.
+// S2-T14: Consulta autenticada de la credencial QR contra ms-pedidos (GET /api/pedidos/:id/qr).
+// Utiliza el JWT de la sesión y maneja de forma diferenciada 401, 404, 409 y fallos de red.
 const obtenerQrDesdeBackend = async (pedidoId) => {
-  if (!API_URL) return null;
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
-    const res = await fetch(`${API_URL}/api/pedidos/${pedidoId}/qr`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json?.success && json?.data ? json.data : null;
-  } catch (e) {
-    return null;
+    const data = await apiGet(`/api/pedidos/${pedidoId}/qr`, { timeoutMs: 5000 });
+    return { ok: true, qr_token: data?.qr_token || null };
+  } catch (err) {
+    if (err instanceof ApiError) {
+      return {
+        ok: false,
+        status: err.status,
+        mensaje: err.message,
+        esAuth: err.status === 401 || err.status === 404,
+      };
+    }
+    return { ok: false, status: 0, mensaje: 'Error de red o conexión', esAuth: false };
   }
 };
 
@@ -144,7 +140,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
-  const [qrBackend, setQrBackend] = useState(null);
+  const [qrResultado, setQrResultado] = useState({
+    cargando: false,
+    token: null,
+    error: null,
+    esOffline: false,
+  });
   // Pestaña del conmutador: 'activos' (pendientes de retirar) o 'inactivos'
   // (historial entregado/cancelado).
   const [tab, setTab] = useState('activos');
@@ -155,22 +156,58 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
   const cerrarPedido = useCallback(() => {
     pedidoAbierto.current = null;
     setSelected(null);
-    setQrBackend(null);
+    setQrResultado({ cargando: false, token: null, error: null, esOffline: false });
   }, []);
 
-  // Al abrir un pedido se pide su QR al backend. `qrBackend` es null mientras
-  // carga, y queda null si la API no respondió (se usa el QR local).
-  // Un pedido ya entregado no pide QR: se muestra el recibo en su lugar.
+  // Al abrir un pedido activo se solicita su credencial QR autenticada a ms-pedidos.
+  // Si el pedido ya está en estado terminal (entregado/cancelado), nunca se pide QR.
   const abrirPedido = useCallback(async (item) => {
     pedidoAbierto.current = item.id;
     setSelected(item);
-    setQrBackend(null);
-    if (!item.qr_token || !esActivo(item.estado)) return;
-    // Solo se pide QR para pedidos ACTIVOS. Un pedido inactivo (entregado o
-    // cancelado) nunca debe solicitar el QR: no sirve y no conviene exponerlo.
-    const data = await obtenerQrDesdeBackend(item.id);
+    setQrResultado({ cargando: true, token: null, error: null, esOffline: false });
+
+    // S2-T14: Pedidos terminales (inactivos) no solicitan ni presentan QR
+    if (!esActivo(item.estado)) {
+      setQrResultado({ cargando: false, token: null, error: null, esOffline: false });
+      return;
+    }
+
+    const res = await obtenerQrDesdeBackend(item.id);
     if (pedidoAbierto.current !== item.id) return;
-    setQrBackend(data);
+
+    if (res.ok && res.qr_token) {
+      setQrResultado({ cargando: false, token: res.qr_token, error: null, esOffline: false });
+    } else if (res.esAuth) {
+      // S2-T14: Error 401 o 404: El fallback NUNCA debe ocultar errores de autorización
+      setQrResultado({
+        cargando: false,
+        token: null,
+        error: {
+          status: res.status,
+          mensaje:
+            res.status === 401
+              ? 'Sesión no autorizada o expirada. Inicia sesión nuevamente.'
+              : 'No tienes autorización para consultar el QR de este pedido.',
+        },
+        esOffline: false,
+      });
+    } else if (res.status === 409) {
+      // S2-T14: Estado inválido en el backend (ej. terminal o sin QR disponible)
+      setQrResultado({
+        cargando: false,
+        token: null,
+        error: { status: 409, mensaje: 'El QR no está disponible en el estado actual del pedido.' },
+        esOffline: false,
+      });
+    } else {
+      // Error de red (status 0): se permite credencial local únicamente en modo offline si es activo
+      setQrResultado({
+        cargando: false,
+        token: item.qr_token || null,
+        error: null,
+        esOffline: true,
+      });
+    }
   }, []);
 
   const aplicarOrden = useCallback((nuevos) => {
@@ -645,19 +682,27 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                   </View>
                 ) : (
                   <View style={styles.qrContainer}>
-                    {selected.qr_token ? (
+                    {qrResultado.cargando ? (
+                      <ActivityIndicator size="small" color={colors.cafeOscuro} style={{ marginVertical: 32 }} />
+                    ) : qrResultado.error ? (
+                      <View style={styles.qrErrorBox}>
+                        <Text style={styles.qrErrorIcon}>⚠️</Text>
+                        <Text style={styles.qrErrorTitulo}>
+                          {qrResultado.error.status === 401
+                            ? 'Sesión no autorizada'
+                            : qrResultado.error.status === 404
+                              ? 'Pedido no encontrado o ajeno'
+                              : 'QR no disponible'}
+                        </Text>
+                        <Text style={styles.qrErrorMensaje}>{qrResultado.error.mensaje}</Text>
+                      </View>
+                    ) : qrResultado.token ? (
                       <>
-                        {/* El backend genera la imagen y el contenido va en JSON;
-                            si la API no responde se cae al QR local con el token
-                            crudo, que el KDS también acepta. */}
-                        {qrBackend?.qr_image ? (
-                          <Image
-                            source={{ uri: qrBackend.qr_image }}
-                            style={styles.qrImagen}
-                            resizeMode="contain"
-                          />
-                        ) : (
-                          <QrCode value={selected.qr_token} size={190} />
+                        <QrCode value={qrResultado.token} size={190} />
+                        {qrResultado.esOffline && (
+                          <Text style={styles.offlineAviso}>
+                            ● Modo sin conexión: credencial de respaldo
+                          </Text>
                         )}
                         <Text style={styles.qrHint}>
                           Presenta este QR al llegar a la cafetería para retirar tu pedido.
@@ -667,7 +712,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                             ¿No puedes escanear? Di este código
                           </Text>
                           <Text style={styles.contingenciaCodigo}>
-                            {qrBackend?.codigo_legible || selected.codigo_retiro_diario}
+                            {selected.codigo_retiro_diario || `CF-${selected.id}`}
                           </Text>
                         </View>
                       </>
@@ -820,6 +865,37 @@ const styles = StyleSheet.create({
   },
   qrContainer: { alignItems: 'center', marginTop: spacing.xl },
   qrImagen: { width: 200, height: 200 },
+  qrErrorBox: {
+    padding: spacing.md,
+    backgroundColor: colors.rojoBg || '#FEE2E2',
+    borderRadius: 14,
+    alignItems: 'center',
+    marginVertical: spacing.md,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: colors.rojo || '#DC2626',
+  },
+  qrErrorIcon: { fontSize: 26, marginBottom: spacing.xs },
+  qrErrorTitulo: {
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.rojo || '#DC2626',
+    textAlign: 'center',
+  },
+  qrErrorMensaje: {
+    fontSize: typography.etiqueta,
+    color: colors.textoSecundario,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  offlineAviso: {
+    fontSize: typography.etiqueta,
+    color: colors.naranja,
+    fontWeight: typography.pesoBold,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+  },
   qrHint: {
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,
