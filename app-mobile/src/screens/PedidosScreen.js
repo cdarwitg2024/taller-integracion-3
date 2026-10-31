@@ -91,7 +91,7 @@ const mapPedido = (p) => ({
   codigo_retiro_diario: p.codigo_retiro_diario || null,
   franja_retiro: p.franja_retiro || null,
   cafeteria_nombre: p.cafeterias?.nombre || 'Cafetería',
-  cafeteria_direccion: p.cafeterias?.direccion || null,
+  cafeteria_direccion: p.cafeterias?.campus_sedes?.direccion || p.cafeterias?.direccion || null,
   cafeteria_telefono: p.cafeterias?.telefono || null,
   cafeteria_rut: p.cafeterias?.rut || null,
   metodo_pago: p.metodo_pago || null,
@@ -101,11 +101,19 @@ const mapPedido = (p) => ({
   // Se usa para el recibo: si el pedido ya fue retirado, el QR deja de tener
   // sentido y en su lugar se muestra el detalle de lo que se compro y cuando.
   entregado_en: p.entregado_en || null,
-  detalles: (p.detalles_pedido || []).map((d) => ({
-    nombre: d.productos?.nombre || 'Producto',
-    cantidad: Number(d.cantidad) || 1,
-    precio: Number(d.productos?.precio) || 0,
-  })),
+  detalles: (p.detalles_pedido || []).map((d) => {
+    const cantidad = Number(d.cantidad) || 1;
+    // S2-T13: Priorizar el precio histórico persistido al momento de la compra
+    const precio = Number(d.precio_unitario ?? d.productos?.precio ?? 0);
+    // S2-T13: Priorizar el subtotal histórico del pedido
+    const subtotal = d.subtotal != null ? Number(d.subtotal) : cantidad * precio;
+    return {
+      nombre: d.productos?.nombre || 'Producto',
+      cantidad,
+      precio,
+      subtotal,
+    };
+  }),
 });
 
 // URL del backend Node. Viene de EXPO_PUBLIC_API_URL (ver app-mobile/.env).
@@ -204,7 +212,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
 
       const { data, error } = await supabase
         .from('pedidos')
-        .select('*, cafeterias(nombre, direccion, telefono, rut), detalles_pedido(productos(nombre, precio), cantidad)')
+        .select('*, cafeterias(nombre, telefono, campus_sedes(direccion)), detalles_pedido(cantidad, precio_unitario, subtotal, productos(nombre, precio))')
         .eq('usuario_id', usuarioId)
         .order('creado_en', { ascending: false });
 
@@ -261,14 +269,31 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 const idx = prev.findIndex((o) => o.id === String(nuevo.id));
                 if (idx === -1) return prev;
                 const siguiente = [...prev];
-                siguiente[idx] = mapPedido(nuevo);
+                const mapeado = mapPedido(nuevo);
+                siguiente[idx] = {
+                  ...prev[idx],
+                  ...mapeado,
+                  detalles: nuevo.detalles_pedido ? mapeado.detalles : prev[idx].detalles,
+                  cafeteria_nombre: nuevo.cafeterias ? mapeado.cafeteria_nombre : prev[idx].cafeteria_nombre,
+                  cafeteria_direccion: nuevo.cafeterias ? mapeado.cafeteria_direccion : prev[idx].cafeteria_direccion,
+                  cafeteria_telefono: nuevo.cafeterias ? mapeado.cafeteria_telefono : prev[idx].cafeteria_telefono,
+                  cafeteria_rut: nuevo.cafeterias ? mapeado.cafeteria_rut : prev[idx].cafeteria_rut,
+                };
                 return siguiente;
               });
-              setSelected((prevSel) =>
-                prevSel && String(prevSel.id) === String(nuevo.id)
-                  ? mapPedido(nuevo)
-                  : prevSel
-              );
+              setSelected((prevSel) => {
+                if (!prevSel || String(prevSel.id) !== String(nuevo.id)) return prevSel;
+                const mapeado = mapPedido(nuevo);
+                return {
+                  ...prevSel,
+                  ...mapeado,
+                  detalles: nuevo.detalles_pedido ? mapeado.detalles : prevSel.detalles,
+                  cafeteria_nombre: nuevo.cafeterias ? mapeado.cafeteria_nombre : prevSel.cafeteria_nombre,
+                  cafeteria_direccion: nuevo.cafeterias ? mapeado.cafeteria_direccion : prevSel.cafeteria_direccion,
+                  cafeteria_telefono: nuevo.cafeterias ? mapeado.cafeteria_telefono : prevSel.cafeteria_telefono,
+                  cafeteria_rut: nuevo.cafeterias ? mapeado.cafeteria_rut : prevSel.cafeteria_rut,
+                };
+              });
             }
           )
           .on(
@@ -530,7 +555,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                         {d.cantidad}× {d.nombre}
                       </Text>
                       <Text style={styles.detallePrecio}>
-                        ${(d.cantidad * d.precio).toLocaleString('es-CL')}
+                        ${(d.subtotal ?? (d.cantidad * d.precio)).toLocaleString('es-CL')}
                       </Text>
                     </View>
                   ))}
