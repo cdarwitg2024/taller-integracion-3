@@ -700,17 +700,24 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
               placeholder="$0"
               keyboardType="numeric"
               value={montoRecarga}
-              onChangeText={setMontoRecarga}
+              onChangeText={(text) => setMontoRecarga(text.replace(/[^0-9]/g, ''))}
               autoFocus
             />
 
             <Button
               title="Continuar"
               onPress={() => {
-                const monto = parseInt(montoRecarga, 10);
+                const valorLimpio = montoRecarga.replace(/[^0-9]/g, '');
+                const monto = parseInt(valorLimpio, 10);
                 if (!isNaN(monto) && monto > 0) {
+                  if (monto > 100000) {
+                    Alert.alert('Monto excedido', 'El monto máximo por recarga es de $100.000 CLP.');
+                    return;
+                  }
                   setMontoSeleccionado(monto);
                   setRecargaVisible(true);
+                } else {
+                  Alert.alert('Monto inválido', 'Por favor ingresa un monto válido mayor a $0.');
                 }
               }}
               disabled={!montoRecarga}

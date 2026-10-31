@@ -128,19 +128,32 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
   const cargarWallet = useCallback(async (usuarioIdInterno) => {
     if (isGuest || (!usuarioIdInterno && !authUserId)) {
       setWallet(null);
-      return;
+      return null;
     }
 
     setWalletLoading(true);
     try {
-      let query = supabase.from('wallets').select('*');
-      if (usuarioIdInterno) {
-        query = query.eq('usuario_id', usuarioIdInterno);
-      } else if (authUserId) {
-        query = query.eq('usuario_id', authUserId);
+      let idInterno = usuarioIdInterno;
+      if (!idInterno && authUserId) {
+        const { data: uData } = await supabase
+          .from('usuarios')
+          .select('id')
+          .eq('auth_user_id', authUserId)
+          .maybeSingle();
+        idInterno = uData?.id;
       }
 
-      const { data, error } = await query.maybeSingle();
+      if (!idInterno) {
+        setWallet({ saldo_actual: 0 });
+        return { saldo_actual: 0 };
+      }
+
+      const { data, error } = await supabase
+        .from('wallets')
+        .select('*')
+        .eq('usuario_id', idInterno)
+        .maybeSingle();
+
       if (!error && data) {
         setWallet(data);
         return data;
@@ -332,6 +345,43 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
   useEffect(() => {
     cargarPerfil();
   }, [cargarPerfil]);
+
+  // S2-T18: Sincronización en tiempo real de Wallet y Actividad en Perfil
+  useEffect(() => {
+    if (!usuarioData?.id) return undefined;
+
+    const canal = supabase
+      .channel(`perfil-realtime-${usuarioData.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'wallets',
+          filter: `usuario_id=eq.${usuarioData.id}`,
+        },
+        () => {
+          cargarWallet(usuarioData.id);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pedidos',
+          filter: `usuario_id=eq.${usuarioData.id}`,
+        },
+        () => {
+          cargarActividad(usuarioData.id, wallet?.id);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [usuarioData?.id, wallet?.id, cargarWallet, cargarActividad]);
 
   const onRefresh = () => {
     setRefreshing(true);
