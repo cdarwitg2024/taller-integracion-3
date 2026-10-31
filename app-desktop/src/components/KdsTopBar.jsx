@@ -97,22 +97,27 @@ function KdsTopBar({ conexion = 'conectado', onEscanear, estadoVoz, onActivarVoz
           value={busqueda}
           onChange={(e) => onBusquedaChange?.(e.target.value)}
           placeholder="Buscar por código de pedido..."
+          sx={{
+            '& .MuiInputBase-root': {
+              backgroundColor: '#fff',
+              borderRadius: 2,
+            },
+            '& .MuiInputBase-input': {
+              color: '#000',
+              WebkitTextFillColor: '#000',
+            },
+            '& .MuiInputBase-input::placeholder': {
+              color: '#666',
+              opacity: 1,
+              WebkitTextFillColor: '#666',
+            },
+          }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon sx={{ color: kdsColors.textSecondary }} />
+                <SearchIcon sx={{ color: '#666' }} />
               </InputAdornment>
             ),
-            sx: {
-              backgroundColor: '#fff',
-              borderRadius: 2,
-              color: kdsColors.textPrimary,
-            },
-          }}
-          inputProps={{
-            style: {
-              color: kdsColors.textPrimary,
-            },
           }}
         />
       </Box>
