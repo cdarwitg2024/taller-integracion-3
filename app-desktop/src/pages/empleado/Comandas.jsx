@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material';
 
 import KdsTopBar from '../../components/KdsTopBar';
 import KanbanColumn from '../../components/KanbanColumn';
@@ -13,7 +13,6 @@ import kdsRealtime, {
   ESTADO_RECONECTANDO,
 } from '../../services/kdsRealtime';
 import vozKds, { VOZ_APAGADA, VOZ_SILENCIADA } from '../../services/vozKdsService';
-import { CAFETERIA_ID } from '../../services/backendApi';
 import { kdsColors } from '../../theme/theme';
 import { COLORS } from '../../design/tokens';
 
@@ -53,8 +52,20 @@ function Comandas({ currentUser }) {
   const [estadoVoz, setEstadoVoz] = useState(vozKds.obtenerEstado());
   const [diagnosticoVoz, setDiagnosticoVoz] = useState(vozKds.obtenerDiagnostico());
   const [avisoVoz, setAvisoVoz] = useState(null);
+  const [errorComandas, setErrorComandas] = useState('');
+  const [errorOperacion, setErrorOperacion] = useState('');
+  const [procesando, setProcesando] = useState(new Set());
+  const [busqueda, setBusqueda] = useState('');
 
   const pedidosRealtime = useRef(new Map());
+
+  const cafeteriaIdEmpleado = Number(
+    currentUser?.cafeteria_id ??
+    currentUser?.cafeteriaId ??
+    currentUser?.usuario?.cafeteria_id ??
+    currentUser?.perfil?.cafeteria_id
+  );
+  const sinCafeteriaAsociada = !Number.isFinite(cafeteriaIdEmpleado);
 
   // T16 · Avisos de voz: la UI refleja el estado del servicio de voz.
   useEffect(() => vozKds.suscribir((estado, diagnostico) => {
@@ -92,22 +103,52 @@ function Comandas({ currentUser }) {
     });
   }, []);
 
-  const fetchPedidos = useCallback(async () => {
-    const data = await pedidosService.getAll({ cafeteriaId: CAFETERIA_ID });
-    mergeConSnapshot(data);
-    setLoading(false);
-  }, [mergeConSnapshot]);
+  const fetchPedidos = useCallback(async (isRetry = false) => {
+    if (sinCafeteriaAsociada) {
+      setPedidos([]);
+      setErrorComandas('Este empleado no tiene una cafetería asociada. No es posible consultar comandas.');
+      setLoading(false);
+      return;
+    }
+    try {
+      if (!isRetry) {
+        setErrorComandas('');
+      }
+      const data = await pedidosService.getAll({ cafeteriaId: cafeteriaIdEmpleado });
+      setErrorComandas('');
+      mergeConSnapshot(data);
+    } catch (err) {
+      console.error('Error cargando comandas:', err);
+      const mensaje = err?.message || 'Error al cargar comandas';
+      // Si ya hay comandas visibles, no las borramos por un error temporal
+      if (pedidos.length > 0) {
+        setErrorComandas(mensaje);
+      } else {
+        setErrorComandas(mensaje);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [mergeConSnapshot, cafeteriaIdEmpleado, sinCafeteriaAsociada, pedidos.length]);
 
   const agregarComandaRealTime = useCallback((comanda) => {
+    if (sinCafeteriaAsociada) return;
+    if (Number.isFinite(cafeteriaIdEmpleado) && comanda?.cafeteria_id != null && Number(comanda.cafeteria_id) !== cafeteriaIdEmpleado) {
+      return;
+    }
     const id = String(comanda.id);
     pedidosRealtime.current.set(id, comanda);
     setPedidos(prev => (prev.some(p => String(p.id) === id) ? prev : ordenarPedidos([comanda, ...prev])));
     // T16 · aviso de voz: solo en ingresos reales por Realtime (nunca en
     // la carga inicial de la pantalla ni en cambios de estado).
     vozKds.anunciar(comanda);
-  }, []);
+  }, [sinCafeteriaAsociada, cafeteriaIdEmpleado]);
 
   const actualizarPedidoRealTime = useCallback((comanda) => {
+    if (sinCafeteriaAsociada) return;
+    if (Number.isFinite(cafeteriaIdEmpleado) && comanda?.cafeteria_id != null && Number(comanda.cafeteria_id) !== cafeteriaIdEmpleado) {
+      return;
+    }
     const id = String(comanda.id);
     pedidosRealtime.current.set(id, comanda);
     setPedidos(prev => {
@@ -115,30 +156,42 @@ function Comandas({ currentUser }) {
       return ordenarPedidos(prev.map(p => (String(p.id) === id ? comanda : p)));
     });
     setSelectedPedido(prev => (prev && String(prev.id) === id ? { ...prev, ...comanda } : prev));
-  }, []);
+  }, [sinCafeteriaAsociada, cafeteriaIdEmpleado]);
 
   useEffect(() => {
-    fetchPedidos();
+    setLoading(true);
+    fetchPedidos(false);
   }, [fetchPedidos]);
 
   useEffect(() => {
+    if (sinCafeteriaAsociada) {
+      setConexion(ESTADO_RECONECTANDO);
+      return undefined;
+    }
     const suscripcion = kdsRealtime.suscribir({
       onComanda: agregarComandaRealTime,
       onActualizar: actualizarPedidoRealTime,
       onEstadoCanal: setConexion,
+      cafeteriaId: cafeteriaIdEmpleado,
     });
     return () => suscripcion.cerrar();
-  }, [agregarComandaRealTime, actualizarPedidoRealTime]);
+  }, [agregarComandaRealTime, actualizarPedidoRealTime, cafeteriaIdEmpleado, sinCafeteriaAsociada]);
 
   useEffect(() => {
-    // Sin `cafeteriaId`: el KDS muestra los pedidos de todas las cafeterias, cada
-    // uno con el nombre de la suya en la tarjeta. Filtrar aqui hacia que un
-    // pedido pagado no apareciera hasta recargar a mano.
+    if (sinCafeteriaAsociada) return;
     const poll = setInterval(() => {
-      pedidosService.getAll().then(mergeConSnapshot);
+      pedidosService.getAll({ cafeteriaId: cafeteriaIdEmpleado })
+        .then((data) => {
+          setErrorComandas('');
+          mergeConSnapshot(data);
+        })
+        .catch((err) => {
+          console.error('Error en polling de comandas:', err);
+          // No eliminar comandas ya visibles ante fallo temporal
+        });
     }, 10000);
     return () => clearInterval(poll);
-  }, [mergeConSnapshot]);
+  }, [mergeConSnapshot, cafeteriaIdEmpleado, sinCafeteriaAsociada]);
 
   useEffect(() => {
     const idsVisibles = new Set(pedidos.map(p => String(p.id)));
@@ -149,19 +202,58 @@ function Comandas({ currentUser }) {
 
   const handleCambiarEstado = async (id, nuevoEstado, e) => {
     if (e) e.stopPropagation();
-    const actualizado = await pedidosService.updateEstado(id, nuevoEstado);
-    if (actualizado) {
-      actualizarPedidoRealTime(actualizado);
-    } else {
-      setPedidos(prev => prev.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p));
-      if (selectedPedido && selectedPedido.id === id) {
-        setSelectedPedido(prev => ({ ...prev, estado: nuevoEstado }));
+    const pedidoId = id;
+    const key = String(pedidoId);
+    if (procesando.has(key)) return;
+    setProcesando(prev => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+    try {
+      const actualizado = await pedidosService.updateEstado(pedidoId, nuevoEstado);
+      if (actualizado) {
+        actualizarPedidoRealTime(actualizado);
+      } else {
+        setPedidos(prev => prev.map(p => String(p.id) === key ? { ...p, estado: nuevoEstado } : p));
+        if (selectedPedido && String(selectedPedido.id) === key) {
+          setSelectedPedido(prev => ({ ...prev, estado: nuevoEstado }));
+        }
       }
+    } catch (err) {
+      console.error('Error al cambiar estado:', err);
+      const msg = err?.message || 'No se pudo cambiar el estado del pedido';
+      if (String(msg).toLowerCase().includes('no autorizado') || err?.status === 401 || err?.code === 'UNAUTHORIZED') {
+        setErrorOperacion('Sesión inválida o vencida. No se pudo cambiar el estado. Inicie sesión nuevamente.');
+      } else if (err?.status === 403) {
+        setErrorOperacion('No tiene permisos para cambiar el estado de este pedido.');
+      } else if (err?.status === 409) {
+        setErrorOperacion('No se pudo cambiar el estado: hay un conflicto con el estado actual del pedido.');
+      } else if (String(msg).toLowerCase().includes('failed to fetch') || String(msg).toLowerCase().includes('network')) {
+        setErrorOperacion('Sin conexión al backend. Verifique su red e inténtelo nuevamente.');
+      } else {
+        setErrorOperacion(`Error al cambiar estado: ${msg}`);
+      }
+    } finally {
+      setProcesando(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
     }
   };
 
   const pedidosOrdenados = useMemo(() => ordenarPedidos(pedidos), [pedidos]);
-  const pedidosOperativos = pedidosOrdenados.filter(p =>
+  const pedidosFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return pedidosOrdenados;
+    return pedidosOrdenados.filter(p => {
+      const codigo = String(p.codigo_pedido || '').toLowerCase();
+      const id = String(p.id || p.rawId || '').toLowerCase();
+      return codigo.includes(q) || id.includes(q);
+    });
+  }, [pedidosOrdenados, busqueda]);
+  const pedidosOperativos = pedidosFiltrados.filter(p =>
     p.estado === 'pendiente' || p.estado === 'preparando' || p.estado === 'en_preparacion' || p.estado === 'listo'
   );
 
@@ -183,6 +275,8 @@ function Comandas({ currentUser }) {
           onActivarVoz={() => vozKds.activar()}
           onSilenciarVoz={() => vozKds.silenciar()}
           avisoVoz={avisoVoz}
+          busqueda={busqueda}
+          onBusquedaChange={setBusqueda}
         />
       </Box>
 
@@ -191,6 +285,29 @@ function Comandas({ currentUser }) {
           <CircularProgress size={56} />
         </Box>
       ) : (
+        <>
+          {conexion !== ESTADO_CONECTADO && pedidosOperativos.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Alert severity="warning">Conexión en tiempo real interrumpida. Las comandas se mantienen, se intentará reconectar.</Alert>
+            </Box>
+          )}
+          {errorOperacion && (
+            <Box sx={{ mb: 2 }}>
+              <Alert severity="error" onClose={() => setErrorOperacion('')} action={<Button color="inherit" size="small">Entendido</Button>}>{errorOperacion}</Alert>
+            </Box>
+          )}
+          {errorComandas && (
+            <Box sx={{ mb: 2 }}>
+              <Alert severity="warning" action={<Button color="inherit" size="small" onClick={() => { setLoading(true); fetchPedidos(true); }}>Reintentar</Button>}>
+                {errorComandas}
+              </Alert>
+            </Box>
+          )}
+          {errorComandas && pedidosOperativos.length === 0 ? (
+            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+              <Typography color="text.secondary">No hay comandas para mostrar</Typography>
+            </Box>
+          ) : (
         <Box
           sx={{
             display: 'grid',
@@ -219,6 +336,7 @@ function Comandas({ currentUser }) {
                       pedido={pedido}
                       onOpen={setSelectedPedido}
                       onChangeEstado={handleCambiarEstado}
+                      procesando={procesando.has(String(pedido.id))}
                     />
                   ))
                 )}
@@ -226,6 +344,8 @@ function Comandas({ currentUser }) {
             );
           })}
         </Box>
+          )}
+        </>
       )}
 
       <DetallePedidoDialog
@@ -236,7 +356,7 @@ function Comandas({ currentUser }) {
 
       <EscanearQrDialog
         open={escaneando}
-        cafeteriaId={CAFETERIA_ID}
+        cafeteriaId={cafeteriaIdEmpleado}
         usuarioId={currentUser?.id != null ? String(currentUser.id) : 'empleado'}
         onClose={() => setEscaneando(false)}
       />

@@ -445,12 +445,18 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
           ...payloadAutorizado,
           ...(authUserId ? { auth_user_id: authUserId } : {}),
         };
-        const { error: updateError } = await supabase
+        const { data: updateData, error: updateError } = await supabase
           .from('usuarios')
           .update(payloadConAuth)
-          .eq('id', usuarioGuardadoId);
+          .eq('id', usuarioGuardadoId)
+          .select('id');
 
         if (updateError) throw updateError;
+
+        // Criterio S2-T15: Una actualización de cero filas no se informa como éxito
+        if (!updateData || updateData.length === 0) {
+          throw new Error('No se actualizó ningún registro en la base de datos (0 filas afectadas).');
+        }
       } else if (authUserId) {
         let updateQ = supabase
           .from('usuarios')
@@ -484,19 +490,22 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
           const { data: insertData, error: insertError } = await supabase
             .from('usuarios')
             .insert(nuevoUsuario)
-            .select('id')
-            .single();
+            .select('id');
 
           if (insertError) throw insertError;
-          if (insertData) usuarioGuardadoId = insertData.id;
+          if (!insertData || insertData.length === 0) {
+            throw new Error('No se pudo crear el registro del usuario en la base de datos (0 filas insertadas).');
+          }
+          usuarioGuardadoId = insertData[0].id;
         }
       } else {
         throw new Error('No se identificó la sesión del usuario.');
       }
 
-      // 2. Persistir sincronización en los metadatos de Supabase Auth
+      // 2. Persistir sincronización en metadatos de Supabase Auth y comprobar errores (S2-T15)
+      let advertenciaAuth = null;
       try {
-        await supabase.auth.updateUser({
+        const { error: authError } = await supabase.auth.updateUser({
           data: {
             first_name: nombreLimpio,
             last_name: apellidoLimpio,
@@ -504,24 +513,33 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
             telefono: telLimpio || null,
           },
         });
+
+        if (authError) {
+          console.warn('[PerfilScreen] Error retornado por auth.updateUser:', authError);
+          advertenciaAuth = authError.message || 'Error al sincronizar metadatos de sesión.';
+        }
       } catch (authErr) {
-        console.warn('[PerfilScreen] Aviso al sincronizar auth.users:', authErr?.message);
+        console.warn('[PerfilScreen] Excepción al invocar auth.updateUser:', authErr);
+        advertenciaAuth = authErr?.message || 'Fallo de comunicación con el servicio de autenticación.';
       }
 
-      // 3. Actualizar estado local inmediatamente para reflejar cambios en la UI
-      setUsuarioData((prev) => ({
-        ...prev,
-        id: usuarioGuardadoId || prev?.id,
-        nombre: nombreLimpio,
-        apellido: apellidoLimpio,
-        telefono: telLimpio || '',
-      }));
+      // 3. Recargar Perfil directamente desde la base de datos para demostrar persistencia real (S2-T15)
+      await cargarPerfil();
 
       setModalEdicionVisible(false);
-      Alert.alert(
-        '¡Perfil actualizado!',
-        'Tus datos personales fueron modificados y persistidos correctamente.'
-      );
+
+      // Criterio S2-T15: Un resultado parcial se comunica correctamente
+      if (advertenciaAuth) {
+        Alert.alert(
+          'Actualización parcial',
+          `Tus datos fueron guardados en la base de datos, pero hubo un problema al sincronizar la sesión: ${advertenciaAuth}`
+        );
+      } else {
+        Alert.alert(
+          '¡Perfil actualizado!',
+          'Tus datos personales fueron modificados y persistidos correctamente.'
+        );
+      }
     } catch (err) {
       console.error('Error al persistir cambios de perfil:', err);
       setErrorEdit(

@@ -163,12 +163,40 @@ function aMinutosDelDia(horaRetiro) {
 function aInstanteRetiro(pedido) {
   // Ojo: `normalizarPedido` deja `hora_retiro` como texto "HH:mm", así que
   // hay que soportar los dos formatos que llegan desde la base.
+  const creado = parsearFecha(pedido.creado_en);
+
+  // S2-T7: Prioridad estricta según requerimiento
+  // 1) franja_retiro: utilizar la hora de inicio de la franja
+  if (pedido?.franja_retiro) {
+    const franja = String(pedido.franja_retiro).trim();
+    if (franja) {
+      // Extraer inicio de la franja: puede venir como "12:30-12:45", "12:30 - 12:45"
+      const inicio = franja.split(/[-–—]/)[0].trim();
+      let minutos = aMinutosDelDia(inicio);
+      if (minutos === null) {
+        // Fallback: intentar parsear la franja completa por si viene en otro formato
+        minutos = aMinutosDelDia(franja);
+      }
+      if (minutos !== null) {
+        if (creado) {
+          // "HH:mm" sobre el día en que se creó el pedido.
+          const base = new Date(creado);
+          base.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
+          return base.getTime();
+        }
+        // Sin fecha de creación: se asume hoy.
+        const hoy = new Date();
+        hoy.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
+        return hoy.getTime();
+      }
+    }
+  }
+
+  // 2) hora_retiro: utilizarla cuando no exista una franja válida
   const retiroTs = parsearFecha(pedido.hora_retiro);
   if (retiroTs) return retiroTs.getTime();
 
   const minutos = aMinutosDelDia(pedido.hora_retiro);
-  const creado = parsearFecha(pedido.creado_en);
-
   if (minutos !== null) {
     if (creado) {
       // "HH:mm" sobre el dia en que se creo el pedido.
@@ -182,14 +210,15 @@ function aInstanteRetiro(pedido) {
     return hoy.getTime();
   }
 
+  // 3) creado_en + 15 minutos: utilizarlo únicamente como fallback cuando no exista información de retiro válida
   if (creado) return creado.getTime() + 15 * 60000; // estimado por defecto
   return null;
 }
 
 function comparadorPrioridad(a, b) {
-  // Ordenar por minutos del dia no servía: dos pedidos del mismo minuto
-  // quedaban "empate" y el kanban se veía desordenado. Se compara el
-  // instante real (epoch) y, ante empate, la hora de creación.
+  // Ordenar por el instante real de retiro (franja/hora/estimado).
+  // Los pedidos que deben retirarse antes aparecen primero.
+  // Ante empate se mantiene el criterio por hora de creación.
   const tA = aInstanteRetiro(a);
   const tB = aInstanteRetiro(b);
   if (tA !== null && tB !== null && tA !== tB) return tA - tB;
@@ -219,11 +248,19 @@ export const pedidosService = {
     if (!isSupabaseConfigured) {
       throw new Error('Supabase no está configurado en el cliente');
     }
+    // El alcance de cafetería debe provenir exclusivamente del perfil/sesión del empleado (currentUser.cafeteria_id).
+    // No se permite fallback silencioso a ninguna cafetería fija.
+    if (cafeteriaId === null || cafeteriaId === undefined || cafeteriaId === '') {
+      throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
+    }
+    const cid = Number(cafeteriaId);
+    if (!Number.isFinite(cid)) {
+      throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
+    }
     let query = supabase
       .from('pedidos')
-      .select('*, usuarios(nombre, apellido), cafeterias(*), detalles_pedido(*, productos(*))');
-
-    if (cafeteriaId) query = query.eq('cafeteria_id', cafeteriaId);
+      .select('*, usuarios(nombre, apellido), cafeterias(*), detalles_pedido(*, productos(*))')
+      .eq('cafeteria_id', cid);
 
     const { data, error } = await query.order('creado_en', { ascending: false });
 
@@ -294,17 +331,29 @@ export const pedidosService = {
       return actual;
     }
 
-    // 1. Via MS Comercio (PATCH /pedidos/:id/estado) — valida la secuencia
-    //    pendiente -> en_preparacion -> listo en el backend.
+    // 1. Vía MS Comercio (PATCH /pedidos/:id/estado) — backend debe ser autoridad
     try {
       await backendApi.cambiarEstadoPedido(id, nuevoEstado);
       const updated = await this.getById(id);
       if (updated) return updated;
+      throw new Error('No se pudo obtener el pedido actualizado tras el cambio de estado.');
     } catch (err) {
-      console.warn('MS Comercio no disponible, intentando Supabase directo:', err.message);
+      const status = err?.status;
+      const code = err?.code;
+      // Errores de autorización/prohibidos/conflictos: NO hacer fallback alternativo
+      if (status === 401 || status === 403 || status === 409 || code === 'UNAUTHORIZED') {
+        throw err;
+      }
+      // Errores de red/otros: NO asumir autorización para escribir directamente.
+      // Solo intentar fallback si es claramente "no disponible" pero NO para rechazos del backend.
+      const msg = String(err?.message || '').toLowerCase();
+      if (msg.includes('no autorizado') || msg.includes('forbidden') || msg.includes('conflict')) {
+        throw err;
+      }
+      console.warn('MS Comercio no disponible o error no autorizado, intentando Supabase directo:', err.message);
     }
 
-    // 2. Fallback: UPDATE directo en Supabase
+    // 2. Fallback: UPDATE directo en Supabase (solo si no fue un rechazo del backend)
     if (!isSupabaseConfigured) {
       throw new Error('Supabase no está configurado en el cliente');
     }
@@ -342,7 +391,7 @@ export const pedidosService = {
    * token no coincide, el token de contingencia del mismo pedido lo entrega; y
    * al reves, si el token fue borrado o mal tipeado, el QR lo entrega.
    */
-  async validarQrEntrega(textoQr, idUsuario = null) {
+  async validarQrEntrega(textoQr, idUsuario = null, cafeteriaIdValidacion = null) {
     const candidatas = extraerCredenciales(textoQr);
     if (candidatas.length === 0) {
       return { valido: false, razon: 'QR vacío o ilegible, intenta nuevamente.' };
@@ -365,7 +414,8 @@ export const pedidosService = {
         await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'rechazado', detalle: 'QR no reconocido.', usuarioId: idUsuario });
         return { valido: false, razon: 'QR no reconocido. Verifica que corresponda a un pedido de CoffeFaster.' };
       }
-      if (Number(pedido.cafeteria_id) !== CAFETERIA_ID) {
+      const cidVal = cafeteriaIdValidacion !== null && cafeteriaIdValidacion !== undefined ? Number(cafeteriaIdValidacion) : (CAFETERIA_ID !== null && CAFETERIA_ID !== undefined ? Number(CAFETERIA_ID) : null);
+      if (Number.isFinite(cidVal) && Number(pedido.cafeteria_id) !== cidVal) {
         const razon = `El pedido #${pedido.id} no pertenece a esta cafetería.`;
         await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
         return { valido: false, razon };

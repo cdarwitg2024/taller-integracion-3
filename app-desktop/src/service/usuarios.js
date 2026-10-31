@@ -442,14 +442,14 @@ export const usuarios = {
       if (!authUserId) {
         return { success: false, error: 'sin_sesion', fatal: true };
       }
-      const { userProfile, profileError } = await fetchPerfilYCafeteria(authUserId);
+      const { userProfile, cafeteriaAsignada, profileError } = await fetchPerfilYCafeteria(authUserId);
       if (profileError || !userProfile) {
         return { success: false, error: 'perfil_no_encontrado', fatal: true };
       }
       const rolNombre = String(userProfile?.roles?.nombre || '')
         .trim()
         .toLowerCase();
-      return { success: true, user: { ...userProfile, rol: rolNombre }, rol: rolNombre };
+      return { success: true, user: { ...userProfile, rol: rolNombre, cafeteria_id: cafeteriaAsignada || userProfile.cafeteria_id || 1 }, rol: rolNombre };
     } catch (err) {
       // Error de red u otro no definitivo: no se cierra la sesión.
       console.warn('Error consultando perfil de sesión:', err);

@@ -28,12 +28,16 @@ export const solicitudesStock = {
     if (isNaN(cantidad) || cantidad <= 0) {
       throw new Error('La cantidad solicitada debe ser mayor a 0.');
     }
+    const cid = cafeteria_id !== null && cafeteria_id !== undefined ? Number(cafeteria_id) : null;
+    if (!Number.isFinite(cid)) {
+      throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
+    }
 
     const payload = {
       producto_id: Number(producto_id),
       nombre_producto: nombre_producto || null,
       cantidad_solicitada: cantidad,
-      cafeteria_id,
+      cafeteria_id: cid,
       usuario_id,
       observaciones: observaciones || null,
       estado: 'pendiente',
