@@ -54,6 +54,7 @@ function Comandas({ currentUser }) {
   const [avisoVoz, setAvisoVoz] = useState(null);
   const [errorComandas, setErrorComandas] = useState('');
   const [procesando, setProcesando] = useState(new Set());
+  const [busqueda, setBusqueda] = useState('');
 
   const pedidosRealtime = useRef(new Map());
 
@@ -230,7 +231,16 @@ function Comandas({ currentUser }) {
   };
 
   const pedidosOrdenados = useMemo(() => ordenarPedidos(pedidos), [pedidos]);
-  const pedidosOperativos = pedidosOrdenados.filter(p =>
+  const pedidosFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return pedidosOrdenados;
+    return pedidosOrdenados.filter(p => {
+      const codigo = String(p.codigo_pedido || '').toLowerCase();
+      const id = String(p.id || p.rawId || '').toLowerCase();
+      return codigo.includes(q) || id.includes(q);
+    });
+  }, [pedidosOrdenados, busqueda]);
+  const pedidosOperativos = pedidosFiltrados.filter(p =>
     p.estado === 'pendiente' || p.estado === 'preparando' || p.estado === 'en_preparacion' || p.estado === 'listo'
   );
 
@@ -252,6 +262,8 @@ function Comandas({ currentUser }) {
           onActivarVoz={() => vozKds.activar()}
           onSilenciarVoz={() => vozKds.silenciar()}
           avisoVoz={avisoVoz}
+          busqueda={busqueda}
+          onBusquedaChange={setBusqueda}
         />
       </Box>
 
