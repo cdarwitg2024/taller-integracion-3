@@ -77,8 +77,10 @@ Reglas al aplicar manifiestos:
    existente, recrea el objeto con `kubectl create secret`; **no** lo apliques
    desde un archivo del repo.
 
-Las claves que espera el Secret son `SUPABASE_URL` y `SUPABASE_SERVICE_KEY`, las
-mismas que inyectan los Deployments por `envFrom.secretRef`.
+El Secret debe incluir `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` y
+`SUPABASE_PUBLISHABLE_KEY`. ms-pedidos las referencia mediante `secretKeyRef`;
+el ejemplo anterior debe completarse con la clave publica para ese servicio.
+Ver la [matriz de ms-pedidos](docs/seguridad/ms-pedidos-entornos-s2-t14.md).
 
 ## 👥 Integrantes
 - **Int 1**: App Móvil (Kotlin)
