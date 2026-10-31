@@ -100,12 +100,18 @@ function KdsTopBar({ conexion = 'conectado', onEscanear, estadoVoz, onActivarVoz
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon sx={{ color: kdsColors.onDarkMuted }} />
+                <SearchIcon sx={{ color: kdsColors.textSecondary }} />
               </InputAdornment>
             ),
             sx: {
               backgroundColor: '#fff',
               borderRadius: 2,
+              color: kdsColors.textPrimary,
+            },
+          }}
+          inputProps={{
+            style: {
+              color: kdsColors.textPrimary,
             },
           }}
         />
