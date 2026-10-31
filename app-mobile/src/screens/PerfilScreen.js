@@ -21,6 +21,7 @@ import Button from '../components/Button';
 import Card from '../components/Card';
 import Header from '../components/Header';
 import Input from '../components/Input';
+import PoliticasAyudaScreen from './PoliticasAyudaScreen';
 
 /**
  * Formatea un rol interno a un nombre legible en la interfaz
@@ -114,7 +115,9 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
     telefono: '',
   });
 
-  // Modales de Políticas y Ayuda
+  // Pantalla y Modales de Políticas y Ayuda (S2-T16)
+  const [pantallaPoliticasVisible, setPantallaPoliticasVisible] = useState(false);
+  const [seccionPoliticasInicial, setSeccionPoliticasInicial] = useState('todas');
   const [modalPoliticaVisible, setModalPoliticaVisible] = useState(false);
   const [politicaActiva, setPoliticaActiva] = useState(null);
 
@@ -568,16 +571,31 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
     );
   };
 
-  // ─── Apertura de Políticas y Ayuda ────────────────────────────────
+  // ─── Apertura de Pantalla Políticas y Ayuda (S2-T16) ─────────────
+  const abrirPantallaPoliticas = (seccion = 'todas') => {
+    setSeccionPoliticasInicial(seccion);
+    setPantallaPoliticasVisible(true);
+  };
+
   const abrirPolitica = (tipo) => {
     setPoliticaActiva(tipo);
-    setModalPoliticaVisible(true);
+    abrirPantallaPoliticas(tipo === 'retiro' ? 'cancelacion' : 'todas');
   };
 
   const abrirAyuda = (tipo) => {
     setAyudaActiva(tipo);
-    setModalAyudaVisible(true);
+    abrirPantallaPoliticas(tipo === 'contacto' ? 'contacto' : 'faq');
   };
+
+  // ─── Render: Pantalla Completa Políticas y Ayuda (S2-T16) ──────────
+  if (pantallaPoliticasVisible) {
+    return (
+      <PoliticasAyudaScreen
+        onBack={() => setPantallaPoliticasVisible(false)}
+        seccionInicial={seccionPoliticasInicial}
+      />
+    );
+  }
 
   // ─── Render: Caso Modo Invitado ───────────────────────────────────
   if (isGuest) {
@@ -603,18 +621,23 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
             </Text>
           </Card>
 
-          {/* Políticas en modo invitado */}
+          {/* Políticas en modo invitado (S2-T16) */}
           <Card variant="outlined" style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Información y Políticas</Text>
-            <TouchableOpacity style={styles.menuRow} onPress={() => abrirPolitica('terminos')}>
-              <Text style={styles.menuRowIcon}>📋</Text>
-              <Text style={styles.menuRowText}>Términos del Servicio</Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Información y Políticas</Text>
+              <TouchableOpacity onPress={() => abrirPantallaPoliticas('todas')}>
+                <Text style={styles.sectionLink}>Ver todo ›</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('todas')}>
+              <Text style={styles.menuRowIcon}>📜</Text>
+              <Text style={styles.menuRowText}>Políticas, Retiro QR y Reembolsos</Text>
               <Text style={styles.menuRowChevron}>›</Text>
             </TouchableOpacity>
             <View style={styles.separator} />
-            <TouchableOpacity style={styles.menuRow} onPress={() => abrirPolitica('privacidad')}>
-              <Text style={styles.menuRowIcon}>🔒</Text>
-              <Text style={styles.menuRowText}>Privacidad y Seguridad</Text>
+            <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('faq')}>
+              <Text style={styles.menuRowIcon}>💬</Text>
+              <Text style={styles.menuRowText}>Centro de Ayuda y Preguntas (FAQ)</Text>
               <Text style={styles.menuRowChevron}>›</Text>
             </TouchableOpacity>
           </Card>
@@ -991,16 +1014,19 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
           )}
         </Card>
 
-        {/* ─── 4. SECCIÓN: POLÍTICAS INSTITUCIONALES ─────────────────── */}
+        {/* ─── 4. SECCIÓN: POLÍTICAS INSTITUCIONALES (S2-T16) ──────── */}
         <Card variant="outlined" style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={styles.sectionHeaderEmoji}>📜</Text>
               <Text style={styles.sectionTitle}>Políticas y Condiciones</Text>
             </View>
+            <TouchableOpacity onPress={() => abrirPantallaPoliticas('todas')}>
+              <Text style={styles.sectionLink}>Ver todo ›</Text>
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPolitica('terminos')} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('todas')} activeOpacity={0.7}>
             <View style={styles.menuRowLeft}>
               <View style={styles.menuIconContainer}>
                 <Text style={styles.menuRowIcon}>📋</Text>
@@ -1015,7 +1041,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
 
           <View style={styles.separator} />
 
-          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPolitica('privacidad')} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('todas')} activeOpacity={0.7}>
             <View style={styles.menuRowLeft}>
               <View style={styles.menuIconContainer}>
                 <Text style={styles.menuRowIcon}>🔒</Text>
@@ -1030,37 +1056,40 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
 
           <View style={styles.separator} />
 
-          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPolitica('retiro')} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('cancelacion')} activeOpacity={0.7}>
             <View style={styles.menuRowLeft}>
               <View style={styles.menuIconContainer}>
                 <Text style={styles.menuRowIcon}>⏱️</Text>
               </View>
               <View>
-                <Text style={styles.menuRowText}>Retiro y Cancelaciones</Text>
-                <Text style={styles.menuRowSub}>Franjas horarias y reembolsos a Wallet</Text>
+                <Text style={styles.menuRowText}>Retiro, Cancelación y Reembolso</Text>
+                <Text style={styles.menuRowSub}>Franjas horarias, QR y reembolsos a Wallet</Text>
               </View>
             </View>
             <Text style={styles.menuRowChevron}>›</Text>
           </TouchableOpacity>
         </Card>
 
-        {/* ─── 5. SECCIÓN: AYUDA Y SOPORTE ──────────────────────────── */}
+        {/* ─── 5. SECCIÓN: AYUDA Y SOPORTE (S2-T16) ─────────────────── */}
         <Card variant="outlined" style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={styles.sectionHeaderEmoji}>💬</Text>
               <Text style={styles.sectionTitle}>Ayuda y Soporte</Text>
             </View>
+            <TouchableOpacity onPress={() => abrirPantallaPoliticas('faq')}>
+              <Text style={styles.sectionLink}>Centro de Ayuda ›</Text>
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.menuRow} onPress={() => abrirAyuda('faq')} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('faq')} activeOpacity={0.7}>
             <View style={styles.menuRowLeft}>
               <View style={styles.menuIconContainer}>
                 <Text style={styles.menuRowIcon}>❓</Text>
               </View>
               <View>
                 <Text style={styles.menuRowText}>Preguntas Frecuentes (FAQ)</Text>
-                <Text style={styles.menuRowSub}>Uso de QR, recargas y pedidos</Text>
+                <Text style={styles.menuRowSub}>Uso de QR, recargas, preparación y pedidos</Text>
               </View>
             </View>
             <Text style={styles.menuRowChevron}>›</Text>
@@ -1068,7 +1097,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
 
           <View style={styles.separator} />
 
-          <TouchableOpacity style={styles.menuRow} onPress={() => abrirAyuda('contacto')} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('contacto')} activeOpacity={0.7}>
             <View style={styles.menuRowLeft}>
               <View style={styles.menuIconContainer}>
                 <Text style={styles.menuRowIcon}>✉️</Text>
@@ -1504,6 +1533,11 @@ const styles = StyleSheet.create({
     fontSize: typography.cuerpoPequeno,
     fontWeight: typography.pesoBold,
     color: colors.cafeMedio,
+  },
+  sectionLink: {
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.dorado,
   },
 
   // ─── Filas de Actividad Reciente ─────────────────────────────────
