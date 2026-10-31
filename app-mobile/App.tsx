@@ -542,12 +542,40 @@ function AppContent() {
         return;
       }
 
-      // Solo aca se vacia el carrito: el pago se aprobo y el saldo se debito.
+      // S2-T14: validar que la respuesta del pago identifique el pedido y
+      // traiga los montos completos ANTES de vaciar el carrito. Una respuesta
+      // incompleta no debe confirmar el pago ni borrar el carrito.
+      if (
+        typeof resultado.pedido_id !== 'number' ||
+        !Number.isInteger(resultado.pedido_id) ||
+        resultado.pedido_id <= 0
+      ) {
+        Alert.alert(
+          'Error inesperado',
+          'La respuesta del servidor no incluye un identificador de pedido válido.'
+        );
+        return;
+      }
+
+      if (
+        typeof resultado.total !== 'number' ||
+        Number.isNaN(resultado.total) ||
+        typeof resultado.saldo_restante !== 'number' ||
+        Number.isNaN(resultado.saldo_restante)
+      ) {
+        Alert.alert(
+          'Error inesperado',
+          'La respuesta del servidor está incompleta.'
+        );
+        return;
+      }
+
+      // Solo un resultado confirmado y completo limpia el carrito:
       clearCart();
       setPedidoConfirmado({
-        pedido_id: resultado.pedido_id ?? 0,
-        total: resultado.total ?? 0,
-        saldo_restante: resultado.saldo_restante ?? 0,
+        pedido_id: resultado.pedido_id,
+        total: resultado.total,
+        saldo_restante: resultado.saldo_restante,
         franja_retiro: resultado.franja_retiro,
         estado: resultado.estado,
         pago_estado: resultado.pago_estado,
@@ -557,7 +585,7 @@ function AppContent() {
       Alert.alert(
         'Pago aprobado',
         `Tu pedido fue pagado con Wallet.\n` +
-          `Saldo restante: ${formatCLP(Number(resultado.saldo_restante ?? 0))}.`
+          `Saldo restante: ${formatCLP(resultado.saldo_restante)}.`
       );
     } catch (e) {
       // S2-T15: timeout o pérdida de conexión DESPUÉS de enviar la solicitud.
