@@ -162,13 +162,18 @@ function Comandas({ currentUser }) {
   }, [fetchPedidos]);
 
   useEffect(() => {
+    if (sinCafeteriaAsociada) {
+      setConexion(ESTADO_RECONECTANDO);
+      return undefined;
+    }
     const suscripcion = kdsRealtime.suscribir({
       onComanda: agregarComandaRealTime,
       onActualizar: actualizarPedidoRealTime,
       onEstadoCanal: setConexion,
+      cafeteriaId: cafeteriaIdEmpleado,
     });
     return () => suscripcion.cerrar();
-  }, [agregarComandaRealTime, actualizarPedidoRealTime]);
+  }, [agregarComandaRealTime, actualizarPedidoRealTime, cafeteriaIdEmpleado, sinCafeteriaAsociada]);
 
   useEffect(() => {
     if (sinCafeteriaAsociada) return;

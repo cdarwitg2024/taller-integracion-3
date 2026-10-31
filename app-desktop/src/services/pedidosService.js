@@ -248,16 +248,19 @@ export const pedidosService = {
     if (!isSupabaseConfigured) {
       throw new Error('Supabase no está configurado en el cliente');
     }
-    const cid = cafeteriaId !== null && cafeteriaId !== undefined ? Number(cafeteriaId) : null;
-    if (cafeteriaId !== null && cafeteriaId !== undefined && !Number.isFinite(cid)) {
+    // El alcance de cafetería debe provenir exclusivamente del perfil/sesión del empleado (currentUser.cafeteria_id).
+    // No se permite fallback silencioso a ninguna cafetería fija.
+    if (cafeteriaId === null || cafeteriaId === undefined || cafeteriaId === '') {
+      throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
+    }
+    const cid = Number(cafeteriaId);
+    if (!Number.isFinite(cid)) {
       throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
     }
     let query = supabase
       .from('pedidos')
-      .select('*, usuarios(nombre, apellido), cafeterias(*), detalles_pedido(*, productos(*))');
-    if (Number.isFinite(cid)) {
-      query = query.eq('cafeteria_id', cid);
-    }
+      .select('*, usuarios(nombre, apellido), cafeterias(*), detalles_pedido(*, productos(*))')
+      .eq('cafeteria_id', cid);
 
     const { data, error } = await query.order('creado_en', { ascending: false });
 
