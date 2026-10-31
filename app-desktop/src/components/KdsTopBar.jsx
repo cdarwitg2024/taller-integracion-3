@@ -1,5 +1,6 @@
-import { Box, Button, Tooltip, Typography } from '@mui/material';
+import { Box, Button, InputAdornment, TextField, Tooltip, Typography } from '@mui/material';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
+import SearchIcon from '@mui/icons-material/Search';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 
@@ -51,7 +52,7 @@ function BotonVoz({ estado, onActivar, onSilenciar }) {
   );
 }
 
-function KdsTopBar({ conexion = 'conectado', onEscanear, estadoVoz, onActivarVoz, onSilenciarVoz, avisoVoz }) {
+function KdsTopBar({ conexion = 'conectado', onEscanear, estadoVoz, onActivarVoz, onSilenciarVoz, avisoVoz, busqueda = '', onBusquedaChange }) {
   return (
     <Box
       sx={{
@@ -68,7 +69,7 @@ function KdsTopBar({ conexion = 'conectado', onEscanear, estadoVoz, onActivarVoz
       }}
     >
       {/* Identidad + aviso: ocupa el espacio flexible y trunca si hace falta */}
-      <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: '0 1 auto' }}>
         <Typography
           variant="h4"
           fontWeight={800}
@@ -86,6 +87,39 @@ function KdsTopBar({ conexion = 'conectado', onEscanear, estadoVoz, onActivarVoz
             {avisoVoz}
           </Typography>
         )}
+      </Box>
+
+      {/* Búsqueda local por código/identificador visible */}
+      <Box sx={{ flex: '1 1 280px', maxWidth: 420, minWidth: 180 }}>
+        <TextField
+          fullWidth
+          size="small"
+          value={busqueda}
+          onChange={(e) => onBusquedaChange?.(e.target.value)}
+          placeholder="Buscar por código de pedido..."
+          sx={{
+            '& .MuiInputBase-root': {
+              backgroundColor: '#fff',
+              borderRadius: 2,
+            },
+            '& .MuiInputBase-input': {
+              color: '#000',
+              WebkitTextFillColor: '#000',
+            },
+            '& .MuiInputBase-input::placeholder': {
+              color: '#666',
+              opacity: 1,
+              WebkitTextFillColor: '#666',
+            },
+          }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon sx={{ color: '#666' }} />
+              </InputAdornment>
+            ),
+          }}
+        />
       </Box>
 
       {/* Acciones: no se encogen y quedan siempre alineadas a la derecha */}
