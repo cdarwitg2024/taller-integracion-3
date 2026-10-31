@@ -8,10 +8,11 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  Alert,
 } from 'react-native';
 
 import { supabase } from '../lib/supabase';
-import { apiGet, ApiError } from '../services/backendClient';
+import { apiGet, apiPatch, ApiError } from '../services/backendClient';
 import QrCode from '../lib/QrCode';
 import Button from '../components/Button';
 import Card from '../components/Card';
@@ -125,6 +126,12 @@ const obtenerQrDesdeBackend = async (pedidoId) => {
     return { ok: true, qr_token: data?.qr_token || null };
   } catch (err) {
     if (err instanceof ApiError) {
+      // Diferenciar 404 de "Pedido ajeno / rol no autorizado" (devuelto por ms-pedidos)
+      // de un 404 de "Ruta no encontrada" (cuando el endpoint no está levantado en el puerto configurado).
+      const esRutaInexistente = /ruta no encontrada|cannot get|no se encontró la ruta/i.test(err.message || '');
+      if (esRutaInexistente) {
+        return { ok: false, status: 0, mensaje: 'Servicio de pedidos no disponible', esAuth: false };
+      }
       return {
         ok: false,
         status: err.status,
@@ -149,6 +156,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
   // Pestaña del conmutador: 'activos' (pendientes de retirar) o 'inactivos'
   // (historial entregado/cancelado).
   const [tab, setTab] = useState('activos');
+  const [cancelando, setCancelando] = useState(false);
   // Guarda qué pedido está abierto: si la respuesta del backend llega tarde,
   // no debe pintar el QR de un pedido que el estudiante ya cerró.
   const pedidoAbierto = useRef(null);
@@ -157,6 +165,127 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
     pedidoAbierto.current = null;
     setSelected(null);
     setQrResultado({ cargando: false, token: null, error: null, esOffline: false });
+  }, []);
+
+  // S2-T17: Cancelación autónoma de pedidos con reembolso automático a Wallet
+  const solicitarCancelacion = useCallback((pedido) => {
+    if (!pedido || pedido.estado !== 'pendiente') {
+      Alert.alert(
+        'No cancelable',
+        'Solo puedes cancelar pedidos que se encuentren en estado Pendiente (antes del inicio de su preparación).'
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Cancelar pedido',
+      `¿Deseas cancelar el pedido ${pedido.codigo_pedido} por $${pedido.total.toLocaleString('es-CL')}?\n\nEl monto se reembolsará automáticamente al 100% en tu Billetera Virtual (Wallet).`,
+      [
+        { text: 'Mantener pedido', style: 'cancel' },
+        {
+          text: 'Sí, cancelar y reembolsar',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelando(true);
+            try {
+              let resultado = null;
+              let exito = false;
+
+              // 1. Vía microservicio ms-pedidos (PATCH /api/pedidos/:id/estado)
+              try {
+                const res = await apiPatch(`/api/pedidos/${pedido.id}/estado`, {
+                  estado: 'cancelado',
+                }, { timeoutMs: 7000 });
+
+                if (res && res.ok) {
+                  resultado = res;
+                  exito = true;
+                }
+              } catch (apiErr) {
+                if (apiErr instanceof ApiError && apiErr.status === 409) {
+                  const motivo = apiErr.detalle || apiErr.message;
+                  if (/ya_cancelado/i.test(motivo)) {
+                    Alert.alert('Pedido ya cancelado', 'Este pedido ya había sido cancelado previamente.');
+                  } else {
+                    Alert.alert(
+                      'No es posible cancelar',
+                      'La cafetería ya comenzó a preparar tu pedido o ya está listo para retiro.'
+                    );
+                  }
+                  return;
+                }
+                console.warn('[PedidosScreen] Falló ms-pedidos, intentando fallback RPC Supabase:', apiErr?.message);
+              }
+
+              // 2. Fallback vía RPC cancelar_pedido en Supabase
+              if (!exito) {
+                const { data: rpcRes, error: rpcErr } = await supabase.rpc('cancelar_pedido', {
+                  p_pedido_id: Number(pedido.id),
+                });
+
+                if (rpcErr) {
+                  throw rpcErr;
+                }
+
+                if (rpcRes?.ok) {
+                  resultado = rpcRes;
+                  exito = true;
+                } else if (rpcRes?.motivo) {
+                  if (rpcRes.motivo === 'no_cancelable') {
+                    Alert.alert(
+                      'No es posible cancelar',
+                      'La cafetería ya comenzó a preparar tu pedido o ya está listo para retiro.'
+                    );
+                    return;
+                  }
+                  if (rpcRes.motivo === 'ya_cancelado') {
+                    Alert.alert('Pedido ya cancelado', 'Este pedido ya había sido cancelado previamente.');
+                    return;
+                  }
+                  if (rpcRes.motivo === 'no_autorizado') {
+                    Alert.alert('No autorizado', 'No tienes permisos para cancelar este pedido.');
+                    return;
+                  }
+                  Alert.alert('Aviso', `No se pudo cancelar el pedido (${rpcRes.motivo}).`);
+                  return;
+                }
+              }
+
+              if (exito) {
+                const monto = resultado?.monto_reembolsado ?? pedido.total;
+                const nuevoSaldo = resultado?.saldo_nuevo;
+
+                const pedidoActualizado = {
+                  ...pedido,
+                  estado: 'cancelado',
+                  cancelado_en: new Date().toISOString(),
+                };
+
+                setSelected(pedidoActualizado);
+                setOrders((prev) =>
+                  prev.map((o) => (String(o.id) === String(pedido.id) ? pedidoActualizado : o))
+                );
+
+                Alert.alert(
+                  '¡Pedido cancelado!',
+                  `Tu orden ${pedido.codigo_pedido} fue cancelada exitosamente.\n\nSe reembolsaron $${monto.toLocaleString('es-CL')} a tu Wallet${
+                    nuevoSaldo != null ? ` (Saldo actual: $${nuevoSaldo.toLocaleString('es-CL')})` : ''
+                  }.`
+                );
+              }
+            } catch (err) {
+              console.warn('[PedidosScreen] Error cancelando pedido:', err);
+              Alert.alert(
+                'Error al cancelar',
+                'No pudimos procesar la cancelación. Verifica tu conexión a internet e inténtalo nuevamente.'
+              );
+            } finally {
+              setCancelando(false);
+            }
+          },
+        },
+      ]
+    );
   }, []);
 
   // Al abrir un pedido activo se solicita su credencial QR autenticada a ms-pedidos.
@@ -721,6 +850,31 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                         El QR de retiro aparecerá aquí una vez confirmado el pago de tu pedido.
                       </Text>
                     )}
+
+                    {/* S2-T17: Opciones de Cancelación y Reembolso */}
+                    {selected.estado === 'pendiente' && (
+                      <View style={styles.cancelarBox}>
+                        <Text style={styles.cancelarHint}>
+                          ¿Tuviste un imprevisto? Mientras la orden esté pendiente de preparación, puedes cancelarla y recibir el reembolso completo a tu Wallet.
+                        </Text>
+                        <Button
+                          title={cancelando ? 'Cancelando orden...' : 'Cancelar pedido y reembolsar'}
+                          variant="danger"
+                          size="sm"
+                          onPress={() => solicitarCancelacion(selected)}
+                          disabled={cancelando}
+                          loading={cancelando}
+                        />
+                      </View>
+                    )}
+
+                    {selected.estado !== 'pendiente' && esActivo(selected.estado) && (
+                      <View style={styles.noCancelableBox}>
+                        <Text style={styles.noCancelableText}>
+                          🔒 Comanda en preparación o lista: no admite cancelación porque la cafetería ya comenzó a elaborar tus productos.
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 )}
               </>
@@ -1040,6 +1194,36 @@ const styles = StyleSheet.create({
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,
     textAlign: 'center',
+  },
+  cancelarBox: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borde,
+    alignItems: 'center',
+    width: '100%',
+  },
+  cancelarHint: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+    textAlign: 'center',
+    lineHeight: 16,
+    marginBottom: spacing.sm,
+  },
+  noCancelableBox: {
+    marginTop: spacing.md,
+    backgroundColor: colors.fondo,
+    padding: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borde,
+    width: '100%',
+  },
+  noCancelableText: {
+    fontSize: typography.etiqueta + 1,
+    color: colors.cafeMedio,
+    textAlign: 'center',
+    lineHeight: 15,
   },
 });
 

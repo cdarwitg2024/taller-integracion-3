@@ -260,3 +260,69 @@ export async function apiGet<T>(ruta: string, opciones?: { timeoutMs?: number })
 
   return json as T;
 }
+
+/**
+ * `PATCH` genérico contra el backend (S2-T17).
+ *
+ * Utilizado para la actualización de estados de pedidos como la cancelación
+ * (`PATCH /api/pedidos/:id/estado` con `{ estado: 'cancelado' }`), la cual
+ * ejecuta la RPC transaccional de reembolso a Wallet en la base de datos.
+ *
+ * @param ruta ruta relativa, p. ej. `/api/pedidos/123/estado`.
+ * @param cuerpo objeto a enviar en el body como JSON.
+ * @param opciones configuración opcional (ej. `timeoutMs`).
+ */
+export async function apiPatch<T>(
+  ruta: string,
+  cuerpo: unknown,
+  opciones?: { timeoutMs?: number }
+): Promise<T> {
+  const url = `${urlBase()}${normalizarRuta(ruta)}`;
+  const token = await tokenActual();
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opciones?.timeoutMs ?? 6000);
+
+  let respuesta: Response;
+  try {
+    respuesta = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(cuerpo ?? {}),
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      throw new ApiError(
+        `Tiempo de espera agotado al actualizar el pedido (${ruta}).`,
+        0,
+        undefined,
+        true
+      );
+    }
+    throw new ApiError(
+      `No se pudo contactar con el backend (${ruta}): ${textoDe(e)}`,
+      0,
+      undefined,
+      true
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const texto = await respuesta.text().catch(() => '');
+  const json = cuerpoJson(texto);
+
+  if (!respuesta.ok) {
+    throw new ApiError(
+      mensajeDeError(json) ?? `El backend respondió HTTP ${respuesta.status} en ${ruta}.`,
+      respuesta.status,
+      detalleDeError(json)
+    );
+  }
+
+  return json as T;
+}
