@@ -221,6 +221,8 @@ function Comandas({ currentUser }) {
       }
     } catch (err) {
       console.error('Error al cambiar estado:', err);
+      const msg = err?.message || 'No se pudo cambiar el estado del pedido';
+      setErrorComandas(`Error al cambiar estado: ${msg}`);
     } finally {
       setProcesando(prev => {
         const next = new Set(prev);

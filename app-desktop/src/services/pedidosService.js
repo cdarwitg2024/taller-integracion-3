@@ -331,17 +331,29 @@ export const pedidosService = {
       return actual;
     }
 
-    // 1. Vía MS Comercio (PATCH /pedidos/:id/estado) — valida la secuencia
-    //    pendiente -> en_preparacion -> listo en el backend.
+    // 1. Vía MS Comercio (PATCH /pedidos/:id/estado) — backend debe ser autoridad
     try {
       await backendApi.cambiarEstadoPedido(id, nuevoEstado);
       const updated = await this.getById(id);
       if (updated) return updated;
+      throw new Error('No se pudo obtener el pedido actualizado tras el cambio de estado.');
     } catch (err) {
-      console.warn('MS Comercio no disponible, intentando Supabase directo:', err.message);
+      const status = err?.status;
+      const code = err?.code;
+      // Errores de autorización/prohibidos/conflictos: NO hacer fallback alternativo
+      if (status === 401 || status === 403 || status === 409 || code === 'UNAUTHORIZED') {
+        throw err;
+      }
+      // Errores de red/otros: NO asumir autorización para escribir directamente.
+      // Solo intentar fallback si es claramente "no disponible" pero NO para rechazos del backend.
+      const msg = String(err?.message || '').toLowerCase();
+      if (msg.includes('no autorizado') || msg.includes('forbidden') || msg.includes('conflict')) {
+        throw err;
+      }
+      console.warn('MS Comercio no disponible o error no autorizado, intentando Supabase directo:', err.message);
     }
 
-    // 2. Fallback: UPDATE directo en Supabase
+    // 2. Fallback: UPDATE directo en Supabase (solo si no fue un rechazo del backend)
     if (!isSupabaseConfigured) {
       throw new Error('Supabase no está configurado en el cliente');
     }
