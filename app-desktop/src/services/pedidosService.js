@@ -12,6 +12,51 @@ const CLAVES_CREDENCIAL = ['qr_token', 'token', 'codigo_retiro_diario', 'codigo_
 // un token nuestro, asi que se descarta antes de armar la consulta.
 const CREDENCIAL_SEGURA = /^[A-Za-z0-9_-]+$/;
 
+// ─── Criterio comun de ventas para indicadores administrativos (S2-T11) ───
+// Periodo operativo compartido por los indicadores que representan ventas.
+const PERIOD_INDICADOR_VENTAS = 'hoy';
+
+// Estados que se consideran como venta para los indicadores administrativos.
+// Los cancelados quedan fuera (tratamiento consistente con el criterio de venta).
+const ESTADOS_VENTAS = ['entregado', 'listo', 'preparando', 'en_preparacion'];
+
+/**
+ * Indica si un pedido forma parte del criterio de ventas: no esta cancelado y
+ * tiene un estado de venta. Punto unico de verdad para tarjetas y graficos.
+ */
+function esPedidoDeVentas(pedido) {
+  const estado = String(pedido?.estado || '').toLowerCase();
+  if (estado === 'cancelado') return false;
+  return ESTADOS_VENTAS.includes(estado);
+}
+
+/**
+ * Pedidos del periodo indicado (por defecto: jornada de hoy, hora local del cliente).
+ */
+function obtenerPedidosDelDia(pedidos, ref = new Date()) {
+  const hoyStr = ref.toDateString();
+  return (pedidos || []).filter((p) => {
+    const f = parsearFecha(p.creado_en);
+    return Boolean(f && f.toDateString() === hoyStr);
+  });
+}
+
+/**
+ * Suma las ventas (totales) de los pedidos que componen el criterio de ventas.
+ */
+function obtenerVentasDelDia(pedidosDelDia) {
+  return (pedidosDelDia || [])
+    .filter((p) => esPedidoDeVentas(p))
+    .reduce((sum, p) => sum + (Number(p.total) || 0), 0);
+}
+
+/**
+ * Devuelve los pedidos validos de ventas del periodo indicado.
+ */
+function obtenerPedidosDeVentasDelDia(pedidosDelDia) {
+  return (pedidosDelDia || []).filter((p) => esPedidoDeVentas(p));
+}
+
 /**
  * Devuelve TODAS las credenciales que se pueden extraer de una entrada arbitraria
  * (texto plano, JSON del QR, URL) en orden de prioridad, sin duplicados.
@@ -491,23 +536,16 @@ export const pedidosService = {
   async getEstadisticas() {
     const pedidos = await this.getAll();
 
-    // Filtrar solo pedidos del día actual (hora local del cliente)
-    const hoyStr = new Date().toDateString();
-    const pedidosHoy = pedidos.filter((p) => {
-      const f = parsearFecha(p.creado_en);
-      return f && f.toDateString() === hoyStr;
-    });
+    // Criterio comun de ventas (S2-T11): periodo 'hoy' y conjunto de ventas validas
+    const pedidosDelDia = obtenerPedidosDelDia(pedidos);
+    const totalVentas = obtenerVentasDelDia(pedidosDelDia);
 
-    const totalVentas = pedidosHoy
-      .filter((p) => p.estado === 'entregado' || p.estado === 'listo' || p.estado === 'preparando' || p.estado === 'en_preparacion')
-      .reduce((sum, p) => sum + (Number(p.total) || 0), 0);
+    const pendientes = pedidosDelDia.filter((p) => p.estado === 'pendiente').length;
+    const preparando = pedidosDelDia.filter((p) => p.estado === 'preparando' || p.estado === 'en_preparacion').length;
+    const listos = pedidosDelDia.filter((p) => p.estado === 'listo').length;
+    const entregados = pedidosDelDia.filter((p) => p.estado === 'entregado').length;
 
-    const pendientes = pedidosHoy.filter((p) => p.estado === 'pendiente').length;
-    const preparando = pedidosHoy.filter((p) => p.estado === 'preparando' || p.estado === 'en_preparacion').length;
-    const listos = pedidosHoy.filter((p) => p.estado === 'listo').length;
-    const entregados = pedidosHoy.filter((p) => p.estado === 'entregado').length;
-
-    const tiempos = pedidosHoy
+    const tiempos = pedidosDelDia
       .filter((p) => p.tiempo_real_min && Number(p.tiempo_real_min) > 0)
       .map((p) => Number(p.tiempo_real_min));
     const tiempoPromedioMin =
@@ -517,7 +555,7 @@ export const pedidosService = {
 
     return {
       totalVentas,
-      totalPedidos: pedidosHoy.length,
+      totalPedidos: pedidosDelDia.length,
       pendientes,
       preparando,
       listos,
@@ -528,15 +566,11 @@ export const pedidosService = {
 
   async getVentasPorHora() {
     const list = await this.getAll();
-    const hoyStr = new Date().toDateString();
-    const pedidosHoy = list.filter((p) => {
-      const f = parsearFecha(p.creado_en);
-      return f && f.toDateString() === hoyStr;
-    });
+    const pedidosDelDia = obtenerPedidosDelDia(list);
 
     // SOLO usamos pedidos de hoy. Si no hay pedidos hoy, no devolvemos datos
     // históricos: el gráfico debe mostrar ceros/cero ventas para hoy.
-    const pedidosParaGrafico = pedidosHoy;
+    const pedidosParaGrafico = obtenerPedidosDeVentasDelDia(pedidosDelDia);
 
     const now = new Date();
     const currentHour = now.getHours();
@@ -562,9 +596,8 @@ export const pedidosService = {
       hourlyMap[hourStr] = { hora: hourStr, ventas: 0, pedidos: 0 };
     }
 
-    // Acumular ventas y cantidad de pedidos por tramo horario (excluyendo cancelados)
+    // Acumular ventas y cantidad de pedidos por tramo horario (criterio comun S2-T11)
     pedidosParaGrafico.forEach((p) => {
-      if (p.estado === 'cancelado') return;
       const hourStr = formatearHoraBucket(p.creado_en);
       if (hourStr && hourlyMap[hourStr]) {
         hourlyMap[hourStr].ventas += Number(p.total || 0);
@@ -579,9 +612,10 @@ export const pedidosService = {
     const list = await this.getAll();
     const productCountMap = {};
 
-    list.forEach((p) => {
-      // Excluir pedidos cancelados del ranking de productos vendidos (S2-T10)
-      if (p.estado === 'cancelado') return;
+    const pedidosDelDia = obtenerPedidosDelDia(list);
+    const pedidosDeVentas = obtenerPedidosDeVentasDelDia(pedidosDelDia);
+
+    pedidosDeVentas.forEach((p) => {
       const items = p.productos || p.detalles_pedido || [];
       items.forEach((item) => {
         const name = item.nombre || item.productos?.nombre || 'Producto';
