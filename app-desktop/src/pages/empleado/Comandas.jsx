@@ -293,7 +293,7 @@ function Comandas({ currentUser }) {
           )}
           {errorOperacion && (
             <Box sx={{ mb: 2 }}>
-              <Alert severity="error" onClose={() => setErrorOperacion('')}>{errorOperacion}</Alert>
+              <Alert severity="error" onClose={() => setErrorOperacion('')} action={<Button color="inherit" size="small">Entendido</Button>}>{errorOperacion}</Alert>
             </Box>
           )}
           {errorComandas && (
