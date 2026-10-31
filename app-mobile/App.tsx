@@ -110,6 +110,15 @@ const TABS: { key: AppTab; label: string }[] = [
   { key: 'perfil', label: 'Perfil' },
 ];
 
+/**
+ * S2-T15: límite de espera del `POST /api/pedidos`.
+ *
+ * Pasado este tiempo la app no puede saber si el pedido alcanzó a crearse y
+ * cobrarse; por eso el timeout se informa como "resultado desconocido" y no
+ * como pago rechazado. El carrito se conserva y no se reintenta solo.
+ */
+const TIMEOUT_CREAR_PEDIDO_MS = 15000;
+
 function AppContent() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -423,6 +432,28 @@ function AppContent() {
     );
   };
 
+  /**
+   * S2-T15: alerta única para resultado desconocido del pago.
+   *
+   * Se usa cuando la solicitud pudo haberse procesado pero no hay respuesta
+   * (timeout o pérdida de conexión). No es un rechazo: el carrito se conserva
+   * y NO se reintenta la compra automáticamente; se invita a revisar "Pedidos"
+   * antes de volver a pagar para evitar un cobro duplicado.
+   */
+  const alertarResultadoIncierto = () => {
+    Alert.alert(
+      'No pudimos confirmar tu pago',
+      'La conexión se interrumpió o la respuesta tardó demasiado, así que no ' +
+        'podemos saber si el pedido alcanzó a registrarse.\n\n' +
+        'Tu carrito se mantiene. Revisa "Pedidos" antes de volver a pagar para ' +
+        'evitar un cobro duplicado.',
+      [
+        { text: 'Revisar pedidos', onPress: () => handleTabPress('pedidos') },
+        { text: 'Entendido', style: 'cancel' },
+      ]
+    );
+  };
+
   const handleCheckout = async (franjaRetiro?: { franja: string }) => {
     // La cafetería del pedido sale de los propios ítems del carrito, no de
     // `selectedCafeteria`. Antes se leía de ahí, y como perder la cafetería
@@ -476,7 +507,8 @@ function AppContent() {
 
       const respuesta = await apiPost<RespuestaCrearPedido | null>(
         '/api/pedidos',
-        cuerpo
+        cuerpo,
+        { timeoutMs: TIMEOUT_CREAR_PEDIDO_MS }
       );
 
       // El backend responde HTTP 201 con `{ ok: true, pedido: <retorno de
@@ -485,7 +517,14 @@ function AppContent() {
       // `resultado.ok` y no el código HTTP.
       const resultado = respuesta?.pedido ?? null;
 
-      if (!resultado || !resultado.ok) {
+      // S2-T15: un 2xx sin `pedido` no confirma ni rechaza el pago; se trata
+      // como resultado desconocido (carrito intacto, sin reintento automático).
+      if (!resultado) {
+        alertarResultadoIncierto();
+        return;
+      }
+
+      if (!resultado.ok) {
         if (resultado?.motivo === 'saldo_insuficiente') {
           // Carrito intacto a proposito: el usuario recarga y reintenta.
           Alert.alert(
@@ -503,12 +542,40 @@ function AppContent() {
         return;
       }
 
-      // Solo aca se vacia el carrito: el pago se aprobo y el saldo se debito.
+      // S2-T14: validar que la respuesta del pago identifique el pedido y
+      // traiga los montos completos ANTES de vaciar el carrito. Una respuesta
+      // incompleta no debe confirmar el pago ni borrar el carrito.
+      if (
+        typeof resultado.pedido_id !== 'number' ||
+        !Number.isInteger(resultado.pedido_id) ||
+        resultado.pedido_id <= 0
+      ) {
+        Alert.alert(
+          'Error inesperado',
+          'La respuesta del servidor no incluye un identificador de pedido válido.'
+        );
+        return;
+      }
+
+      if (
+        typeof resultado.total !== 'number' ||
+        Number.isNaN(resultado.total) ||
+        typeof resultado.saldo_restante !== 'number' ||
+        Number.isNaN(resultado.saldo_restante)
+      ) {
+        Alert.alert(
+          'Error inesperado',
+          'La respuesta del servidor está incompleta.'
+        );
+        return;
+      }
+
+      // Solo un resultado confirmado y completo limpia el carrito:
       clearCart();
       setPedidoConfirmado({
-        pedido_id: resultado.pedido_id ?? 0,
-        total: resultado.total ?? 0,
-        saldo_restante: resultado.saldo_restante ?? 0,
+        pedido_id: resultado.pedido_id,
+        total: resultado.total,
+        saldo_restante: resultado.saldo_restante,
         franja_retiro: resultado.franja_retiro,
         estado: resultado.estado,
         pago_estado: resultado.pago_estado,
@@ -518,12 +585,19 @@ function AppContent() {
       Alert.alert(
         'Pago aprobado',
         `Tu pedido fue pagado con Wallet.\n` +
-          `Saldo restante: ${formatCLP(Number(resultado.saldo_restante ?? 0))}.`
+          `Saldo restante: ${formatCLP(resultado.saldo_restante)}.`
       );
     } catch (e) {
-      // `ApiError` cubre la misma falla que antes devolvía `error` de la RPC
-      // (red, API caída, sesión vencida), por lo que conserva su alerta; el
-      // resto es inesperado y conserva la suya.
+      // S2-T15: timeout o pérdida de conexión DESPUÉS de enviar la solicitud.
+      // El pago pudo procesarse, así que no se presenta como rechazo, no se
+      // vacía el carrito y no se reintenta automáticamente.
+      if (e instanceof ApiError && e.resultadoIncierto) {
+        alertarResultadoIncierto();
+        return;
+      }
+
+      // `ApiError` con respuesta HTTP cubre las fallas definitivas (sesión
+      // vencida, backend caído con respuesta); el resto es inesperado.
       Alert.alert(
         'No se pudo procesar el pago',
         e instanceof ApiError

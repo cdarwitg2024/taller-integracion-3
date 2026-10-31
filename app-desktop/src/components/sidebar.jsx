@@ -23,11 +23,22 @@ import { drawerWidth, kdsColors } from '../theme/theme';
 function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Panel de Control', currentUser }) {
   const [pendientesCount, setPendientesCount] = useState(0);
 
+  // S2-T18: `pedidosService.getAll` exige la cafetería autorizada desde
+  // S2-T12. El badge de pedidos activos debe consultar solo la del usuario.
+  const cafeteriaId =
+    currentUser?.cafeteria_id ?? currentUser?.cafeteriaId ?? null;
+
   useEffect(() => {
     let isMounted = true;
+
+    if (cafeteriaId === null || cafeteriaId === undefined || cafeteriaId === '') {
+      setPendientesCount(0);
+      return undefined;
+    }
+
     const updateCount = async () => {
       try {
-        const pedidos = await pedidosService.getAll();
+        const pedidos = await pedidosService.getAll({ cafeteriaId });
         if (isMounted && Array.isArray(pedidos)) {
           const count = pedidos.filter(
             (p) => p.estado === 'pendiente' || p.estado === 'preparando'
@@ -44,7 +55,7 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [cafeteriaId]);
 
   const defaultMenuItems = [
     {

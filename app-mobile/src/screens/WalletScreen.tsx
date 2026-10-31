@@ -24,6 +24,11 @@ import Card from '../components/Card';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import {
+  type RecargaPendiente,
+  depurarRecargasPendientes,
+  reconciliarMovimientos,
+} from '../utils/walletReconciliation';
 
 // ─── Tipos ───────────────────────────────────────────────────────
 interface Wallet {
@@ -93,7 +98,15 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
   const [procesandoRecarga, setProcesandoRecarga] = useState(false);
   const [montoSeleccionado, setMontoSeleccionado] = useState(0);
   const [saldoMostrado, setSaldoMostrado] = useState(0);
-  const saldoAnterior = useRef(0);
+  // S2-T16: recargas optimistas que todavía no están confirmadas en la base.
+  // Se muestran arriba de los movimientos y se retiran al confirmarse o fallar.
+  const [recargasPendientes, setRecargasPendientes] = useState<
+    RecargaPendiente[]
+  >([]);
+  // Último `wallet` confirmado, para fijar el saldo final fuera del closure.
+  const walletRef = useRef<Wallet | null>(null);
+  // Evita que un refetch de Realtime "salte" el contador mientras anima.
+  const animandoSaldoRef = useRef(false);
 
   // ─── Animaciones ─────────────────────────────────────────────────
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -228,7 +241,13 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
             'No se pudieron cargar tus movimientos de forma segura. Por favor, reintenta.'
           );
         } else if (movs) {
-          setMovimientos(movs as Movimiento[]);
+          const confirmados = movs as Movimiento[];
+          setMovimientos(confirmados);
+          // S2-T16: si el movimiento real ya está en la base, la recarga
+          // temporal deja de mostrarse para no duplicar la recarga.
+          setRecargasPendientes((prev) =>
+            depurarRecargasPendientes(prev, confirmados)
+          );
         }
       }
     } catch (err) {
@@ -244,11 +263,24 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
     cargarSaldo();
   }, [cargarSaldo]);
 
-  // Inicializar saldoMostrado con el saldo real cuando wallet cambia
+  // S2-T16: el contador del saldo sigue el valor interpolado de la animación.
+  // El saldo final, al terminar, se toma del estado confirmado (wallet).
   useEffect(() => {
-    if (wallet) {
-      setSaldoMostrado(wallet.saldo_actual);
-    }
+    const listenerId = saldoInterpolado.addListener(({ value }) => {
+      setSaldoMostrado(Math.round(value));
+    });
+
+    return () => {
+      saldoInterpolado.removeListener(listenerId);
+    };
+  }, [saldoInterpolado]);
+
+  // S2-T16: `wallet.saldo_actual` es el saldo confirmado por la base. Se
+  // refleja en pantalla salvo mientras corre la animación de una recarga.
+  useEffect(() => {
+    walletRef.current = wallet;
+    if (!wallet || animandoSaldoRef.current) return;
+    setSaldoMostrado(wallet.saldo_actual);
   }, [wallet]);
 
   // ─── Realtime ─────────────────────────────────────────────────
@@ -289,10 +321,67 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
   }, [wallet, cargarSaldo]);
 
   // ─── Recargar saldo ───────────────────────────────────────────
-  const handleRecarga = async (monto: number) => {
-    if (!wallet || monto <= 0) return;
+  /**
+   * S2-T16: retira una recarga optimista.
+   *
+   * Se usa cuando la RPC falla o devuelve `ok: false`: el movimiento temporal
+   * no debe quedar como si la recarga hubiera sido confirmada.
+   */
+  const descartarRecargaPendiente = (id: string) => {
+    setRecargasPendientes((prev) => prev.filter((p) => p.id !== id));
+  };
 
+  /**
+   * S2-T16: anima el contador del saldo hasta el valor devuelto por la RPC.
+   * El valor final se fija con `wallet.saldo_actual` (estado confirmado).
+   */
+  const animarSaldoConfirmado = (destino: number | null) => {
+    const desde = walletRef.current?.saldo_actual ?? saldoMostrado;
+    const objetivo = destino ?? desde;
+
+    if (objetivo === desde) {
+      setSaldoMostrado(desde);
+      return;
+    }
+
+    animandoSaldoRef.current = true;
+    saldoInterpolado.setValue(desde);
+
+    Animated.timing(saldoInterpolado, {
+      toValue: objetivo,
+      duration: 800,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start(() => {
+      animandoSaldoRef.current = false;
+      // El saldo final sale del estado confirmado: si el refetch ya actualizó
+      // la wallet se usa ese valor; si todavía no llegó, el `saldo_nuevo` que
+      // devolvió la RPC (leído de la base, nunca calculado en el cliente).
+      const confirmado = walletRef.current?.saldo_actual;
+      setSaldoMostrado(
+        typeof confirmado === 'number' && confirmado !== desde
+          ? confirmado
+          : objetivo
+      );
+    });
+  };
+
+  const handleRecarga = async (monto: number) => {
+    if (!wallet || monto <= 0 || procesandoRecarga) return;
+
+    // Movimiento temporal visible mientras la RPC responde. Realtime puede
+    // insertar el movimiento real antes o después; la reconciliación evita
+    // que ambos queden visibles a la vez.
+    const pendiente: RecargaPendiente = {
+      id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      monto,
+      iniciadaEn: Date.now(),
+      descripcion: 'Recarga de saldo',
+    };
+
+    setRecargasPendientes((prev) => [pendiente, ...prev]);
     setProcesandoRecarga(true);
+
     try {
       // El saldo NO se actualiza con un UPDATE desde el cliente: la politica
       // `wallets_update_own` no existe a proposito, para que nadie se ponga un
@@ -300,17 +389,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
       // HTTP 204), la app sumaba en pantalla y al refrescar volvia el saldo
       // viejo. La recarga va por la RPC `recargar_saldo`, que suma, deja el
       // movimiento y devuelve el saldo real leido de la base.
-      console.log('=== DEBUG recargar_saldo ===');
-      console.log('Monto:', monto);
-      console.log('Wallet:', wallet);
-
       const { data, error } = await supabase.rpc('recargar_saldo', {
         p_monto: monto,
       });
-
-      console.log('Error en recargar_saldo:', error);
-      console.log('Data:', data);
-      console.log('=== FIN DEBUG ===');
 
       if (error) throw error;
 
@@ -322,46 +403,32 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
       } | null;
 
       if (!res?.ok) {
+        // Recarga rechazada: no queda ningún movimiento "confirmado".
+        descartarRecargaPendiente(pendiente.id);
         Alert.alert('No se pudo recargar', res?.mensaje || 'Intenta nuevamente.');
         return;
       }
 
-      // Animar el saldo con interpolación suave (sin saltos bruscos)
-      const nuevoSaldo = res.saldo_nuevo ?? 0;
-      saldoAnterior.current = wallet.saldo_actual;
-      saldoInterpolado.setValue(saldoAnterior.current);
-      setSaldoMostrado(saldoAnterior.current);
-      Animated.timing(saldoInterpolado, {
-        toValue: nuevoSaldo,
-        duration: 800,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start(({ finished }) => {
-        if (finished) {
-          setSaldoMostrado(nuevoSaldo);
-        }
-      });
-
-      // El saldo se toma del servidor, no se calcula aqui.
-      setWallet((prev) =>
-        prev ? { ...prev, saldo_actual: nuevoSaldo } : prev
+      // `saldo_nuevo` lo devuelve la RPC (no se calcula en el cliente) y se
+      // usa solo como destino de la animación.
+      animarSaldoConfirmado(
+        typeof res.saldo_nuevo === 'number' ? res.saldo_nuevo : null
       );
-      setMovimientos((prev) => [
-        {
-          id: `temp-${Date.now()}`,
-          tipo: 'recarga',
-          monto: monto,
-          descripcion: 'Recarga de saldo',
-          creado_en: new Date().toISOString(),
-          pedido_id: null,
-        },
-        ...prev,
-      ]);
+
+      // Refresco autoritativo: wallet + movimientos reales. Deja el saldo y
+      // el historial en el estado confirmado por la base.
+      await cargarSaldo();
 
       setRecargaVisible(false);
       setMontoRecarga('');
       setMontoSeleccionado(0);
     } catch (err) {
+      // La recarga no se confirmó: se elimina el movimiento temporal.
+      descartarRecargaPendiente(pendiente.id);
+      // El estado final debe ser el confirmado por la base: si la recarga
+      // alcanzó a registrarse antes del error, el refetch la muestra; si no,
+      // no queda nada visible como confirmado.
+      await cargarSaldo();
       Alert.alert('Error', 'No se pudo procesar la recarga. Inténtalo nuevamente.');
       console.warn('Error en recarga:', err);
     } finally {
@@ -408,7 +475,16 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
     );
   }
 
-  const saldo = wallet?.saldo_actual ?? 0;
+  // S2-T16: lista visible = recargas pendientes no confirmadas + movimientos
+  // confirmados por la base. Evita el duplicado temporal/real.
+  const movimientosVisibles = reconciliarMovimientos(
+    movimientos,
+    recargasPendientes
+  );
+
+  // El saldo en pantalla es el animado; su valor final sale del estado
+  // confirmado (wallet recargada desde la base).
+  const saldo = saldoMostrado;
   const esSaldoCero = saldo === 0;
   const esSaldoBajo = saldo > 0 && saldo < 1000;
 
@@ -523,18 +599,18 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           ]}
         >
           <Card variant="outlined" padding="none" style={styles.statCard}>
-            <Text style={styles.statValue}>{movimientos.length}</Text>
+            <Text style={styles.statValue}>{movimientosVisibles.length}</Text>
             <Text style={styles.statLabel}>Movimientos</Text>
           </Card>
           <Card variant="outlined" padding="none" style={styles.statCard}>
             <Text style={styles.statValue}>
-              {movimientos.filter((m) => m.tipo === 'compra').length}
+              {movimientosVisibles.filter((m) => m.tipo === 'compra').length}
             </Text>
             <Text style={styles.statLabel}>Compras</Text>
           </Card>
           <Card variant="outlined" padding="none" style={styles.statCard}>
             <Text style={styles.statValue}>
-              {movimientos.filter((m) => m.tipo === 'recarga').length}
+              {movimientosVisibles.filter((m) => m.tipo === 'recarga').length}
             </Text>
             <Text style={styles.statLabel}>Recargas</Text>
           </Card>
@@ -563,7 +639,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
                 style={styles.retryButton}
               />
             </Card>
-          ) : movimientos.length === 0 ? (
+          ) : movimientosVisibles.length === 0 ? (
             <Card variant="outlined" padding="none" style={styles.emptyMovimientos}>
               <Text style={styles.emptyEmoji}>💳</Text>
               <Text style={styles.emptyTitle}>Sin movimientos todavía</Text>
@@ -572,7 +648,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
               </Text>
             </Card>
           ) : (
-            movimientos.map((mov, index) => (
+            movimientosVisibles.map((mov, index) => (
               <MovimientoItem key={mov.id} mov={mov} index={index} />
             ))
           )}

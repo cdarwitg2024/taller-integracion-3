@@ -142,3 +142,57 @@ export function origenRetiroPedido(pedido) {
 
   return { tipo: null, valor: null };
 }
+
+/**
+ * Calcula cuántos minutos faltan para el horario de retiro del pedido.
+ * Prioriza franja_retiro (hora de inicio), luego hora_retiro y luego estimado +15 min.
+ * Úsalo solo para señales visuales (no para lógica de negocio).
+ */
+export function minutosHastaRetiro(pedido) {
+  if (!pedido) return null;
+
+  const ahora = Date.now();
+  let instante = null;
+
+  // 1) Franja elegida por el estudiante: tomar hora de inicio
+  const franja = franjaRetiroPedido(pedido);
+  if (franja) {
+    const inicio = franja.split(/[-–—]/)[0]?.trim();
+    if (inicio) {
+      const m = inicio.match(/^(\d{1,2}):(\d{2})/);
+      if (m) {
+        const h = Number(m[1]);
+        const min = Number(m[2]);
+        const base = parsearFecha(pedido.creado_en) || new Date();
+        const d = new Date(base);
+        d.setHours(h, min, 0, 0);
+        instante = d.getTime();
+      }
+    }
+  }
+
+  // 2) Hora exacta de retiro
+  if (instante === null && pedido.hora_retiro) {
+    const hora = formatearHora(pedido.hora_retiro);
+    if (hora && hora !== '--:--') {
+      const m = hora.match(/^(\d{1,2}):(\d{2})/);
+      if (m) {
+        const h = Number(m[1]);
+        const min = Number(m[2]);
+        const base = parsearFecha(pedido.creado_en) || new Date();
+        const d = new Date(base);
+        d.setHours(h, min, 0, 0);
+        instante = d.getTime();
+      }
+    }
+  }
+
+  // 3) Estimado: creado_en + 15 min
+  if (instante === null && pedido.creado_en) {
+    const fecha = parsearFecha(pedido.creado_en);
+    if (fecha) instante = fecha.getTime() + 15 * 60000;
+  }
+
+  if (instante === null) return null;
+  return Math.round((instante - ahora) / 60000);
+}

@@ -88,6 +88,7 @@ beforeEach(() => {
 
   process.env.SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_test';
   process.env.SUPABASE_ANON_KEY = 'sb_anon_test';
+  process.env.MS_MENUS_URL = 'http://menus-test:9999';
   delete process.env.SUPABASE_SERVICE_KEY;
 });
 
@@ -294,7 +295,7 @@ describe('ms-pedidos', () => {
     const res = await request(app).post('/api/pedidos').send(bodyPedido());
     expect(res.status).toBe(201);
     expect(httpMock.post).toHaveBeenCalledTimes(1);
-    expect(httpMock.post.mock.calls[0][0]).toContain('/menus/precios');
+    expect(httpMock.post.mock.calls[0][0]).toBe('http://menus-test:9999/api/menus/precios');
   });
 
   test('POST /api/pedidos construye el cliente autenticado con el fallback SUPABASE_ANON_KEY', async () => {
@@ -341,7 +342,7 @@ describe('ms-pedidos', () => {
     // dueño
     supa.from.mockImplementation((tabla) => {
       if (tabla === 'pedidos') {
-        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 5, usuario_id: 10, cafeteria_id: 1 }, error: null }) }) }) };
+        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 5, usuario_id: 10, cafeteria_id: 1, estado: 'listo', codigo_retiro_diario: 'TEST1234' }, error: null }) }) }) };
       }
       if (tabla === 'usuarios') {
         return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 10 }, error: null }) }) }) };
@@ -351,13 +352,13 @@ describe('ms-pedidos', () => {
       }
       return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
     });
-    const ok1 = await service.obtenerTokenContingencia({ user: { authUserId: 'u1' } }, 5);
-    expect(ok1).toHaveProperty('token');
+    const ok1 = await service.obtenerTokenContingencia({ user: { authUserId: 'u1' }, id: 5 });
+    expect(ok1).toEqual({ token: 'TEST1234' });
 
     // otro usuario 403
     supa.from.mockImplementation((tabla) => {
       if (tabla === 'pedidos') {
-        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 5, usuario_id: 10, cafeteria_id: 1 }, error: null }) }) }) };
+        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 5, usuario_id: 10, cafeteria_id: 1, estado: 'listo', codigo_retiro_diario: 'TEST1234' }, error: null }) }) }) };
       }
       if (tabla === 'usuarios') {
         return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 99 }, error: null }) }) }) };
@@ -367,12 +368,12 @@ describe('ms-pedidos', () => {
       }
       return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
     });
-    await expect(service.obtenerTokenContingencia({ user: { authUserId: 'otro' } }, 5)).rejects.toMatchObject({ status: 403 });
+    await expect(service.obtenerTokenContingencia({ user: { authUserId: 'otro' }, id: 5 })).rejects.toMatchObject({ status: 403 });
 
     // personal
     supa.from.mockImplementation((tabla) => {
       if (tabla === 'pedidos') {
-        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 5, usuario_id: 10, cafeteria_id: 1 }, error: null }) }) }) };
+        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 5, usuario_id: 10, cafeteria_id: 1, estado: 'listo', codigo_retiro_diario: 'TEST1234' }, error: null }) }) }) };
       }
       if (tabla === 'usuarios') {
         return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 99 }, error: null }) }) }) };
@@ -382,8 +383,8 @@ describe('ms-pedidos', () => {
       }
       return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
     });
-    const resP = await service.obtenerTokenContingencia({ user: { authUserId: 'otro2' } }, 5);
-    expect(resP).toHaveProperty('token');
+    const resP = await service.obtenerTokenContingencia({ user: { authUserId: 'otro2' }, id: 5 });
+    expect(resP).toEqual({ token: 'TEST1234' });
   });
 });
 
@@ -537,6 +538,46 @@ describe('PATCH /api/pedidos/:id/estado', () => {
 });
 
 describe('PATCH /api/pedidos/:id/estado — autorizacion KDS (D.3)', () => {
+  test.each([
+    ['estudiante', { usuarioInterno: { id: 10, rol_id: 1 } }, 403, 'Solo un empleado puede cambiar el estado del pedido'],
+    ['dueño', { usuarioInterno: { id: 10, rol_id: 3 } }, 403, 'Solo un empleado puede cambiar el estado del pedido'],
+    ['empleado de otra cafeteria', { pertenece: false }, 403, 'El empleado no pertenece a la cafeteria del pedido'],
+    ['sin cuenta interna', { usuarioInterno: null }, 404, 'Usuario no encontrado']
+  ])('S2-T9: %s no obtiene el pedido por estado identico', async (_actor, opciones, status, error) => {
+    const updateMock = configurarPedido(
+      { id: 5, estado: 'pendiente', cafeteria_id: 1, qr_token: 'qr-privado-de-prueba' },
+      opciones
+    );
+    const res = await request(app).patch('/api/pedidos/5/estado')
+      .send({ estado: 'pendiente', rol_id: 2, cafeteria_id: 1 });
+    expect(res.status).toBe(status);
+    expect(res.body).toEqual({ error, servicio: 'ms-pedidos' });
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  test.each(['pendiente', 'en_preparacion', 'listo', 'entregado', 'Preparando'])(
+    'S2-T9: empleado autorizado reintenta %s sin efectos ni datos sensibles', async (estado) => {
+      const publico = { id: 5, estado, cafeteria_id: 1, total: 5000 };
+      const updateMock = configurarPedido({
+        ...publico,
+        qr_token: 'qr-privado-de-prueba', access_token: 'access-de-prueba',
+        refresh_token: 'refresh-de-prueba', Authorization: 'Bearer prueba',
+        credenciales: { password: 'prueba' }, session: { user: 'prueba' },
+        service_key: 'key-de-prueba', auth: { interno: true }
+      });
+      for (let intento = 0; intento < 2; intento += 1) {
+        const res = await request(app).patch('/api/pedidos/5/estado').send({ estado });
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual(publico);
+      }
+      expect(supabaseMock.obtenerCliente().from).toHaveBeenCalledWith('usuarios');
+      expect(supabaseMock.obtenerCliente().from).toHaveBeenCalledWith('cafeteria_usuarios');
+      expect(updateMock).not.toHaveBeenCalled();
+      expect(mockRpc).not.toHaveBeenCalled();
+    }
+  );
+
   test('empleado autorizado: pendiente -> en_preparacion = 200', async () => {
     const updateMock = configurarPedido({ id: 5, estado: 'pendiente', cafeteria_id: 1 });
     const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'en_preparacion' });
@@ -595,13 +636,16 @@ describe('PATCH /api/pedidos/:id/estado — autorizacion KDS (D.3)', () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  test('estudiante: listo -> entregado = 409 (requiere QR) y NO actualiza', async () => {
+  test('estudiante: listo -> entregado = 403 (autorizacion antes de transicion) y NO actualiza', async () => {
     const updateMock = configurarPedido(
       { id: 5, estado: 'listo', cafeteria_id: 1 },
       { usuarioInterno: { id: 10, rol_id: 1 } }
     );
     const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'entregado' });
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({
+      error: 'Solo un empleado puede cambiar el estado del pedido', servicio: 'ms-pedidos'
+    });
     expect(updateMock).not.toHaveBeenCalled();
   });
 
@@ -1040,15 +1084,82 @@ describe('GET /api/pedidos/:id/qr — credencial de retiro (D.5-B)', () => {
   });
 });
 
+describe('S2-T10 contingencia persistida', () => {
+  const pedido = { id: 5, usuario_id: 10, cafeteria_id: 1, estado: 'listo',
+    codigo_retiro_diario: 'TEST1234', qr_token: 'qr-distinto-de-prueba' };
+  const consultar = () => request(app).get('/api/pedidos/5/token-contingencia');
+
+  test.each(['pendiente', 'en_preparacion', 'listo', 'Preparando'])(
+    'propietario obtiene codigo persistido en %s, nunca QR ni literal', async (estado) => {
+      const reg = fijarLecturas({ pedidos: { data: { ...pedido, estado }, error: null } });
+      const res = await consultar();
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ token: pedido.codigo_retiro_diario });
+      expect(JSON.stringify(res.body)).not.toContain('token-contingencia');
+      expect(camposDe(reg.pedidos.select)).toContain('codigo_retiro_diario');
+      expect(camposDe(reg.pedidos.select)).not.toContain('qr_token');
+      expect(reg.pedidos.eq).toEqual([['id', 5]]);
+    }
+  );
+
+  test('personal asociado obtiene el codigo del pedido de su cafeteria', async () => {
+    const reg = fijarLecturas({ usuario: { id: 99, rol_id: 2 },
+      pedidos: { data: pedido, error: null }, cafeterias: { data: { id: 77 }, error: null } });
+    const res = await consultar();
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ token: pedido.codigo_retiro_diario });
+    expect(reg.cafeteria_usuarios.eq).toEqual([['usuario_id', 99], ['cafeteria_id', 1]]);
+  });
+
+  test.each([{ id: 99, rol_id: 1 }, { id: 99, rol_id: 2 }, null])(
+    'conocer el ID sin propiedad/asociacion no da acceso (%j)', async (usuario) => {
+      fijarLecturas({ usuario, pedidos: { data: pedido, error: null } });
+      const res = await consultar();
+      expect(res.status).toBe(403);
+      expect(res.body).toEqual({ error: 'No autorizado para obtener token de contingencia', servicio: 'ms-pedidos' });
+    }
+  );
+
+  test.each(['entregado', 'cancelado', 'Retirado', 'desconocido'])(
+    'estado %s no entrega credencial', async (estado) => {
+      fijarLecturas({ pedidos: { data: { ...pedido, estado }, error: null } });
+      const res = await consultar();
+      expect(res.status).toBe(409);
+      expect(res.body).not.toHaveProperty('token');
+    }
+  );
+
+  test.each([null, ''])('sin codigo persistido (%j) no inventa fallback', async (codigo) => {
+    fijarLecturas({ pedidos: { data: { ...pedido, codigo_retiro_diario: codigo }, error: null } });
+    const res = await consultar();
+    expect(res.status).toBe(409);
+    expect(res.body).not.toHaveProperty('token');
+  });
+
+  test('pedido inexistente -> 404 sin credencial', async () => {
+    fijarLecturas({ pedidos: { data: null, error: null } });
+    const res = await consultar();
+    expect(res.status).toBe(404);
+    expect(res.body).not.toHaveProperty('token');
+  });
+
+  test('id invalido -> 400 antes de consultar', async () => {
+    fijarLecturas();
+    const res = await request(app).get('/api/pedidos/abc/token-contingencia');
+    expect(res.status).toBe(400);
+    expect(supabaseMock.obtenerCliente().from).not.toHaveBeenCalled();
+  });
+});
+
 describe('regresion D.5-B', () => {
   test('token-contingencia sigue respondiendo { token } al propietario', async () => {
     fijarLecturas({
       usuario: { id: 10, rol_id: 1 },
-      pedidos: { data: { id: 5, usuario_id: 10, cafeteria_id: 1 }, error: null }
+      pedidos: { data: { id: 5, usuario_id: 10, cafeteria_id: 1, estado: 'listo', codigo_retiro_diario: 'TEST5678' }, error: null }
     });
     const res = await request(app).get('/api/pedidos/5/token-contingencia');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('token');
+    expect(res.body).toEqual({ token: 'TEST5678' });
     expect(res.body).not.toHaveProperty('codigo_retiro_diario');
   });
 });

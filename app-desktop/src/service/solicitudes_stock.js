@@ -28,12 +28,16 @@ export const solicitudesStock = {
     if (isNaN(cantidad) || cantidad <= 0) {
       throw new Error('La cantidad solicitada debe ser mayor a 0.');
     }
+    const cid = cafeteria_id !== null && cafeteria_id !== undefined ? Number(cafeteria_id) : null;
+    if (!Number.isFinite(cid)) {
+      throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
+    }
 
     const payload = {
       producto_id: Number(producto_id),
       nombre_producto: nombre_producto || null,
       cantidad_solicitada: cantidad,
-      cafeteria_id,
+      cafeteria_id: cid,
       usuario_id,
       observaciones: observaciones || null,
       estado: 'pendiente',
@@ -52,6 +56,44 @@ export const solicitudesStock = {
     }
 
     return data;
+  },
+
+  /**
+   * Lista las solicitudes de reposición de una cafetería (solo lectura).
+   *
+   * S2-T17: el panel del Dueño consulta únicamente las solicitudes de su
+   * cafetería autorizada. Esta consulta no procesa solicitudes ni modifica
+   * inventario: solo lee lo que el sistema ya persistió.
+   *
+   * @param {number|string} cafeteriaId
+   * @returns {Promise<Array>}
+   */
+  async listarPorCafeteria(cafeteriaId) {
+    const cid =
+      cafeteriaId !== null && cafeteriaId !== undefined
+        ? Number(cafeteriaId)
+        : NaN;
+
+    if (!Number.isFinite(cid)) {
+      throw new Error(
+        'No se pudo determinar la cafetería autorizada para consultar solicitudes.'
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('solicitudes_stock')
+      .select('*')
+      .eq('cafeteria_id', cid)
+      .order('fecha_solicitud', { ascending: false });
+
+    if (error) {
+      console.error('Error al listar solicitudes de stock:', error);
+      throw new Error(
+        error.message || 'No se pudieron obtener las solicitudes de reposición.'
+      );
+    }
+
+    return data || [];
   },
 
   /**

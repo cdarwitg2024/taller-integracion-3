@@ -26,12 +26,24 @@ export class ApiError extends Error {
   readonly status: number;
   /** `detalle` del cuerpo de error del backend (solo se envía en errores 4xx). */
   readonly detalle?: string;
+  /**
+   * `true` cuando la solicitud ya se envió pero no se recibió respuesta
+   * (red caída o timeout): el resultado real es desconocido. En un pago NO
+   * debe presentarse como rechazo, porque el cobro pudo haberse realizado.
+   */
+  readonly resultadoIncierto: boolean;
 
-  constructor(mensaje: string, status = 0, detalle?: string) {
+  constructor(
+    mensaje: string,
+    status = 0,
+    detalle?: string,
+    resultadoIncierto = false
+  ) {
     super(mensaje);
     this.name = 'ApiError';
     this.status = status;
     this.detalle = detalle;
+    this.resultadoIncierto = resultadoIncierto;
     // Sin esto, `e instanceof ApiError` puede fallar si el transpilador baja
     // las clases a funciones heredadas de Error. La app depende de esa
     // comprobación para elegir el mensaje que se muestra.
@@ -127,15 +139,27 @@ function textoDe(e: unknown): string {
  * Devuelve el cuerpo JSON ya parseado y lanza `ApiError` cuando:
  *  - falta `EXPO_PUBLIC_API_URL`;
  *  - no hay sesión (ni por consiguiente token);
- *  - falla la red;
+ *  - falla la red o se agota el `timeoutMs` (en ambos casos el `ApiError`
+ *    queda marcado con `resultadoIncierto: true`);
  *  - la respuesta HTTP no es 2xx (con el `error` del backend si existe).
  *
  * @param ruta  ruta relativa, p. ej. `/api/pedidos`.
  * @param cuerpo objeto serializado con `JSON.stringify` como body.
+ * @param opciones configuración opcional; `timeoutMs` define el límite de
+ *                 espera (por defecto 6000 ms).
  */
-export async function apiPost<T>(ruta: string, cuerpo: unknown): Promise<T> {
+export async function apiPost<T>(
+  ruta: string,
+  cuerpo: unknown,
+  opciones?: { timeoutMs?: number }
+): Promise<T> {
   const url = `${urlBase()}${normalizarRuta(ruta)}`;
   const token = await tokenActual();
+
+  // S2-T15: límite de espera explícito. Si se agota DESPUÉS de enviar la
+  // solicitud no se sabe si el backend alcanzó a procesarla.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opciones?.timeoutMs ?? 6000);
 
   let respuesta: Response;
   try {
@@ -148,10 +172,79 @@ export async function apiPost<T>(ruta: string, cuerpo: unknown): Promise<T> {
       // Sin `no-validate` ni equivalentes: TLS queda tal cual lo resuelve el
       // sistema. Tampoco se manda ningún header de key del lado del cliente.
       body: JSON.stringify(cuerpo ?? {}),
+      signal: controller.signal,
     });
-  } catch (e) {
-    // Red, DNS o handshake TLS roto: nunca se incluye el token en el mensaje.
-    throw new ApiError(`No se pudo contactar con el backend (${ruta}): ${textoDe(e)}`);
+  } catch (e: any) {
+    // Red, DNS, handshake TLS roto o timeout: nunca se incluye el token en el
+    // mensaje. El resultado es incierto porque la solicitud pudo llegar al
+    // backend y procesarse antes de que se perdiera la respuesta.
+    if (e?.name === 'AbortError') {
+      throw new ApiError(
+        `Tiempo de espera agotado al procesar la solicitud (${ruta}).`,
+        0,
+        undefined,
+        true
+      );
+    }
+    throw new ApiError(
+      `No se pudo contactar con el backend (${ruta}): ${textoDe(e)}`,
+      0,
+      undefined,
+      true
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const texto = await respuesta.text().catch(() => '');
+  const json = cuerpoJson(texto);
+
+  if (!respuesta.ok) {
+    throw new ApiError(
+      mensajeDeError(json) ?? `El backend respondió HTTP ${respuesta.status} en ${ruta}.`,
+      respuesta.status,
+      detalleDeError(json)
+    );
+  }
+
+  return json as T;
+}
+
+/**
+ * `GET` autenticado contra el backend (S2-T14).
+ *
+ * Utiliza el JWT de la sesión activa de Supabase Auth en `Authorization: Bearer <token>`.
+ * Retorna el cuerpo JSON tipado y lanza `ApiError` con el código HTTP correspondiente
+ * (401 No autenticado, 404 No encontrado / rol no autorizado, 409 Estado no disponible)
+ * o status 0 ante fallos de red / timeout.
+ *
+ * @param ruta ruta relativa, p. ej. `/api/pedidos/123/qr`.
+ * @param opciones configuración opcional, como `timeoutMs`.
+ */
+export async function apiGet<T>(ruta: string, opciones?: { timeoutMs?: number }): Promise<T> {
+  const url = `${urlBase()}${normalizarRuta(ruta)}`;
+  const token = await tokenActual();
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opciones?.timeoutMs ?? 6000);
+
+  let respuesta: Response;
+  try {
+    respuesta = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      throw new ApiError(`Tiempo de espera agotado al consultar el backend (${ruta}).`, 0);
+    }
+    throw new ApiError(`No se pudo contactar con el backend (${ruta}): ${textoDe(e)}`, 0);
+  } finally {
+    clearTimeout(timer);
   }
 
   const texto = await respuesta.text().catch(() => '');

@@ -17,6 +17,11 @@ app.use((err, req, res, next) => {
 });
 
 describe('ms-pedidos auth', () => {
+  test('S2-T10: contingencia sin token -> 401', async () => {
+    const res = await request(app).get('/api/pedidos/5/token-contingencia');
+    expect(res.status).toBe(401);
+    expect(res.body).not.toHaveProperty('token');
+  });
   test('sin token → 401', async () => {
     const res = await request(app).post('/api/pedidos').send({ items: [{ producto_id: 1, cantidad: 1 }] });
     expect(res.status).toBe(401);
