@@ -9,7 +9,7 @@ import OrdersDistributionChart from '../../components/dashboard/OrdersDistributi
 import TopProductsChart from '../../components/dashboard/TopProductsChart';
 import RecentOrdersTable from '../../components/dashboard/RecentOrdersTable';
 
-function Dashboard() {
+function Dashboard({ currentUser }) {
   const [stats, setStats] = useState(null);
   const [pedidos, setPedidos] = useState([]);
   const [salesData, setSalesData] = useState([]);
@@ -18,12 +18,31 @@ function Dashboard() {
   const [dbError, setDbError] = useState(null);
   const [ultimaActualizacionExitosa, setUltimaActualizacionExitosa] = useState(null);
 
+  // S2-T18: el alcance de cafetería proviene del perfil del dueño. Desde
+  // S2-T12 `getAll` exige cafeteriaId y no acepta un fallback fijo, así que
+  // el Dashboard debe pasarlo explícitamente.
+  const cafeteriaId =
+    currentUser?.cafeteria_id ?? currentUser?.cafeteriaId ?? null;
+
   const loadData = async (showLoading = true) => {
     if (showLoading) setLoading(true);
     setDbError(null);
+
+    if (cafeteriaId === null || cafeteriaId === undefined || cafeteriaId === '') {
+      setDbError(
+        'Tu usuario no tiene una cafetería autorizada asociada. No es posible calcular los indicadores.'
+      );
+      setStats(null);
+      setPedidos([]);
+      setSalesData([]);
+      setTopProducts([]);
+      if (showLoading) setLoading(false);
+      return;
+    }
+
     try {
       // Snapshot comun de pedidos (S2-T12): un solo getAll; los indicadores derivan sus metricas
-      const pedidos = await pedidosService.getAll();
+      const pedidos = await pedidosService.getAll({ cafeteriaId });
 
       const [resStats, resSales, resTop] = await Promise.all([
         pedidosService.getEstadisticas(pedidos),
@@ -79,7 +98,7 @@ function Dashboard() {
     return () => {
       supabase.removeChannel(canalDashboard);
     };
-  }, []);
+  }, [cafeteriaId]);
 
   return (
     <Box sx={{ width: '100%', maxWidth: '100%', pb: 4, boxSizing: 'border-box' }}>
