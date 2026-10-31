@@ -25,7 +25,7 @@ import PrintIcon from '@mui/icons-material/Print';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
-import VisibilityOutlinedIcon from '@mui/icons/icons-material/VisibilityOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useEffect, useState } from 'react';
 import TimeAgo from './TimeAgo';
