@@ -53,6 +53,7 @@ function Comandas({ currentUser }) {
   const [diagnosticoVoz, setDiagnosticoVoz] = useState(vozKds.obtenerDiagnostico());
   const [avisoVoz, setAvisoVoz] = useState(null);
   const [errorComandas, setErrorComandas] = useState('');
+  const [procesando, setProcesando] = useState(new Set());
 
   const pedidosRealtime = useRef(new Map());
 
@@ -194,14 +195,32 @@ function Comandas({ currentUser }) {
 
   const handleCambiarEstado = async (id, nuevoEstado, e) => {
     if (e) e.stopPropagation();
-    const actualizado = await pedidosService.updateEstado(id, nuevoEstado);
-    if (actualizado) {
-      actualizarPedidoRealTime(actualizado);
-    } else {
-      setPedidos(prev => prev.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p));
-      if (selectedPedido && selectedPedido.id === id) {
-        setSelectedPedido(prev => ({ ...prev, estado: nuevoEstado }));
+    const pedidoId = id;
+    const key = String(pedidoId);
+    if (procesando.has(key)) return;
+    setProcesando(prev => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+    try {
+      const actualizado = await pedidosService.updateEstado(pedidoId, nuevoEstado);
+      if (actualizado) {
+        actualizarPedidoRealTime(actualizado);
+      } else {
+        setPedidos(prev => prev.map(p => String(p.id) === key ? { ...p, estado: nuevoEstado } : p));
+        if (selectedPedido && String(selectedPedido.id) === key) {
+          setSelectedPedido(prev => ({ ...prev, estado: nuevoEstado }));
+        }
       }
+    } catch (err) {
+      console.error('Error al cambiar estado:', err);
+    } finally {
+      setProcesando(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
     }
   };
 
@@ -277,6 +296,7 @@ function Comandas({ currentUser }) {
                       pedido={pedido}
                       onOpen={setSelectedPedido}
                       onChangeEstado={handleCambiarEstado}
+                      procesando={procesando.has(String(pedido.id))}
                     />
                   ))
                 )}
