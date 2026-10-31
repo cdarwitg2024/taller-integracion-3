@@ -163,28 +163,40 @@ function aMinutosDelDia(horaRetiro) {
 function aInstanteRetiro(pedido) {
   // Ojo: `normalizarPedido` deja `hora_retiro` como texto "HH:mm", así que
   // hay que soportar los dos formatos que llegan desde la base.
-  const retiroTs = parsearFecha(pedido.hora_retiro);
-  if (retiroTs) return retiroTs.getTime();
-
-  let minutos = aMinutosDelDia(pedido.hora_retiro);
   const creado = parsearFecha(pedido.creado_en);
 
-  // S2-T7: Priorizar la franja de retiro elegida por el estudiante.
-  // Se toma la HORA DE INICIO de la franja (ej. "12:30" de "12:30-12:45")
-  // para ordenar los pedidos por el momento en que realmente deben retirarse.
-  if (minutos === null && pedido?.franja_retiro) {
+  // S2-T7: Prioridad estricta según requerimiento
+  // 1) franja_retiro: utilizar la hora de inicio de la franja
+  if (pedido?.franja_retiro) {
     const franja = String(pedido.franja_retiro).trim();
     if (franja) {
       // Extraer inicio de la franja: puede venir como "12:30-12:45", "12:30 - 12:45"
       const inicio = franja.split(/[-–—]/)[0].trim();
-      minutos = aMinutosDelDia(inicio);
+      let minutos = aMinutosDelDia(inicio);
       if (minutos === null) {
         // Fallback: intentar parsear la franja completa por si viene en otro formato
         minutos = aMinutosDelDia(franja);
       }
+      if (minutos !== null) {
+        if (creado) {
+          // "HH:mm" sobre el día en que se creó el pedido.
+          const base = new Date(creado);
+          base.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
+          return base.getTime();
+        }
+        // Sin fecha de creación: se asume hoy.
+        const hoy = new Date();
+        hoy.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
+        return hoy.getTime();
+      }
     }
   }
 
+  // 2) hora_retiro: utilizarla cuando no exista una franja válida
+  const retiroTs = parsearFecha(pedido.hora_retiro);
+  if (retiroTs) return retiroTs.getTime();
+
+  const minutos = aMinutosDelDia(pedido.hora_retiro);
   if (minutos !== null) {
     if (creado) {
       // "HH:mm" sobre el día en que se creó el pedido.
@@ -198,6 +210,7 @@ function aInstanteRetiro(pedido) {
     return hoy.getTime();
   }
 
+  // 3) creado_en + 15 minutos: utilizarlo únicamente como fallback cuando no exista información de retiro válida
   if (creado) return creado.getTime() + 15 * 60000; // estimado por defecto
   return null;
 }
