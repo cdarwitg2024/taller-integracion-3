@@ -53,6 +53,7 @@ function Comandas({ currentUser }) {
   const [diagnosticoVoz, setDiagnosticoVoz] = useState(vozKds.obtenerDiagnostico());
   const [avisoVoz, setAvisoVoz] = useState(null);
   const [errorComandas, setErrorComandas] = useState('');
+  const [errorOperacion, setErrorOperacion] = useState('');
   const [procesando, setProcesando] = useState(new Set());
   const [busqueda, setBusqueda] = useState('');
 
@@ -222,7 +223,17 @@ function Comandas({ currentUser }) {
     } catch (err) {
       console.error('Error al cambiar estado:', err);
       const msg = err?.message || 'No se pudo cambiar el estado del pedido';
-      setErrorComandas(`Error al cambiar estado: ${msg}`);
+      if (String(msg).toLowerCase().includes('no autorizado') || err?.status === 401 || err?.code === 'UNAUTHORIZED') {
+        setErrorOperacion('Sesión inválida o vencida. No se pudo cambiar el estado. Inicie sesión nuevamente.');
+      } else if (err?.status === 403) {
+        setErrorOperacion('No tiene permisos para cambiar el estado de este pedido.');
+      } else if (err?.status === 409) {
+        setErrorOperacion('No se pudo cambiar el estado: hay un conflicto con el estado actual del pedido.');
+      } else if (String(msg).toLowerCase().includes('failed to fetch') || String(msg).toLowerCase().includes('network')) {
+        setErrorOperacion('Sin conexión al backend. Verifique su red e inténtelo nuevamente.');
+      } else {
+        setErrorOperacion(`Error al cambiar estado: ${msg}`);
+      }
     } finally {
       setProcesando(prev => {
         const next = new Set(prev);
@@ -275,6 +286,16 @@ function Comandas({ currentUser }) {
         </Box>
       ) : (
         <>
+          {conexion !== ESTADO_CONECTADO && pedidosOperativos.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Alert severity="warning">Conexión en tiempo real interrumpida. Las comandas se mantienen, se intentará reconectar.</Alert>
+            </Box>
+          )}
+          {errorOperacion && (
+            <Box sx={{ mb: 2 }}>
+              <Alert severity="error" onClose={() => setErrorOperacion('')}>{errorOperacion}</Alert>
+            </Box>
+          )}
           {errorComandas && (
             <Box sx={{ mb: 2 }}>
               <Alert severity="warning" action={<Button color="inherit" size="small" onClick={() => { setLoading(true); fetchPedidos(true); }}>Reintentar</Button>}>
