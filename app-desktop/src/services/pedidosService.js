@@ -580,6 +580,8 @@ export const pedidosService = {
     const productCountMap = {};
 
     list.forEach((p) => {
+      // Excluir pedidos cancelados del ranking de productos vendidos (S2-T10)
+      if (p.estado === 'cancelado') return;
       const items = p.productos || p.detalles_pedido || [];
       items.forEach((item) => {
         const name = item.nombre || item.productos?.nombre || 'Producto';
