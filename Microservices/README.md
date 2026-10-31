@@ -154,7 +154,8 @@ que se resuelva.
 prefijo elimina la parte del URI que coincide, y `/api/cafeterias/1` llegaría al
 upstream como `/1`. Sin barra, el URI viaja intacto.
 
-**Rutas internas bloqueadas antes que las públicas.** nginx matchea por prefijo y
-gana el más corto, así que `location /api/menus` se comería
-`/api/menus/precios`. Por eso la regla de bloqueo usa un ancla de fin de palabra
-(`~ ^/api/menus/precios/?$`) y está declarada antes.
+**Rutas internas bloqueadas mediante regex.** nginx selecciona el prefijo más
+largo y después evalúa las expresiones regulares, salvo que el prefijo use `^~`.
+La regex `~ ^/api/menus/precios/?$` prevalece sobre `/api/menus` y devuelve 404
+con o sin barra final. `$` ancla el final de la ruta. Entre regex gana la primera
+coincidencia; poner esta regla antes del prefijo no es lo que le da prioridad.
