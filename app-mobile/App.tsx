@@ -490,6 +490,93 @@ function AppContent() {
     if (paying) return;
     setPaying(true);
 
+    // Revalidación no destructiva del carrito antes de pagar.
+    // Diferencia error de consulta vs producto no disponible/desactivado/sin stock.
+    // No reemplaza la validación transaccional del backend.
+    try {
+      const ids = Array.from(new Set(cart.map((item) => item.id)));
+      if (ids.length > 0) {
+        const { data, error } = await supabase
+          .from('productos')
+          .select('id, cafeteria_id, nombre, activo, eliminado_en, stock')
+          .in('id', ids);
+
+        if (error) {
+          console.warn('[Carrito] Error al revalidar disponibilidad:', error);
+          Alert.alert(
+            'No se pudo verificar disponibilidad',
+            'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
+          );
+          setPaying(false);
+          return;
+        }
+
+        const map = new Map();
+        (Array.isArray(data) ? data : []).forEach((p) => {
+          map.set(Number(p.id), p);
+        });
+
+        const issues: Array<{ tipo: 'desactivado' | 'sin_stock'; nombre: string; solicitado: number; stock?: number }> = [];
+
+        for (let i = 0; i < cart.length; i += 1) {
+          const item = cart[i];
+          const prod = map.get(Number(item.id));
+          if (!prod) {
+            issues.push({ tipo: 'desactivado', nombre: item.name, solicitado: item.quantity });
+            continue;
+          }
+          if (Number(prod.cafeteria_id) !== Number(cafeteriaId)) {
+            issues.push({ tipo: 'desactivado', nombre: prod.nombre || item.name, solicitado: item.quantity });
+            continue;
+          }
+          const activo = prod.activo !== false && prod.activo !== null;
+          const eliminado = Boolean(prod.eliminado_en);
+          if (!activo || eliminado) {
+            issues.push({ tipo: 'desactivado', nombre: prod.nombre || item.name, solicitado: item.quantity });
+            continue;
+          }
+          const stock = Number(prod.stock);
+          if (Number.isFinite(stock) && stock < Number(item.quantity)) {
+            issues.push({ tipo: 'sin_stock', nombre: prod.nombre || item.name, solicitado: Number(item.quantity), stock });
+            continue;
+          }
+        }
+
+        if (issues.length > 0) {
+          const desactivados = issues.filter((x) => x.tipo === 'desactivado');
+          const sinStock = issues.filter((x) => x.tipo === 'sin_stock');
+          const lines: string[] = [];
+          if (desactivados.length > 0) {
+            const nombres = desactivados.map((x) => `• ${x.nombre}`).slice(0, 6);
+            lines.push('Producto(s) desactivado(s) o no disponible(s):');
+            lines.push(...nombres);
+            if (desactivados.length > 6) lines.push(`• ... y ${desactivados.length - 6} más`);
+          }
+          if (sinStock.length > 0) {
+            if (lines.length > 0) lines.push('');
+            const nombres = sinStock.map((x) => `• ${x.nombre} (solicitado: ${x.solicitado}${Number.isFinite(x.stock) ? `, stock: ${x.stock}` : ''})`).slice(0, 6);
+            lines.push('Producto(s) sin stock suficiente:');
+            lines.push(...nombres);
+            if (sinStock.length > 6) lines.push(`• ... y ${sinStock.length - 6} más`);
+          }
+          lines.push('');
+          lines.push('El carrito no fue modificado. Ajusta las cantidades o elimina los productos afectados antes de pagar.');
+
+          Alert.alert('Hay cambios en la disponibilidad', lines.join('\n'));
+          setPaying(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('[Carrito] Excepción al revalidar disponibilidad:', e);
+      Alert.alert(
+        'No se pudo verificar disponibilidad',
+        'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
+      );
+      setPaying(false);
+      return;
+    }
+
     const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
 
     try {
