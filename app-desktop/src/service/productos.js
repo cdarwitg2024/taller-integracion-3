@@ -50,7 +50,7 @@ export const productos = {
 
     const { data, error } = await supabase
       .from(TABLE)
-      .select('*, cafeterias(*)')
+      .select('*, cafeterias(*), categorias(*)')
       .eq('id', id)
       .single();
 
@@ -103,7 +103,7 @@ export const productos = {
     const { data, error } = await supabase
       .from(TABLE)
       .insert(dbPayload)
-      .select('*, cafeterias(*)')
+      .select('*, cafeterias(*), categorias(*)')
       .single();
 
     if (error) {
@@ -137,7 +137,7 @@ export const productos = {
       .from(TABLE)
       .update(dbPayload)
       .eq('id', id)
-      .select('*, cafeterias(*)')
+      .select('*, cafeterias(*), categorias(*)')
       .single();
 
     if (error) {
