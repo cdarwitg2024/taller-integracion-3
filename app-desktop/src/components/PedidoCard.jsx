@@ -25,8 +25,9 @@ import PrintIcon from '@mui/icons-material/Print';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import VisibilityOutlinedIcon from '@mui/icons/icons-material/VisibilityOutlined';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { useEffect, useState } from 'react';
 import TimeAgo from './TimeAgo';
 import { minutosHastaRetiro, origenRetiroPedido } from '../utils/dateUtils';
 import impresionService from '../services/impresionService';
@@ -74,10 +75,19 @@ const filaFlex = {
 };
 
 function PedidoCard({ pedido, onOpen, onChangeEstado }) {
+  const [ahora, setAhora] = useState(Date.now());
   const configEstado = getEstadoConfig(pedido.estado);
   const accion = ACCION_POR_ESTADO[pedido.estado];
   const estadoImpresion = impresionService.getEstadoImpresion(pedido.rawId ?? pedido.id);
   const nombreCafeteria = pedido.cafeteria_nombre || pedido.ubicacion || '';
+
+  useEffect(() => {
+    if (pedido.estado !== 'listo') return;
+    const intervalId = setInterval(() => {
+      setAhora(Date.now());
+    }, 60000);
+    return () => clearInterval(intervalId);
+  }, [pedido.estado]);
 
   // Origen del dato de retiro: la franja elegida por el estudiante (dato real
   // del pedido) manda sobre la hora exacta, y ambas sobre el estimado. Así la
@@ -103,6 +113,7 @@ function PedidoCard({ pedido, onOpen, onChangeEstado }) {
         : COLORS.textSecondary;
 
   // S2-T8: Indicador visual para pedidos LISTO cercanos a su horario de retiro
+  void ahora;
   const minFaltan = minutosHastaRetiro(pedido);
   const retiroProximo =
     pedido.estado === 'listo' &&
