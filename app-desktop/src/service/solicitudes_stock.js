@@ -7,6 +7,33 @@ import { supabase } from './supabase';
  */
 export const solicitudesStock = {
   /**
+   * Verifica si ya existe una solicitud pendiente equivalente
+   * Equivalencia: misma cafetería, mismo producto y estado 'pendiente'
+   */
+  async existeSolicitudPendiente({ producto_id, cafeteria_id }) {
+    const pid = producto_id !== null && producto_id !== undefined ? Number(producto_id) : null;
+    const cid = cafeteria_id !== null && cafeteria_id !== undefined ? Number(cafeteria_id) : null;
+    if (!Number.isFinite(pid) || !Number.isFinite(cid)) {
+      throw new Error('Datos insuficientes para verificar solicitudes pendientes equivalentes.');
+    }
+
+    const { data, error } = await supabase
+      .from('solicitudes_stock')
+      .select('id')
+      .eq('producto_id', pid)
+      .eq('cafeteria_id', cid)
+      .eq('estado', 'pendiente')
+      .limit(1);
+
+    if (error) {
+      console.error('Error al verificar solicitudes pendientes equivalentes:', error);
+      throw new Error(error.message || 'Error al consultar solicitudes pendientes equivalentes.');
+    }
+
+    return Array.isArray(data) && data.length > 0;
+  },
+
+  /**
    * Crear una solicitud de reposición de stock
    * @param {Object} params
    * @param {number|string} params.producto_id
