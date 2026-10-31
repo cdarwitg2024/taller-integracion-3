@@ -15,6 +15,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 
 import { supabase } from '../lib/supabase';
 import PaymentScreen from './PaymentScreen';
@@ -450,7 +451,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
           <Text style={styles.headerTitle}>Mi Wallet</Text>
         </View>
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>🔒</Text>
+          <AppIcon name="lock" style={styles.emptyIcon} />
           <Text style={styles.emptyTitle}>Inicia sesión</Text>
           <Text style={styles.emptyDescription}>
             Necesitas una cuenta para ver tu saldo y movimientos.
@@ -627,7 +628,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
 
           {errorMovimientos ? (
             <Card variant="outlined" padding="none" style={styles.errorMovimientos}>
-              <Text style={styles.errorEmoji}>⚠️</Text>
+              <AppIcon name="warning" style={styles.errorIcon} />
               <Text style={styles.errorTitle}>Error al cargar movimientos</Text>
               <Text style={styles.errorDescription}>{errorMovimientos}</Text>
               <Button
@@ -641,7 +642,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
             </Card>
           ) : movimientosVisibles.length === 0 ? (
             <Card variant="outlined" padding="none" style={styles.emptyMovimientos}>
-              <Text style={styles.emptyEmoji}>💳</Text>
+              <AppIcon name="card" style={styles.emptyIcon} />
               <Text style={styles.emptyTitle}>Sin movimientos todavía</Text>
               <Text style={styles.emptyDescription}>
                 Tus recargas y compras aparecerán aquí para que lleves el control de tu saldo.
@@ -674,7 +675,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Selecciona el monto</Text>
               <TouchableOpacity onPress={() => setMontoSeleccionado(0)}>
-                <Text style={styles.modalClose}>✕</Text>
+                <AppIcon name="close" style={styles.modalClose} />
               </TouchableOpacity>
             </View>
 
@@ -1019,7 +1020,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.rojo,
   },
-  errorEmoji: {
+  errorIcon: {
     fontSize: 36,
     marginBottom: spacing.xs,
   },
@@ -1059,7 +1060,7 @@ const styles = StyleSheet.create({
     paddingTop: 80,
     paddingHorizontal: 40,
   },
-  emptyEmoji: {
+  emptyIcon: {
     fontSize: 48,
     marginBottom: spacing.lg,
   },

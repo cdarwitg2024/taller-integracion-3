@@ -8,6 +8,7 @@ import {
   ScrollView,
   RefreshControl,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import Button from '../components/Button';
@@ -105,7 +106,7 @@ export const CafeteriaListScreen = ({
     <Card variant="elevated" padding="md" style={styles.card}>
       {imagenesCaidas[item.id] || !item.imagen_url ? (
         <View style={[styles.cardImage, styles.cardImageFallback]}>
-          <Text style={styles.cardImageFallbackIcon}>☕</Text>
+          <AppIcon name="mug" style={styles.cardImageFallbackIcon} />
         </View>
       ) : (
         <Image
@@ -149,7 +150,7 @@ export const CafeteriaListScreen = ({
         <View style={{ width: 36 }} />
         <Text style={styles.welcomeText}>Bienvenido {serverUserName || 'Usuario'}</Text>
         <View style={styles.iconBadge}>
-          <Text style={{ fontSize: 18 }}>☕</Text>
+          <AppIcon name="mug" size={18} />
         </View>
       </View>
 
@@ -180,7 +181,7 @@ export const CafeteriaListScreen = ({
           </View>
         ) : errorMessage ? (
           <View style={styles.errorState}>
-            <Text style={styles.errorStateIcon}>📡</Text>
+            <AppIcon name="wifi" style={styles.errorStateIcon} />
             <Text style={styles.errorStateTitle}>Sin conexión con el servidor</Text>
             <Text style={styles.errorStateText}>{errorMessage}</Text>
             <View style={styles.retryButtonWrapper}>
@@ -192,7 +193,7 @@ export const CafeteriaListScreen = ({
           </View>
         ) : cafeterias.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>☕</Text>
+            <AppIcon name="mug" style={styles.emptyStateIcon} />
             <Text style={styles.emptyStateTitle}>Aún no hay cafeterías disponibles</Text>
             <Text style={styles.emptyStateText}>
               No hay cafeterías activas registradas en este momento. Vuelve más tarde para ver

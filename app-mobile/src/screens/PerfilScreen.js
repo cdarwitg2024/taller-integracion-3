@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -75,12 +76,12 @@ const formatFecha = (iso) => {
  */
 const getIconoActividad = (tipo, descripcion = '') => {
   const txt = `${tipo || ''} ${descripcion || ''}`.toLowerCase();
-  if (txt.includes('recarga') || txt.includes('saldo') || txt.includes('abono')) return '💳';
-  if (txt.includes('reembolso') || txt.includes('devolucion') || txt.includes('cancel')) return '↩️';
-  if (txt.includes('pedido') || txt.includes('compra') || txt.includes('orden') || txt.includes('cafe')) return '☕';
-  if (txt.includes('qr') || txt.includes('retiro') || txt.includes('entrega')) return '📦';
-  if (txt.includes('perfil') || txt.includes('usuario')) return '👤';
-  return '📝';
+  if (txt.includes('recarga') || txt.includes('saldo') || txt.includes('abono')) return 'card';
+  if (txt.includes('reembolso') || txt.includes('devolucion') || txt.includes('cancel')) return 'refund';
+  if (txt.includes('pedido') || txt.includes('compra') || txt.includes('orden') || txt.includes('cafe')) return 'mug';
+  if (txt.includes('qr') || txt.includes('retiro') || txt.includes('entrega')) return 'box';
+  if (txt.includes('perfil') || txt.includes('usuario')) return 'user';
+  return 'receipt';
 };
 
 const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
@@ -655,7 +656,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Card variant="elevated" style={styles.guestHeroCard}>
             <View style={styles.guestAvatar}>
-              <Text style={styles.guestAvatarText}>🎓</Text>
+              <AppIcon name="student" style={styles.guestAvatarText} />
             </View>
             <Text style={styles.guestTitle}>Modo Invitado</Text>
             <Text style={styles.guestSubtitle}>Explorando CoffeeFast UCT</Text>
@@ -680,13 +681,13 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('todas')}>
-              <Text style={styles.menuRowIcon}>📜</Text>
+              <AppIcon name="receipt" style={styles.menuRowIcon} />
               <Text style={styles.menuRowText}>Políticas, Retiro QR y Reembolsos</Text>
               <Text style={styles.menuRowChevron}>›</Text>
             </TouchableOpacity>
             <View style={styles.separator} />
             <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('faq')}>
-              <Text style={styles.menuRowIcon}>💬</Text>
+              <AppIcon name="help" style={styles.menuRowIcon} />
               <Text style={styles.menuRowText}>Centro de Ayuda y Preguntas (FAQ)</Text>
               <Text style={styles.menuRowChevron}>›</Text>
             </TouchableOpacity>
@@ -725,7 +726,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
       <View style={styles.container}>
         <Header title="Mi Perfil" />
         <View style={styles.centerContainer}>
-          <Text style={styles.errorEmoji}>⚠️</Text>
+          <AppIcon name="warning" style={styles.errorIcon} />
           <Text style={styles.errorTitle}>Error al cargar perfil</Text>
           <Text style={styles.errorDescription}>{errorCarga}</Text>
           <Button
@@ -827,7 +828,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
                 onPress={() => setModalPoliticaVisible(false)}
                 style={styles.modalCloseBtn}
               >
-                <Text style={styles.modalCloseText}>✕</Text>
+                <AppIcon name="close" style={styles.modalCloseText} />
               </TouchableOpacity>
             </View>
             {contenido}
@@ -874,15 +875,24 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
             ¿Tienes dudas con tu cuenta, problemas con un retiro o necesitas asistencia con tu saldo?
           </Text>
           <View style={styles.contactItemBox}>
-            <Text style={styles.contactLabel}>📧 Correo de soporte:</Text>
+            <View style={styles.contactLabelRow}>
+              <AppIcon name="envelope" style={styles.contactLabelIcon} />
+              <Text style={styles.contactLabel}>Correo de soporte:</Text>
+            </View>
             <Text style={styles.contactValue}>soporte.cafeteria@alu.uct.cl</Text>
           </View>
           <View style={styles.contactItemBox}>
-            <Text style={styles.contactLabel}>⏰ Horario de atención:</Text>
+            <View style={styles.contactLabelRow}>
+              <AppIcon name="clock" style={styles.contactLabelIcon} />
+              <Text style={styles.contactLabel}>Horario de atención:</Text>
+            </View>
             <Text style={styles.contactValue}>Lunes a Viernes: 08:30 - 18:30 hrs</Text>
           </View>
           <View style={styles.contactItemBox}>
-            <Text style={styles.contactLabel}>📍 Ubicaciones:</Text>
+            <View style={styles.contactLabelRow}>
+              <AppIcon name="location" style={styles.contactLabelIcon} />
+              <Text style={styles.contactLabel}>Ubicaciones:</Text>
+            </View>
             <Text style={styles.contactValue}>Campus San Juan Pablo II & Campus San Francisco</Text>
           </View>
         </View>
@@ -904,7 +914,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
                 onPress={() => setModalAyudaVisible(false)}
                 style={styles.modalCloseBtn}
               >
-                <Text style={styles.modalCloseText}>✕</Text>
+                <AppIcon name="close" style={styles.modalCloseText} />
               </TouchableOpacity>
             </View>
             {contenido}
@@ -959,12 +969,12 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
           {/* Badges de Estado y Rol */}
           <View style={styles.badgesRow}>
             <View style={styles.roleChip}>
-              <Text style={styles.roleChipIcon}>🎓</Text>
+              <AppIcon name="student" style={styles.roleChipIcon} />
               <Text style={styles.roleChipText}>{rolLegible}</Text>
             </View>
             {Boolean(usuarioData?.telefono) && (
               <View style={styles.phoneChip}>
-                <Text style={styles.phoneChipIcon}>📞</Text>
+                <AppIcon name="phone" style={styles.phoneChipIcon} />
                 <Text style={styles.phoneChipText}>{usuarioData.telefono}</Text>
               </View>
             )}
@@ -975,7 +985,10 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
             onPress={abrirModalEdicion}
             activeOpacity={0.8}
           >
-            <Text style={styles.editProfileBtnText}>✏️ Modificar datos personales</Text>
+            <View style={styles.editProfileBtnRow}>
+              <AppIcon name="edit" style={styles.editProfileBtnIcon} />
+              <Text style={styles.editProfileBtnText}>Modificar datos personales</Text>
+            </View>
           </TouchableOpacity>
         </Card>
 
@@ -983,7 +996,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
         <Card variant="elevated" style={styles.walletCard}>
           <View style={styles.walletTopRow}>
             <View style={styles.walletLabelContainer}>
-              <Text style={styles.walletHeaderIcon}>💳</Text>
+              <AppIcon name="card" style={styles.walletHeaderIcon} />
               <Text style={styles.walletHeaderTitle}>Billetera CoffeeFast</Text>
             </View>
           </View>
@@ -1009,7 +1022,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
         <Card variant="outlined" style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.sectionHeaderEmoji}>🕒</Text>
+              <AppIcon name="clock" style={styles.sectionHeaderIcon} />
               <Text style={styles.sectionTitle}>Actividad Reciente</Text>
             </View>
             <TouchableOpacity onPress={onRefresh}>
@@ -1024,7 +1037,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
             </View>
           ) : actividades.length === 0 ? (
             <View style={styles.emptyStateBox}>
-              <Text style={styles.emptyStateEmoji}>☕</Text>
+              <AppIcon name="mug" style={styles.emptyStateIcon} />
               <Text style={styles.emptyStateTitle}>Sin actividad reciente</Text>
               <Text style={styles.emptyStateDescription}>
                 Tus compras de café, colaciones y recargas de saldo se listarán automáticamente aquí.
@@ -1037,7 +1050,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
                 <View key={item.id || index}>
                   <View style={styles.activityRow}>
                     <View style={styles.activityIconCircle}>
-                      <Text style={styles.activityIconText}>{icono}</Text>
+                      <AppIcon name={icono} style={styles.activityIconText} />
                     </View>
                     <View style={styles.activityMainInfo}>
                       <Text style={styles.activityTitle} numberOfLines={1}>{item.titulo}</Text>
@@ -1046,7 +1059,8 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
                         <Text style={styles.activityDate}>{formatFecha(item.fecha)}</Text>
                         {item.pedido_id && (
                           <View style={styles.activityPedidoBadge}>
-                            <Text style={styles.activityPedidoText}>📦 #{item.pedido_id}</Text>
+                            <AppIcon name="box" style={styles.activityPedidoIcon} />
+                            <Text style={styles.activityPedidoText}>#{item.pedido_id}</Text>
                           </View>
                         )}
                       </View>
@@ -1068,7 +1082,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
         <Card variant="outlined" style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.sectionHeaderEmoji}>📜</Text>
+              <AppIcon name="receipt" style={styles.sectionHeaderIcon} />
               <Text style={styles.sectionTitle}>Políticas y Condiciones</Text>
             </View>
             <TouchableOpacity onPress={() => abrirPantallaPoliticas('todas')}>
@@ -1079,7 +1093,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
           <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('todas')} activeOpacity={0.7}>
             <View style={styles.menuRowLeft}>
               <View style={styles.menuIconContainer}>
-                <Text style={styles.menuRowIcon}>📋</Text>
+                <AppIcon name="receipt" style={styles.menuRowIcon} />
               </View>
               <View>
                 <Text style={styles.menuRowText}>Términos del Servicio</Text>
@@ -1094,7 +1108,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
           <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('todas')} activeOpacity={0.7}>
             <View style={styles.menuRowLeft}>
               <View style={styles.menuIconContainer}>
-                <Text style={styles.menuRowIcon}>🔒</Text>
+                <AppIcon name="lock" style={styles.menuRowIcon} />
               </View>
               <View>
                 <Text style={styles.menuRowText}>Privacidad y Seguridad</Text>
@@ -1109,7 +1123,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
           <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('cancelacion')} activeOpacity={0.7}>
             <View style={styles.menuRowLeft}>
               <View style={styles.menuIconContainer}>
-                <Text style={styles.menuRowIcon}>⏱️</Text>
+                <AppIcon name="clock" style={styles.menuRowIcon} />
               </View>
               <View>
                 <Text style={styles.menuRowText}>Retiro, Cancelación y Reembolso</Text>
@@ -1124,7 +1138,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
         <Card variant="outlined" style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.sectionHeaderEmoji}>💬</Text>
+              <AppIcon name="help" style={styles.sectionHeaderIcon} />
               <Text style={styles.sectionTitle}>Ayuda y Soporte</Text>
             </View>
             <TouchableOpacity onPress={() => abrirPantallaPoliticas('faq')}>
@@ -1135,7 +1149,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
           <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('faq')} activeOpacity={0.7}>
             <View style={styles.menuRowLeft}>
               <View style={styles.menuIconContainer}>
-                <Text style={styles.menuRowIcon}>❓</Text>
+                <AppIcon name="help" style={styles.menuRowIcon} />
               </View>
               <View>
                 <Text style={styles.menuRowText}>Preguntas Frecuentes (FAQ)</Text>
@@ -1150,7 +1164,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
           <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('contacto')} activeOpacity={0.7}>
             <View style={styles.menuRowLeft}>
               <View style={styles.menuIconContainer}>
-                <Text style={styles.menuRowIcon}>✉️</Text>
+                <AppIcon name="envelope" style={styles.menuRowIcon} />
               </View>
               <View>
                 <Text style={styles.menuRowText}>Contacto con Soporte</Text>
@@ -1188,7 +1202,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
                 onPress={() => setModalEdicionVisible(false)}
                 style={styles.modalCloseBtn}
               >
-                <Text style={styles.modalCloseText}>✕</Text>
+                <AppIcon name="close" style={styles.modalCloseText} />
               </TouchableOpacity>
             </View>
 
@@ -1266,7 +1280,7 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
               {/* Datos protegidos por el sistema (Solo lectura) */}
               <View style={styles.protectedSection}>
                 <View style={styles.protectedHeaderRow}>
-                  <Text style={styles.protectedHeaderIcon}>🔒</Text>
+                  <AppIcon name="lock" style={styles.protectedHeaderIcon} />
                   <Text style={styles.protectedHeaderText}>Datos protegidos por el sistema</Text>
                 </View>
 
@@ -1339,7 +1353,7 @@ const styles = StyleSheet.create({
     color: colors.textoSecundario,
     fontSize: typography.cuerpo,
   },
-  errorEmoji: {
+  errorIcon: {
     fontSize: 48,
     marginBottom: spacing.md,
   },
@@ -1482,6 +1496,8 @@ const styles = StyleSheet.create({
     fontWeight: typography.pesoBold,
     color: colors.cafeOscuro,
   },
+  editProfileBtnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
+  editProfileBtnIcon: { fontSize: 14, color: colors.cafeOscuro },
 
   // ─── 2. Tarjeta Wallet ───────────────────────────────────────────
   walletCard: {
@@ -1565,7 +1581,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs,
   },
-  sectionHeaderEmoji: {
+  sectionHeaderIcon: {
     fontSize: 16,
   },
   sectionTitle: {
@@ -1626,6 +1642,9 @@ const styles = StyleSheet.create({
     color: colors.textoDeshabilitado,
   },
   activityPedidoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     backgroundColor: colors.crema,
     paddingHorizontal: 5,
     paddingVertical: 1,
@@ -1638,6 +1657,7 @@ const styles = StyleSheet.create({
     fontWeight: typography.pesoBold,
     color: colors.cafeOscuro,
   },
+  activityPedidoIcon: { fontSize: 9, color: colors.cafeOscuro },
   activityAmount: {
     fontSize: typography.cuerpoPequeno,
     fontWeight: typography.pesoBold,
@@ -1654,7 +1674,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
   },
-  emptyStateEmoji: {
+  emptyStateIcon: {
     fontSize: 32,
     marginBottom: spacing.xs,
   },
@@ -1923,6 +1943,8 @@ const styles = StyleSheet.create({
     color: colors.textoSecundario,
     marginBottom: 2,
   },
+  contactLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  contactLabelIcon: { fontSize: 12, color: colors.cafeOscuro, marginBottom: 2 },
   contactValue: {
     fontSize: typography.cuerpoPequeno,
     fontWeight: typography.pesoBold,

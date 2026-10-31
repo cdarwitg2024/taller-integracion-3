@@ -6,6 +6,7 @@ import {
   Image,
   StyleSheet,
 } from 'react-native';
+import AppIcon from './AppIcon';
 
 /**
  * Tarjeta de un producto del menú.
@@ -15,7 +16,7 @@ import {
  * `mapProduct` (ver src/screens/MenuScreen.js) y un callback `onAdd`.
  *
  * Contrato que espera del producto:
- *   id, name, description, price, emoji, imageUrl, stock, stockMin, available
+ *   id, name, description, price, iconName, imageUrl, stock, stockMin, available
  *
  * `onPress` es opcional (FR-08): si viene, la tarjeta completa se vuelve
  * clickeable para abrir el detalle del producto.
@@ -26,11 +27,10 @@ import {
 const ProductCard = ({ product, onAdd, onPress, adding = false }) => {
   const { available, stock, stockMin = 0 } = product;
 
-  // Si la URL de la imagen existe pero no carga (404, host caído), caemos al
-  // emoji en vez de dejar un cuadro gris vacío sin explicación.
+  // Si la URL de la imagen no carga, conservamos un icono de categoría.
   const [imagenCaida, setImagenCaida] = useState(false);
   // La imagen aparece recién cuando carga (fade), y mientras tanto se ve el
-  // emoji de fondo:
+  // icono de categoría:
   const [imagenCargada, setImagenCargada] = useState(false);
 
   // Si cambia de producto (reutilización del componente en la lista), hay que
@@ -62,14 +62,14 @@ const ProductCard = ({ product, onAdd, onPress, adding = false }) => {
       <View style={styles.imagePlaceholder}>
         {/*
          * Carga diferida + placeholder que no se vea roto:
-         * - El emoji queda siempre como capa base, así nunca hay un cuadro
+         * - El icono queda siempre como capa base, así nunca hay un cuadro
          *   vacío mientras la imagen baja.
          * - La <Image> se monta con opacidad 0 y aparece (fade) recién al
-         *   terminar de cargar (onLoad). Si falla, queda el emoji.
+         *   terminar de cargar (onLoad). Si falla, queda el icono.
          * - Esto + FlatList (que sólo renderiza las filas visibles de la
          *   ventana) evita cargar imágenes lejanas.
          */}
-        <Text style={styles.imageEmoji}>{product.emoji}</Text>
+        <AppIcon name={product.iconName || 'food'} style={styles.imageIcon} />
 
         {product.imageUrl && !imagenCaida ? (
           <Image
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  imageEmoji: {
+  imageIcon: {
     fontSize: 34,
   },
 

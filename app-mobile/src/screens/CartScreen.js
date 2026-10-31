@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 
 import CartItem from '../components/CartItem';
 import { useCartTotals } from '../hooks/useCartTotals';
@@ -63,14 +64,14 @@ const CartScreen = ({
         onBack={onBack}
         rightElement={
           <View style={styles.headerIcon}>
-            <Text style={styles.headerIconText}>▣</Text>
+            <AppIcon name="cart" style={styles.headerIconText} />
           </View>
         }
       />
 
       {cart.length === 0 ? (
         <Card padding="lg" style={styles.emptyCard}>
-          <Text style={styles.emptyEmoji}>🛒</Text>
+          <AppIcon name="cart" style={styles.emptyIcon} />
 
           <Text style={styles.emptyTitle}>
             Tu carrito está vacío
@@ -90,7 +91,7 @@ const CartScreen = ({
             <>
               <Card padding="sm" style={styles.pickupCard}>
                 <View style={styles.locationCircle}>
-                  <Text>●</Text>
+                  <AppIcon name="location" style={styles.locationCircleIcon} />
                 </View>
 
                 <View style={styles.pickupInfo}>
@@ -258,6 +259,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  locationCircleIcon: { fontSize: 14, color: colors.cafeOscuro },
 
   pickupInfo: {
     flex: 1,
@@ -425,7 +427,7 @@ const styles = StyleSheet.create({
     margin: spacing.lg,
   },
 
-  emptyEmoji: {
+  emptyIcon: {
     fontSize: 48,
     marginBottom: spacing.lg,
   },

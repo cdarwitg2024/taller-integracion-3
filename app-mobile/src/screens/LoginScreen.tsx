@@ -11,6 +11,7 @@ import {
   Platform,
   StyleSheet,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import Button from '../components/Button';
@@ -221,7 +222,7 @@ export const LoginScreen = ({
               accessibilityState={{ checked: rememberMe }}
             >
               <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                {rememberMe && <Text style={styles.checkmark}>✓</Text>}
+                {rememberMe && <AppIcon name="check" style={styles.checkmark} />}
               </View>
               <Text style={styles.checkboxLabel}>Recordar sesión en este dispositivo</Text>
             </TouchableOpacity>

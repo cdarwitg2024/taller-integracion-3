@@ -27,6 +27,9 @@ import { Cafeteria } from './src/types/cafeteria';
 import { CartProvider, useCart } from './src/context/CartContext';
 import { useCartTotals } from './src/hooks/useCartTotals';
 import { apiPost, ApiError } from './src/services/backendClient';
+import AppIcon from './src/components/AppIcon';
+import type { AppIconName } from './src/components/AppIcon';
+import { colors } from './src/theme/colors';
 
 const logo = require('./assets/icon.png');
 
@@ -35,7 +38,7 @@ type Product = {
   name: string;
   description: string;
   price: number;
-  emoji: string;
+  iconName: AppIconName;
   available: boolean;
 };
 
@@ -44,7 +47,7 @@ type CartItem = {
   name: string;
   description: string;
   price: number;
-  emoji: string;
+  iconName: AppIconName;
   quantity: number;
   /**
    * De qué cafetería es el ítem. El pedido se hace contra UNA cafetería, así
@@ -55,6 +58,14 @@ type CartItem = {
 };
 
 type AppTab = 'cafeterias' | 'pedidos' | 'carrito' | 'wallet' | 'perfil';
+
+const TAB_ICONS: Record<AppTab, AppIconName> = {
+  cafeterias: 'store',
+  pedidos: 'receipt',
+  carrito: 'cart',
+  wallet: 'card',
+  perfil: 'user',
+};
 
 /**
  * Respuesta de la RPC `procesar_pago` (ver database/fixes/crear_rpc_pagos.sql).
@@ -363,7 +374,7 @@ function AppContent() {
           name: product.name,
           description: product.description,
           price: product.price,
-          emoji: product.emoji,
+          iconName: product.iconName,
           quantity: 1,
           cafeteriaId,
           cafeteriaNombre: cafeteria.nombre,
@@ -830,20 +841,26 @@ function AppContent() {
                 style={styles.navItem}
                 activeOpacity={0.7}
                 onPress={() => handleTabPress(tab.key)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={tab.key === 'carrito' && totalProducts > 0
+                  ? `${tab.label}, ${totalProducts} productos`
+                  : tab.label}
               >
-                <View>
-                  <Text
-                    style={[
-                      styles.navIcon,
-                      isActive && styles.activeNavIcon,
-                    ]}
-                  >
-                    {tab.key === 'cafeterias' && '🏪'}
-                    {tab.key === 'pedidos' && '📋'}
-                    {tab.key === 'carrito' && '🛒'}
-                    {tab.key === 'wallet' && '💳'}
-                    {tab.key === 'perfil' && '👤'}
-                  </Text>
+                <View style={[styles.navItemContent, isActive && styles.activeNavItemContent]}>
+                    <View style={styles.navIconWrapper}>
+                      <AppIcon
+                        name={TAB_ICONS[tab.key]}
+                        style={[styles.navIcon, isActive && styles.activeNavIcon]}
+                      />
+                      {tab.key === 'carrito' && totalProducts > 0 && (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText} numberOfLines={1}>
+                            {totalProducts > 99 ? '99+' : totalProducts}
+                          </Text>
+                        </View>
+                      )}
+                  </View>
                   <Text
                     style={[
                       styles.navText,
@@ -853,18 +870,7 @@ function AppContent() {
                   >
                     {tab.label}
                   </Text>
-                  {tab.key === 'carrito' && totalProducts > 0 && (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{totalProducts}</Text>
-                    </View>
-                  )}
                 </View>
-                <View
-                  style={[
-                    styles.navIndicator,
-                    isActive && styles.activeNavIndicator,
-                  ]}
-                />
               </TouchableOpacity>
             );
           })}
@@ -945,59 +951,83 @@ const styles = StyleSheet.create({
     opacity: 0.96,
   },
   bottomNavigation: {
-    height: 64,
-    backgroundColor: '#FFFFFF',
+    height: 76,
+    backgroundColor: colors.blanco,
     borderTopWidth: 1,
-    borderTopColor: '#EDE8E5',
+    borderTopColor: colors.borde,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingBottom: 4,
+    justifyContent: 'space-evenly',
+    paddingHorizontal: 5,
+    paddingTop: 5,
+    paddingBottom: 7,
+    elevation: 10,
+    shadowColor: colors.sombra,
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 60,
+  },
+  navItemContent: {
+    minWidth: 58,
+    height: 58,
+    paddingHorizontal: 5,
+    paddingVertical: 5,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  activeNavItemContent: {
+    backgroundColor: colors.cafeOscuro,
+    borderRadius: 14,
+  },
+  navIconWrapper: {
+    width: 27,
+    height: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   navIcon: {
-    fontSize: 20,
+    fontSize: 19,
+    color: colors.textoSecundario,
   },
   activeNavIcon: {
-    opacity: 1,
+    color: colors.crema,
   },
   navText: {
-    fontSize: 11,
-    color: '#A39A96',
+    fontSize: 10,
+    lineHeight: 13,
+    color: colors.textoSecundario,
+    fontWeight: '500',
   },
   activeNavText: {
-    color: '#4A332C',
+    color: colors.blanco,
     fontWeight: '700',
-  },
-  navIndicator: {
-    width: 16,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: 'transparent',
-    marginTop: 3,
-  },
-  activeNavIndicator: {
-    backgroundColor: '#4A332C',
   },
   badge: {
     position: 'absolute',
-    right: -12,
-    top: -4,
-    minWidth: 18,
-    height: 18,
+    right: -7,
+    top: -3,
+    minWidth: 17,
+    height: 17,
     borderRadius: 9,
-    backgroundColor: '#E65100',
+    backgroundColor: colors.rojo,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
+    borderWidth: 1,
+    borderColor: colors.blanco,
   },
   badgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
+    color: colors.blanco,
+    fontSize: 9,
+    lineHeight: 12,
     fontWeight: '800',
   },
 });

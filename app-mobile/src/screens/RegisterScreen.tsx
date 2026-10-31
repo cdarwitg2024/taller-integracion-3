@@ -9,6 +9,7 @@ import {
   Image,
   StyleSheet,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import Button from '../components/Button';
@@ -219,7 +220,7 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
           <Card variant="elevated" padding="lg">
             <View style={styles.iconCenterContainer}>
               <View style={styles.mailIconCircle}>
-                <Text style={styles.mailEmoji}>✉️</Text>
+                <AppIcon name="envelope" style={styles.mailIcon} />
               </View>
             </View>
 
@@ -447,7 +448,7 @@ export const RegisterScreen = ({ onNavigateToLogin }: RegisterScreenProps) => {
             accessibilityState={{ checked: acceptedTerms }}
           >
             <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
-              {acceptedTerms && <Text style={styles.checkmark}>✓</Text>}
+              {acceptedTerms && <AppIcon name="check" style={styles.checkmark} />}
             </View>
             <Text style={styles.termsText}>
               Acepto los <Text style={styles.termsBold}>términos de uso</Text> y políticas de la red del campus
@@ -661,7 +662,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.bordeOscuro,
   },
-  mailEmoji: {
+  mailIcon: {
     fontSize: 32,
   },
   checkEmailTitle: {

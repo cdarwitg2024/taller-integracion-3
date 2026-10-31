@@ -11,6 +11,8 @@ import Header from '../components/Header';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import { colors } from '../theme/colors';
+import AppIcon from '../components/AppIcon';
+import type { AppIconName } from '../components/AppIcon';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
@@ -32,7 +34,7 @@ interface FaqItem {
   id: string;
   pregunta: string;
   respuesta: string;
-  icono: string;
+  icono: AppIconName;
   categoria: 'pedidos' | 'wallet' | 'retiro' | 'sistema';
 }
 
@@ -42,7 +44,7 @@ const FAQS: FaqItem[] = [
     pregunta: '¿Cuándo puedo cancelar un pedido?',
     respuesta:
       'Solamente puedes cancelar tu pedido mientras se encuentre en estado "Pendiente" (orden confirmada y pagada, antes de que el personal de cocina inicie su elaboración). Si ya está "En preparación", "Listo" o "Entregado", no podrá cancelarse porque los insumos ya fueron procesados.',
-    icono: '⏱️',
+    icono: 'clock',
     categoria: 'pedidos',
   },
   {
@@ -50,7 +52,7 @@ const FAQS: FaqItem[] = [
     pregunta: '¿Cómo funciona el reembolso a mi Wallet?',
     respuesta:
       'Al cancelar con éxito un pedido pendiente, o si la cafetería no puede prepararlo por falta de stock imprevista, el 100% del dinero pagado se reembolsa automáticamente a tu Billetera Virtual (Wallet). El abono es inmediato, sin comisiones y se refleja en tus movimientos como "+$Saldo".',
-    icono: '💰',
+    icono: 'card',
     categoria: 'wallet',
   },
   {
@@ -58,7 +60,7 @@ const FAQS: FaqItem[] = [
     pregunta: '¿Cómo retiro mi pedido en la cafetería?',
     respuesta:
       'Dirígete a la pestaña "Pedidos" y selecciona tu orden activa. Se desplegará tu Código QR digital encriptado y un código de retiro alfanumérico. Acércate al mesón de entrega de la cafetería de tu campus y muéstralo al personal para recibir tus productos.',
-    icono: '📱',
+    icono: 'mobile',
     categoria: 'retiro',
   },
   {
@@ -66,7 +68,7 @@ const FAQS: FaqItem[] = [
     pregunta: '¿Qué ocurre con la franja horaria de preparación?',
     respuesta:
       'Al pagar tu pedido, se te asigna una franja de retiro (por ejemplo, 15 a 20 minutos). Te recomendamos acudir puntualmente al mesón de retiro para disfrutar de tus bebidas y alimentos a temperatura y frescura óptima.',
-    icono: '☕',
+    icono: 'mug',
     categoria: 'pedidos',
   },
   {
@@ -74,7 +76,7 @@ const FAQS: FaqItem[] = [
     pregunta: '¿Puedo pedir productos de cafeterías distintas en la misma orden?',
     respuesta:
       'No. Cada pedido se prepara en una cafetería específica para asegurar la disponibilidad física y la trazabilidad de inventario. Si agregas productos de una cafetería diferente, la aplicación te consultará si deseas vaciar el carrito actual.',
-    icono: '🏪',
+    icono: 'store',
     categoria: 'pedidos',
   },
   {
@@ -82,7 +84,7 @@ const FAQS: FaqItem[] = [
     pregunta: '¿Cómo recargo saldo en mi Billetera Virtual?',
     respuesta:
       'Accede a la pestaña "Wallet" en la barra inferior o desde el acceso rápido en tu perfil. Selecciona uno de los montos sugeridos ($2.000, $5.000, $10.000, etc.) o ingresa el saldo deseado y confirma la recarga para usarlo en tus compras.',
-    icono: '💳',
+    icono: 'card',
     categoria: 'wallet',
   },
   {
@@ -90,7 +92,7 @@ const FAQS: FaqItem[] = [
     pregunta: '¿Qué hago si la pantalla de pago tarda o falla la conexión?',
     respuesta:
       'Si pierdes conexión al presionar pagar, no intentes pagar nuevamente de inmediato. Tu carrito se conservará intacto. Revisa primero la pestaña "Pedidos" para verificar si la orden alcanzó a confirmarse; así evitarás débitos duplicados.',
-    icono: '📶',
+    icono: 'wifi',
     categoria: 'sistema',
   },
   {
@@ -98,7 +100,7 @@ const FAQS: FaqItem[] = [
     pregunta: '¿Qué pasa si el lector no puede leer mi código QR?',
     respuesta:
       'No te preocupes. Debajo de cada Código QR dispones de un código de retiro alfanumérico único (por ejemplo: CF-8421). El personal de mesón puede digitar ese código en el sistema de escritorio para validar y entregar tu pedido.',
-    icono: '🔢',
+    icono: 'number',
     categoria: 'retiro',
   },
 ];
@@ -145,8 +147,13 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
           style={[styles.tabButton, tabActiva === 'politicas' && styles.tabButtonActive]}
           onPress={() => setTabActiva('politicas')}
           activeOpacity={0.8}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tabActiva === 'politicas' }}
         >
-          <Text style={styles.tabEmoji}>📜</Text>
+          <AppIcon
+            name="receipt"
+            style={[styles.tabIcon, tabActiva === 'politicas' && styles.tabIconActive]}
+          />
           <Text
             style={[styles.tabButtonText, tabActiva === 'politicas' && styles.tabButtonTextActive]}
           >
@@ -158,8 +165,13 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
           style={[styles.tabButton, tabActiva === 'ayuda' && styles.tabButtonActive]}
           onPress={() => setTabActiva('ayuda')}
           activeOpacity={0.8}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tabActiva === 'ayuda' }}
         >
-          <Text style={styles.tabEmoji}>💬</Text>
+          <AppIcon
+            name="help"
+            style={[styles.tabIcon, tabActiva === 'ayuda' && styles.tabIconActive]}
+          />
           <Text
             style={[styles.tabButtonText, tabActiva === 'ayuda' && styles.tabButtonTextActive]}
           >
@@ -177,7 +189,7 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
             {/* Banner Introductorio */}
             <Card variant="elevated" style={styles.heroCard}>
               <View style={styles.heroHeader}>
-                <Text style={styles.heroEmoji}>☕</Text>
+                <AppIcon name="mug" style={styles.heroIcon} />
                 <View style={styles.heroTexts}>
                   <Text style={styles.heroTitle}>Políticas de Servicio CoffeeFast</Text>
                   <Text style={styles.heroSubtitle}>
@@ -195,7 +207,7 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
             <Card variant="outlined" style={styles.policyCard}>
               <View style={styles.policyHeaderRow}>
                 <View style={styles.policyIconBadge}>
-                  <Text style={styles.policyIconText}>↩️</Text>
+                  <AppIcon name="refund" style={styles.policyIconText} />
                 </View>
                 <View style={styles.policyHeaderContent}>
                   <Text style={styles.policyTitle}>Cancelación y Reembolso</Text>
@@ -250,7 +262,7 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
             <Card variant="outlined" style={styles.policyCard}>
               <View style={styles.policyHeaderRow}>
                 <View style={[styles.policyIconBadge, { backgroundColor: colors.doradoBg }]}>
-                  <Text style={styles.policyIconText}>⏱️</Text>
+                  <AppIcon name="clock" style={styles.policyIconText} />
                 </View>
                 <View style={styles.policyHeaderContent}>
                   <Text style={styles.policyTitle}>Preparación y Franjas Horarias</Text>
@@ -265,19 +277,19 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
                   <Text style={styles.stepChipNum}>1</Text>
                   <Text style={styles.stepChipText}>Pendiente</Text>
                 </View>
-                <Text style={styles.stepArrow}>➔</Text>
+                <AppIcon name="arrowRight" style={styles.stepArrow} />
                 <View style={styles.stepChip}>
                   <Text style={styles.stepChipNum}>2</Text>
                   <Text style={styles.stepChipText}>En cocina</Text>
                 </View>
-                <Text style={styles.stepArrow}>➔</Text>
+                <AppIcon name="arrowRight" style={styles.stepArrow} />
                 <View style={styles.stepChip}>
                   <Text style={styles.stepChipNum}>3</Text>
                   <Text style={styles.stepChipText}>Listo</Text>
                 </View>
-                <Text style={styles.stepArrow}>➔</Text>
+                <AppIcon name="arrowRight" style={styles.stepArrow} />
                 <View style={[styles.stepChip, { backgroundColor: colors.verdeBg }]}>
-                  <Text style={[styles.stepChipNum, { color: colors.verde }]}>✓</Text>
+                  <AppIcon name="check" style={[styles.stepChipNum, { color: colors.verde }]} />
                   <Text style={[styles.stepChipText, { color: colors.verde }]}>Retirado</Text>
                 </View>
               </View>
@@ -315,7 +327,7 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
             <Card variant="outlined" style={styles.policyCard}>
               <View style={styles.policyHeaderRow}>
                 <View style={[styles.policyIconBadge, { backgroundColor: colors.verdeBg }]}>
-                  <Text style={styles.policyIconText}>📦</Text>
+                  <AppIcon name="box" style={styles.policyIconText} />
                 </View>
                 <View style={styles.policyHeaderContent}>
                   <Text style={styles.policyTitle}>Retiro mediante Código QR</Text>
@@ -326,7 +338,7 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
               </View>
 
               <View style={styles.qrHighlightBox}>
-                <Text style={styles.qrHighlightEmoji}>📱</Text>
+                <AppIcon name="mobile" style={styles.qrHighlightIcon} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.qrHighlightTitle}>Credencial QR Dinámica</Text>
                   <Text style={styles.qrHighlightText}>
@@ -369,7 +381,7 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
             <Card variant="outlined" style={styles.policyCard}>
               <View style={styles.policyHeaderRow}>
                 <View style={[styles.policyIconBadge, { backgroundColor: colors.naranjaBg }]}>
-                  <Text style={styles.policyIconText}>🔒</Text>
+                  <AppIcon name="lock" style={styles.policyIconText} />
                 </View>
                 <View style={styles.policyHeaderContent}>
                   <Text style={styles.policyTitle}>Seguridad y Privacidad de Datos</Text>
@@ -392,7 +404,7 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
             {/* CENTRO DE AYUDA Y FAQ */}
             <Card variant="elevated" style={styles.heroCard}>
               <View style={styles.heroHeader}>
-                <Text style={styles.heroEmoji}>💡</Text>
+                <AppIcon name="idea" style={styles.heroIcon} />
                 <View style={styles.heroTexts}>
                   <Text style={styles.heroTitle}>Centro de Ayuda y Preguntas</Text>
                   <Text style={styles.heroSubtitle}>
@@ -409,7 +421,7 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
             {/* Lista de FAQs */}
             <Card variant="outlined" style={styles.faqContainerCard}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionHeaderEmoji}>❓</Text>
+                <AppIcon name="help" style={styles.sectionHeaderIcon} />
                 <Text style={styles.sectionTitle}>Preguntas Frecuentes (FAQ)</Text>
               </View>
 
@@ -423,12 +435,10 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
                       activeOpacity={0.7}
                     >
                       <View style={styles.faqIconBox}>
-                        <Text style={styles.faqIconText}>{item.icono}</Text>
+                        <AppIcon name={item.icono} style={styles.faqIconText} />
                       </View>
                       <Text style={styles.faqQuestionText}>{item.pregunta}</Text>
-                      <Text style={[styles.faqChevron, isOpen && styles.faqChevronOpen]}>
-                        {isOpen ? '▲' : '▼'}
-                      </Text>
+                      <AppIcon name={isOpen ? 'chevronUp' : 'chevronDown'} style={[styles.faqChevron, isOpen && styles.faqChevronOpen]} />
                     </TouchableOpacity>
 
                     {isOpen && (
@@ -447,7 +457,7 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
             <Card variant="outlined" style={styles.policyCard}>
               <View style={styles.policyHeaderRow}>
                 <View style={[styles.policyIconBadge, { backgroundColor: colors.crema }]}>
-                  <Text style={styles.policyIconText}>✉️</Text>
+                  <AppIcon name="envelope" style={styles.policyIconText} />
                 </View>
                 <View style={styles.policyHeaderContent}>
                   <Text style={styles.policyTitle}>Canales de Contacto y Soporte</Text>
@@ -463,17 +473,26 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
               </Text>
 
               <View style={styles.contactItemBox}>
-                <Text style={styles.contactLabel}>📧 Correo de soporte:</Text>
+                <View style={styles.contactLabelRow}>
+                  <AppIcon name="envelope" style={styles.contactLabelIcon} />
+                  <Text style={styles.contactLabel}>Correo de soporte:</Text>
+                </View>
                 <Text style={styles.contactValue}>soporte.cafeteria@alu.uct.cl</Text>
               </View>
 
               <View style={styles.contactItemBox}>
-                <Text style={styles.contactLabel}>⏰ Horario de atención:</Text>
+                <View style={styles.contactLabelRow}>
+                  <AppIcon name="clock" style={styles.contactLabelIcon} />
+                  <Text style={styles.contactLabel}>Horario de atención:</Text>
+                </View>
                 <Text style={styles.contactValue}>Lunes a Viernes: 08:30 a 18:30 hrs</Text>
               </View>
 
               <View style={styles.contactItemBox}>
-                <Text style={styles.contactLabel}>📍 Campus y Sedes:</Text>
+                <View style={styles.contactLabelRow}>
+                  <AppIcon name="location" style={styles.contactLabelIcon} />
+                  <Text style={styles.contactLabel}>Campus y Sedes:</Text>
+                </View>
                 <Text style={styles.contactValue}>
                   • Campus San Juan Pablo II (Rudecindo Ortega 02950){'\n'}
                   • Campus San Francisco (Manuel Montt 056)
@@ -481,7 +500,7 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
               </View>
 
               <View style={styles.supportTipCard}>
-                <Text style={styles.supportTipIcon}>💡</Text>
+                <AppIcon name="idea" style={styles.supportTipIcon} />
                 <Text style={styles.supportTipText}>
                   Para una atención más expedita al reportar un problema de pedido, indica siempre tu
                   código de orden (ej. #124) y correo institucional.
@@ -535,8 +554,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cafeOscuro,
     borderColor: colors.cafeOscuro,
   },
-  tabEmoji: {
+  tabIcon: {
     fontSize: 14,
+    color: colors.cafeMedio,
+  },
+  tabIconActive: {
+    color: colors.crema,
   },
   tabButtonText: {
     fontSize: typography.cuerpo,
@@ -563,7 +586,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     gap: spacing.md,
   },
-  heroEmoji: {
+  heroIcon: {
     fontSize: 32,
   },
   heroTexts: {
@@ -752,7 +775,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borde,
   },
-  qrHighlightEmoji: {
+  qrHighlightIcon: {
     fontSize: 28,
   },
   qrHighlightTitle: {
@@ -778,7 +801,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     gap: spacing.sm,
   },
-  sectionHeaderEmoji: {
+  sectionHeaderIcon: {
     fontSize: 20,
   },
   sectionTitle: {
@@ -848,6 +871,8 @@ const styles = StyleSheet.create({
     color: colors.cafeOscuro,
     marginBottom: 2,
   },
+  contactLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  contactLabelIcon: { fontSize: 13, color: colors.cafeOscuro, marginBottom: 2 },
   contactValue: {
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,

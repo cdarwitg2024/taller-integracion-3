@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Modal,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 import Button from '../components/Button';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -162,9 +163,10 @@ const MovimientoItem: React.FC<MovimientoItemProps> = ({ mov, index }) => {
               mov.tipo === 'reembolso' && styles.movimientoIconRefund,
             ]}
           >
-            <Text style={styles.movimientoIconText}>
-              {mov.tipo === 'recarga' ? '+' : mov.tipo === 'compra' ? '−' : '↩'}
-            </Text>
+            <AppIcon
+              name={mov.tipo === 'recarga' ? 'card' : mov.tipo === 'compra' ? 'cart' : 'refund'}
+              style={styles.movimientoIconText}
+            />
           </View>
 
           {/* Información principal */}
@@ -178,7 +180,8 @@ const MovimientoItem: React.FC<MovimientoItemProps> = ({ mov, index }) => {
               </Text>
               {tienePedido && (
                 <View style={styles.pedidoBadge}>
-                  <Text style={styles.pedidoBadgeText}>📦 #{mov.pedido_id}</Text>
+                  <AppIcon name="box" style={styles.pedidoBadgeIcon} />
+                  <Text style={styles.pedidoBadgeText}>#{mov.pedido_id}</Text>
                 </View>
               )}
             </View>
@@ -229,7 +232,7 @@ const MovimientoItem: React.FC<MovimientoItemProps> = ({ mov, index }) => {
                 accessibilityRole="button"
                 accessibilityLabel="Cerrar detalle"
               >
-                <Text style={styles.modalCloseText}>✕</Text>
+                <AppIcon name="close" style={styles.modalCloseText} />
               </TouchableOpacity>
             </View>
 
@@ -243,9 +246,10 @@ const MovimientoItem: React.FC<MovimientoItemProps> = ({ mov, index }) => {
                   mov.tipo === 'reembolso' && styles.movimientoIconRefund,
                 ]}
               >
-                <Text style={styles.modalHeroIconText}>
-                  {mov.tipo === 'recarga' ? '+' : mov.tipo === 'compra' ? '−' : '↩'}
-                </Text>
+                <AppIcon
+                  name={mov.tipo === 'recarga' ? 'card' : mov.tipo === 'compra' ? 'cart' : 'refund'}
+                  style={styles.modalHeroIconText}
+                />
               </View>
               <Text
                 style={[
@@ -266,14 +270,17 @@ const MovimientoItem: React.FC<MovimientoItemProps> = ({ mov, index }) => {
                     : styles.modalHeroBadgeEgreso,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.modalHeroBadgeText,
-                    esIngreso ? styles.badgeTextIngreso : styles.badgeTextEgreso,
-                  ]}
-                >
-                  {esIngreso ? '● Ingreso a cuenta' : '● Egreso por compra'}
-                </Text>
+                <View style={styles.modalHeroBadgeRow}>
+                  <AppIcon name={esIngreso ? 'arrowDown' : 'arrowUp'} style={styles.modalHeroBadgeIcon} />
+                  <Text
+                    style={[
+                      styles.modalHeroBadgeText,
+                      esIngreso ? styles.badgeTextIngreso : styles.badgeTextEgreso,
+                    ]}
+                  >
+                    {esIngreso ? 'Ingreso a cuenta' : 'Egreso por compra'}
+                  </Text>
+                </View>
               </View>
             </View>
 
@@ -305,9 +312,10 @@ const MovimientoItem: React.FC<MovimientoItemProps> = ({ mov, index }) => {
                 <Text style={styles.modalDetailLabel}>Pedido relacionado</Text>
                 {tienePedido ? (
                   <View style={styles.modalPedidoTag}>
-                    <Text style={styles.modalPedidoTagText}>
-                      📦 Pedido #{mov.pedido_id}
-                    </Text>
+                    <View style={styles.modalPedidoTagRow}>
+                      <AppIcon name="box" style={styles.modalPedidoTagIcon} />
+                      <Text style={styles.modalPedidoTagText}>Pedido #{mov.pedido_id}</Text>
+                    </View>
                   </View>
                 ) : (
                   <Text style={styles.modalDetailSubvalue}>
@@ -401,6 +409,9 @@ const styles = StyleSheet.create({
     color: colors.textoSecundario,
   },
   pedidoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: colors.crema,
     paddingHorizontal: 6,
     paddingVertical: 1,
@@ -413,6 +424,7 @@ const styles = StyleSheet.create({
     fontWeight: typography.pesoBold,
     color: colors.cafeOscuro,
   },
+  pedidoBadgeIcon: { fontSize: 10, color: colors.cafeOscuro },
   amountContainer: {
     alignItems: 'flex-end',
   },
@@ -514,6 +526,8 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 12,
   },
+  modalHeroBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  modalHeroBadgeIcon: { fontSize: 10 },
   modalHeroBadgeIngreso: {
     backgroundColor: colors.verdeBg,
   },
@@ -569,6 +583,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.bordeOscuro,
   },
+  modalPedidoTagRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  modalPedidoTagIcon: { fontSize: 12, color: colors.cafeOscuro },
   modalPedidoTagText: {
     fontSize: typography.cuerpoPequeno,
     fontWeight: typography.pesoBold,

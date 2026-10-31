@@ -10,6 +10,7 @@ import {
   Image,
   Alert,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 
 import { supabase } from '../lib/supabase';
 import { apiGet, apiPatch, ApiError } from '../services/backendClient';
@@ -528,7 +529,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
         title="Mis Pedidos"
         rightElement={
           <View style={styles.headerIcon}>
-            <Text style={styles.headerIconText}>▣</Text>
+            <AppIcon name="receipt" style={styles.headerIconText} />
           </View>
         }
       />
@@ -575,7 +576,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
             ListEmptyComponent={
               tab === 'activos' ? (
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyEmoji}>📦</Text>
+                  <AppIcon name="box" style={styles.emptyIcon} />
                   <Text style={styles.emptyTitle}>No tienes pedidos activos</Text>
                   <Text style={styles.emptyDescription}>
                     Cuando tengas un pedido pendiente, en preparación o listo para retiro, aparecerá aquí con su QR y token.
@@ -589,7 +590,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 </View>
               ) : (
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyEmoji}>🗂️</Text>
+                  <AppIcon name="archive" style={styles.emptyIcon} />
                   <Text style={styles.emptyTitle}>Todavía no tienes historial</Text>
                   <Text style={styles.emptyDescription}>
                     Cuando un pedido quede entregado o cancelado, aparecerá aquí y podrás ver su boleta.
@@ -614,14 +615,14 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
               <>
                 <View style={styles.confirmacionHeader}>
                   <View style={styles.confirmacionIcono}>
-                    <Text style={styles.confirmacionIconoTexto}>✓</Text>
+                    <AppIcon name="check" style={styles.confirmacionIconoTexto} />
                   </View>
                   <Text style={styles.confirmacionTitulo}>¡Pedido Confirmado!</Text>
                   <TouchableOpacity
                     style={styles.modalClose}
                     onPress={onConfirmacionVista}
                   >
-                    <Text style={styles.modalCloseText}>✕</Text>
+                    <AppIcon name="close" style={styles.modalCloseText} />
                   </TouchableOpacity>
                 </View>
 
@@ -710,7 +711,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                     style={styles.modalClose}
                     onPress={cerrarPedido}
                   >
-                    <Text style={styles.modalCloseText}>✕</Text>
+                    <AppIcon name="close" style={styles.modalCloseText} />
                   </TouchableOpacity>
                 </View>
 
@@ -737,9 +738,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                      QR ni token de contingencia. En su lugar se muestra la
                      boleta/comprobante con los datos de la cafetería. */
                   <View style={styles.reciboBox}>
-                    <Text style={styles.reciboTitulo}>
-                      {selected.estado === 'cancelado' ? '✕ Pedido cancelado' : '✓ Pedido entregado'}
-                    </Text>
+                    <View style={styles.reciboTitleRow}>
+                      <AppIcon name={selected.estado === 'cancelado' ? 'close' : 'check'} style={styles.reciboTitleIcon} />
+                      <Text style={styles.reciboTitulo}>
+                        {selected.estado === 'cancelado' ? 'Pedido cancelado' : 'Pedido entregado'}
+                      </Text>
+                    </View>
                     <Text style={styles.reciboSubtitulo}>
                       {selected.estado === 'cancelado'
                         ? 'Este pedido fue cancelado. Conserva esta boleta, sin QR ni token.'
@@ -815,7 +819,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                       <ActivityIndicator size="small" color={colors.cafeOscuro} style={{ marginVertical: 32 }} />
                     ) : qrResultado.error ? (
                       <View style={styles.qrErrorBox}>
-                        <Text style={styles.qrErrorIcon}>⚠️</Text>
+                        <AppIcon name="warning" style={styles.qrErrorIcon} />
                         <Text style={styles.qrErrorTitulo}>
                           {qrResultado.error.status === 401
                             ? 'Sesión no autorizada'
@@ -829,9 +833,10 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                       <>
                         <QrCode value={qrResultado.token} size={190} />
                         {qrResultado.esOffline && (
-                          <Text style={styles.offlineAviso}>
-                            ● Modo sin conexión: credencial de respaldo
-                          </Text>
+                          <View style={styles.offlineAvisoRow}>
+                            <AppIcon name="wifi" style={styles.offlineAvisoIcon} />
+                            <Text style={styles.offlineAviso}>Modo sin conexión: credencial de respaldo</Text>
+                          </View>
                         )}
                         <Text style={styles.qrHint}>
                           Presenta este QR al llegar a la cafetería para retirar tu pedido.
@@ -870,9 +875,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
 
                     {selected.estado !== 'pendiente' && esActivo(selected.estado) && (
                       <View style={styles.noCancelableBox}>
-                        <Text style={styles.noCancelableText}>
-                          🔒 Comanda en preparación o lista: no admite cancelación porque la cafetería ya comenzó a elaborar tus productos.
-                        </Text>
+                        <View style={styles.noCancelableRow}>
+                          <AppIcon name="lock" style={styles.noCancelableIcon} />
+                          <Text style={styles.noCancelableText}>
+                            Comanda en preparación o lista: no admite cancelación porque la cafetería ya comenzó a elaborar tus productos.
+                          </Text>
+                        </View>
                       </View>
                     )}
                   </View>
@@ -968,7 +976,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     marginTop: spacing.sm,
   },
-  emptyEmoji: { fontSize: 40, marginBottom: spacing.md },
+  emptyIcon: { fontSize: 40, marginBottom: spacing.md },
   emptyTitle: { fontSize: typography.subtitulo, fontWeight: typography.pesoBold, color: colors.cafeOscuro, textAlign: 'center' },
   emptyDescription: {
     fontSize: typography.cuerpoPequeno,
@@ -1050,6 +1058,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     textAlign: 'center',
   },
+  offlineAvisoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
+  offlineAvisoIcon: { fontSize: 13, color: colors.cafeMedio },
   qrHint: {
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,
@@ -1093,6 +1103,8 @@ const styles = StyleSheet.create({
     borderColor: colors.bordeOscuro,
   },
   reciboTitulo: { fontSize: 15, fontWeight: typography.pesoExtraBold, color: colors.verde },
+  reciboTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  reciboTitleIcon: { fontSize: 16, color: colors.verde },
   reciboSubtitulo: {
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,
@@ -1225,6 +1237,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 15,
   },
+  noCancelableRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  noCancelableIcon: { fontSize: 15, color: colors.cafeMedio },
 });
 
 export default PedidosScreen;

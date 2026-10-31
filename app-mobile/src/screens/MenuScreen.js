@@ -10,6 +10,7 @@ import {
   RefreshControl,
   TextInput,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 
 import ProductCard from '../components/ProductCard';
 import ProductDetail from '../components/ProductDetail';
@@ -39,22 +40,18 @@ import { typography } from '../theme/typography';
  * bigint en el checkout.
  */
 
-const DEFAULT_EMOJI = '🍽';
-
-const EMOJI_RULES = [
-  { cv: /café|cafe|espresso|capuchino|americano|latte/i, emoji: '☕' },
-  { cv: /té|\bte\b|chai|infusión|infusion/i, emoji: '🍵' },
-  { cv: /leche|lácteo|lacteo|yogur/i, emoji: '🥛' },
-  { cv: /sándwich|sandwich|ave |jamón|jamon|queso|croissant/i, emoji: '🥪' },
-  { cv: /empanada|pan|medialuna|bollo/i, emoji: '🥐' },
-  { cv: /muffin|galleta|cookie|kuchen|torta|pastel|reposter/i, emoji: '🧁' },
-  { cv: /jugo|bebida|refresco|agua|limonada/i, emoji: '🧃' },
+const PRODUCT_ICON_RULES = [
+  { cv: /café|cafe|espresso|capuchino|americano|latte|té|\bte\b|chai|infusión|infusion/i, iconName: 'mug' },
+  { cv: /leche|lácteo|lacteo|yogur|jugo|bebida|refresco|agua|limonada/i, iconName: 'drink' },
+  { cv: /sándwich|sandwich|ave |jamón|jamon|queso/i, iconName: 'sandwich' },
+  { cv: /empanada|pan|medialuna|bollo|croissant/i, iconName: 'bread' },
+  { cv: /muffin|galleta|cookie|kuchen|torta|pastel|reposter/i, iconName: 'cookie' },
 ];
 
-/** Elige un emoji a partir del nombre, la categoría y la descripción. */
-export const getEmoji = ({ name = '', description = '', category = '' }) => {
-  const rule = EMOJI_RULES.find((r) => r.cv.test(`${category} ${name} ${description}`));
-  return rule ? rule.emoji : DEFAULT_EMOJI;
+/** Elige un icono Font Awesome según el producto; usa cubiertos como opción general. */
+export const getProductIcon = ({ name = '', description = '', category = '' }) => {
+  const rule = PRODUCT_ICON_RULES.find((r) => r.cv.test(`${category} ${name} ${description}`));
+  return rule ? rule.iconName : 'food';
 };
 
 /**
@@ -86,7 +83,7 @@ export const mapProduct = (raw) => {
     // FR-07: el filtro trabaja por id, no por nombre. Guardamos ambos.
     categoryId: Number.isFinite(Number(raw.categoria_id)) ? Number(raw.categoria_id) : null,
     category: raw.categorias?.nombre || 'General',
-    emoji: getEmoji({
+    iconName: getProductIcon({
       name: raw.nombre || '',
       description: raw.descripcion || '',
       category: raw.categorias?.nombre || '',
@@ -333,7 +330,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     if (error) {
       return (
         <View style={styles.stateContainer}>
-          <Text style={styles.stateEmoji}>📡</Text>
+          <AppIcon name="wifi" style={styles.stateIcon} />
           <Text style={styles.stateTitle}>Sin conexión con el menú</Text>
           <Text style={styles.stateText}>{error}</Text>
           <Button
@@ -350,7 +347,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     if (products.length === 0) {
       return (
         <View style={styles.stateContainer}>
-          <Text style={styles.stateEmoji}>☕</Text>
+          <AppIcon name="mug" style={styles.stateIcon} />
           <Text style={styles.stateTitle}>Esta cafetería no tiene menú</Text>
           <Text style={styles.stateText}>
             Todavía no hay productos cargados en {cafeteria?.nombre || 'esta cafetería'}.
@@ -372,7 +369,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
       if (busquedaDebounced) {
         return (
           <View style={styles.stateContainer}>
-            <Text style={styles.stateEmoji}>🔍</Text>
+            <AppIcon name="search" style={styles.stateIcon} />
             <Text style={styles.stateTitle}>Sin resultados</Text>
             <Text style={styles.stateText}>
               No encontramos productos que coincidan con “{busquedaDebounced}”.
@@ -393,7 +390,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
       const catNombre = categories.find((c) => String(c.id) === String(categoriaActiva))?.nombre;
       return (
         <View style={styles.stateContainer}>
-          <Text style={styles.stateEmoji}>🔍</Text>
+          <AppIcon name="search" style={styles.stateIcon} />
           <Text style={styles.stateTitle}>Sin productos en esta categoría</Text>
           <Text style={styles.stateText}>
             No hay productos disponibles en {catNombre || 'la categoría seleccionada'}.
@@ -458,7 +455,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
           <Text style={styles.title}>Menú</Text>
 
           <View style={styles.headerIcon}>
-            <Text style={styles.headerIconText}>▣</Text>
+            <AppIcon name="food" style={styles.headerIconText} />
           </View>
         </View>
 
@@ -497,7 +494,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
         />
         {busqueda.length > 0 && (
           <TouchableOpacity onPress={() => setBusqueda('')} style={styles.searchClear}>
-            <Text style={styles.searchClearText}>✕</Text>
+            <AppIcon name="close" style={styles.searchClearText} />
           </TouchableOpacity>
         )}
       </View>
@@ -765,7 +762,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
 
-  stateEmoji: {
+  stateIcon: {
     fontSize: 48,
     marginBottom: spacing.lg,
   },
