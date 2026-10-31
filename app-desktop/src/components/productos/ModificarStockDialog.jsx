@@ -187,6 +187,7 @@ function ModificarStockDialog({
     try {
       if (modoSolicitud && onSolicitar) {
         await onSolicitar(stockFinal);
+        // El cierre del diálogo lo decide el padre tras éxito
         return;
       }
       // Actualizar en Supabase mediante el servicio dedicado (FR-47)

@@ -150,7 +150,14 @@ function StockEmpleado({ currentUser }) {
       });
       return;
     }
-    if (!productoSeleccionado || !cantidadSolicitada || cantidadSolicitada <= 0) return;
+    if (!productoSeleccionado || !cantidadSolicitada || cantidadSolicitada <= 0) {
+      setSnackbar({
+        open: true,
+        message: 'La cantidad solicitada debe ser mayor a 0.',
+        severity: 'error',
+      });
+      return;
+    }
     try {
       await solicitudesStockService.crearSolicitud({
         producto_id: productoSeleccionado.id,
