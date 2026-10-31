@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Alert, Box, CircularProgress, Typography } from '@mui/material';
 
 import KdsTopBar from '../../components/KdsTopBar';
 import KanbanColumn from '../../components/KanbanColumn';
@@ -13,7 +13,6 @@ import kdsRealtime, {
   ESTADO_RECONECTANDO,
 } from '../../services/kdsRealtime';
 import vozKds, { VOZ_APAGADA, VOZ_SILENCIADA } from '../../services/vozKdsService';
-import { CAFETERIA_ID } from '../../services/backendApi';
 import { kdsColors } from '../../theme/theme';
 import { COLORS } from '../../design/tokens';
 
@@ -53,8 +52,17 @@ function Comandas({ currentUser }) {
   const [estadoVoz, setEstadoVoz] = useState(vozKds.obtenerEstado());
   const [diagnosticoVoz, setDiagnosticoVoz] = useState(vozKds.obtenerDiagnostico());
   const [avisoVoz, setAvisoVoz] = useState(null);
+  const [errorComandas, setErrorComandas] = useState('');
 
   const pedidosRealtime = useRef(new Map());
+
+  const cafeteriaIdEmpleado = Number(
+    currentUser?.cafeteria_id ??
+    currentUser?.cafeteriaId ??
+    currentUser?.usuario?.cafeteria_id ??
+    currentUser?.perfil?.cafeteria_id
+  );
+  const sinCafeteriaAsociada = !Number.isFinite(cafeteriaIdEmpleado);
 
   // T16 · Avisos de voz: la UI refleja el estado del servicio de voz.
   useEffect(() => vozKds.suscribir((estado, diagnostico) => {
@@ -93,21 +101,42 @@ function Comandas({ currentUser }) {
   }, []);
 
   const fetchPedidos = useCallback(async () => {
-    const data = await pedidosService.getAll({ cafeteriaId: CAFETERIA_ID });
-    mergeConSnapshot(data);
-    setLoading(false);
-  }, [mergeConSnapshot]);
+    if (sinCafeteriaAsociada) {
+      setPedidos([]);
+      setErrorComandas('Este empleado no tiene una cafetería asociada. No es posible consultar comandas.');
+      setLoading(false);
+      return;
+    }
+    try {
+      setErrorComandas('');
+      const data = await pedidosService.getAll({ cafeteriaId: cafeteriaIdEmpleado });
+      mergeConSnapshot(data);
+    } catch (err) {
+      console.error('Error cargando comandas:', err);
+      setErrorComandas(err.message || 'Error al cargar comandas');
+    } finally {
+      setLoading(false);
+    }
+  }, [mergeConSnapshot, cafeteriaIdEmpleado, sinCafeteriaAsociada]);
 
   const agregarComandaRealTime = useCallback((comanda) => {
+    if (sinCafeteriaAsociada) return;
+    if (Number.isFinite(cafeteriaIdEmpleado) && comanda?.cafeteria_id != null && Number(comanda.cafeteria_id) !== cafeteriaIdEmpleado) {
+      return;
+    }
     const id = String(comanda.id);
     pedidosRealtime.current.set(id, comanda);
     setPedidos(prev => (prev.some(p => String(p.id) === id) ? prev : ordenarPedidos([comanda, ...prev])));
     // T16 · aviso de voz: solo en ingresos reales por Realtime (nunca en
     // la carga inicial de la pantalla ni en cambios de estado).
     vozKds.anunciar(comanda);
-  }, []);
+  }, [sinCafeteriaAsociada, cafeteriaIdEmpleado]);
 
   const actualizarPedidoRealTime = useCallback((comanda) => {
+    if (sinCafeteriaAsociada) return;
+    if (Number.isFinite(cafeteriaIdEmpleado) && comanda?.cafeteria_id != null && Number(comanda.cafeteria_id) !== cafeteriaIdEmpleado) {
+      return;
+    }
     const id = String(comanda.id);
     pedidosRealtime.current.set(id, comanda);
     setPedidos(prev => {
@@ -115,7 +144,7 @@ function Comandas({ currentUser }) {
       return ordenarPedidos(prev.map(p => (String(p.id) === id ? comanda : p)));
     });
     setSelectedPedido(prev => (prev && String(prev.id) === id ? { ...prev, ...comanda } : prev));
-  }, []);
+  }, [sinCafeteriaAsociada, cafeteriaIdEmpleado]);
 
   useEffect(() => {
     fetchPedidos();
@@ -131,14 +160,16 @@ function Comandas({ currentUser }) {
   }, [agregarComandaRealTime, actualizarPedidoRealTime]);
 
   useEffect(() => {
-    // Sin `cafeteriaId`: el KDS muestra los pedidos de todas las cafeterias, cada
-    // uno con el nombre de la suya en la tarjeta. Filtrar aqui hacia que un
-    // pedido pagado no apareciera hasta recargar a mano.
+    if (sinCafeteriaAsociada) return;
     const poll = setInterval(() => {
-      pedidosService.getAll().then(mergeConSnapshot);
+      pedidosService.getAll({ cafeteriaId: cafeteriaIdEmpleado })
+        .then(mergeConSnapshot)
+        .catch((err) => {
+          console.error('Error en polling de comandas:', err);
+        });
     }, 10000);
     return () => clearInterval(poll);
-  }, [mergeConSnapshot]);
+  }, [mergeConSnapshot, cafeteriaIdEmpleado, sinCafeteriaAsociada]);
 
   useEffect(() => {
     const idsVisibles = new Set(pedidos.map(p => String(p.id)));
@@ -186,7 +217,11 @@ function Comandas({ currentUser }) {
         />
       </Box>
 
-      {loading ? (
+      {errorComandas ? (
+        <Box sx={{ flexGrow: 1 }}>
+          <Alert severity="error">{errorComandas}</Alert>
+        </Box>
+      ) : loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1 }}>
           <CircularProgress size={56} />
         </Box>
@@ -236,7 +271,7 @@ function Comandas({ currentUser }) {
 
       <EscanearQrDialog
         open={escaneando}
-        cafeteriaId={CAFETERIA_ID}
+        cafeteriaId={cafeteriaIdEmpleado}
         usuarioId={currentUser?.id != null ? String(currentUser.id) : 'empleado'}
         onClose={() => setEscaneando(false)}
       />
