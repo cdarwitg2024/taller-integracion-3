@@ -81,6 +81,9 @@ export const useDisponibilidadProductos = (cafeteriaId) => {
             {
               id: Number(nuevo.id),
               stock: Number(nuevo.stock) || 0,
+              // El precio también viaja: un cambio de precio debe verse en el
+              // menú sin recargar, igual que el stock.
+              precio: Number(nuevo.precio),
               activo: nuevo.activo,
               eliminadoEn: nuevo.eliminado_en ?? null,
               ts: Date.now(),

@@ -31,6 +31,10 @@ import {
   evaluarDisponibilidad,
   mensajeProblemas,
 } from './src/utils/revalidacionCarrito';
+import {
+  clasificarResultadoPago,
+  type PagoResult,
+} from './src/utils/resultadoPago';
 import AppIcon from './src/components/AppIcon';
 import type { AppIconName } from './src/components/AppIcon';
 import { colors } from './src/theme/colors';
@@ -74,23 +78,9 @@ const TAB_ICONS: Record<AppTab, AppIconName> = {
 /**
  * Respuesta de la RPC `procesar_pago` (ver database/fixes/crear_rpc_pagos.sql).
  * Modela los dos caminos: aprobado y rechazado, con los campos que la app
- * necesita mostrarle al usuario.
+ * necesita mostrarle al usuario. El tipo y la clasificación viven en
+ * `src/utils/resultadoPago`.
  */
-type PagoResult = {
-  ok: boolean;
-  motivo?: string;
-  mensaje?: string;
-  saldo_disponible?: number;
-  total?: number;
-  faltante?: number;
-  pedido_id?: number;
-  saldo_restante?: number;
-  estado?: string;
-  pago_estado?: string;
-  franja_retiro?: string;
-  qr_token?: string;
-  codigo_retiro?: string;
-};
 
 /**
  * Cuerpo de `POST /api/pedidos` (ver
@@ -568,42 +558,41 @@ function AppContent() {
       // El backend responde HTTP 201 con `{ ok: true, pedido: <retorno de
       // procesar_pago> }`. Ojo: dentro de ese 201, `pedido` puede traer
       // `ok: false` (p. ej. saldo insuficiente), así que el chequeo real es
-      // `resultado.ok` y no el código HTTP.
-      const resultado = respuesta?.pedido ?? null;
+      // `pedido.ok` y no el código HTTP. La clasificación vive en
+      // `utils/resultadoPago` para poder probarla sin montar la app entera.
+      const clasificacion = clasificarResultadoPago(respuesta?.pedido ?? null);
 
       // S2-T15: un 2xx sin `pedido` no confirma ni rechaza el pago; se trata
       // como resultado desconocido (carrito intacto, sin reintento automático).
-      if (!resultado) {
+      if (clasificacion.tipo === 'incierto') {
         alertarResultadoIncierto();
         return;
       }
 
-      if (!resultado.ok) {
-        if (resultado?.motivo === 'saldo_insuficiente') {
-          // Carrito intacto a proposito: el usuario recarga y reintenta.
-          Alert.alert(
-            'Saldo insuficiente en la Wallet',
-            `Tu pedido cuesta ${formatCLP(resultado.total ?? 0)} y te ` +
-              `faltan ${formatCLP(resultado.faltante ?? 0)}.\n` +
-              `Saldo actual: ${formatCLP(resultado.saldo_disponible ?? 0)}.`
-          );
-        } else {
-          Alert.alert(
-            'Pago rechazado',
-            resultado?.mensaje || 'No fue posible procesar el pago.'
-          );
-        }
+      if (clasificacion.tipo === 'saldo_insuficiente') {
+        // Carrito intacto a proposito: el usuario recarga y reintenta.
+        const rechazo = clasificacion.resultado;
+        Alert.alert(
+          'Saldo insuficiente en la Wallet',
+          `Tu pedido cuesta ${formatCLP(rechazo.total ?? 0)} y te ` +
+            `faltan ${formatCLP(rechazo.faltante ?? 0)}.\n` +
+            `Saldo actual: ${formatCLP(rechazo.saldo_disponible ?? 0)}.`
+        );
+        return;
+      }
+
+      if (clasificacion.tipo === 'rechazado') {
+        Alert.alert(
+          'Pago rechazado',
+          clasificacion.resultado.mensaje || 'No fue posible procesar el pago.'
+        );
         return;
       }
 
       // S2-T14: validar que la respuesta del pago identifique el pedido y
       // traiga los montos completos ANTES de vaciar el carrito. Una respuesta
       // incompleta no debe confirmar el pago ni borrar el carrito.
-      if (
-        typeof resultado.pedido_id !== 'number' ||
-        !Number.isInteger(resultado.pedido_id) ||
-        resultado.pedido_id <= 0
-      ) {
+      if (clasificacion.tipo === 'pedido_id_invalido') {
         Alert.alert(
           'Error inesperado',
           'La respuesta del servidor no incluye un identificador de pedido válido.'
@@ -611,18 +600,15 @@ function AppContent() {
         return;
       }
 
-      if (
-        typeof resultado.total !== 'number' ||
-        Number.isNaN(resultado.total) ||
-        typeof resultado.saldo_restante !== 'number' ||
-        Number.isNaN(resultado.saldo_restante)
-      ) {
+      if (clasificacion.tipo === 'datos_incompletos') {
         Alert.alert(
           'Error inesperado',
           'La respuesta del servidor está incompleta.'
         );
         return;
       }
+
+      const resultado = clasificacion.resultado;
 
       // Solo un resultado confirmado y completo limpia el carrito:
       clearCart();

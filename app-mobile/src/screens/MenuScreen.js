@@ -18,6 +18,7 @@ import CategoryFilter from '../components/CategoryFilter';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { supabase } from '../lib/supabase';
+import { aplicarCambioProducto, productoPorId } from '../utils/productos';
 import { useDisponibilidadProductos } from '../hooks/useDisponibilidadProductos';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -115,9 +116,17 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
   const [busqueda, setBusqueda] = useState('');
   const [busquedaDebounced, setBusquedaDebounced] = useState('');
   const [orden, setOrden] = useState('precio_asc');
-  // FR-08: producto abierto en detalle. La cafetería NO se pasa: el detalle se
-  // muestra encima del menú, así que el contexto se mantiene solo.
-  const [productoDetalle, setProductoDetalle] = useState(null);
+  // FR-08: producto abierto en detalle. Guardamos el id, no el objeto: así el
+  // detalle abierto sigue el estado real de la lista (stock, precio,
+  // disponibilidad) y se cierra solo si el producto deja de estar disponible.
+  // La cafetería NO se pasa: el detalle se muestra encima del menú, así que el
+  // contexto se mantiene solo.
+  const [productoDetalleId, setProductoDetalleId] = useState(null);
+
+  const productoDetalle = useMemo(
+    () => productoPorId(products, productoDetalleId),
+    [products, productoDetalleId]
+  );
 
   const cafeteriaId = cafeteria?.id ?? null;
 
@@ -139,25 +148,10 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
 
     if (Number.isFinite(pendiente.id)) {
       setProducts((prev) => {
-        const stock = pendiente.stock;
-        const activo = pendiente.activo !== false && pendiente.activo !== null;
-        const eliminado = Boolean(pendiente.eliminadoEn);
-
-        // Si lo dejaron inactivo o lo borraron, sale de la lista
-        if (!activo || eliminado) {
-          return prev.filter((x) => x.id !== pendiente.id);
-        }
-
-        // Si ya existe en la lista, solo actualizamos stock/disponibilidad
-        if (prev.some((x) => x.id === pendiente.id)) {
-          return prev.map((p) =>
-            p.id === pendiente.id ? { ...p, stock, available: stock > 0 } : p
-          );
-        }
-
-        // Si no existe y ahora está activo, recargamos para traerlo con info completa
-        fetchProducts({ silent: true });
-        return prev;
+        const { productos, recargar } = aplicarCambioProducto(prev, pendiente);
+        // Si no estaba en la lista, hay que traerlo con toda su información
+        if (recargar) fetchProducts({ silent: true });
+        return productos;
       });
     }
   }, [cambios]);
@@ -278,7 +272,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
   // Al cambiar de cafetería, el filtro y el detalle se reinician
   useEffect(() => {
     setCategoriaActiva('todos');
-    setProductoDetalle(null);
+    setProductoDetalleId(null);
   }, [cafeteriaId]);
 
   // El detalle de producto es un overlay sobre el menú, no una pantalla
@@ -290,7 +284,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     if (!productoDetalle) return undefined;
 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      setProductoDetalle(null);
+      setProductoDetalleId(null);
       return true;
     });
 
@@ -319,7 +313,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     // cada ítem y no mezcle productos de dos menus distintos.
     onAddToCart?.(product, cafeteria);
     // Si venía desde el detalle, se cierra para volver al menú
-    setProductoDetalle(null);
+    setProductoDetalleId(null);
   };
 
   const renderBody = () => {
@@ -429,7 +423,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
                 key={product.id}
                 product={product}
                 onAdd={handleAdd}
-                onPress={setProductoDetalle}
+                onPress={(p) => setProductoDetalleId(p.id)}
                 adding={addingId != null && String(addingId) === String(product.id)}
               />
             ))}
@@ -527,7 +521,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
             product={productoDetalle}
             cafeteriaName={cafeteria?.nombre}
             onAdd={handleAdd}
-            onClose={() => setProductoDetalle(null)}
+            onClose={() => setProductoDetalleId(null)}
           />
         </View>
       )}
