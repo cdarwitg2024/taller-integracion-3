@@ -17,15 +17,7 @@ import Header from '../components/Header';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
-
-const FRANJAS = [
-  { id: '12:00-12:15', label: '12:00 - 12:15', inicio: '12:00', fin: '12:15' },
-  { id: '12:15-12:30', label: '12:15 - 12:30', inicio: '12:15', fin: '12:30' },
-  { id: '12:30-12:45', label: '12:30 - 12:45', inicio: '12:30', fin: '12:45' },
-  { id: '12:45-13:00', label: '12:45 - 13:00', inicio: '12:45', fin: '13:00' },
-  { id: '13:00-13:15', label: '13:00 - 13:15', inicio: '13:00', fin: '13:15' },
-  { id: '13:15-13:30', label: '13:15 - 13:30', inicio: '13:15', fin: '13:30' },
-];
+import { FRANJAS, franjasConVencimiento } from '../utils/franjas';
 
 // Referencia horaria explícita utilizada para validar vencimiento
 const getReferenciaHoraria = () => new Date();
@@ -57,23 +49,14 @@ const CartScreen = ({
   useEffect(() => {
     const timer = setInterval(() => {
       setAhora(getReferenciaHoraria());
-    }, 30000);
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const franjasDisponibles = useMemo(() => {
-    const referencia = ahora;
-    const hoy = new Date(referencia.getFullYear(), referencia.getMonth(), referencia.getDate());
-    return FRANJAS.map((f) => {
-      const [hI, mI] = f.inicio.split(':').map((n) => parseInt(n, 10));
-      const [hF, mF] = f.fin.split(':').map((n) => parseInt(n, 10));
-      const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), hI, mI, 0, 0);
-      const fin = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), hF, mF, 0, 0);
-      // Franja vencida si la hora de fin ya pasó respecto a la referencia horaria explícita
-      const vencida = fin.getTime() <= referencia.getTime();
-      return { ...f, vencida };
-    });
-  }, [ahora]);
+  const franjasDisponibles = useMemo(
+    () => franjasConVencimiento(FRANJAS, ahora),
+    [ahora]
+  );
 
   // Si la franja seleccionada vence antes del checkout/estado actual, deja de ser válida
   useEffect(() => {
@@ -87,14 +70,19 @@ const CartScreen = ({
   const hayFranjasDisponibles = franjasDisponibles.some((f) => !f.vencida);
 
   const handleCheckout = () => {
-    const actual = franjasDisponibles.find((f) => f.id === franjaSeleccionada);
-    if (!franjaSeleccionada || !actual || actual.vencida) {
-      alert('La franja horaria seleccionada ya no está disponible. Selecciona una franja vigente.');
-      if (actual && actual.vencida) setFranjaSeleccionada(null);
+    if (!franjaSeleccionada) {
+      alert('Por favor selecciona una franja horaria para el retiro.');
       return;
     }
-    if (!hayFranjasDisponibles) {
-      alert('No hay franjas de retiro disponibles en este momento.');
+    // Referencia fresca: la franja pudo vencer entre el último tick y este toque.
+    const referencia = getReferenciaHoraria();
+    const actual = franjasConVencimiento(FRANJAS, referencia).find(
+      (f) => f.id === franjaSeleccionada
+    );
+    if (!actual || actual.vencida) {
+      setAhora(referencia);
+      setFranjaSeleccionada(null);
+      alert('La franja horaria seleccionada ya no está disponible. Selecciona una franja vigente.');
       return;
     }
     onCheckout({ franja: franjaSeleccionada });
