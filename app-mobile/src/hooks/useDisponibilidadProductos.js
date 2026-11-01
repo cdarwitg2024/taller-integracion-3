@@ -68,8 +68,11 @@ export const useDisponibilidadProductos = (cafeteriaId) => {
           // para incorporarlo sin duplicados y con toda su información.
           if (activo && !eliminado) {
             const anterior = payload.old || {};
+            const sinOld = !payload.old || Object.keys(anterior).length === 0;
             const estabaInactivo = anterior.activo === false || anterior.activo === null || Boolean(anterior.eliminado_en);
-            if (estabaInactivo) {
+            // Fallback: si Realtime no entrega payload.old, tratamos como posible
+            // reactivación para no depender únicamente de ese campo.
+            if (estabaInactivo || sinOld) {
               setCambios((prev) => [{ recargar: true, ts: Date.now() }, ...prev.slice(0, 19)]);
               return;
             }
