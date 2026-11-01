@@ -1,9 +1,9 @@
 module.exports = {
   preset: 'react-native',
   setupFiles: ['./jest.setup.js'],
-  // Los paquetes que se publican como ESM hay que transformarlos igual que
-  // react-native, si no cualquier pantalla que los importe rompe en Jest.
+  // react-native-url-polyfill se publica como ESM: hay que transformarlo igual
+  // que react-native, si no App.test.tsx falla al importar src/lib/supabase.
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|react-native-url-polyfill|@fortawesome)/)',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|react-native-url-polyfill|@fortawesome/react-native-fontawesome)/)',
   ],
 };
