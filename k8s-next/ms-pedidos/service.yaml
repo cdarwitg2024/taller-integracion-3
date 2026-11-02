@@ -1,7 +1,8 @@
-# ms-pedidos - Service interno.
-#
-# ClusterIP: lo consumen el gateway (POST /api/pedidos) y las apps. Todo
-# Requires sesion: exigirAuth devuelve 401 sin Bearer valido.
+# /health y /api/pedidos/health son públicos; las operaciones de pedidos exigen JWT.
+# ms-pedidos: dirección estable dentro del namespace student-cdarwitg.
+# selector.app debe coincidir con las etiquetas del Pod; port es el puerto
+# del Service y targetPort debe resolver al puerto HTTP del contenedor.
+# ClusterIP no publica el servicio en Internet: el acceso exterior pasa por gateway.
 apiVersion: v1
 kind: Service
 metadata:
@@ -17,5 +18,5 @@ spec:
   ports:
     - name: http
       port: 3005
-      targetPort: http   # -> 3005
+      targetPort: http
       protocol: TCP

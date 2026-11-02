@@ -1,12 +1,6 @@
-# ms-cafeterias — Horizontal Pod Autoscaler basado en CPU.
-#
-# El HPA utiliza la métrica de CPU de los Pods y calcula la utilización
-# respecto de requests.cpu del contenedor (actualmente 50m).
-#
-# Requiere que Metrics API (metrics.k8s.io) esté disponible en el clúster.
-#
-# El servicio mantiene un mínimo de 1 Pod y puede escalar hasta un máximo
-# de 3 Pods totales según la utilización de CPU.
+# ms-cafeterias: escalado por CPU; requiere Metrics API y CPU requests en los Pods.
+# Objetivo 70% del request de 50m (aprox. 35m por Pod), no del límite de 150m.
+# El cálculo depende de métricas, tolerancias y capacidad/cuota del namespace.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -20,6 +14,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: ms-cafeterias
+  # Mínimo y máximo de réplicas deseadas; no garantizan que todos los Pods
+  # puedan programarse ni que una prueba de carga alcance el máximo.
   minReplicas: 1
   maxReplicas: 3
   metrics:
@@ -30,6 +26,8 @@ spec:
           type: Utilization
           averageUtilization: 70
   behavior:
+    # Max elige la política más permisiva: +100% o +3 Pods por 15 s,
+    # siempre limitado por maxReplicas. Sin ventana adicional al subir.
     scaleUp:
       selectPolicy: Max
       policies:
@@ -40,6 +38,8 @@ spec:
           value: 3
           periodSeconds: 15
       stabilizationWindowSeconds: 0
+    # Ventana de recomendaciones de 300 s para amortiguar bajadas.
+    # No es un temporizador exacto ni permite bajar de minReplicas.
     scaleDown:
       stabilizationWindowSeconds: 300
       selectPolicy: Max

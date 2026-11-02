@@ -1,5 +1,7 @@
 # Preparación de ms-menus para Horizontal Pod Autoscaler
 
+> **Informe histórico de una ejecución o tarea anterior.** Sus Pods, métricas, réplicas y comandos reflejan ese momento; no certifican el estado actual. Para operación vigente consultar [estado Kubernetes](estado-actual.md) y [guía de despliegue](../../k8s-next/DESPLIEGUE.md). Revisión documental: 1 de noviembre de 2026.
+
 > Tarea: S2-T2 — Camilo Darwitg — Preparar ms-menus para Autoscaling en Kubernetes
 > Fecha: 2026-10-15
 > Tipo de actividad: auditoría técnica read-only previa a HPA

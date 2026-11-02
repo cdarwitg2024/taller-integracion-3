@@ -1,3 +1,5 @@
+# Service interno gateway:80. El Ingress apunta a este Service,
+# y selector.app debe seleccionar los Pods del Deployment gateway.
 apiVersion: v1
 kind: Service
 metadata:
