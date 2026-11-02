@@ -1,5 +1,7 @@
 # Notificaciones de voz en el KDS con ElevenLabs (TTS)
 
+> **Estado vigente — 1 de noviembre de 2026:** el cuerpo conserva investigación, propuestas y pruebas históricas. La función voz-pedido fue publicada con empleado rol 4. La prueba autenticada con pedido_id=0 devolvió 400 pedido_invalido en vez de 403 sin_permiso; no generó audio ni modificó anuncios. Falta validar reproducción audible. Comandas.jsx solo llama a anunciar() en ingresos nuevos por Realtime, con voz activada: no al cargar historial, por polling o al pasar a listo. Se intenta ElevenLabs y después voz del sistema. Los roles/ausencias de tablas y resultados de audio del cuerpo son históricos; no asumirlos para Cloud actual. Ver [estado actual](estado-actual.md).
+
 > Documento técnico de investigación y propuesta de mejora.
 > Alcance evaluado: **solo el aviso sonoro de ingreso de un pedido nuevo a la cocina**. Quedan fuera los comandos por voz.
 
@@ -129,7 +131,7 @@ Tres reglas que hacen que esto sea robusto:
 | # | Archivo | Responsabilidad |
 |---|---|---|
 | 1 | `supabase/functions/voz-pedido/index.ts` | Edge Function. Valida el JWT del empleado y que el rol sea **2** (el dueño recibe 403), valida que el pedido exista y esté `pendiente`, reserva el pedido en `anuncios_pedido` (si ya lo estaba, responde `ya_anunciado` sin llamar a ElevenLabs), pide el audio y lo devuelve como MP3. |
-| 2 | `database/fixes/crear_anuncios_pedido.sql` (+ espejo en `scrips_database/fixes/`) | Tabla `anuncios_pedido` con `pedido_id` **único**: es la garantía de "una vez por pedido". Columnas: `id`, `pedido_id`, `cafeteria_id`, `usuario_id`, `canal`, `modelo`, `voz`, `caracteres`, `estado`, `detalle`, `creado_en`, `emitido_en`. |
+| 2 | `database/fixes/crear_anuncios_pedido.sql` | Tabla `anuncios_pedido` con `pedido_id` **único**: es la garantía de "una vez por pedido". Columnas: `id`, `pedido_id`, `cafeteria_id`, `usuario_id`, `canal`, `modelo`, `voz`, `caracteres`, `estado`, `detalle`, `creado_en`, `emitido_en`. |
 | 3 | `app-desktop/src/services/vozKdsService.js` | Cliente. Arma la frase desde los detalles del pedido, invoca la función, reproduce el audio, maneja la cascada, la cola, el agrupamiento, el silenciar y el desbloqueo de audio. |
 | 4 | Toggle 🔊 en `components/KdsTopBar.jsx` | Interruptor de avisos de voz con estado visible (activo / silenciado / sin permisos). |
 | 5 | Integración en `pages/empleado/Comandas.jsx` | Se engancha al camino del pedido nuevo (el mismo callback que ya agrega la tarjeta), **solo en alta real, nunca en la carga inicial** de la pantalla. |
@@ -452,5 +454,5 @@ muestra aparte para que no tape el resultado real del audio.
 - **Prototipo de origen:** `/home/elias/Documentos/test_botKDS/kds-voice-prototype.html` (620 líneas, sin build). De ahí se toma la metodología: cascada de TTS, manejo de errores sin romper el flujo, control de reproducción en serie.
 - **API de ElevenLabs:** `POST /v1/text-to-speech/{voice_id}` · `GET /v1/voices` · header `xi-api-key`.
 - **Puntos de integración en el proyecto:** `app-desktop/src/services/kdsRealtime.js` (callback `onComanda`) y `app-desktop/src/pages/empleado/Comandas.jsx`.
-- **Precedente de configuración con RLS:** `app-desktop/src/service/telegram_dueno.js`.
-- **Precedente de migración SQL replicada:** `database/fixes/` y `scrips_database/fixes/`.
+- **Precedente de configuración con RLS:** `app-desktop/src/services/telegram_dueno.js`.
+- **Precedente de migración SQL:** `database/fixes/` es el único árbol de migraciones SQL del proyecto (la carpeta `scrips_database/` era un duplicado exacto y fue eliminada).

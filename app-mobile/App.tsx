@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   BackHandler,
   Image,
+  Linking,
   View,
   StyleSheet,
   Text,
@@ -25,6 +26,18 @@ import PerfilScreen from './src/screens/PerfilScreen';
 import { Cafeteria } from './src/types/cafeteria';
 import { CartProvider, useCart } from './src/context/CartContext';
 import { useCartTotals } from './src/hooks/useCartTotals';
+import { apiPost, ApiError } from './src/services/backendClient';
+import {
+  evaluarDisponibilidad,
+  mensajeProblemas,
+} from './src/utils/revalidacionCarrito';
+import {
+  clasificarResultadoPago,
+  type PagoResult,
+} from './src/utils/resultadoPago';
+import AppIcon from './src/components/AppIcon';
+import type { AppIconName } from './src/components/AppIcon';
+import { colors } from './src/theme/colors';
 
 const logo = require('./assets/icon.png');
 
@@ -33,7 +46,7 @@ type Product = {
   name: string;
   description: string;
   price: number;
-  emoji: string;
+  iconName: AppIconName;
   available: boolean;
 };
 
@@ -42,7 +55,7 @@ type CartItem = {
   name: string;
   description: string;
   price: number;
-  emoji: string;
+  iconName: AppIconName;
   quantity: number;
   /**
    * De qué cafetería es el ítem. El pedido se hace contra UNA cafetería, así
@@ -54,25 +67,33 @@ type CartItem = {
 
 type AppTab = 'cafeterias' | 'pedidos' | 'carrito' | 'wallet' | 'perfil';
 
+const TAB_ICONS: Record<AppTab, AppIconName> = {
+  cafeterias: 'store',
+  pedidos: 'receipt',
+  carrito: 'cart',
+  wallet: 'card',
+  perfil: 'user',
+};
+
 /**
  * Respuesta de la RPC `procesar_pago` (ver database/fixes/crear_rpc_pagos.sql).
  * Modela los dos caminos: aprobado y rechazado, con los campos que la app
- * necesita mostrarle al usuario.
+ * necesita mostrarle al usuario. El tipo y la clasificación viven en
+ * `src/utils/resultadoPago`.
  */
-type PagoResult = {
+
+/**
+ * Cuerpo de `POST /api/pedidos` (ver
+ * `Microservices/ms-pedidos/src/modules/pedidos/pedidos.service.js`).
+ *
+ * El servicio responde 201 con `{ ok: true, pedido }`, donde `pedido` es el
+ * retorno crudo de la RPC `procesar_pago`: el mismo objeto que antes la app
+ * recibía como `data`. Notar que `ok` del envoltorio siempre es `true` en un
+ * 201; el resultado real del pago está en `pedido.ok`.
+ */
+type RespuestaCrearPedido = {
   ok: boolean;
-  motivo?: string;
-  mensaje?: string;
-  saldo_disponible?: number;
-  total?: number;
-  faltante?: number;
-  pedido_id?: number;
-  saldo_restante?: number;
-  estado?: string;
-  pago_estado?: string;
-  franja_retiro?: string;
-  qr_token?: string;
-  codigo_retiro?: string;
+  pedido?: PagoResult | null;
 };
 
 type PedidoConfirmado = {
@@ -93,6 +114,15 @@ const TABS: { key: AppTab; label: string }[] = [
   { key: 'wallet', label: 'Wallet' },
   { key: 'perfil', label: 'Perfil' },
 ];
+
+/**
+ * S2-T15: límite de espera del `POST /api/pedidos`.
+ *
+ * Pasado este tiempo la app no puede saber si el pedido alcanzó a crearse y
+ * cobrarse; por eso el timeout se informa como "resultado desconocido" y no
+ * como pago rechazado. El carrito se conserva y no se reintenta solo.
+ */
+const TIMEOUT_CREAR_PEDIDO_MS = 15000;
 
 function AppContent() {
   const [session, setSession] = useState<Session | null>(null);
@@ -138,6 +168,80 @@ function AppContent() {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // S2-T2: Manejo robusto de Deep Linking para confirmación de correo (coffeefast://auth/callback)
+  // Soporta tanto flujo implícito (access_token en hash) como flujo PKCE (code en query),
+  // y notifica errores claros si el enlace expiró o fue reutilizado.
+  useEffect(() => {
+    const handleDeepLink = async (url: string | null) => {
+      if (!url) return;
+      try {
+        // Extraer tanto query string como hash fragment
+        const queryPart = url.includes('?') ? url.split('?')[1].split('#')[0] : '';
+        const hashPart = url.includes('#') ? url.split('#')[1] : '';
+        const combined = [queryPart, hashPart].filter(Boolean).join('&');
+        if (!combined) return;
+
+        const params = new URLSearchParams(combined);
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const code = params.get('code');
+        const type = params.get('type');
+        const error = params.get('error');
+        const errorDescription = params.get('error_description');
+
+        if (error || errorDescription) {
+          const mensajeError = decodeURIComponent(
+            (errorDescription || error || 'El enlace de confirmación no es válido o ha expirado.').replace(/\+/g, ' ')
+          );
+          Alert.alert('Error de confirmación', mensajeError);
+          return;
+        }
+
+        // Caso 1: Flujo PKCE (código de autorización)
+        if (code) {
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (!exchangeError && data?.session) {
+            setSession(data.session);
+            Alert.alert(
+              '¡Cuenta confirmada!',
+              'Tu correo institucional ha sido verificado exitosamente. Ya puedes utilizar CoffeeFast.'
+            );
+            return;
+          } else if (exchangeError) {
+            console.warn('[DeepLink] Error en exchangeCodeForSession:', exchangeError.message);
+          }
+        }
+
+        // Caso 2: Flujo implícito (tokens directos)
+        if (accessToken && refreshToken) {
+          const { data, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (!sessionError && data?.session) {
+            setSession(data.session);
+            Alert.alert(
+              '¡Cuenta confirmada!',
+              'Tu correo institucional ha sido verificado exitosamente. Ya puedes utilizar CoffeeFast.'
+            );
+          } else if (sessionError) {
+            console.warn('[DeepLink] Error en setSession:', sessionError.message);
+          }
+        }
+      } catch (err) {
+        console.warn('[DeepLink] Error procesando enlace de autenticación:', err);
+      }
+    };
+
+    Linking.getInitialURL().then(handleDeepLink);
+    const linkingSub = Linking.addEventListener('url', (event) => handleDeepLink(event.url));
+
+    return () => {
+      linkingSub.remove();
+    };
   }, []);
 
   /**
@@ -213,18 +317,22 @@ function AppContent() {
     setActiveTab('cafeterias');
   };
 
+  const [navigating, setNavigating] = useState(false);
+
   const handleTabPress = (tab: AppTab) => {
     // Tocar la pestaña que ya está activa no debe hacer nada. Antes, tocar
     // "Cafeterías" estando dentro del menú de una cafetería ejecutaba el
     // setSelectedCafeteria(null) y te expulsaba al listado sin avisar.
-    if (tab === activeTab) {
+    if (tab === activeTab || navigating) {
       return;
     }
 
     // Cambiar de pestaña NO borra la cafetería seleccionada: si el usuario
     // estaba leyendo el menú de una cafetería, vuelve exactamente donde
     // estaba. Para salir del menú está el botón "‹" y el gesto de atrás.
+    setNavigating(true);
     setActiveTab(tab);
+    setTimeout(() => setNavigating(false), 150);
   };
 
   /**
@@ -260,7 +368,7 @@ function AppContent() {
           name: product.name,
           description: product.description,
           price: product.price,
-          emoji: product.emoji,
+          iconName: product.iconName,
           quantity: 1,
           cafeteriaId,
           cafeteriaNombre: cafeteria.nombre,
@@ -329,6 +437,28 @@ function AppContent() {
     );
   };
 
+  /**
+   * S2-T15: alerta única para resultado desconocido del pago.
+   *
+   * Se usa cuando la solicitud pudo haberse procesado pero no hay respuesta
+   * (timeout o pérdida de conexión). No es un rechazo: el carrito se conserva
+   * y NO se reintenta la compra automáticamente; se invita a revisar "Pedidos"
+   * antes de volver a pagar para evitar un cobro duplicado.
+   */
+  const alertarResultadoIncierto = () => {
+    Alert.alert(
+      'No pudimos confirmar tu pago',
+      'La conexión se interrumpió o la respuesta tardó demasiado, así que no ' +
+        'podemos saber si el pedido alcanzó a registrarse.\n\n' +
+        'Tu carrito se mantiene. Revisa "Pedidos" antes de volver a pagar para ' +
+        'evitar un cobro duplicado.',
+      [
+        { text: 'Revisar pedidos', onPress: () => handleTabPress('pedidos') },
+        { text: 'Entendido', style: 'cancel' },
+      ]
+    );
+  };
+
   const handleCheckout = async (franjaRetiro?: { franja: string }) => {
     // La cafetería del pedido sale de los propios ítems del carrito, no de
     // `selectedCafeteria`. Antes se leía de ahí, y como perder la cafetería
@@ -359,73 +489,134 @@ function AppContent() {
       return;
     }
 
-    // Guardia de reentrada: dos toques antes de que resuelva la RPC intentarian
-    // cobrar dos veces. El UNIQUE en pagos.pedido_id es la red real, pero esto
-    // evita siquiera intentarlo.
+    // Guardia de reentrada: dos toques antes de que resuelva el `POST
+    // /api/pedidos` intentarian cobrar dos veces. El UNIQUE en pagos.pedido_id
+    // es la red real, pero esto evita siquiera intentarlo.
     if (paying) return;
     setPaying(true);
+
+    // Revalidación no destructiva del carrito antes de pagar.
+    // Diferencia error de consulta vs producto no disponible/desactivado/sin stock.
+    // No reemplaza la validación transaccional del backend.
+    try {
+      const ids = Array.from(new Set(cart.map((item) => item.id)));
+      if (ids.length > 0) {
+        const { data, error } = await supabase
+          .from('productos')
+          .select('id, cafeteria_id, nombre, activo, eliminado_en, stock')
+          .in('id', ids);
+
+        if (error) {
+          console.warn('[Carrito] Error al revalidar disponibilidad:', error);
+          Alert.alert(
+            'No se pudo verificar disponibilidad',
+            'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
+          );
+          setPaying(false);
+          return;
+        }
+
+        const issues = evaluarDisponibilidad(cart, data, cafeteriaId);
+
+        if (issues.length > 0) {
+          Alert.alert('Hay cambios en la disponibilidad', mensajeProblemas(issues));
+          setPaying(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('[Carrito] Excepción al revalidar disponibilidad:', e);
+      Alert.alert(
+        'No se pudo verificar disponibilidad',
+        'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
+      );
+      setPaying(false);
+      return;
+    }
 
     const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
 
     try {
-      // El total NO se manda. La RPC lo recalcula desde productos.precio: si
-      // se enviara, un cliente podria pagar $100 un sándwich de $2.000.
-      const { data, error } = await supabase.rpc('procesar_pago', {
-        p_cafeteria_id: cafeteriaId,
-        p_items: cart.map((item) => ({
+      // El total NO se manda. ms-pedidos lo cotiza contra ms-menus y la RPC
+      // `procesar_pago` lo recalcula desde productos.precio: si se enviara,
+      // un cliente podria pagar $100 un sándwich de $2.000.
+      const cuerpo = {
+        cafeteria_id: cafeteriaId,
+        items: cart.map((item) => ({
           producto_id: item.id,
           cantidad: item.quantity,
+          precio_esperado: item.price,
         })),
-        p_franja_retiro: franjaRetiro.franja,
-      });
+        franja_retiro: franjaRetiro.franja,
+      };
 
-      console.log('=== DEBUG procesar_pago ===');
-      console.log('Parámetros enviados:', {
-        p_cafeteria_id: cafeteriaId,
-        p_items: cart.map((item) => ({
-          producto_id: item.id,
-          cantidad: item.quantity,
-        })),
-        p_franja_retiro: franjaRetiro.franja,
-      });
-      console.log('Error:', error);
-      console.log('Data:', data);
-      console.log('=== FIN DEBUG ===');
+      const respuesta = await apiPost<RespuestaCrearPedido | null>(
+        '/api/pedidos',
+        cuerpo,
+        { timeoutMs: TIMEOUT_CREAR_PEDIDO_MS }
+      );
 
-      if (error) {
+      // El backend responde HTTP 201 con `{ ok: true, pedido: <retorno de
+      // procesar_pago> }`. Ojo: dentro de ese 201, `pedido` puede traer
+      // `ok: false` (p. ej. saldo insuficiente), así que el chequeo real es
+      // `pedido.ok` y no el código HTTP. La clasificación vive en
+      // `utils/resultadoPago` para poder probarla sin montar la app entera.
+      const clasificacion = clasificarResultadoPago(respuesta?.pedido ?? null);
+
+      // S2-T15: un 2xx sin `pedido` no confirma ni rechaza el pago; se trata
+      // como resultado desconocido (carrito intacto, sin reintento automático).
+      if (clasificacion.tipo === 'incierto') {
+        alertarResultadoIncierto();
+        return;
+      }
+
+      if (clasificacion.tipo === 'saldo_insuficiente') {
+        // Carrito intacto a proposito: el usuario recarga y reintenta.
+        const rechazo = clasificacion.resultado;
         Alert.alert(
-          'No se pudo procesar el pago',
-          'Revisa tu conexión e inténtalo nuevamente.'
+          'Saldo insuficiente en la Wallet',
+          `Tu pedido cuesta ${formatCLP(rechazo.total ?? 0)} y te ` +
+            `faltan ${formatCLP(rechazo.faltante ?? 0)}.\n` +
+            `Saldo actual: ${formatCLP(rechazo.saldo_disponible ?? 0)}.`
         );
         return;
       }
 
-      const resultado = data as PagoResult | null;
-
-      if (!resultado || !resultado.ok) {
-        if (resultado?.motivo === 'saldo_insuficiente') {
-          // Carrito intacto a proposito: el usuario recarga y reintenta.
-          Alert.alert(
-            'Saldo insuficiente en la Wallet',
-            `Tu pedido cuesta ${formatCLP(resultado.total ?? 0)} y te ` +
-              `faltan ${formatCLP(resultado.faltante ?? 0)}.\n` +
-              `Saldo actual: ${formatCLP(resultado.saldo_disponible ?? 0)}.`
-          );
-        } else {
-          Alert.alert(
-            'Pago rechazado',
-            resultado?.mensaje || 'No fue posible procesar el pago.'
-          );
-        }
+      if (clasificacion.tipo === 'rechazado') {
+        Alert.alert(
+          'Pago rechazado',
+          clasificacion.resultado.mensaje || 'No fue posible procesar el pago.'
+        );
         return;
       }
 
-      // Solo aca se vacia el carrito: el pago se aprobo y el saldo se debito.
+      // S2-T14: validar que la respuesta del pago identifique el pedido y
+      // traiga los montos completos ANTES de vaciar el carrito. Una respuesta
+      // incompleta no debe confirmar el pago ni borrar el carrito.
+      if (clasificacion.tipo === 'pedido_id_invalido') {
+        Alert.alert(
+          'Error inesperado',
+          'La respuesta del servidor no incluye un identificador de pedido válido.'
+        );
+        return;
+      }
+
+      if (clasificacion.tipo === 'datos_incompletos') {
+        Alert.alert(
+          'Error inesperado',
+          'La respuesta del servidor está incompleta.'
+        );
+        return;
+      }
+
+      const resultado = clasificacion.resultado;
+
+      // Solo un resultado confirmado y completo limpia el carrito:
       clearCart();
       setPedidoConfirmado({
-        pedido_id: resultado.pedido_id ?? 0,
-        total: resultado.total ?? 0,
-        saldo_restante: resultado.saldo_restante ?? 0,
+        pedido_id: resultado.pedido_id,
+        total: resultado.total,
+        saldo_restante: resultado.saldo_restante,
         franja_retiro: resultado.franja_retiro,
         estado: resultado.estado,
         pago_estado: resultado.pago_estado,
@@ -435,12 +626,24 @@ function AppContent() {
       Alert.alert(
         'Pago aprobado',
         `Tu pedido fue pagado con Wallet.\n` +
-          `Saldo restante: ${formatCLP(Number(resultado.saldo_restante ?? 0))}.`
+          `Saldo restante: ${formatCLP(resultado.saldo_restante)}.`
       );
     } catch (e) {
+      // S2-T15: timeout o pérdida de conexión DESPUÉS de enviar la solicitud.
+      // El pago pudo procesarse, así que no se presenta como rechazo, no se
+      // vacía el carrito y no se reintenta automáticamente.
+      if (e instanceof ApiError && e.resultadoIncierto) {
+        alertarResultadoIncierto();
+        return;
+      }
+
+      // `ApiError` con respuesta HTTP cubre las fallas definitivas (sesión
+      // vencida, backend caído con respuesta); el resto es inesperado.
       Alert.alert(
         'No se pudo procesar el pago',
-        'Ocurrio un error inesperado. Intentalo nuevamente.'
+        e instanceof ApiError
+          ? 'Revisa tu conexión e inténtalo nuevamente.'
+          : 'Ocurrio un error inesperado. Intentalo nuevamente.'
       );
     } finally {
       setPaying(false);
@@ -520,7 +723,7 @@ function AppContent() {
         </SafeAreaView>
 
         {/* Contenido principal según la pestaña activa */}
-        <View style={styles.content}>
+        <View style={[styles.content, navigating && styles.contentNavigating]}>
           {activeTab === 'cafeterias' &&
             (selectedCafeteria ? (
               <MenuScreen
@@ -566,6 +769,7 @@ function AppContent() {
               session={session}
               isGuest={isGuest}
               onLogout={handleLogout}
+              onNavigateTab={handleTabPress}
             />
           )}
         </View>
@@ -580,20 +784,26 @@ function AppContent() {
                 style={styles.navItem}
                 activeOpacity={0.7}
                 onPress={() => handleTabPress(tab.key)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={tab.key === 'carrito' && totalProducts > 0
+                  ? `${tab.label}, ${totalProducts} productos`
+                  : tab.label}
               >
-                <View>
-                  <Text
-                    style={[
-                      styles.navIcon,
-                      isActive && styles.activeNavIcon,
-                    ]}
-                  >
-                    {tab.key === 'cafeterias' && '🏪'}
-                    {tab.key === 'pedidos' && '📋'}
-                    {tab.key === 'carrito' && '🛒'}
-                    {tab.key === 'wallet' && '💳'}
-                    {tab.key === 'perfil' && '👤'}
-                  </Text>
+                <View style={[styles.navItemContent, isActive && styles.activeNavItemContent]}>
+                    <View style={styles.navIconWrapper}>
+                      <AppIcon
+                        name={TAB_ICONS[tab.key]}
+                        style={[styles.navIcon, isActive && styles.activeNavIcon]}
+                      />
+                      {tab.key === 'carrito' && totalProducts > 0 && (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText} numberOfLines={1}>
+                            {totalProducts > 99 ? '99+' : totalProducts}
+                          </Text>
+                        </View>
+                      )}
+                  </View>
                   <Text
                     style={[
                       styles.navText,
@@ -603,18 +813,7 @@ function AppContent() {
                   >
                     {tab.label}
                   </Text>
-                  {tab.key === 'carrito' && totalProducts > 0 && (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{totalProducts}</Text>
-                    </View>
-                  )}
                 </View>
-                <View
-                  style={[
-                    styles.navIndicator,
-                    isActive && styles.activeNavIndicator,
-                  ]}
-                />
               </TouchableOpacity>
             );
           })}
@@ -691,60 +890,87 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  contentNavigating: {
+    opacity: 0.96,
+  },
   bottomNavigation: {
-    height: 64,
-    backgroundColor: '#FFFFFF',
+    height: 76,
+    backgroundColor: colors.blanco,
     borderTopWidth: 1,
-    borderTopColor: '#EDE8E5',
+    borderTopColor: colors.borde,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingBottom: 4,
+    justifyContent: 'space-evenly',
+    paddingHorizontal: 5,
+    paddingTop: 5,
+    paddingBottom: 7,
+    elevation: 10,
+    shadowColor: colors.sombra,
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 60,
+  },
+  navItemContent: {
+    minWidth: 58,
+    height: 58,
+    paddingHorizontal: 5,
+    paddingVertical: 5,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  activeNavItemContent: {
+    backgroundColor: colors.cafeOscuro,
+    borderRadius: 14,
+  },
+  navIconWrapper: {
+    width: 27,
+    height: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   navIcon: {
-    fontSize: 20,
+    fontSize: 19,
+    color: colors.textoSecundario,
   },
   activeNavIcon: {
-    opacity: 1,
+    color: colors.crema,
   },
   navText: {
-    fontSize: 11,
-    color: '#A39A96',
+    fontSize: 10,
+    lineHeight: 13,
+    color: colors.textoSecundario,
+    fontWeight: '500',
   },
   activeNavText: {
-    color: '#4A332C',
+    color: colors.blanco,
     fontWeight: '700',
-  },
-  navIndicator: {
-    width: 16,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: 'transparent',
-    marginTop: 3,
-  },
-  activeNavIndicator: {
-    backgroundColor: '#4A332C',
   },
   badge: {
     position: 'absolute',
-    right: -12,
-    top: -4,
-    minWidth: 18,
-    height: 18,
+    right: -7,
+    top: -3,
+    minWidth: 17,
+    height: 17,
     borderRadius: 9,
-    backgroundColor: '#E65100',
+    backgroundColor: colors.rojo,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
+    borderWidth: 1,
+    borderColor: colors.blanco,
   },
   badgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
+    color: colors.blanco,
+    fontSize: 9,
+    lineHeight: 12,
     fontWeight: '800',
   },
 });

@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 import Button from '../components/Button';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -268,7 +269,7 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Pago con tarjeta</Text>
             <TouchableOpacity onPress={onCancelar}>
-              <Text style={styles.headerClose}>✕</Text>
+              <AppIcon name="close" style={styles.headerClose} />
             </TouchableOpacity>
           </View>
 
@@ -433,7 +434,10 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
                 },
               ]}
             >
-              <Text style={styles.estadoExitoTexto}>✓ Pago aprobado</Text>
+              <View style={styles.estadoPagoRow}>
+                <AppIcon name="check" style={styles.estadoPagoIcon} />
+                <Text style={styles.estadoExitoTexto}>Pago aprobado</Text>
+              </View>
             </Animated.View>
           )}
 
@@ -446,9 +450,10 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
                 },
               ]}
             >
-              <Text style={styles.estadoErrorTexto}>
-                ✕ Pago rechazado. Verifica los datos.
-              </Text>
+              <View style={styles.estadoPagoRow}>
+                <AppIcon name="close" style={styles.estadoPagoIcon} />
+                <Text style={styles.estadoErrorTexto}>Pago rechazado. Verifica los datos.</Text>
+              </View>
             </Animated.View>
           )}
 
@@ -462,9 +467,10 @@ const PaymentScreen: React.FC<PaymentScreenProps> = ({
             style={{ marginTop: spacing.sm }}
           />
 
-          <Text style={styles.notaSeguridad}>
-            🔒 Pago simulado - No se procesará ningún cargo real
-          </Text>
+          <View style={styles.notaSeguridadRow}>
+            <AppIcon name="lock" style={styles.notaSeguridadIcon} />
+            <Text style={styles.notaSeguridad}>Pago simulado - No se procesará ningún cargo real</Text>
+          </View>
         </ScrollView>
       </Animated.View>
     </KeyboardAvoidingView>
@@ -635,6 +641,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.verdeBg,
     borderRadius: 12,
   },
+  estadoPagoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  estadoPagoIcon: { fontSize: 19 },
   estadoExitoTexto: {
     fontSize: typography.subtitulo,
     fontWeight: typography.pesoExtraBold,
@@ -658,6 +666,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.md,
   },
+  notaSeguridadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.md },
+  notaSeguridadIcon: { fontSize: 13, color: colors.textoSecundario },
 });
 
 export default PaymentScreen;

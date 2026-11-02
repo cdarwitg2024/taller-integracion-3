@@ -1,102 +1,166 @@
-﻿# ☕ App de Pedidos para Cafeterías Universitarias
+# CoffeeFast — Sistema de Pedidos para Cafeterías Universitarias
 
-## 📋 Descripción
-Aplicación full stack para pedidos por adelantado en cafeterías universitarias.
+Aplicación full-stack para pedidos anticipados en cafeterías universitarias. Permite a los estudiantes realizar pedidos desde su dispositivo móvil, a los dueños administrar el negocio desde una app de escritorio y a los empleados gestionar la preparación y entrega mediante un sistema KDS con escaneo QR.
 
-## 🏗️ Arquitectura
-- **Frontend Móvil**: React Native + Expo
-- **Frontend Desktop**: React + Vite + Electron + MUI
-- **Backend**: Node.js + Express
-- **Base de Datos**: Supabase (PostgreSQL)
+## Arquitectura
 
-## 📁 Estructura del Proyecto
-- /app-mobile - App Android (React Native + Expo)
-- /app-desktop - App Escritorio (React + Electron)
-- /backend-node - Servidor Node.js
-- /database - Migraciones y seeds de Supabase
-- /docs - Documentación del proyecto
+| Componente | Tecnología |
+|---|---|
+| App móvil | React Native + Expo |
+| App de escritorio (KDS) | React + Vite + Electron + MUI |
+| Microservicios (backend vigente) | Node.js / Express — gateway Nginx, ms-cafeterias, ms-menus, ms-pedidos |
+| Base de datos | Supabase (PostgreSQL + Auth + Edge Functions) |
+| Infraestructura | Docker Compose (local) / Kubernetes (producción) |
 
-## 📖 Documentación
-- **[Puesta en marcha del flujo de pedidos](docs/puesta_en_marcha_flujo_pedidos.md)** —
-  cómo levantar el entorno, orden de migraciones, cuentas de prueba, endpoints
-  y qué se corrigió para que el flujo pago → preparación → retiro por QR funcione
-  de punta a punta.
-- **[Despliegue en Kubernetes](docs/despliegue_kubernetes_backend.md)** — build,
-  push y aplicación de `backend-node` e `inventario-service` en el clúster
-  `student-cdarwitg`.
-- **[Arquitectura de microservicios](docs/arquitectura-microservicios.md)** —
-  Ingress, Secrets, réplicas y comunicación interna entre servicios.
+## Estructura del repositorio
 
-## ⚠️ Advertencia: seguridad al aplicar manifiestos
+```
+/
+├── app-mobile/              # App Android (React Native + Expo)
+├── app-desktop/             # App de escritorio (React + Electron)
+├── Microservices/           # Stack de microservicios vigente
+│   ├── gateway/             # Proxy inverso Nginx
+│   ├── ms-cafeterias/       # Servicio de cafeterías y catálogo
+│   ├── ms-menus/            # Servicio de menús y productos
+│   ├── ms-pedidos/          # Servicio de pedidos y pagos
+│   ├── shared/              # Librería interna compartida
+│   └── docker-compose.yml   # Orquestación local
+├── k8s-next/                # Manifiestos Kubernetes (producción)
+├── supabase/                # Edge Functions y configuración de Supabase
+├── database/                # Migraciones y scripts SQL
+├── BotTelegramCoffeFaster/  # Bot de alertas de stock (Python + FastAPI)
+├── backend-node/            # Backend legacy (en retiro; ver docs/README.md)
+└── docs/                    # Documentación del proyecto
+```
 
-**Nunca uses `kubectl apply -R` (ni `--recursive`) sobre carpetas que puedan
-contener Secrets.** Un `apply` recursivo no distingue una plantilla de un Secret
-real: aplica **todo** lo que encuentra, y en este proyecto ya pasó — un
-`kubectl apply -f k8s/ --recursive` sobrescribió el Secret
-`coffeesecret-supabase` del clúster con los placeholders de una plantilla.
+## Requisitos previos
 
-Reglas al aplicar manifiestos:
+- Node.js >= 18
+- Docker Desktop (para levantar los microservicios localmente)
+- Supabase CLI (para desarrollo de Edge Functions o migraciones)
+- Expo CLI (`npm install -g expo-cli`) para la app móvil
+- Variables de entorno configuradas (ver sección siguiente)
 
-1. **Aplica archivo por archivo** o **por subcarpeta cerrada**, nunca por el árbol
-   completo:
-   ```powershell
-   # correcto: archivos o subcarpetas explícitas
-   kubectl apply -f k8s/ingress.yaml
-   kubectl apply -f k8s/pedidos/
-   kubectl apply -f k8s/inventario/
+## Configuración de variables de entorno
 
-   # PROHIBIDO: recorre todo el árbol, incluidos Secrets
-   kubectl apply -f k8s/ --recursive
-   ```
-2. **Dentro de `k8s/` no hay ningún manifiesto de Secret.** Es intencional: así
-   un `apply` recursivo no tiene nada que pisar. La plantilla de referencia vive
-   fuera, en [`docs/secrets/supabase-secret.example.yaml`](docs/secrets/supabase-secret.example.yaml),
-   que solo contiene placeholders (`<TU_SUPABASE_URL>`).
-3. **El Secret real se crea a mano, una vez, y no se versiona:**
-   ```powershell
-   kubectl create secret generic coffeesecret-supabase `
-     --from-literal=SUPABASE_URL="https://<proyecto>.supabase.co" `
-     --from-literal=SUPABASE_SERVICE_KEY="<service key>" `
-     -n student-cdarwitg
-   ```
-4. **Nunca pegues credenciales reales en el repo.** Ni en manifiestos, ni en
-   `.env` versionado, ni en documentación. Para revisar o corregir un Secret
-   existente, recrea el objeto con `kubectl create secret`; **no** lo apliques
-   desde un archivo del repo.
+### Microservicios
 
-Las claves que espera el Secret son `SUPABASE_URL` y `SUPABASE_SERVICE_KEY`, las
-mismas que inyectan los Deployments por `envFrom.secretRef`.
+```bash
+cd Microservices
+cp .env.example .env
+```
 
-## 👥 Integrantes
-- **Int 1**: App Móvil (Kotlin)
-- **Int 2**: App Escritorio (React + Electron)
-- **Int 3**: Base de Datos (Supabase)
-- **Int 4**: Servidor Node.js
-- **Int 5**: Escáner + Dashboard + Integración
+Completar en `Microservices/.env`:
 
-## 🔐 Credenciales de Acceso (App Escritorio)
+```
+SUPABASE_URL=http://host.docker.internal:54321
+SUPABASE_SERVICE_KEY=<service_role key de Supabase>
+SUPABASE_PUBLISHABLE_KEY=<anon/publishable key de Supabase>
+GATEWAY_PORT=8080
+```
 
-| Rol | URL de acceso | Email | Contraseña |
-| --- | --- | --- | --- |
-| **Dueño** | `http://localhost:5173/login/dueno` | `dueno@coffeefaster.cl` | `123456` |
-| **Empleado** | `http://localhost:5173/login/empleado` | `empleado@coffeefaster.cl` | `123456` |
+### App de escritorio
 
-> **Nota**: el login intenta primero con Supabase Auth (si el proyecto está configurado) y si no responde usa un fallback de desarrollo que se activa ÚNICAMENTE en `import.meta.env.DEV` (comando `npm run dev`). Las credenciales de fallback se pueden cambiar con las variables `VITE_DEV_ADMIN_EMAIL`/`VITE_DEV_ADMIN_PASSWORD` y `VITE_DEV_EMPLEADO_EMAIL`/`VITE_DEV_EMPLEADO_PASSWORD` en `app-desktop/.env`.
->
-> El usuario **dueño** (`usuarios.id = 1`) todavía no está vinculado en Supabase Auth, así que hoy solo entra por ese fallback de desarrollo.
+La configuración Vite carga los `.env` de la **raíz del repositorio**. Completar `.env` en la raíz con las credenciales del proyecto Supabase.
 
-## 🔐 Credenciales de la App Móvil
+### App móvil
 
-| Rol | Email | Contraseña |
-| --- | --- | --- |
-| **Estudiante** | `camilo.pago@alu.uct.cl` | `pruebapago2026` |
+Crear `app-mobile/.env` con las credenciales correspondientes. El dispositivo físico requiere que `SUPABASE_URL` apunte a la IP actual del PC en la red local, no a `localhost`.
 
-## 🧪 Cuenta de KDS para probar el flujo completo
+## Pasos para ejecutar la aplicación
 
-| Rol | Email | Contraseña |
-| --- | --- | --- |
-| **Cocina** | `cocina.central@cafeteria.com` | `cocina2026` |
+### 1. Microservicios (backend)
 
-- **Dueño**: panel de administración (productos, stock, personal, métricas y alertas).
-- **Empleado**: KDS de cocina (comandas en tiempo real, preparación y validación de retiros por QR).
+```bash
+cd Microservices
+docker compose up --build
+```
 
+El gateway queda disponible en `http://localhost:8080`. Los microservicios individuales se exponen en los puertos 3002 (ms-cafeterias), 3003 (ms-menus) y 3005 (ms-pedidos) solo para depuración directa.
+
+Para detener:
+
+```bash
+docker compose down
+```
+
+### 2. App de escritorio (KDS / panel de dueño)
+
+```bash
+cd app-desktop
+npm install
+npm run electron:dev
+```
+
+Esto levanta Vite en el puerto 5173 y abre la ventana Electron apuntando a ese servidor de desarrollo.
+
+Para construir el instalador:
+
+```bash
+npm run electron:build
+```
+
+### 3. App móvil
+
+```bash
+cd app-mobile
+npm install
+npm run android   # dispositivo o emulador Android
+# o
+npm run start     # abre el servidor Expo para escanear con Expo Go
+```
+
+### 4. Bot de Telegram (opcional)
+
+Ver instrucciones en `BotTelegramCoffeFaster/`.
+
+## Roles y acceso
+
+Las apps utilizan Supabase Auth. No hay cuentas de demostración integradas. Solicitar las credenciales de prueba por el canal del equipo; no versionar credenciales en el repositorio.
+
+| Rol | Acceso |
+|---|---|
+| Dueno | Dashboard, gestión de productos, stock y resolución de solicitudes de reposición |
+| Empleado | KDS, retiro por QR y solicitudes de reposición |
+| Estudiante | App móvil — compra, consulta de pedidos y wallet |
+
+## Despliegue en Kubernetes
+
+Ver [`k8s-next/DESPLIEGUE.md`](k8s-next/DESPLIEGUE.md) para el procedimiento completo, requisitos previos y advertencias de seguridad.
+
+> **Importante:** nunca usar `kubectl apply --recursive` sobre el árbol de manifiestos. Aplicar siempre archivo por archivo o por subcarpeta explícita para evitar sobrescribir Secrets del cluster con valores de plantilla.
+
+## Documentación
+
+| Documento | Descripcion |
+|---|---|
+| [`docs/README.md`](docs/README.md) | Indice y clasificacion de la documentacion |
+| [`docs/puesta_en_marcha_flujo_pedidos.md`](docs/puesta_en_marcha_flujo_pedidos.md) | Guia completa para levantar el entorno y ejecutar el flujo de pedidos |
+| [`docs/estado-actual.md`](docs/estado-actual.md) | Funcionalidades implementadas y pendientes |
+| [`docs/kubernetes/estado-actual.md`](docs/kubernetes/estado-actual.md) | Estado del cluster Kubernetes |
+
+## Ejecutar pruebas
+
+```bash
+# Microservicios
+cd Microservices/ms-pedidos && npm test
+cd Microservices/ms-cafeterias && npm test
+
+# App móvil
+cd app-mobile && npm test
+
+# App de escritorio
+cd app-desktop && npm test
+
+# Backend legacy
+cd backend-node && npm test
+```
+
+## Integrantes
+
+| Integrantes |
+Ariel Diaz
+Diego Cordova
+Diego Vasquez
+Elias Caranza
+Camilo Darwitg

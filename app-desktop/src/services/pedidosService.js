@@ -12,6 +12,52 @@ const CLAVES_CREDENCIAL = ['qr_token', 'token', 'codigo_retiro_diario', 'codigo_
 // un token nuestro, asi que se descarta antes de armar la consulta.
 const CREDENCIAL_SEGURA = /^[A-Za-z0-9_-]+$/;
 
+// ─── Criterio comun de ventas para indicadores administrativos (S2-T11) ───
+// Periodo operativo compartido por los indicadores que representan ventas.
+// Solo el gráfico por hora restringe la consulta a hoy.
+
+// Estados que se consideran como venta para los indicadores administrativos.
+// Los cancelados quedan fuera (tratamiento consistente con el criterio de venta).
+const ESTADOS_VENTAS = ['entregado', 'listo', 'preparando', 'en_preparacion'];
+
+/**
+ * Indica si un pedido forma parte del criterio de ventas: no esta cancelado y
+ * tiene un estado de venta. Punto unico de verdad para tarjetas y graficos.
+ */
+function esPedidoDeVentas(pedido) {
+  const estado = String(pedido?.estado || '').toLowerCase();
+  if (estado === 'cancelado' || ['rechazado', 'reembolsado'].includes(pedido?.pago_estado)) return false;
+  if (estado === 'pendiente' || estado === 'pagado') return pedido?.pago_estado === 'pagado';
+  return ESTADOS_VENTAS.includes(estado);
+}
+
+/**
+ * Pedidos del periodo indicado (por defecto: jornada de hoy, hora local del cliente).
+ */
+function obtenerPedidosDelDia(pedidos, ref = new Date()) {
+  const hoyStr = ref.toDateString();
+  return (pedidos || []).filter((p) => {
+    const f = parsearFecha(p.creado_en);
+    return Boolean(f && f.toDateString() === hoyStr);
+  });
+}
+
+/**
+ * Suma las ventas (totales) de los pedidos que componen el criterio de ventas.
+ */
+function obtenerVentasDelDia(pedidosDelDia) {
+  return (pedidosDelDia || [])
+    .filter((p) => esPedidoDeVentas(p))
+    .reduce((sum, p) => sum + (Number(p.total) || 0), 0);
+}
+
+/**
+ * Devuelve los pedidos validos de ventas del periodo indicado.
+ */
+function obtenerPedidosDeVentasDelDia(pedidosDelDia) {
+  return (pedidosDelDia || []).filter((p) => esPedidoDeVentas(p));
+}
+
 /**
  * Devuelve TODAS las credenciales que se pueden extraer de una entrada arbitraria
  * (texto plano, JSON del QR, URL) en orden de prioridad, sin duplicados.
@@ -109,6 +155,19 @@ export function normalizarPedido(fila) {
   // token de contingencia es una credencial y no debe viajar en la tarjeta.
   const idStr = String(fila.id);
 
+  // La hora de retiro puede venir vacia: `formatearHora` devolvería "--:--",
+  // que no es un dato real y se colaba hasta la tarjeta. Se deja en null para
+  // que la pantalla use la franja real del pedido o marque el estimado.
+  const horaRetiroNormalizada = (() => {
+    const hora = formatearHora(fila.hora_retiro);
+    return hora === '--:--' ? null : hora;
+  })();
+
+  // Franja de retiro elegida por el estudiante: se toma SIEMPRE del pedido real
+  // (columna franja_retiro) y se normaliza aqui, en el unico punto por el que
+  // pasan tanto la carga inicial como las actualizaciones en tiempo real.
+  const franjaRetiro = typeof fila.franja_retiro === 'string' ? fila.franja_retiro.trim() : '';
+
   return {
     ...fila,
     id: idStr,
@@ -121,7 +180,8 @@ export function normalizarPedido(fila) {
     cafeteria_nombre: cafeObj?.nombre || 'Cafetería',
     cafeterias: cafeObj,
     hora: fila.hora || (fila.creado_en ? formatearHora(fila.creado_en) : undefined),
-    hora_retiro: formatearHora(fila.hora_retiro),
+    hora_retiro: horaRetiroNormalizada,
+    franja_retiro: franjaRetiro || null,
     creado_en: fila.creado_en,
     total: Number(fila.total) || 0,
     estado: fila.estado === 'preparando' ? 'en_preparacion' : fila.estado,
@@ -149,33 +209,62 @@ function aMinutosDelDia(horaRetiro) {
 function aInstanteRetiro(pedido) {
   // Ojo: `normalizarPedido` deja `hora_retiro` como texto "HH:mm", así que
   // hay que soportar los dos formatos que llegan desde la base.
+  const creado = parsearFecha(pedido.creado_en);
+
+  // S2-T7: Prioridad estricta según requerimiento
+  // 1) franja_retiro: utilizar la hora de inicio de la franja
+  if (pedido?.franja_retiro) {
+    const franja = String(pedido.franja_retiro).trim();
+    if (franja) {
+      // Extraer inicio de la franja: puede venir como "12:30-12:45", "12:30 - 12:45"
+      const inicio = franja.split(/[-–—]/)[0].trim();
+      let minutos = aMinutosDelDia(inicio);
+      if (minutos === null) {
+        // Fallback: intentar parsear la franja completa por si viene en otro formato
+        minutos = aMinutosDelDia(franja);
+      }
+      if (minutos !== null) {
+        if (creado) {
+          // "HH:mm" sobre el día en que se creó el pedido.
+          const base = new Date(creado);
+          base.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
+          return base.getTime();
+        }
+        // Sin fecha de creación: se asume hoy.
+        const hoy = new Date();
+        hoy.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
+        return hoy.getTime();
+      }
+    }
+  }
+
+  // 2) hora_retiro: utilizarla cuando no exista una franja válida
   const retiroTs = parsearFecha(pedido.hora_retiro);
   if (retiroTs) return retiroTs.getTime();
 
   const minutos = aMinutosDelDia(pedido.hora_retiro);
-  const creado = parsearFecha(pedido.creado_en);
-
   if (minutos !== null) {
     if (creado) {
-      // "HH:mm" sobre el día en que se creó el pedido.
+      // "HH:mm" sobre el dia en que se creo el pedido.
       const base = new Date(creado);
       base.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
       return base.getTime();
     }
-    // Sin fecha de creación: se asume hoy.
+    // Sin fecha de creacion: se asume hoy.
     const hoy = new Date();
     hoy.setHours(Math.floor(minutos / 60), minutos % 60, 0, 0);
     return hoy.getTime();
   }
 
+  // 3) creado_en + 15 minutos: utilizarlo únicamente como fallback cuando no exista información de retiro válida
   if (creado) return creado.getTime() + 15 * 60000; // estimado por defecto
   return null;
 }
 
 function comparadorPrioridad(a, b) {
-  // Ordenar por minutos del día no servía: dos pedidos del mismo minuto
-  // quedaban "empate" y el kanban se veía desordenado. Se compara el
-  // instante real (epoch) y, ante empate, la hora de creación.
+  // Ordenar por el instante real de retiro (franja/hora/estimado).
+  // Los pedidos que deben retirarse antes aparecen primero.
+  // Ante empate se mantiene el criterio por hora de creación.
   const tA = aInstanteRetiro(a);
   const tB = aInstanteRetiro(b);
   if (tA !== null && tB !== null && tA !== tB) return tA - tB;
@@ -205,11 +294,19 @@ export const pedidosService = {
     if (!isSupabaseConfigured) {
       throw new Error('Supabase no está configurado en el cliente');
     }
+    // El alcance de cafetería debe provenir exclusivamente del perfil/sesión del empleado (currentUser.cafeteria_id).
+    // No se permite fallback silencioso a ninguna cafetería fija.
+    if (cafeteriaId === null || cafeteriaId === undefined || cafeteriaId === '') {
+      throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
+    }
+    const cid = Number(cafeteriaId);
+    if (!Number.isFinite(cid)) {
+      throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
+    }
     let query = supabase
       .from('pedidos')
-      .select('*, usuarios(nombre, apellido), cafeterias(*), detalles_pedido(*, productos(*))');
-
-    if (cafeteriaId) query = query.eq('cafeteria_id', cafeteriaId);
+      .select('*, usuarios(nombre, apellido), cafeterias(*), detalles_pedido(*, productos(*))')
+      .eq('cafeteria_id', cid);
 
     const { data, error } = await query.order('creado_en', { ascending: false });
 
@@ -276,21 +373,35 @@ export const pedidosService = {
     //    (pendiente -> en_preparacion -> listo -> entregado).
     const actual = await this.getById(id);
     if (actual && !esTransicionValida(actual.estado, nuevoEstado)) {
-      console.warn(`Transición inválida de estado: ${actual.estado} -> ${nuevoEstado} (pedido ${id})`);
+      console.warn(`Transicion invalida de estado: ${actual.estado} -> ${nuevoEstado} (pedido ${id})`);
       return actual;
     }
 
-    // 1. Vía MS Comercio (PATCH /pedidos/:id/estado) — valida la secuencia
-    //    pendiente -> en_preparacion -> listo en el backend.
+    // 1. Vía MS Comercio (PATCH /pedidos/:id/estado) — backend debe ser autoridad
     try {
       await backendApi.cambiarEstadoPedido(id, nuevoEstado);
       const updated = await this.getById(id);
       if (updated) return updated;
+      throw new Error('No se pudo obtener el pedido actualizado tras el cambio de estado.');
     } catch (err) {
-      console.warn('MS Comercio no disponible, intentando Supabase directo:', err.message);
+      // Cancelar exige la RPC transaccional: nunca degradar a UPDATE de estado.
+      if (nuevoEstado === 'cancelado') throw err;
+      const status = err?.status;
+      const code = err?.code;
+      // Errores de autorización/prohibidos/conflictos: NO hacer fallback alternativo
+      if (status === 401 || status === 403 || status === 409 || code === 'UNAUTHORIZED') {
+        throw err;
+      }
+      // Errores de red/otros: NO asumir autorización para escribir directamente.
+      // Solo intentar fallback si es claramente "no disponible" pero NO para rechazos del backend.
+      const msg = String(err?.message || '').toLowerCase();
+      if (msg.includes('no autorizado') || msg.includes('forbidden') || msg.includes('conflict')) {
+        throw err;
+      }
+      console.warn('MS Comercio no disponible o error no autorizado, intentando Supabase directo:', err.message);
     }
 
-    // 2. Fallback: UPDATE directo en Supabase
+    // 2. Fallback: UPDATE directo en Supabase (solo si no fue un rechazo del backend)
     if (!isSupabaseConfigured) {
       throw new Error('Supabase no está configurado en el cliente');
     }
@@ -328,7 +439,7 @@ export const pedidosService = {
    * token no coincide, el token de contingencia del mismo pedido lo entrega; y
    * al reves, si el token fue borrado o mal tipeado, el QR lo entrega.
    */
-  async validarQrEntrega(textoQr, idUsuario = null) {
+  async validarQrEntrega(textoQr, idUsuario = null, cafeteriaIdValidacion = null) {
     const candidatas = extraerCredenciales(textoQr);
     if (candidatas.length === 0) {
       return { valido: false, razon: 'QR vacío o ilegible, intenta nuevamente.' };
@@ -349,9 +460,10 @@ export const pedidosService = {
 
       if (!pedido) {
         await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'rechazado', detalle: 'QR no reconocido.', usuarioId: idUsuario });
-        return { valido: false, razon: 'QR no reconocido. Verifica que corresponda a un pedido de CofeeFaster.' };
+        return { valido: false, razon: 'QR no reconocido. Verifica que corresponda a un pedido de CoffeFaster.' };
       }
-      if (Number(pedido.cafeteria_id) !== CAFETERIA_ID) {
+      const cidVal = cafeteriaIdValidacion !== null && cafeteriaIdValidacion !== undefined ? Number(cafeteriaIdValidacion) : (CAFETERIA_ID !== null && CAFETERIA_ID !== undefined ? Number(CAFETERIA_ID) : null);
+      if (Number.isFinite(cidVal) && Number(pedido.cafeteria_id) !== cidVal) {
         const razon = `El pedido #${pedido.id} no pertenece a esta cafetería.`;
         await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
         return { valido: false, razon };
@@ -424,27 +536,29 @@ export const pedidosService = {
     }
   },
 
-  async getEstadisticas() {
-    const pedidos = await this.getAll();
-    const totalVentas = pedidos
-      .filter(p => p.estado === 'entregado' || p.estado === 'listo' || p.estado === 'preparando' || p.estado === 'en_preparacion')
-      .reduce((sum, p) => sum + (Number(p.total) || 0), 0);
+  async getEstadisticas(pedidos = null) {
+    const lista = pedidos ?? (await this.getAll());
 
-    const pendientes = pedidos.filter(p => p.estado === 'pendiente').length;
-    const preparando = pedidos.filter(p => p.estado === 'preparando' || p.estado === 'en_preparacion').length;
-    const listos = pedidos.filter(p => p.estado === 'listo').length;
-    const entregados = pedidos.filter(p => p.estado === 'entregado').length;
+    // Mismo alcance de pedidos que el KDS, sin descartar fechas anteriores.
+    const pedidosDelAlcance = lista;
+    const totalVentas = obtenerVentasDelDia(pedidosDelAlcance);
 
-    const tiempos = pedidos
-      .filter(p => p.tiempo_real_min && Number(p.tiempo_real_min) > 0)
-      .map(p => Number(p.tiempo_real_min));
-    const tiempoPromedioMin = tiempos.length > 0
-      ? Number((tiempos.reduce((a, b) => a + b, 0) / tiempos.length).toFixed(1))
-      : 0;
+    const pendientes = pedidosDelAlcance.filter((p) => p.estado === 'pendiente').length;
+    const preparando = pedidosDelAlcance.filter((p) => p.estado === 'preparando' || p.estado === 'en_preparacion').length;
+    const listos = pedidosDelAlcance.filter((p) => p.estado === 'listo').length;
+    const entregados = pedidosDelAlcance.filter((p) => p.estado === 'entregado').length;
+
+    const tiempos = pedidosDelAlcance
+      .filter((p) => p.tiempo_real_min && Number(p.tiempo_real_min) > 0)
+      .map((p) => Number(p.tiempo_real_min));
+    const tiempoPromedioMin =
+      tiempos.length > 0
+        ? Number((tiempos.reduce((a, b) => a + b, 0) / tiempos.length).toFixed(1))
+        : 0;
 
     return {
       totalVentas,
-      totalPedidos: pedidos.length,
+      totalPedidos: pedidosDelAlcance.length,
       pendientes,
       preparando,
       listos,
@@ -453,16 +567,13 @@ export const pedidosService = {
     };
   },
 
-  async getVentasPorHora() {
-    const list = await this.getAll();
-    const hoyStr = new Date().toDateString();
-    const pedidosHoy = list.filter((p) => {
-      const f = parsearFecha(p.creado_en);
-      return f && f.toDateString() === hoyStr;
-    });
+  async getVentasPorHora(pedidos = null) {
+    const lista = pedidos ?? (await this.getAll());
+    const pedidosDelDia = obtenerPedidosDelDia(lista);
 
-    // Si hay pedidos en la jornada de hoy usamos hoy; si no (ej. datos de prueba en otra fecha), usamos el total disponible
-    const pedidosParaGrafico = pedidosHoy.length > 0 ? pedidosHoy : list;
+    // SOLO usamos pedidos de hoy. Si no hay pedidos hoy, no devolvemos datos
+    // históricos: el gráfico debe mostrar ceros/cero ventas para hoy.
+    const pedidosParaGrafico = obtenerPedidosDeVentasDelDia(pedidosDelDia);
 
     const now = new Date();
     const currentHour = now.getHours();
@@ -488,9 +599,8 @@ export const pedidosService = {
       hourlyMap[hourStr] = { hora: hourStr, ventas: 0, pedidos: 0 };
     }
 
-    // Acumular ventas y cantidad de pedidos por tramo horario (excluyendo cancelados)
+    // Acumular ventas y cantidad de pedidos por tramo horario (criterio comun S2-T11)
     pedidosParaGrafico.forEach((p) => {
-      if (p.estado === 'cancelado') return;
       const hourStr = formatearHoraBucket(p.creado_en);
       if (hourStr && hourlyMap[hourStr]) {
         hourlyMap[hourStr].ventas += Number(p.total || 0);
@@ -501,11 +611,13 @@ export const pedidosService = {
     return Object.values(hourlyMap).sort((a, b) => a.hora.localeCompare(b.hora));
   },
 
-  async getTopProductos() {
-    const list = await this.getAll();
+  async getTopProductos(pedidos = null) {
+    const lista = pedidos ?? (await this.getAll());
     const productCountMap = {};
 
-    list.forEach((p) => {
+    const pedidosDeVentas = lista.filter(esPedidoDeVentas);
+
+    pedidosDeVentas.forEach((p) => {
       const items = p.productos || p.detalles_pedido || [];
       items.forEach((item) => {
         const name = item.nombre || item.productos?.nombre || 'Producto';

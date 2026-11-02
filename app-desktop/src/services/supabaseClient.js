@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from '../service/supabase.js';
+import { supabase, isSupabaseConfigured } from './supabase.js';
 
 export { supabase, isSupabaseConfigured };
 export default supabase;

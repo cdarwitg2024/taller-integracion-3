@@ -39,17 +39,22 @@ export const kdsRealtime = {
     onComanda,
     onActualizar,
     onEstadoCanal,
-  }) {
+    cafeteriaId,
+  } = {}) {
     if (!isSupabaseConfigured) {
       onEstadoCanal?.(ESTADO_INDISPONIBLE);
       return { cerrar() {} };
     }
 
-    const vistos = new Set();
-    const canal = supabase.channel('kds-pedidos');
+    const cid = cafeteriaId !== null && cafeteriaId !== undefined && cafeteriaId !== '' ? Number(cafeteriaId) : null;
+    if (!Number.isFinite(cid)) {
+      onEstadoCanal?.(ESTADO_INDISPONIBLE);
+      return { cerrar() {} };
+    }
 
-    // Sin filtro por cafeteria: hay un unico KDS y el estudiante puede pedir en
-    // cualquiera de ellas. Cada tarjeta muestra el nombre de la cafeteria para no confundirlos.
+    const vistos = new Set();
+    const canal = supabase.channel(`kds-pedidos-${cid}`);
+
     canal.on(
       'postgres_changes',
       {
@@ -60,6 +65,7 @@ export const kdsRealtime = {
       async (payload) => {
         const nuevo = payload?.new;
         if (!nuevo || nuevo.estado !== 'pendiente') return;
+        if (Number(nuevo.cafeteria_id) !== cid) return;
         if (vistos.has(String(nuevo.id))) return;
         vistos.add(String(nuevo.id));
 
@@ -84,6 +90,7 @@ export const kdsRealtime = {
       async (payload) => {
         const fila = payload?.new;
         if (!fila) return;
+        if (Number(fila.cafeteria_id) !== cid) return;
         const { data: cafe } = await supabase
           .from('cafeterias')
           .select('*')

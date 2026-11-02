@@ -1,171 +1,411 @@
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Divider,
-  Stack,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+// ─── Componente: Tarjeta de Pedido (KDS / Panel Dueño) ──────────────────────
+// Tarjeta de pedido normalizada para la cocina y panel administrativo.
+//
+// Muestra de un vistazo: código del pedido, estado, horario de retiro, productos
+// y la acción disponible para ese estado. El color del acento lateral, el chip de
+// estado y la cantidad de cada producto salen de BaseBadge/tokens, que es la
+// fuente única de verdad: así el KDS y el panel de dueño usan los mismos colores
+// para el mismo estado.
+//
+// IMPORTANTE (2 detalles de MUI v9 / sx):
+//  1. Los tokens SPACING vienen en px reales (12 = 12px), pero dentro de `sx` los
+//     números se multiplican por theme.spacing (×8). Por eso se pasan con `px()`
+//     como string: si no, `px: SPACING.md` se aplicaba como 96px y la tarjeta
+//     desbordaba.
+//  2. Los contenedores flex se declaran con `sx` (y no con los props `flexWrap` /
+//     `justifyContent` de Stack), que en esta versión se filtran al DOM sin
+//     aplicarse.
+//
+// Todos los bloques usan `minWidth: 0` + recorte de texto, para que la tarjeta
+// se adapte a columnas angostas (ventana chica, muchas columnas) en vez de
+// desbordar y quedar cortada.
 
+import { Box, Chip, Divider, Tooltip, Typography } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { useEffect, useState } from 'react';
 import TimeAgo from './TimeAgo';
-import { parsearFecha, formatearHora } from '../utils/dateUtils';
+import { minutosHastaRetiro, origenRetiroPedido } from '../utils/dateUtils';
 import impresionService from '../services/impresionService';
 
-const etiquetaPorEstado = {
-  pendiente: { fondo: '#F2ECE7', texto: '#4A3B32', label: 'PENDIENTE' },
-  preparando: { fondo: '#FFF3E0', texto: '#E65100', label: 'EN PREPARACIÓN' },
-  en_preparacion: { fondo: '#FFF3E0', texto: '#E65100', label: 'EN PREPARACIÓN' },
-  listo: { fondo: '#E8F5E9', texto: '#2E7D32', label: 'LISTO PARA RETIRO' },
+import BaseCard from './ui/BaseCard';
+import BaseButton from './ui/BaseButton';
+import BaseBadge, { getEstadoConfig } from './ui/BaseBadge';
+import { COLORS, SPACING, TYPOGRAPHY } from '../design/tokens';
+
+// Los tokens SPACING son px reales; en `sx` hay que declararlos como string.
+const px = (valor) => `${valor}px`;
+
+// Flujo de estados del pedido y la acción disponible en cada uno:
+// pendiente → en_preparacion → listo.
+const ACCION_POR_ESTADO = {
+  pendiente: {
+    label: 'COMENZAR PREPARACIÓN',
+    siguiente: 'en_preparacion',
+    variante: 'primary',
+    Icono: PlayArrowIcon,
+  },
+  preparando: {
+    label: 'MARCAR COMO LISTO',
+    siguiente: 'listo',
+    variante: 'success',
+    Icono: TaskAltIcon,
+  },
+  en_preparacion: {
+    label: 'MARCAR COMO LISTO',
+    siguiente: 'listo',
+    variante: 'success',
+    Icono: TaskAltIcon,
+  },
 };
 
-const botonPorEstado = {
-  pendiente: { label: 'COMENZAR PREPARACIÓN', background: '#4A3B32', siguiente: 'en_preparacion' },
-  preparando: { label: 'MARCAR COMO LISTO', background: '#E65100', siguiente: 'listo' },
-  en_preparacion: { label: 'MARCAR COMO LISTO', background: '#E65100', siguiente: 'listo' },
+// Contenedor flex declarado con sx: envuelve en pantallas angostas y respeta
+// los gaps, sin depender de props de Stack que esta versión de MUI no aplica.
+const filaFlex = {
+  display: 'flex',
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: px(SPACING.sm),
+  minWidth: 0,
 };
 
-function getHoraRetiro(pedido) {
-  if (pedido.hora_retiro) return formatearHora(pedido.hora_retiro);
-  if (pedido.creado_en) {
-    const fecha = parsearFecha(pedido.creado_en);
-    if (fecha) {
-      return formatearHora(new Date(fecha.getTime() + 15 * 60000));
-    }
-  }
-  return '—';
-}
-
-function PedidoCard({ pedido, onOpen, onChangeEstado }) {
-  const etiqueta = etiquetaPorEstado[pedido.estado];
-  const boton = botonPorEstado[pedido.estado];
-  const horaRetiro = getHoraRetiro(pedido);
+function PedidoCard({ pedido, onOpen, onChangeEstado, procesando = false }) {
+  const [ahora, setAhora] = useState(Date.now());
+  const configEstado = getEstadoConfig(pedido.estado);
+  const accion = ACCION_POR_ESTADO[pedido.estado];
   const estadoImpresion = impresionService.getEstadoImpresion(pedido.rawId ?? pedido.id);
+  const nombreCafeteria = pedido.cafeteria_nombre || pedido.ubicacion || '';
+
+  useEffect(() => {
+    if (pedido.estado !== 'listo') return;
+    const intervalId = setInterval(() => {
+      setAhora(Date.now());
+    }, 60000);
+    return () => clearInterval(intervalId);
+  }, [pedido.estado]);
+
+  // Origen del dato de retiro: la franja elegida por el estudiante (dato real
+  // del pedido) manda sobre la hora exacta, y ambas sobre el estimado. Así la
+  // tarjeta distingue una franja REAL de una hora inventada por nosotros.
+  const retiro = origenRetiroPedido(pedido);
+
+  // Texto del horario de retiro, con un rótulo que deja claro de dónde sale el
+  // dato y un fallback explícito cuando no hay información alguna.
+  const textoRetiro = (() => {
+    if (retiro.tipo === 'franja') return `Franja ${retiro.valor}`;
+    if (retiro.tipo === 'hora') return `Retiro ${retiro.valor}`;
+    if (retiro.tipo === 'estimado') return `Estimado ${retiro.valor}`;
+    return 'Sin franja de retiro';
+  })();
+
+  // El estimado usa un color más tenue: es un cálculo nuestro, no un dato del
+  // pedido, y conviene que no se confunda con la franja real.
+  const colorRetiro =
+    retiro.tipo === 'estimado'
+      ? COLORS.textSecondary
+      : retiro.tipo
+        ? configEstado.color
+        : COLORS.textSecondary;
+
+  // S2-T8: Indicador visual para pedidos LISTO cercanos a su horario de retiro
+  void ahora;
+  const minFaltan = minutosHastaRetiro(pedido);
+  const retiroProximo =
+    pedido.estado === 'listo' &&
+    minFaltan !== null &&
+    minFaltan <= 15 &&
+    minFaltan >= -10;
 
   return (
-    <Card
-      elevation={3}
+    <BaseCard
+      padding="none"
       sx={{
-        borderRadius: 3,
-        border: '1px solid #EFEAE6',
         cursor: 'pointer',
-        boxShadow: '0 8px 24px rgba(74, 59, 50, 0.14)',
+        mb: px(SPACING.md),
+        // `display: block` + `minWidth: 0`: la tarjeta y sus bloques se ajustan
+        // al ancho de la columna en vez de quedarse en su ancho natural.
+        display: 'block',
+        boxSizing: 'border-box',
+        maxWidth: '100%',
+        minWidth: 0,
+        // Acento de color: identifica el estado sin tener que leer el chip.
+        borderLeft: `6px solid ${configEstado.color}`,
+        '&:hover': { boxShadow: '0 6px 16px rgba(74, 55, 40, 0.08)' },
         '&:active': { transform: 'scale(0.99)' },
-        '&:hover': { boxShadow: '0 12px 28px rgba(74, 59, 50, 0.2)' },
-        mb: 2,
       }}
       onClick={() => onOpen(pedido)}
     >
-      <CardContent sx={{ p: 2.5 }}>
-        <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between', alignItems: 'center'}}>
-          <Box>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="h5" fontWeight={800} sx={{ fontSize: { xs: '1.6rem', md: '1.9rem' } }}>
-                {pedido.codigo_pedido || `#${pedido.rawId ?? pedido.id}`}
-              </Typography>
-              {estadoImpresion.veces > 0 && (
-                <Tooltip
-                  title={
-                    estadoImpresion.veces > 1
-                      ? `Comanda reimpresa (${estadoImpresion.veces} veces)`
-                      : 'Comanda impresa para cocina'
-                  }
-                >
-                  <Chip
-                    size="small"
-                    icon={<PrintIcon sx={{ fontSize: '13px !important' }} />}
-                    label={estadoImpresion.veces > 1 ? `×${estadoImpresion.veces}` : 'Impresa'}
-                    sx={{
-                      height: 22,
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      backgroundColor: estadoImpresion.veces > 1 ? '#FFF3E0' : '#EFEBE9',
-                      color: estadoImpresion.veces > 1 ? '#E65100' : '#5D4037',
-                    }}
-                  />
-                </Tooltip>
-              )}
-            </Stack>
-            {/* El KDS muestra todas las cafeterias, asi que la comanda lleva el
-                nombre de donde salio para no entregar un pedido en la otra. */}
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              {pedido.cafeteria_nombre || pedido.ubicacion || ''}
-              {pedido.franja_retiro ? ` · Retiro ${pedido.franja_retiro}` : ''}
-            </Typography>
-          </Box>
-            <TimeAgo pedido={pedido} sx={{ fontSize: '1.15rem', fontWeight: 800 }} />
-        </Stack>
-
-        <Stack direction="row" sx={{ mt: 1.5, justifyContent: 'space-between', alignItems: 'center'}}>
-          {etiqueta && (
-            <Box
+      {/* Cabecera: código + estado + tiempo transcurrido */}
+      <Box
+        sx={{
+          boxSizing: 'border-box',
+          maxWidth: '100%',
+          px: px(SPACING.lg),
+          pt: px(SPACING.md),
+          pb: px(SPACING.sm),
+          // S2-T8: Resaltar visualmente los pedidos LISTO próximos a retirar
+          ...(retiroProximo && {
+            background: `linear-gradient(90deg, ${COLORS.warningBg} 0%, transparent 70%)`,
+            borderTopLeftRadius: 12,
+            borderTopRightRadius: 12,
+          }),
+        }}
+      >
+        <Box sx={{ ...filaFlex, justifyContent: 'space-between' }}>
+          <Box sx={{ ...filaFlex, minWidth: 0, gap: px(SPACING.xs) }}>
+            <Typography
+              variant="h5"
               sx={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                minHeight: 44,
-                px: 2.5,
-                borderRadius: 2,
-                backgroundColor: etiqueta.fondo,
-                color: etiqueta.texto,
-                fontWeight: 900,
-                letterSpacing: 0.5,
-                fontSize: '1.05rem',
+                minWidth: 0,
+                fontSize: { xs: '1.2rem', md: '1.55rem' },
+                fontWeight: TYPOGRAPHY.fontWeightExtraBold,
+                color: COLORS.textPrimary,
+                lineHeight: 1.15,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
-              {etiqueta.label}
-            </Box>
-          )}
-
-          <Typography
-            fontWeight={900}
-            sx={{ color: '#4A3B32', whiteSpace: 'nowrap', fontSize: '1.15rem' }}
-          >
-            🕐 {horaRetiro}
-          </Typography>
-        </Stack>
-
-        <Divider sx={{ my: 1.5 }} />
-
-        <Box sx={{ maxHeight: 170, overflowY: 'auto' }}>
-          {pedido.productos?.map((item, idx) => (
-            <Typography
-              key={idx}
-              fontWeight={800}
-              sx={{ fontSize: '1.2rem', color: '#4A3B32', lineHeight: 1.6 }}
-            >
-              {item.nombre} × {item.cantidad}
+              {pedido.codigo_pedido || `#${pedido.rawId ?? pedido.id}`}
             </Typography>
-          )) || <Typography sx={{ color: 'text.secondary' }}>Sin productos</Typography>}
-        </Box>
-      </CardContent>
+            {retiroProximo && (
+              <Tooltip title={minFaltan <= 0 ? 'Horario de retiro alcanzado o pasado' : `Faltan ${minFaltan} min para retirar`}>
+                <Chip
+                  size="small"
+                  icon={<WarningAmberIcon sx={{ fontSize: '14px !important' }} />}
+                  label={minFaltan <= 0 ? 'RETIRAR YA' : `RETIRAR EN ${minFaltan} MIN`}
+                  sx={{
+                    height: 22,
+                    fontSize: '0.7rem',
+                    fontWeight: TYPOGRAPHY.fontWeightExtraBold,
+                    backgroundColor: COLORS.warning,
+                    color: '#fff',
+                    '& .MuiChip-icon': { color: '#fff' },
+                  }}
+                />
+              </Tooltip>
+            )}
+          </Box>
 
-      {boton && (
-        <Box sx={{ px: 2.5, pb: 2.5, pt: 0 }}>
-          <Button
-            fullWidth
-            variant="contained"
-            onClick={(e) => onChangeEstado(pedido.rawId ?? pedido.id, boton.siguiente, e)}
+          <Box
             sx={{
-              minHeight: 56,
-              minWidth: 56,
-              backgroundColor: boton.background,
-              fontSize: '1.05rem',
-              fontWeight: 800,
-              letterSpacing: 0.5,
-              '&:hover': {
-                backgroundColor: boton.background,
-                filter: 'brightness(0.92)',
-              },
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: px(SPACING.xs),
+              minWidth: 0,
             }}
           >
-            {boton.label}
-          </Button>
+            <BaseBadge
+              estado={pedido.estado}
+              sx={{
+                maxWidth: '100%',
+                // En tarjetas angostas el rótulo se recorta en vez de desbordar.
+                '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
+              }}
+            />
+
+            {estadoImpresion.veces > 0 && (
+              <Tooltip
+                title={
+                  estadoImpresion.veces > 1
+                    ? `Comanda reimpresa (${estadoImpresion.veces} veces)`
+                    : 'Comanda impresa para cocina'
+                }
+              >
+                <Chip
+                  size="small"
+                  icon={<PrintIcon sx={{ fontSize: '13px !important' }} />}
+                  label={estadoImpresion.veces > 1 ? `×${estadoImpresion.veces}` : 'Impresa'}
+                  sx={{
+                    height: 24,
+                    fontSize: '0.75rem',
+                    fontWeight: TYPOGRAPHY.fontWeightBold,
+                    backgroundColor: estadoImpresion.veces > 1 ? COLORS.warningBg : COLORS.surfaceAlt,
+                    color: estadoImpresion.veces > 1 ? COLORS.warning : COLORS.textSecondary,
+                  }}
+                />
+              </Tooltip>
+            )}
+          </Box>
+
+          <TimeAgo
+            pedido={pedido}
+            sx={{
+              flexShrink: 0,
+              ml: 'auto',
+              fontSize: { xs: '0.95rem', md: '1.15rem' },
+              fontWeight: TYPOGRAPHY.fontWeightExtraBold,
+              color: COLORS.textPrimary,
+            }}
+          />
+        </Box>
+
+        {/* Cafetería · horario de retiro (una sola línea, se recorta si no cabe) */}
+        <Box sx={{ ...filaFlex, gap: px(SPACING.xs), mt: px(SPACING.xs) }}>
+          <AccessTimeIcon
+            sx={{
+              flexShrink: 0,
+              fontSize: { xs: 16, md: 18 },
+              color: retiroProximo ? COLORS.warning : colorRetiro,
+            }}
+          />
+          <Typography
+            variant="caption"
+            title={`${nombreCafeteria} · ${textoRetiro}`}
+            sx={{
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              color: retiroProximo ? COLORS.warning : COLORS.textSecondary,
+              fontWeight: retiroProximo ? TYPOGRAPHY.fontWeightBold : TYPOGRAPHY.fontWeightMedium,
+            }}
+          >
+            {nombreCafeteria ? `${nombreCafeteria} · ${textoRetiro}` : textoRetiro}
+          </Typography>
+        </Box>
+      </Box>
+
+      <Divider sx={{ borderColor: COLORS.border }} />
+      {retiroProximo && (
+        <Box
+          sx={{
+            px: px(SPACING.lg),
+            py: px(SPACING.xs),
+            backgroundColor: COLORS.warningBg,
+            display: 'flex',
+            alignItems: 'center',
+            gap: px(SPACING.xs),
+          }}
+        >
+          <WarningAmberIcon sx={{ fontSize: 16, color: COLORS.warning }} />
+          <Typography sx={{ fontSize: '0.75rem', fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.warning }}>
+            {minFaltan <= 0 ? 'Listo para retirar - Retiro ya' : `Retiro próximo - Faltan ${minFaltan} min`}
+          </Typography>
         </Box>
       )}
-    </Card>
+
+      {/* Productos: cantidad destacada + nombre (máximo 2 líneas) */}
+      <Box
+        sx={{
+          boxSizing: 'border-box',
+          maxWidth: '100%',
+          px: px(SPACING.lg),
+          py: px(SPACING.sm),
+          maxHeight: { xs: 110, md: 170 },
+          overflowY: 'auto',
+          minWidth: 0,
+        }}
+      >
+        {pedido.productos?.length ? (
+          pedido.productos.map((item, idx) => (
+            <Box key={idx} sx={{ ...filaFlex, alignItems: 'flex-start', py: '2px' }}>
+              <Chip
+                label={`×${item.cantidad}`}
+                size="small"
+                sx={{
+                  flexShrink: 0,
+                  minWidth: 38,
+                  height: 24,
+                  backgroundColor: configEstado.bg,
+                  color: configEstado.color,
+                  fontWeight: TYPOGRAPHY.fontWeightExtraBold,
+                  fontSize: '0.8rem',
+                }}
+              />
+              <Typography
+                sx={{
+                  minWidth: 0,
+                  fontSize: { xs: '0.95rem', md: '1.1rem' },
+                  fontWeight: TYPOGRAPHY.fontWeightBold,
+                  color: COLORS.textPrimary,
+                  lineHeight: 1.25,
+                  overflow: 'hidden',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                }}
+              >
+                {item.nombre}
+              </Typography>
+            </Box>
+          ))
+        ) : (
+          <Typography variant="caption" sx={{ color: COLORS.textSecondary }}>
+            Sin productos
+          </Typography>
+        )}
+      </Box>
+
+      {/* Acción disponible para el estado actual */}
+      <Box
+        sx={{
+          boxSizing: 'border-box',
+          maxWidth: '100%',
+          px: px(SPACING.lg),
+          pb: px(SPACING.md),
+        }}
+      >
+        {accion ? (
+          <BaseButton
+            className={`variant-${accion.variante}`}
+            endIcon={procesando ? null : <accion.Icono sx={{ flexShrink: 0 }} />}
+            disabled={procesando}
+            onClick={(e) => {
+              if (procesando) { e.stopPropagation(); return; }
+              onChangeEstado(pedido.rawId ?? pedido.id, accion.siguiente, e);
+            }}
+            sx={{
+              width: '100%',
+              minHeight: { xs: 46, md: 56 },
+              px: px(SPACING.sm),
+              fontSize: { xs: '0.8rem', md: '1rem' },
+              fontWeight: TYPOGRAPHY.fontWeightExtraBold,
+              letterSpacing: { xs: 0, md: 0.4 },
+              lineHeight: 1.15,
+              textAlign: 'center',
+              // En columnas angostas el rótulo se parte en 2 líneas limpias
+              // (MUI corta el texto por defecto con white-space: nowrap).
+              whiteSpace: 'normal',
+              // El ícono se oculta en pantallas angostas: si no, el rótulo
+              // "PREPARACIÓN" no cabe y se cortaba.
+              '& .MuiButton-endIcon': { display: { xs: 'none', md: 'flex' } },
+              opacity: procesando ? 0.7 : 1,
+            }}
+          >
+            {procesando ? 'PROCESANDO...' : accion.label}
+          </BaseButton>
+        ) : (
+          <BaseButton
+            className="variant-outlined"
+            startIcon={<VisibilityOutlinedIcon sx={{ flexShrink: 0 }} />}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(pedido);
+            }}
+            sx={{
+              width: '100%',
+              minHeight: 44,
+              px: px(SPACING.sm),
+              fontSize: { xs: '0.82rem', md: '0.95rem' },
+              fontWeight: TYPOGRAPHY.fontWeightBold,
+              lineHeight: 1.15,
+              textAlign: 'center',
+              whiteSpace: 'normal',
+              '& .MuiButton-startIcon': { display: { xs: 'none', md: 'flex' } },
+            }}
+          >
+            VER DETALLE
+          </BaseButton>
+        )}
+      </Box>
+    </BaseCard>
   );
 }
 

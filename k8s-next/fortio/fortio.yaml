@@ -1,0 +1,22 @@
+# Pod de herramientas para carga HTTP; no es un microservicio de negocio.
+# Ejecutar cargas contra el Pod existente con comandos-fortio.ps1.
+# No aplicar/recrear este Pod durante una medición. restartPolicy Never
+# evita reiniciarlo automáticamente si termina; no ejecuta ninguna carga por sí solo.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fortio
+  namespace: student-cdarwitg
+spec:
+  restartPolicy: Never
+  containers:
+    - name: fortio
+      image: fortio/fortio
+      args: ["server"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

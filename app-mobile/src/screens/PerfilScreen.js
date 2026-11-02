@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -21,6 +22,7 @@ import Button from '../components/Button';
 import Card from '../components/Card';
 import Header from '../components/Header';
 import Input from '../components/Input';
+import PoliticasAyudaScreen from './PoliticasAyudaScreen';
 
 /**
  * Formatea un rol interno a un nombre legible en la interfaz
@@ -29,14 +31,22 @@ const formatearRol = (rolRaw) => {
   if (!rolRaw) return 'Estudiante';
   const normalizado = String(rolRaw).trim().toLowerCase();
   if (normalizado === 'dueno' || normalizado === 'dueño') return 'Dueño';
-  if (normalizado === 'empleado') return 'Empleado';
+  if (normalizado === 'empleado') return 'Personal Cafetería';
   if (normalizado === 'estudiante' || normalizado === 'cliente') return 'Estudiante';
   if (normalizado === 'admin' || normalizado === 'administrador') return 'Administrador';
   return normalizado.charAt(0).toUpperCase() + normalizado.slice(1);
 };
 
 /**
- * Formatea fecha ISO a formato local legible
+ * Formatea valores numéricos a pesos chilenos (CLP)
+ */
+const formatCLP = (monto) => {
+  const num = Math.round(Number(monto) || 0);
+  return `$${num.toLocaleString('es-CL')}`;
+};
+
+/**
+ * Formatea fecha ISO a formato relativo o local amigable
  */
 const formatFecha = (iso) => {
   if (!iso) return '—';
@@ -53,7 +63,6 @@ const formatFecha = (iso) => {
     return fecha.toLocaleDateString('es-CL', {
       day: '2-digit',
       month: 'short',
-      year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -63,50 +72,21 @@ const formatFecha = (iso) => {
 };
 
 /**
- * Retorna un ícono adecuado según el tipo de acción de auditoría
+ * Ícono temático según el tipo de acción
  */
-const getIconoMovimiento = (accion, tabla, tipoEvento) => {
-  const txt = `${accion || ''} ${tabla || ''} ${tipoEvento || ''}`.toLowerCase();
-  if (txt.includes('login') || txt.includes('auth') || txt.includes('sesion')) return '🔑';
-  if (txt.includes('pedido') || txt.includes('orden')) return '☕';
-  if (txt.includes('pago') || txt.includes('wallet') || txt.includes('saldo') || txt.includes('recarga')) return '💳';
-  if (txt.includes('qr') || txt.includes('entrega') || txt.includes('retiro')) return '📦';
-  if (txt.includes('update') || txt.includes('usuario') || txt.includes('perfil')) return '👤';
-  if (txt.includes('delete') || txt.includes('cancel')) return '⚠️';
-  return '📝';
+const getIconoActividad = (tipo, descripcion = '') => {
+  const txt = `${tipo || ''} ${descripcion || ''}`.toLowerCase();
+  if (txt.includes('recarga') || txt.includes('saldo') || txt.includes('abono')) return 'card';
+  if (txt.includes('reembolso') || txt.includes('devolucion') || txt.includes('cancel')) return 'refund';
+  if (txt.includes('pedido') || txt.includes('compra') || txt.includes('orden') || txt.includes('cafe')) return 'mug';
+  if (txt.includes('qr') || txt.includes('retiro') || txt.includes('entrega')) return 'box';
+  if (txt.includes('perfil') || txt.includes('usuario')) return 'user';
+  return 'receipt';
 };
 
-/**
- * Genera una descripción amigable a partir del registro de auditoría
- */
-const formatearDescripcionMovimiento = (item) => {
-  if (item.metadata?.descripcion) return item.metadata.descripcion;
-  if (item.metadata?.mensaje) return item.metadata.mensaje;
-  if (item.descripcion) return item.descripcion;
-  if (item.detalle) return typeof item.detalle === 'string' ? item.detalle : JSON.stringify(item.detalle);
-
-  const tipo = (item.tipo_evento || '').toLowerCase();
-  const tabla = (item.tabla_afectada || item.tabla || '').toLowerCase();
-  const accion = (item.accion || item.action || '').toUpperCase();
-
-  if (tipo === 'validacion_qr') return 'Validación de retiro por QR';
-  if (tipo === 'cambio_estado_pedido') return 'Actualización de estado de pedido';
-  if (tabla.includes('pedidos') && accion.includes('INSERT')) return 'Creación de nuevo pedido';
-  if (tabla.includes('usuarios') && accion.includes('UPDATE')) return 'Actualización de datos de perfil';
-  if (tabla.includes('wallet')) return 'Movimiento en billetera virtual';
-  if (accion.includes('LOGIN') || tipo.includes('login')) return 'Inicio de sesión';
-
-  if (item.tipo_evento) {
-    return item.tipo_evento.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-  }
-
-  return `${accion} ${tabla ? `en ${tabla}` : ''}`.trim() || 'Actividad en cuenta';
-};
-
-const PerfilScreen = ({ session, isGuest, onLogout }) => {
+const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
   const user = session?.user;
   const authUserId = user?.id;
-
 
   // Estados de datos del usuario
   const [usuarioData, setUsuarioData] = useState(null);
@@ -115,20 +95,185 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
   const [errorCarga, setErrorCarga] = useState(null);
   const [imgError, setImgError] = useState(false);
 
-  // Estados de movimientos / logs de auditoría
-  const [movimientos, setMovimientos] = useState([]);
-  const [movimientosLoading, setMovimientosLoading] = useState(false);
-  const [movimientosError, setMovimientosError] = useState(null);
+  // Estados de Wallet
+  const [wallet, setWallet] = useState(null);
+  const [walletLoading, setWalletLoading] = useState(false);
 
-  // Estados del modal de edición
-  const [modalVisible, setModalVisible] = useState(false);
+  // Estados de actividad reciente
+  const [actividades, setActividades] = useState([]);
+  const [actividadesLoading, setActividadesLoading] = useState(false);
+
+  // Modal de edición de datos
+  const [modalEdicionVisible, setModalEdicionVisible] = useState(false);
   const [nombreEdit, setNombreEdit] = useState('');
   const [apellidoEdit, setApellidoEdit] = useState('');
   const [telefonoEdit, setTelefonoEdit] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [errorEdit, setErrorEdit] = useState('');
+  const [erroresCampos, setErroresCampos] = useState({
+    nombre: '',
+    apellido: '',
+    telefono: '',
+  });
 
-  // ─── Carga de datos de public.usuarios ──────────────────────────────
+  // Pantalla y Modales de Políticas y Ayuda (S2-T16)
+  const [pantallaPoliticasVisible, setPantallaPoliticasVisible] = useState(false);
+  const [seccionPoliticasInicial, setSeccionPoliticasInicial] = useState('todas');
+  const [modalPoliticaVisible, setModalPoliticaVisible] = useState(false);
+  const [politicaActiva, setPoliticaActiva] = useState(null);
+
+  const [modalAyudaVisible, setModalAyudaVisible] = useState(false);
+  const [ayudaActiva, setAyudaActiva] = useState(null);
+
+  // ─── Carga de datos de la Wallet ──────────────────────────────────
+  const cargarWallet = useCallback(async (usuarioIdInterno) => {
+    if (isGuest || (!usuarioIdInterno && !authUserId)) {
+      setWallet(null);
+      return null;
+    }
+
+    setWalletLoading(true);
+    try {
+      let idInterno = usuarioIdInterno;
+      if (!idInterno && authUserId) {
+        const { data: uData } = await supabase
+          .from('usuarios')
+          .select('id')
+          .eq('auth_user_id', authUserId)
+          .maybeSingle();
+        idInterno = uData?.id;
+      }
+
+      if (!idInterno) {
+        setWallet({ saldo_actual: 0 });
+        return { saldo_actual: 0 };
+      }
+
+      const { data, error } = await supabase
+        .from('wallets')
+        .select('*')
+        .eq('usuario_id', idInterno)
+        .maybeSingle();
+
+      if (!error && data) {
+        setWallet(data);
+        return data;
+      } else {
+        setWallet({ saldo_actual: 0 });
+        return { saldo_actual: 0 };
+      }
+    } catch (err) {
+      console.warn('[PerfilScreen] Aviso al cargar wallet:', err?.message);
+      setWallet({ saldo_actual: 0 });
+      return null;
+    } finally {
+      setWalletLoading(false);
+    }
+  }, [authUserId, isGuest]);
+
+  // ─── Carga de Actividad Reciente ──────────────────────────────────
+  const cargarActividad = useCallback(async (usuarioIdInterno, walletId) => {
+    if (isGuest) {
+      setActividades([]);
+      return;
+    }
+
+    setActividadesLoading(true);
+    try {
+      const items = [];
+
+      // 1. Intentar cargar últimos movimientos de wallet
+      if (walletId) {
+        const { data: movsWallet } = await supabase
+          .from('movimientos_wallet')
+          .select('*')
+          .eq('wallet_id', walletId)
+          .order('creado_en', { ascending: false })
+          .limit(4);
+
+        if (movsWallet && movsWallet.length > 0) {
+          movsWallet.forEach((m) => {
+            items.push({
+              id: `wallet-${m.id}`,
+              tipo: m.tipo || 'movimiento',
+              titulo: m.tipo === 'recarga' ? 'Recarga de Saldo' : m.tipo === 'reembolso' ? 'Reembolso a Wallet' : 'Pago de Pedido',
+              descripcion: m.descripcion || (m.tipo === 'recarga' ? 'Abono en cuenta' : 'Consumo en cafetería'),
+              monto: m.monto,
+              esIngreso: m.tipo === 'recarga' || m.tipo === 'reembolso',
+              fecha: m.creado_en,
+              pedido_id: m.pedido_id || null,
+            });
+          });
+        }
+      }
+
+      // 2. Si no hay suficientes movimientos, consultar últimos pedidos
+      if (items.length < 4 && usuarioIdInterno) {
+        const { data: ultimosPedidos } = await supabase
+          .from('pedidos')
+          .select('id, total, estado, creado_en, cafeterias(nombre)')
+          .eq('usuario_id', usuarioIdInterno)
+          .order('creado_en', { ascending: false })
+          .limit(4);
+
+        if (ultimosPedidos && ultimosPedidos.length > 0) {
+          ultimosPedidos.forEach((p) => {
+            // Evitar duplicar si ya vino de movimientos
+            if (!items.some((i) => i.descripcion?.includes(`#${p.id}`))) {
+              items.push({
+                id: `pedido-${p.id}`,
+                tipo: 'pedido',
+                titulo: `Pedido en ${p.cafeterias?.nombre || 'Cafetería'}`,
+                descripcion: `Estado: ${p.estado || 'Confirmado'} (#${p.id})`,
+                monto: p.total,
+                esIngreso: false,
+                fecha: p.creado_en,
+              });
+            }
+          });
+        }
+      }
+
+      // 3. Fallback adicional a logs_auditoria si la lista sigue vacía
+      if (items.length === 0) {
+        try {
+          let logQuery = supabase.from('logs_auditoria').select('*');
+          if (usuarioIdInterno) {
+            logQuery = logQuery.eq('usuario_id', usuarioIdInterno);
+          } else if (authUserId) {
+            logQuery = logQuery.eq('auth_user_id', authUserId);
+          }
+          const { data: logs } = await logQuery.order('creado_en', { ascending: false }).limit(3);
+          if (logs && logs.length > 0) {
+            logs.forEach((l) => {
+              items.push({
+                id: `log-${l.id}`,
+                tipo: 'auditoria',
+                titulo: l.tipo_evento?.replace(/_/g, ' ') || 'Actividad en cuenta',
+                descripcion: l.metadata?.descripcion || 'Registro de sistema',
+                monto: null,
+                esIngreso: false,
+                fecha: l.creado_en || l.created_at,
+              });
+            });
+          }
+        } catch {
+          // No bloqueante
+        }
+      }
+
+      // Ordenar por fecha descendente y limitar a 4
+      items.sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime());
+      setActividades(items.slice(0, 4));
+    } catch (err) {
+      console.warn('[PerfilScreen] Aviso al cargar actividad reciente:', err?.message);
+      setActividades([]);
+    } finally {
+      setActividadesLoading(false);
+    }
+  }, [authUserId, isGuest]);
+
+  // ─── Carga Integral del Perfil ────────────────────────────────────
   const cargarPerfil = useCallback(async () => {
     if (isGuest || !authUserId) {
       setLoading(false);
@@ -139,7 +284,6 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
     setErrorCarga(null);
 
     try {
-      // 1. Consultar public.usuarios vinculando por auth_user_id o email
       let query = supabase
         .from('usuarios')
         .select('*, roles(nombre)');
@@ -156,10 +300,10 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
         throw error;
       }
 
-      // Si existe registro en BD, mapeamos con prioridad BD > Auth metadata
+      let usuarioFinal = null;
       if (data) {
         const rolExtraido = data.roles?.nombre || data.rol || user?.user_metadata?.rol || 'estudiante';
-        const info = {
+        usuarioFinal = {
           id: data.id,
           auth_user_id: data.auth_user_id || authUserId,
           nombre: data.nombre || user?.user_metadata?.first_name || '',
@@ -170,12 +314,9 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
           creado_en: data.creado_en || data.created_at || user?.created_at,
           rol: rolExtraido,
         };
-        setUsuarioData(info);
-        cargarMovimientos(data.id, authUserId);
       } else {
-        // Fallback a metadata de Supabase Auth si aún no existe en public.usuarios
         const parts = (user?.user_metadata?.full_name || '').trim().split(' ');
-        const fallbackInfo = {
+        usuarioFinal = {
           id: null,
           auth_user_id: authUserId,
           nombre: user?.user_metadata?.first_name || parts[0] || '',
@@ -186,217 +327,410 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
           creado_en: user?.created_at,
           rol: user?.user_metadata?.rol || 'estudiante',
         };
-        setUsuarioData(fallbackInfo);
-        cargarMovimientos(null, authUserId);
       }
+
+      setUsuarioData(usuarioFinal);
+
+      // Cargar en paralelo Wallet y Actividad
+      const wData = await cargarWallet(usuarioFinal?.id);
+      await cargarActividad(usuarioFinal?.id, wData?.id);
     } catch (err) {
-      console.warn('Error al cargar datos de public.usuarios:', err.message);
+      console.warn('Error al cargar datos del perfil:', err.message);
       setErrorCarga(err.message || 'No se pudo cargar la información de tu perfil');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [authUserId, isGuest, user]);
-
-  // ─── Carga de movimientos desde logs_auditoria ───────────────────────
-  const cargarMovimientos = async (usuarioIdInterno, authId) => {
-    setMovimientosLoading(true);
-    setMovimientosError(null);
-
-    try {
-      // Consultar logs_auditoria filtrando por el usuario
-      let query = supabase.from('logs_auditoria').select('*');
-
-      if (usuarioIdInterno && authId) {
-        query = query.or(`usuario_id.eq.${usuarioIdInterno},auth_user_id.eq.${authId}`);
-      } else if (usuarioIdInterno) {
-        query = query.eq('usuario_id', usuarioIdInterno);
-      } else if (authId) {
-        query = query.eq('auth_user_id', authId);
-      }
-
-      // Ordenar por fecha descendente
-      const { data, error } = await query
-        .order('creado_en', { ascending: false })
-        .limit(20);
-
-      if (error) {
-        // Puede ocurrir que la columna sea created_at
-        if (error.code === '42703' && error.message?.includes('creado_en')) {
-          const { data: dataRetry, error: errorRetry } = await supabase
-            .from('logs_auditoria')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(20);
-
-          if (errorRetry) throw errorRetry;
-          setMovimientos(dataRetry || []);
-          return;
-        }
-        throw error;
-      }
-
-      setMovimientos(data || []);
-    } catch (err) {
-      console.warn('[PerfilScreen] Aviso al cargar logs_auditoria:', err.message);
-      // Si falla por política de seguridad RLS
-      if (err.code === '42501' || err.message?.includes('policy') || err.message?.includes('permission')) {
-        setMovimientosError(
-          'El registro de auditoría tiene acceso restringido actualmente por política de seguridad (logs_auditoria_select_dueno).'
-        );
-      } else {
-        setMovimientosError('No se pudo sincronizar el historial de movimientos.');
-      }
-      setMovimientos([]);
-    } finally {
-      setMovimientosLoading(false);
-    }
-  };
+  }, [authUserId, isGuest, user, cargarWallet, cargarActividad]);
 
   useEffect(() => {
     cargarPerfil();
   }, [cargarPerfil]);
+
+  // S2-T18: Sincronización en tiempo real de Wallet y Actividad en Perfil
+  useEffect(() => {
+    if (!usuarioData?.id) return undefined;
+
+    const canal = supabase
+      .channel(`perfil-realtime-${usuarioData.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'wallets',
+          filter: `usuario_id=eq.${usuarioData.id}`,
+        },
+        () => {
+          cargarWallet(usuarioData.id);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pedidos',
+          filter: `usuario_id=eq.${usuarioData.id}`,
+        },
+        () => {
+          cargarActividad(usuarioData.id, wallet?.id);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [usuarioData?.id, wallet?.id, cargarWallet, cargarActividad]);
 
   const onRefresh = () => {
     setRefreshing(true);
     cargarPerfil();
   };
 
-  // ─── Inicializar modal de edición ──────────────────────────────────
+  // ─── Validaciones de Edición de Perfil (S2-T8) ────────────────────
+  const validarNombre = (val) => {
+    const limpio = (val || '').trim();
+    if (!limpio) return 'El nombre es obligatorio.';
+    if (limpio.length < 2) return 'El nombre debe tener al menos 2 caracteres.';
+    if (limpio.length > 50) return 'El nombre no puede superar los 50 caracteres.';
+    if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/.test(limpio)) {
+      return 'El nombre solo debe contener letras.';
+    }
+    return '';
+  };
+
+  const validarApellido = (val) => {
+    const limpio = (val || '').trim();
+    if (!limpio) return 'El apellido es obligatorio.';
+    if (limpio.length < 2) return 'El apellido debe tener al menos 2 caracteres.';
+    if (limpio.length > 50) return 'El apellido no puede superar los 50 caracteres.';
+    if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/.test(limpio)) {
+      return 'El apellido solo debe contener letras.';
+    }
+    return '';
+  };
+
+  const validarTelefono = (val) => {
+    const limpio = (val || '').trim();
+    if (!limpio) return ''; // Campo opcional
+    if (limpio.length > 20) return 'El teléfono no puede superar los 20 caracteres.';
+    const digitos = limpio.replace(/[\s\-\(\)\+]/g, '');
+    if (!/^\+?[0-9\s\-()]{8,20}$/.test(limpio) || digitos.length < 8) {
+      return 'Formato inválido. Ej: +56 9 1234 5678 o 912345678';
+    }
+    return '';
+  };
+
+  const validarCamposEdicion = () => {
+    const errNombre = validarNombre(nombreEdit);
+    const errApellido = validarApellido(apellidoEdit);
+    const errTelefono = validarTelefono(telefonoEdit);
+
+    const errs = {
+      nombre: errNombre,
+      apellido: errApellido,
+      telefono: errTelefono,
+    };
+
+    setErroresCampos(errs);
+    return !errNombre && !errApellido && !errTelefono;
+  };
+
   const abrirModalEdicion = () => {
     setErrorEdit('');
+    setErroresCampos({ nombre: '', apellido: '', telefono: '' });
     setNombreEdit(usuarioData?.nombre || '');
     setApellidoEdit(usuarioData?.apellido || '');
     setTelefonoEdit(usuarioData?.telefono || '');
-    setModalVisible(true);
+    setModalEdicionVisible(true);
   };
 
-  // ─── Guardar cambios respetando política usuarios_update_own ────────
   const guardarEdicion = async () => {
-    if (!nombreEdit.trim()) {
-      setErrorEdit('El nombre no puede estar vacío.');
+    setErrorEdit('');
+
+    if (!validarCamposEdicion()) {
       return;
     }
 
+    const nombreLimpio = nombreEdit.trim();
+    const apellidoLimpio = apellidoEdit.trim();
+    const telLimpio = telefonoEdit.trim();
+
+    const actualNombre = (usuarioData?.nombre || '').trim();
+    const actualApellido = (usuarioData?.apellido || '').trim();
+    const actualTel = (usuarioData?.telefono || '').trim();
+
+    // Si no hubo cambios en ninguno de los campos autorizados, avisar y no hacer peticiones innecesarias
+    if (
+      nombreLimpio === actualNombre &&
+      apellidoLimpio === actualApellido &&
+      telLimpio === actualTel
+    ) {
+      Alert.alert('Sin cambios', 'No se realizaron modificaciones en tus datos.');
+      setModalEdicionVisible(false);
+      return;
+    }
+
+    // Whitelist estricta de atributos autorizados para modificación (previene mass-assignment)
+    const payloadAutorizado = {
+      nombre: nombreLimpio,
+      apellido: apellidoLimpio,
+      telefono: telLimpio || null,
+    };
+
+    // Bloqueo explícito contra manipulación de datos de autenticación o roles (S2-T8)
+    const camposSensibles = ['email', 'correo', 'rol', 'rol_id', 'password_hash', 'saldo', 'saldo_actual', 'activo'];
+    for (const campo of camposSensibles) {
+      if (campo in payloadAutorizado) {
+        throw new Error(`Modificación rechazada: el dato "${campo}" está protegido por el sistema.`);
+      }
+    }
+
     setGuardando(true);
-    setErrorEdit('');
 
     try {
-      const updates = {
-        nombre: nombreEdit.trim(),
-        apellido: apellidoEdit.trim(),
-        telefono: telefonoEdit.trim() || null,
-      };
+      let usuarioGuardadoId = usuarioData?.id;
 
-      // Si existe id interno actualizamos por id; si no, por auth_user_id
-      let updateQuery = supabase.from('usuarios').update(updates);
+      // 1. Persistir cambios en la tabla public.usuarios
+      if (usuarioGuardadoId) {
+        const payloadConAuth = {
+          ...payloadAutorizado,
+          ...(authUserId ? { auth_user_id: authUserId } : {}),
+        };
+        const { data: updateData, error: updateError } = await supabase
+          .from('usuarios')
+          .update(payloadConAuth)
+          .eq('id', usuarioGuardadoId)
+          .select('id');
 
-      if (usuarioData?.id) {
-        updateQuery = updateQuery.eq('id', usuarioData.id);
+        if (updateError) throw updateError;
+
+        // Criterio S2-T15: Una actualización de cero filas no se informa como éxito
+        if (!updateData || updateData.length === 0) {
+          throw new Error('No se actualizó ningún registro en la base de datos (0 filas afectadas).');
+        }
       } else if (authUserId) {
-        updateQuery = updateQuery.eq('auth_user_id', authUserId);
+        let updateQ = supabase
+          .from('usuarios')
+          .update({
+            ...payloadAutorizado,
+            auth_user_id: authUserId,
+          });
+
+        if (user?.email) {
+          updateQ = updateQ.or(`auth_user_id.eq.${authUserId},email.eq.${user.email}`);
+        } else {
+          updateQ = updateQ.eq('auth_user_id', authUserId);
+        }
+
+        const { data: updateData, error: updateError } = await updateQ.select('id');
+
+        if (updateError) throw updateError;
+
+        if (updateData && updateData.length > 0) {
+          usuarioGuardadoId = updateData[0].id;
+        } else {
+          // Si no existía registro previo en public.usuarios, crearlo con datos autorizados
+          const nuevoUsuario = {
+            ...payloadAutorizado,
+            auth_user_id: authUserId,
+            email: user?.email || '',
+            password_hash: 'supabase_auth_managed',
+            rol_id: 1, // Rol 'estudiante' por defecto
+            activo: true,
+          };
+          const { data: insertData, error: insertError } = await supabase
+            .from('usuarios')
+            .insert(nuevoUsuario)
+            .select('id');
+
+          if (insertError) throw insertError;
+          if (!insertData || insertData.length === 0) {
+            throw new Error('No se pudo crear el registro del usuario en la base de datos (0 filas insertadas).');
+          }
+          usuarioGuardadoId = insertData[0].id;
+        }
       } else {
-        throw new Error('No se identificó el ID de usuario para actualizar.');
+        throw new Error('No se identificó la sesión del usuario.');
       }
 
-      const { error } = await updateQuery;
-      if (error) throw error;
-
-      // Actualizar estado local inmediatamente
-      setUsuarioData((prev) => ({
-        ...prev,
-        nombre: nombreEdit.trim(),
-        apellido: apellidoEdit.trim(),
-        telefono: telefonoEdit.trim() || '',
-      }));
-
-      // También sincronizar opcionalmente en Supabase Auth metadata
+      // 2. Persistir sincronización en metadatos de Supabase Auth y comprobar errores (S2-T15)
+      let advertenciaAuth = null;
       try {
-        await supabase.auth.updateUser({
+        const { error: authError } = await supabase.auth.updateUser({
           data: {
-            first_name: nombreEdit.trim(),
-            last_name: apellidoEdit.trim(),
-            full_name: `${nombreEdit.trim()} ${apellidoEdit.trim()}`.trim(),
-            telefono: telefonoEdit.trim() || null,
+            first_name: nombreLimpio,
+            last_name: apellidoLimpio,
+            full_name: `${nombreLimpio} ${apellidoLimpio}`.trim(),
+            telefono: telLimpio || null,
           },
         });
-      } catch {
-        // no bloqueante
+
+        if (authError) {
+          console.warn('[PerfilScreen] Error retornado por auth.updateUser:', authError);
+          advertenciaAuth = authError.message || 'Error al sincronizar metadatos de sesión.';
+        }
+      } catch (authErr) {
+        console.warn('[PerfilScreen] Excepción al invocar auth.updateUser:', authErr);
+        advertenciaAuth = authErr?.message || 'Fallo de comunicación con el servicio de autenticación.';
       }
 
-      setModalVisible(false);
-      Alert.alert('¡Perfil actualizado!', 'Tus datos se guardaron exitosamente.');
+      // 3. Recargar Perfil directamente desde la base de datos para demostrar persistencia real (S2-T15)
+      await cargarPerfil();
+
+      setModalEdicionVisible(false);
+
+      // Criterio S2-T15: Un resultado parcial se comunica correctamente
+      if (advertenciaAuth) {
+        Alert.alert(
+          'Actualización parcial',
+          `Tus datos fueron guardados en la base de datos, pero hubo un problema al sincronizar la sesión: ${advertenciaAuth}`
+        );
+      } else {
+        Alert.alert(
+          '¡Perfil actualizado!',
+          'Tus datos personales fueron modificados y persistidos correctamente.'
+        );
+      }
     } catch (err) {
-      console.error('Error al actualizar perfil:', err);
+      console.error('Error al persistir cambios de perfil:', err);
       setErrorEdit(
         err.message?.includes('policy')
-          ? 'Error de permisos: la política usuarios_update_own no permitió la modificación.'
-          : err.message || 'No se pudieron guardar los cambios.'
+          ? 'Error de seguridad: la directiva del sistema no autorizó la operación.'
+          : err.message || 'No fue posible guardar los cambios. Inténtalo nuevamente.'
       );
     } finally {
       setGuardando(false);
     }
   };
 
-  // ─── Render: Caso Invitado ─────────────────────────────────────────
+  // ─── Confirmación de Cierre de Sesión ─────────────────────────────
+  const confirmarCierreSesion = () => {
+    Alert.alert(
+      'Cerrar sesión',
+      '¿Estás seguro que deseas salir de tu cuenta en CoffeeFast?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar sesión',
+          style: 'destructive',
+          onPress: onLogout,
+        },
+      ]
+    );
+  };
+
+  // ─── Apertura de Pantalla Políticas y Ayuda (S2-T16) ─────────────
+  const abrirPantallaPoliticas = (seccion = 'todas') => {
+    setSeccionPoliticasInicial(seccion);
+    setPantallaPoliticasVisible(true);
+  };
+
+  const abrirPolitica = (tipo) => {
+    setPoliticaActiva(tipo);
+    abrirPantallaPoliticas(tipo === 'retiro' ? 'cancelacion' : 'todas');
+  };
+
+  const abrirAyuda = (tipo) => {
+    setAyudaActiva(tipo);
+    abrirPantallaPoliticas(tipo === 'contacto' ? 'contacto' : 'faq');
+  };
+
+  // ─── Render: Pantalla Completa Políticas y Ayuda (S2-T16) ──────────
+  if (pantallaPoliticasVisible) {
+    return (
+      <PoliticasAyudaScreen
+        onBack={() => setPantallaPoliticasVisible(false)}
+        seccionInicial={seccionPoliticasInicial}
+      />
+    );
+  }
+
+  // ─── Render: Caso Modo Invitado ───────────────────────────────────
   if (isGuest) {
     return (
       <View style={styles.container}>
         <Header title="Mi Perfil" />
-        <ScrollView contentContainerStyle={styles.content}>
-          <Card variant="elevated" style={styles.profileCard}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>?</Text>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <Card variant="elevated" style={styles.guestHeroCard}>
+            <View style={styles.guestAvatar}>
+              <AppIcon name="student" style={styles.guestAvatarText} />
             </View>
-            <Text style={styles.name}>Modo Invitado</Text>
-            <Text style={styles.email}>Explorando CoffeeFaster</Text>
+            <Text style={styles.guestTitle}>Modo Invitado</Text>
+            <Text style={styles.guestSubtitle}>Explorando CoffeeFast UCT</Text>
             <View style={styles.roleBadge}>
-              <Text style={styles.roleBadgeText}>Invitado</Text>
+              <Text style={styles.roleBadgeText}>Acceso Temporal</Text>
             </View>
           </Card>
 
-          <Card variant="outlined" style={styles.section}>
-            <Text style={styles.sectionTitle}>Cuenta no registrada</Text>
-            <Text style={styles.emptyDescription}>
-              Inicia sesión con tu correo institucional (@alu.uct.cl) para ver tu información, editar tus datos personales y consultar tu historial de actividad.
+          <Card variant="outlined" style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Accede a todos los beneficios</Text>
+            <Text style={styles.sectionText}>
+              Inicia sesión con tu correo institucional (@alu.uct.cl) para activar tu Billetera Virtual, acumular saldo, consultar tu historial de pedidos y gestionar tu perfil de estudiante.
             </Text>
           </Card>
 
+          {/* Políticas en modo invitado (S2-T16) */}
+          <Card variant="outlined" style={styles.sectionCard}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Información y Políticas</Text>
+              <TouchableOpacity onPress={() => abrirPantallaPoliticas('todas')}>
+                <Text style={styles.sectionLink}>Ver todo ›</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('todas')}>
+              <AppIcon name="receipt" style={styles.menuRowIcon} />
+              <Text style={styles.menuRowText}>Políticas, Retiro QR y Reembolsos</Text>
+              <Text style={styles.menuRowChevron}>›</Text>
+            </TouchableOpacity>
+            <View style={styles.separator} />
+            <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('faq')}>
+              <AppIcon name="help" style={styles.menuRowIcon} />
+              <Text style={styles.menuRowText}>Centro de Ayuda y Preguntas (FAQ)</Text>
+              <Text style={styles.menuRowChevron}>›</Text>
+            </TouchableOpacity>
+          </Card>
+
           <Button
-            title="Finalizar modo invitado"
+            title="Iniciar sesión / Registrarme"
             onPress={onLogout}
             variant="primary"
             style={styles.actionButton}
           />
         </ScrollView>
+
+        {/* Modal de Políticas para Invitados */}
+        {renderModalPolitica()}
       </View>
     );
   }
 
-  // ─── Render: Caso Cargando ──────────────────────────────────────────
+  // ─── Render: Caso Cargando ────────────────────────────────────────
   if (loading) {
     return (
       <View style={styles.container}>
         <Header title="Mi Perfil" />
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={colors.cafeOscuro} />
-          <Text style={styles.loadingText}>Cargando perfil...</Text>
+          <Text style={styles.loadingText}>Cargando datos del estudiante...</Text>
         </View>
       </View>
     );
   }
 
-  // ─── Render: Caso Error Crítico ─────────────────────────────────────
+  // ─── Render: Caso Error Crítico ───────────────────────────────────
   if (errorCarga && !usuarioData) {
     return (
       <View style={styles.container}>
         <Header title="Mi Perfil" />
         <View style={styles.centerContainer}>
-          <Text style={styles.errorEmoji}>⚠️</Text>
+          <AppIcon name="warning" style={styles.errorIcon} />
           <Text style={styles.errorTitle}>Error al cargar perfil</Text>
           <Text style={styles.errorDescription}>{errorCarga}</Text>
           <Button
-            title="Reintentar"
+            title="Reintentar carga"
             onPress={cargarPerfil}
             variant="primary"
             style={{ marginTop: spacing.md, minWidth: 160 }}
@@ -406,27 +740,199 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
     );
   }
 
-  // ─── Cálculos de datos para la vista ───────────────────────────────
-  const nombreCompleto = `${usuarioData?.nombre || ''} ${usuarioData?.apellido || ''}`.trim() || 'Estudiante';
+  // ─── Datos formateados para la vista ──────────────────────────────
+  const nombreCompleto = `${usuarioData?.nombre || ''} ${usuarioData?.apellido || ''}`.trim() || 'Estudiante UCT';
   const inicial = (
     usuarioData?.nombre?.[0]
       ? `${usuarioData.nombre[0]}${usuarioData?.apellido?.[0] || ''}`
-      : usuarioData?.correo?.[0] || 'U'
+      : usuarioData?.correo?.[0] || 'E'
   ).toUpperCase();
 
   const fechaMiembro = formatFecha(usuarioData?.creado_en);
   const rolLegible = formatearRol(usuarioData?.rol);
+  const saldoActual = wallet?.saldo_actual ?? 0;
+
+  // ─── Modal Content: Políticas ─────────────────────────────────────
+  function renderModalPolitica() {
+    let titulo = 'Información';
+    let contenido = null;
+
+    if (politicaActiva === 'terminos') {
+      titulo = 'Términos del Servicio';
+      contenido = (
+        <ScrollView style={styles.modalScroll}>
+          <Text style={styles.modalBodyTitle}>1. Servicio de Cafetería Digital</Text>
+          <Text style={styles.modalBodyText}>
+            CoffeeFast es una plataforma institucional diseñada para agilizar la compra y retiro anticipado de productos en las cafeterías universitarias de la Universidad Católica de Temuco.
+          </Text>
+          <Text style={styles.modalBodyTitle}>2. Selección de Cafetería y Pedidos</Text>
+          <Text style={styles.modalBodyText}>
+            Cada pedido se genera hacia una cafetería específica para asegurar la frescura de las preparaciones. El estudiante debe confirmar los productos seleccionados y pagarlos mediante su Billetera Virtual (Wallet).
+          </Text>
+          <Text style={styles.modalBodyTitle}>3. Códigos Únicos de Retiro</Text>
+          <Text style={styles.modalBodyText}>
+            Al confirmarse el pago, la aplicación emite un Código QR encriptado y un código de retiro alfanumérico que debe ser presentado personalmente en el mesón de entrega.
+          </Text>
+        </ScrollView>
+      );
+    } else if (politicaActiva === 'privacidad') {
+      titulo = 'Privacidad y Seguridad de Datos';
+      contenido = (
+        <ScrollView style={styles.modalScroll}>
+          <Text style={styles.modalBodyTitle}>1. Protección de Datos Estudiantiles</Text>
+          <Text style={styles.modalBodyText}>
+            Tu información personal (nombre, correo institucional @alu.uct.cl y teléfono de contacto) es utilizada exclusivamente para la validación de órdenes y seguridad en el campus.
+          </Text>
+          <Text style={styles.modalBodyTitle}>2. Seguridad RLS (Row Level Security)</Text>
+          <Text style={styles.modalBodyText}>
+            Toda modificación y consulta de tu perfil está protegida a nivel de base de datos por la directiva de seguridad usuarios_update_own en Supabase. Nadie puede alterar tus datos personales sin tus credenciales.
+          </Text>
+          <Text style={styles.modalBodyTitle}>3. Seguridad de Pagos</Text>
+          <Text style={styles.modalBodyText}>
+            CoffeeFast no almacena números de tarjetas de crédito o débito; todas las operaciones financieras se liquidan a través de la Wallet institucional.
+          </Text>
+        </ScrollView>
+      );
+    } else if (politicaActiva === 'retiro') {
+      titulo = 'Políticas de Retiro y Franja Horaria';
+      contenido = (
+        <ScrollView style={styles.modalScroll}>
+          <Text style={styles.modalBodyTitle}>1. Franjas Horarias de Entrega</Text>
+          <Text style={styles.modalBodyText}>
+            Al realizar un pedido, se te asignará una franja horaria estimada (15 a 20 minutos). Te recomendamos acudir puntualmente para recibir tu bebida o alimento a temperatura óptima.
+          </Text>
+          <Text style={styles.modalBodyTitle}>2. Validación por QR o Código</Text>
+          <Text style={styles.modalBodyText}>
+            Para retirar, muestra el código QR desde la pestaña Pedidos al personal de cafetería. El sistema marcará automáticamente la orden como entregada.
+          </Text>
+          <Text style={styles.modalBodyTitle}>3. Cancelación y Reembolso</Text>
+          <Text style={styles.modalBodyText}>
+            Si una orden es cancelada por falta de stock o por el usuario antes del inicio de su preparación, el monto total se reembolsa al instante a tu saldo de Wallet.
+          </Text>
+        </ScrollView>
+      );
+    }
+
+    return (
+      <Modal
+        visible={modalPoliticaVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setModalPoliticaVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{titulo}</Text>
+              <TouchableOpacity
+                onPress={() => setModalPoliticaVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <AppIcon name="close" style={styles.modalCloseText} />
+              </TouchableOpacity>
+            </View>
+            {contenido}
+            <Button
+              title="Entendido"
+              variant="primary"
+              onPress={() => setModalPoliticaVisible(false)}
+              style={{ marginTop: spacing.md }}
+            />
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  // ─── Modal Content: Ayuda ─────────────────────────────────────────
+  function renderModalAyuda() {
+    let titulo = 'Centro de Ayuda';
+    let contenido = null;
+
+    if (ayudaActiva === 'faq') {
+      titulo = 'Preguntas Frecuentes (FAQ)';
+      contenido = (
+        <ScrollView style={styles.modalScroll}>
+          <Text style={styles.modalBodyTitle}>¿Cómo recargo mi Billetera Virtual?</Text>
+          <Text style={styles.modalBodyText}>
+            Dirígete a la pestaña "Wallet" desde la barra inferior o desde el botón de acceso rápido en este perfil. Selecciona un monto predefinido ($2.000, $5.000, etc.) y confirma la recarga.
+          </Text>
+          <Text style={styles.modalBodyTitle}>¿Cómo retiro mi pedido en la cafetería?</Text>
+          <Text style={styles.modalBodyText}>
+            En la pestaña "Pedidos", presiona tu orden activa para desplegar el Código QR de retiro. Preséntalo en el mesón de entrega en el campus.
+          </Text>
+          <Text style={styles.modalBodyTitle}>¿Qué pasa si mi pedido fue cancelado?</Text>
+          <Text style={styles.modalBodyText}>
+            El valor del pedido se reintegra de forma automática a tu saldo de Wallet. Puedes verificar el abono en tu sección de Actividad Reciente.
+          </Text>
+        </ScrollView>
+      );
+    } else if (ayudaActiva === 'contacto') {
+      titulo = 'Contacto y Soporte UCT';
+      contenido = (
+        <View style={styles.modalScroll}>
+          <Text style={styles.modalBodyText}>
+            ¿Tienes dudas con tu cuenta, problemas con un retiro o necesitas asistencia con tu saldo?
+          </Text>
+          <View style={styles.contactItemBox}>
+            <View style={styles.contactLabelRow}>
+              <AppIcon name="envelope" style={styles.contactLabelIcon} />
+              <Text style={styles.contactLabel}>Correo de soporte:</Text>
+            </View>
+            <Text style={styles.contactValue}>soporte.cafeteria@alu.uct.cl</Text>
+          </View>
+          <View style={styles.contactItemBox}>
+            <View style={styles.contactLabelRow}>
+              <AppIcon name="clock" style={styles.contactLabelIcon} />
+              <Text style={styles.contactLabel}>Horario de atención:</Text>
+            </View>
+            <Text style={styles.contactValue}>Lunes a Viernes: 08:30 - 18:30 hrs</Text>
+          </View>
+          <View style={styles.contactItemBox}>
+            <View style={styles.contactLabelRow}>
+              <AppIcon name="location" style={styles.contactLabelIcon} />
+              <Text style={styles.contactLabel}>Ubicaciones:</Text>
+            </View>
+            <Text style={styles.contactValue}>Campus San Juan Pablo II & Campus San Francisco</Text>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <Modal
+        visible={modalAyudaVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setModalAyudaVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{titulo}</Text>
+              <TouchableOpacity
+                onPress={() => setModalAyudaVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <AppIcon name="close" style={styles.modalCloseText} />
+              </TouchableOpacity>
+            </View>
+            {contenido}
+            <Button
+              title="Cerrar"
+              variant="primary"
+              onPress={() => setModalAyudaVisible(false)}
+              style={{ marginTop: spacing.md }}
+            />
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <Header
-        title="Mi Perfil"
-        rightElement={
-          <View style={styles.headerIcon}>
-            <Text style={styles.headerIconText}>▣</Text>
-          </View>
-        }
-      />
+      <Header title="Mi Perfil" />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -440,233 +946,389 @@ const PerfilScreen = ({ session, isGuest, onLogout }) => {
           />
         }
       >
-        {/* Tarjeta Superior de Perfil */}
-        <Card variant="elevated" style={styles.profileCard}>
-          {usuarioData?.foto && !imgError ? (
-            <Image
-              source={{ uri: usuarioData.foto }}
-              style={styles.avatarImage}
-              onError={() => setImgError(true)}
-            />
-          ) : (
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{inicial}</Text>
+        {/* ─── 1. TARJETA HERO: DATOS DEL ESTUDIANTE ─────────────────── */}
+        <Card variant="elevated" style={styles.studentHeroCard}>
+          <View style={styles.avatarWrapper}>
+            {usuarioData?.foto && !imgError ? (
+              <Image
+                source={{ uri: usuarioData.foto }}
+                style={styles.avatarImage}
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitialText}>{inicial}</Text>
+              </View>
+            )}
+            <View style={styles.onlineBadge} />
+          </View>
+
+          <Text style={styles.studentName}>{nombreCompleto}</Text>
+          <Text style={styles.studentEmail}>{usuarioData?.correo || 'Sin correo asignado'}</Text>
+
+          {/* Badges de Estado y Rol */}
+          <View style={styles.badgesRow}>
+            <View style={styles.roleChip}>
+              <AppIcon name="student" style={styles.roleChipIcon} />
+              <Text style={styles.roleChipText}>{rolLegible}</Text>
             </View>
-          )}
-
-          <Text style={styles.name}>{nombreCompleto}</Text>
-          <Text style={styles.email}>{usuarioData?.correo || 'Sin correo'}</Text>
-
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleBadgeText}>{rolLegible}</Text>
+            {Boolean(usuarioData?.telefono) && (
+              <View style={styles.phoneChip}>
+                <AppIcon name="phone" style={styles.phoneChipIcon} />
+                <Text style={styles.phoneChipText}>{usuarioData.telefono}</Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity
-            style={styles.editButtonBadge}
+            style={styles.editProfileBtn}
             onPress={abrirModalEdicion}
             activeOpacity={0.8}
           >
-            <Text style={styles.editButtonText}>✏️ Editar Datos</Text>
+            <View style={styles.editProfileBtnRow}>
+              <AppIcon name="edit" style={styles.editProfileBtnIcon} />
+              <Text style={styles.editProfileBtnText}>Modificar datos personales</Text>
+            </View>
           </TouchableOpacity>
         </Card>
 
-        {/* Sección de Datos Personales */}
-        <Card variant="outlined" style={styles.section}>
+        {/* ─── 2. SECCIÓN WALLET: SALDO Y ACCESO RÁPIDO ─────────────── */}
+        <Card variant="elevated" style={styles.walletCard}>
+          <View style={styles.walletTopRow}>
+            <View style={styles.walletLabelContainer}>
+              <AppIcon name="card" style={styles.walletHeaderIcon} />
+              <Text style={styles.walletHeaderTitle}>Billetera CoffeeFast</Text>
+            </View>
+          </View>
+
+          <Text style={styles.walletBalanceLabel}>Saldo disponible</Text>
+          {walletLoading ? (
+            <ActivityIndicator size="small" color={colors.blanco} style={{ marginVertical: 8, alignSelf: 'flex-start' }} />
+          ) : (
+            <Text style={styles.walletBalanceAmount}>{formatCLP(saldoActual)}</Text>
+          )}
+
+          <TouchableOpacity
+            style={styles.walletActionBtn}
+            activeOpacity={0.85}
+            onPress={() => onNavigateTab ? onNavigateTab('wallet') : Alert.alert('Wallet', 'Navega a la pestaña Wallet en la barra inferior.')}
+          >
+            <Text style={styles.walletActionBtnText}>Gestionar Wallet y Recargar</Text>
+            <Text style={styles.walletActionChevron}>→</Text>
+          </TouchableOpacity>
+        </Card>
+
+        {/* ─── 3. SECCIÓN: ACTIVIDAD RECIENTE ───────────────────────── */}
+        <Card variant="outlined" style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Información de la cuenta</Text>
-            <TouchableOpacity onPress={abrirModalEdicion}>
-              <Text style={styles.editLink}>Editar</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <AppIcon name="clock" style={styles.sectionHeaderIcon} />
+              <Text style={styles.sectionTitle}>Actividad Reciente</Text>
+            </View>
+            <TouchableOpacity onPress={onRefresh}>
+              <Text style={styles.refreshLink}>Actualizar</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Nombre</Text>
-            <Text style={styles.infoValue}>{usuarioData?.nombre || '—'}</Text>
-          </View>
-
-          <View style={styles.separator} />
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Apellido</Text>
-            <Text style={styles.infoValue}>{usuarioData?.apellido || '—'}</Text>
-          </View>
-
-          <View style={styles.separator} />
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Correo</Text>
-            <Text style={styles.infoValue}>{usuarioData?.correo || '—'}</Text>
-          </View>
-
-          <View style={styles.separator} />
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Teléfono</Text>
-            <Text style={styles.infoValue}>{usuarioData?.telefono || 'No registrado'}</Text>
-          </View>
-
-          <View style={styles.separator} />
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Rol</Text>
-            <Text style={styles.infoValue}>{rolLegible}</Text>
-          </View>
-
-          <View style={styles.separator} />
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Miembro desde</Text>
-            <Text style={styles.infoValue}>{fechaMiembro}</Text>
-          </View>
-        </Card>
-
-        {/* Sección: Mis Movimientos (Historial de Auditoría) */}
-        <Card variant="outlined" style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Mis Movimientos</Text>
-            <Text style={styles.subtitleBadge}>logs_auditoria</Text>
-          </View>
-
-          {movimientosLoading ? (
-            <View style={styles.miniLoader}>
+          {actividadesLoading ? (
+            <View style={styles.miniLoaderBox}>
               <ActivityIndicator size="small" color={colors.cafeOscuro} />
               <Text style={styles.miniLoaderText}>Cargando actividad...</Text>
             </View>
-          ) : movimientosError ? (
-            <View style={styles.auditWarningBox}>
-              <Text style={styles.auditWarningIcon}>ℹ️</Text>
-              <Text style={styles.auditWarningText}>{movimientosError}</Text>
-            </View>
-          ) : movimientos.length === 0 ? (
-            <View style={styles.emptyMovimientos}>
-              <Text style={styles.emptyIcon}>📋</Text>
-              <Text style={styles.emptyTitle}>Sin actividad registrada</Text>
-              <Text style={styles.emptyDescription}>
-                Tus acciones de pedidos, pagos y actualizaciones de cuenta se reflejarán aquí.
+          ) : actividades.length === 0 ? (
+            <View style={styles.emptyStateBox}>
+              <AppIcon name="mug" style={styles.emptyStateIcon} />
+              <Text style={styles.emptyStateTitle}>Sin actividad reciente</Text>
+              <Text style={styles.emptyStateDescription}>
+                Tus compras de café, colaciones y recargas de saldo se listarán automáticamente aquí.
               </Text>
             </View>
           ) : (
-            movimientos.map((item, index) => {
-              const icon = getIconoMovimiento(
-                item.accion,
-                item.tabla_afectada || item.tabla,
-                item.tipo_evento
-              );
-              const desc = formatearDescripcionMovimiento(item);
-              const fechaMov = formatFecha(item.creado_en || item.created_at);
-
+            actividades.map((item, index) => {
+              const icono = getIconoActividad(item.tipo, item.titulo);
               return (
                 <View key={item.id || index}>
-                  <View style={styles.movimientoRow}>
-                    <View style={styles.movimientoIconBox}>
-                      <Text style={styles.movimientoIcon}>{icon}</Text>
+                  <View style={styles.activityRow}>
+                    <View style={styles.activityIconCircle}>
+                      <AppIcon name={icono} style={styles.activityIconText} />
                     </View>
-                    <View style={styles.movimientoInfo}>
-                      <Text style={styles.movimientoDesc} numberOfLines={2}>
-                        {desc}
+                    <View style={styles.activityMainInfo}>
+                      <Text style={styles.activityTitle} numberOfLines={1}>{item.titulo}</Text>
+                      <Text style={styles.activitySub} numberOfLines={1}>{item.descripcion}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <Text style={styles.activityDate}>{formatFecha(item.fecha)}</Text>
+                        {item.pedido_id && (
+                          <View style={styles.activityPedidoBadge}>
+                            <AppIcon name="box" style={styles.activityPedidoIcon} />
+                            <Text style={styles.activityPedidoText}>#{item.pedido_id}</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                    {item.monto !== null && item.monto !== undefined && (
+                      <Text style={[styles.activityAmount, item.esIngreso ? styles.amountPositive : styles.amountNegative]}>
+                        {item.esIngreso ? `+${formatCLP(item.monto)}` : `-${formatCLP(item.monto)}`}
                       </Text>
-                      <Text style={styles.movimientoFecha}>{fechaMov}</Text>
-                    </View>
+                    )}
                   </View>
-                  {index < movimientos.length - 1 && <View style={styles.separator} />}
+                  {index < actividades.length - 1 && <View style={styles.separator} />}
                 </View>
               );
             })
           )}
         </Card>
 
-        {/* Banner Informativo */}
-        <View style={styles.infoBanner}>
-          <Text style={styles.infoBannerText}>
-            🔒 La edición de perfil se encuentra protegida por la política de seguridad RLS{' '}
-            <Text style={{ fontWeight: typography.pesoBold }}>usuarios_update_own</Text>.
-          </Text>
-        </View>
+        {/* ─── 4. SECCIÓN: POLÍTICAS INSTITUCIONALES (S2-T16) ──────── */}
+        <Card variant="outlined" style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <AppIcon name="receipt" style={styles.sectionHeaderIcon} />
+              <Text style={styles.sectionTitle}>Políticas y Condiciones</Text>
+            </View>
+            <TouchableOpacity onPress={() => abrirPantallaPoliticas('todas')}>
+              <Text style={styles.sectionLink}>Ver todo ›</Text>
+            </TouchableOpacity>
+          </View>
 
-        {/* Botón de Cerrar Sesión */}
+          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('todas')} activeOpacity={0.7}>
+            <View style={styles.menuRowLeft}>
+              <View style={styles.menuIconContainer}>
+                <AppIcon name="receipt" style={styles.menuRowIcon} />
+              </View>
+              <View>
+                <Text style={styles.menuRowText}>Términos del Servicio</Text>
+                <Text style={styles.menuRowSub}>Condiciones de compra y retiro UCT</Text>
+              </View>
+            </View>
+            <Text style={styles.menuRowChevron}>›</Text>
+          </TouchableOpacity>
+
+          <View style={styles.separator} />
+
+          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('todas')} activeOpacity={0.7}>
+            <View style={styles.menuRowLeft}>
+              <View style={styles.menuIconContainer}>
+                <AppIcon name="lock" style={styles.menuRowIcon} />
+              </View>
+              <View>
+                <Text style={styles.menuRowText}>Privacidad y Seguridad</Text>
+                <Text style={styles.menuRowSub}>Protección de datos y directiva RLS</Text>
+              </View>
+            </View>
+            <Text style={styles.menuRowChevron}>›</Text>
+          </TouchableOpacity>
+
+          <View style={styles.separator} />
+
+          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('cancelacion')} activeOpacity={0.7}>
+            <View style={styles.menuRowLeft}>
+              <View style={styles.menuIconContainer}>
+                <AppIcon name="clock" style={styles.menuRowIcon} />
+              </View>
+              <View>
+                <Text style={styles.menuRowText}>Retiro, Cancelación y Reembolso</Text>
+                <Text style={styles.menuRowSub}>Franjas horarias, QR y reembolsos a Wallet</Text>
+              </View>
+            </View>
+            <Text style={styles.menuRowChevron}>›</Text>
+          </TouchableOpacity>
+        </Card>
+
+        {/* ─── 5. SECCIÓN: AYUDA Y SOPORTE (S2-T16) ─────────────────── */}
+        <Card variant="outlined" style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <AppIcon name="help" style={styles.sectionHeaderIcon} />
+              <Text style={styles.sectionTitle}>Ayuda y Soporte</Text>
+            </View>
+            <TouchableOpacity onPress={() => abrirPantallaPoliticas('faq')}>
+              <Text style={styles.sectionLink}>Centro de Ayuda ›</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('faq')} activeOpacity={0.7}>
+            <View style={styles.menuRowLeft}>
+              <View style={styles.menuIconContainer}>
+                <AppIcon name="help" style={styles.menuRowIcon} />
+              </View>
+              <View>
+                <Text style={styles.menuRowText}>Preguntas Frecuentes (FAQ)</Text>
+                <Text style={styles.menuRowSub}>Uso de QR, recargas, preparación y pedidos</Text>
+              </View>
+            </View>
+            <Text style={styles.menuRowChevron}>›</Text>
+          </TouchableOpacity>
+
+          <View style={styles.separator} />
+
+          <TouchableOpacity style={styles.menuRow} onPress={() => abrirPantallaPoliticas('contacto')} activeOpacity={0.7}>
+            <View style={styles.menuRowLeft}>
+              <View style={styles.menuIconContainer}>
+                <AppIcon name="envelope" style={styles.menuRowIcon} />
+              </View>
+              <View>
+                <Text style={styles.menuRowText}>Contacto con Soporte</Text>
+                <Text style={styles.menuRowSub}>Canales de atención estudiantil UCT</Text>
+              </View>
+            </View>
+            <Text style={styles.menuRowChevron}>›</Text>
+          </TouchableOpacity>
+        </Card>
+
+        {/* ─── 6. CIERRE DE SESIÓN ──────────────────────────────────── */}
         <Button
           title="Cerrar sesión"
-          onPress={onLogout}
+          onPress={confirmarCierreSesion}
           variant="danger"
-          style={styles.logoutButton}
+          style={styles.logoutBtn}
         />
       </ScrollView>
 
-      {/* Modal para Editar Nombre y Teléfono */}
+      {/* ─── MODAL DE EDICIÓN DE DATOS PERSONALES (S2-T7) ───────────── */}
       <Modal
-        visible={modalVisible}
+        visible={modalEdicionVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => setModalEdicionVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Editar Perfil</Text>
+              <Text style={styles.modalTitle}>Editar Datos Personales</Text>
               <TouchableOpacity
-                onPress={() => setModalVisible(false)}
+                onPress={() => setModalEdicionVisible(false)}
                 style={styles.modalCloseBtn}
               >
-                <Text style={styles.modalCloseText}>✕</Text>
+                <AppIcon name="close" style={styles.modalCloseText} />
               </TouchableOpacity>
             </View>
 
             <Text style={styles.modalSubtitle}>
-              Puedes actualizar tu nombre, apellido y teléfono de contacto.
+              Modifica únicamente los datos autorizados. Los datos de cuenta institucional están protegidos.
             </Text>
 
-            {Boolean(errorEdit) && (
-              <View style={styles.modalErrorBox}>
-                <Text style={styles.modalErrorText}>{errorEdit}</Text>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.modalEditScroll}
+              contentContainerStyle={styles.modalEditScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {Boolean(errorEdit) && (
+                <View style={styles.modalErrorBox}>
+                  <Text style={styles.modalErrorText}>{errorEdit}</Text>
+                </View>
+              )}
+
+              {/* Campos autorizados para edición */}
+              <Input
+                label="Nombre *"
+                placeholder="Ej. Juan"
+                value={nombreEdit}
+                onChangeText={(val) => {
+                  setNombreEdit(val);
+                  if (erroresCampos.nombre) {
+                    setErroresCampos((prev) => ({ ...prev, nombre: validarNombre(val) }));
+                  }
+                }}
+                onBlur={() => {
+                  setErroresCampos((prev) => ({ ...prev, nombre: validarNombre(nombreEdit) }));
+                }}
+                maxLength={50}
+                autoCapitalize="words"
+                error={erroresCampos.nombre}
+              />
+
+              <Input
+                label="Apellido *"
+                placeholder="Ej. Pérez"
+                value={apellidoEdit}
+                onChangeText={(val) => {
+                  setApellidoEdit(val);
+                  if (erroresCampos.apellido) {
+                    setErroresCampos((prev) => ({ ...prev, apellido: validarApellido(val) }));
+                  }
+                }}
+                onBlur={() => {
+                  setErroresCampos((prev) => ({ ...prev, apellido: validarApellido(apellidoEdit) }));
+                }}
+                maxLength={50}
+                autoCapitalize="words"
+                error={erroresCampos.apellido}
+              />
+
+              <Input
+                label="Teléfono de contacto (Opcional)"
+                placeholder="+56 9 1234 5678"
+                value={telefonoEdit}
+                onChangeText={(val) => {
+                  setTelefonoEdit(val);
+                  if (erroresCampos.telefono) {
+                    setErroresCampos((prev) => ({ ...prev, telefono: validarTelefono(val) }));
+                  }
+                }}
+                onBlur={() => {
+                  setErroresCampos((prev) => ({ ...prev, telefono: validarTelefono(telefonoEdit) }));
+                }}
+                maxLength={20}
+                keyboardType="phone-pad"
+                error={erroresCampos.telefono}
+              />
+
+              {/* Datos protegidos por el sistema (Solo lectura) */}
+              <View style={styles.protectedSection}>
+                <View style={styles.protectedHeaderRow}>
+                  <AppIcon name="lock" style={styles.protectedHeaderIcon} />
+                  <Text style={styles.protectedHeaderText}>Datos protegidos por el sistema</Text>
+                </View>
+
+                <View style={styles.protectedItem}>
+                  <Text style={styles.protectedItemLabel}>Correo institucional (Solo lectura):</Text>
+                  <Text style={styles.protectedItemValue}>{usuarioData?.correo || 'Sin correo asignado'}</Text>
+                  <Text style={styles.protectedItemHint}>
+                    Tu cuenta @alu.uct.cl es tu identidad oficial y no puede modificarse.
+                  </Text>
+                </View>
+
+                <View style={styles.protectedDivider} />
+
+                <View style={styles.protectedItem}>
+                  <Text style={styles.protectedItemLabel}>Rol asignado (Solo lectura):</Text>
+                  <Text style={styles.protectedItemValue}>{rolLegible}</Text>
+                  <Text style={styles.protectedItemHint}>
+                    Los roles y permisos son gestionados centralmente por la institución.
+                  </Text>
+                </View>
               </View>
-            )}
+            </ScrollView>
 
-            <Input
-              label="Nombre"
-              placeholder="Ej. Juan"
-              value={nombreEdit}
-              onChangeText={setNombreEdit}
-              autoCapitalize="words"
-            />
-
-            <Input
-              label="Apellido"
-              placeholder="Ej. Pérez"
-              value={apellidoEdit}
-              onChangeText={setApellidoEdit}
-              autoCapitalize="words"
-            />
-
-            <Input
-              label="Teléfono"
-              placeholder="+56 9 1234 5678"
-              value={telefonoEdit}
-              onChangeText={setTelefonoEdit}
-              keyboardType="phone-pad"
-            />
-
-            <View style={styles.modalActions}>
+            {/* Acciones fijas al fondo: siempre visibles y sin cortes */}
+            <View style={styles.modalActionsRow}>
               <Button
                 title="Cancelar"
-                variant="outline"
-                onPress={() => setModalVisible(false)}
+                variant="ghost"
+                onPress={() => setModalEdicionVisible(false)}
                 disabled={guardando}
                 style={{ flex: 1, marginRight: spacing.sm }}
               />
               <Button
-                title={guardando ? 'Guardando...' : 'Guardar'}
+                title={guardando ? 'Guardando...' : 'Guardar Cambios'}
                 variant="primary"
                 onPress={guardarEdicion}
                 disabled={guardando}
+                loading={guardando}
                 style={{ flex: 1 }}
               />
             </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Modales de Políticas y Ayuda */}
+      {renderModalPolitica()}
+      {renderModalAyuda()}
     </View>
   );
 };
@@ -675,6 +1337,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.fondo,
+  },
+  content: {
+    padding: spacing.lg,
+    paddingBottom: 48,
   },
   centerContainer: {
     flex: 1,
@@ -687,7 +1353,7 @@ const styles = StyleSheet.create({
     color: colors.textoSecundario,
     fontSize: typography.cuerpo,
   },
-  errorEmoji: {
+  errorIcon: {
     fontSize: 48,
     marginBottom: spacing.md,
   },
@@ -703,199 +1369,250 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.lg,
   },
-  headerIcon: {
-    width: 35,
-    height: 35,
-    borderRadius: 8,
-    backgroundColor: colors.cafeOscuro,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerIconText: {
-    color: colors.blanco,
-  },
-  content: {
-    padding: spacing.lg,
-    paddingBottom: 36,
-  },
-  profileCard: {
-    backgroundColor: colors.cafeOscuro,
-    borderRadius: 24,
+
+  // ─── 1. Tarjeta Hero Estudiante ──────────────────────────────────
+  studentHeroCard: {
+    backgroundColor: colors.blanco,
+    borderRadius: 20,
     padding: spacing.xl,
     alignItems: 'center',
-    shadowColor: colors.cafeOscuro,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    borderWidth: 1,
+    borderColor: colors.borde,
+    shadowColor: colors.sombra,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  avatar: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: spacing.xs,
+  },
+  avatarPlaceholder: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
     backgroundColor: colors.crema,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderColor: colors.dorado,
   },
   avatarImage: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 82,
+    height: 82,
+    borderRadius: 41,
     borderWidth: 2,
-    borderColor: colors.blanco,
+    borderColor: colors.dorado,
     backgroundColor: colors.crema,
   },
-  avatarText: {
+  avatarInitialText: {
     fontSize: typography.tituloGrande,
     fontWeight: typography.pesoExtraBold,
     color: colors.cafeOscuro,
     fontFamily: typography.familia,
   },
-  name: {
-    color: colors.blanco,
+  onlineBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.verde,
+    borderWidth: 2,
+    borderColor: colors.blanco,
+  },
+  studentName: {
     fontSize: typography.titulo,
-    fontWeight: typography.pesoExtraBold,
-    fontFamily: typography.familia,
-    marginTop: spacing.md,
-    textAlign: 'center',
-  },
-  email: {
-    color: colors.bordeOscuro,
-    fontSize: typography.cuerpoPequeno,
-    marginTop: spacing.xs,
-    textAlign: 'center',
-  },
-  roleBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 5,
-    borderRadius: 14,
-    marginTop: 10,
-  },
-  roleBadgeText: {
-    color: colors.blanco,
-    fontSize: 11,
     fontWeight: typography.pesoBold,
-  },
-  editButtonBadge: {
-    marginTop: spacing.md,
-    backgroundColor: colors.blanco,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 8,
-    borderRadius: 20,
-    elevation: 2,
-  },
-  editButtonText: {
     color: colors.cafeOscuro,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+  studentEmail: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  roleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.doradoBg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.dorado,
+  },
+  roleChipIcon: {
+    fontSize: 12,
+  },
+  roleChipText: {
+    fontSize: typography.etiqueta,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+  },
+  phoneChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.fondo,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borde,
+  },
+  phoneChipIcon: {
+    fontSize: 12,
+  },
+  phoneChipText: {
+    fontSize: typography.etiqueta,
+    fontWeight: typography.pesoMedio,
+    color: colors.textoSecundario,
+  },
+  editProfileBtn: {
+    marginTop: spacing.lg,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 20,
+    backgroundColor: colors.crema,
+    borderWidth: 1,
+    borderColor: colors.bordeOscuro,
+  },
+  editProfileBtnText: {
     fontSize: typography.cuerpoPequeno,
     fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
   },
-  section: {
-    marginTop: 18,
+  editProfileBtnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
+  editProfileBtnIcon: { fontSize: 14, color: colors.cafeOscuro },
+
+  // ─── 2. Tarjeta Wallet ───────────────────────────────────────────
+  walletCard: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.cafeOscuro,
+    borderRadius: 20,
+    padding: spacing.lg,
+    shadowColor: colors.cafeOscuro,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  walletTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  walletLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  walletHeaderIcon: {
+    fontSize: 18,
+  },
+  walletHeaderTitle: {
+    fontSize: typography.subtitulo,
+    fontWeight: typography.pesoBold,
+    color: colors.blanco,
+    letterSpacing: 0.3,
+  },
+  walletBalanceLabel: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.bordeOscuro,
+    marginTop: 2,
+  },
+  walletBalanceAmount: {
+    fontSize: 28,
+    fontWeight: typography.pesoExtraBold,
+    color: colors.blanco,
+    marginTop: 4,
+    marginBottom: spacing.md,
+    fontFamily: typography.familia,
+  },
+  walletActionBtn: {
+    backgroundColor: colors.dorado,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  walletActionBtnText: {
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+  },
+  walletActionChevron: {
+    fontSize: 14,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+  },
+
+  // ─── Secciones Modulares ─────────────────────────────────────────
+  sectionCard: {
+    marginTop: spacing.lg,
+    borderRadius: 18,
+    padding: spacing.md,
+    backgroundColor: colors.blanco,
+    borderWidth: 1,
+    borderColor: colors.borde,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  sectionHeaderIcon: {
+    fontSize: 16,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: typography.subtitulo,
     fontWeight: typography.pesoBold,
     color: colors.cafeOscuro,
   },
-  editLink: {
+  sectionText: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+    lineHeight: 18,
+    marginTop: spacing.xs,
+  },
+  refreshLink: {
     fontSize: typography.cuerpoPequeno,
     fontWeight: typography.pesoBold,
     color: colors.cafeMedio,
   },
-  subtitleBadge: {
-    fontSize: 10,
-    color: colors.textoDeshabilitado,
-    backgroundColor: colors.fondo,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    fontFamily: typography.familia,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.xs,
-  },
-  infoLabel: {
+  sectionLink: {
     fontSize: typography.cuerpoPequeno,
-    color: colors.textoSecundario,
-  },
-  infoValue: {
-    fontSize: typography.cuerpoPequeno,
-    fontWeight: typography.pesoMedio,
-    color: colors.cafeOscuro,
-    maxWidth: '65%',
-    textAlign: 'right',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.borde,
-    marginVertical: spacing.sm,
-  },
-  miniLoader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.lg,
-    gap: spacing.sm,
-  },
-  miniLoaderText: {
-    fontSize: typography.cuerpoPequeno,
-    color: colors.textoSecundario,
-  },
-  auditWarningBox: {
-    backgroundColor: colors.doradoBg,
-    borderRadius: 12,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  auditWarningIcon: {
-    fontSize: 18,
-  },
-  auditWarningText: {
-    flex: 1,
-    fontSize: 11,
-    color: colors.naranja,
-    lineHeight: 16,
-  },
-  emptyMovimientos: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-  },
-  emptyIcon: {
-    fontSize: 32,
-    marginBottom: spacing.xs,
-  },
-  emptyTitle: {
-    fontSize: typography.cuerpo,
     fontWeight: typography.pesoBold,
-    color: colors.cafeOscuro,
-    marginBottom: 4,
+    color: colors.dorado,
   },
-  emptyDescription: {
-    fontSize: typography.cuerpoPequeno,
-    color: colors.textoSecundario,
-    textAlign: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  movimientoRow: {
+
+  // ─── Filas de Actividad Reciente ─────────────────────────────────
+  activityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.xs,
   },
-  movimientoIconBox: {
+  activityIconCircle: {
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -904,43 +1621,190 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: spacing.md,
   },
-  movimientoIcon: {
-    fontSize: 18,
+  activityIconText: {
+    fontSize: 17,
   },
-  movimientoInfo: {
+  activityMainInfo: {
     flex: 1,
   },
-  movimientoDesc: {
+  activityTitle: {
     fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.textoPrimario,
+  },
+  activitySub: {
+    fontSize: 11,
+    color: colors.textoSecundario,
+    marginTop: 1,
+  },
+  activityDate: {
+    fontSize: 10,
+    color: colors.textoDeshabilitado,
+  },
+  activityPedidoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.crema,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.bordeOscuro,
+  },
+  activityPedidoText: {
+    fontSize: 9,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+  },
+  activityPedidoIcon: { fontSize: 9, color: colors.cafeOscuro },
+  activityAmount: {
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    marginLeft: spacing.sm,
+  },
+  amountPositive: {
+    color: colors.verde,
+  },
+  amountNegative: {
+    color: colors.cafeOscuro,
+  },
+  emptyStateBox: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+  },
+  emptyStateIcon: {
+    fontSize: 32,
+    marginBottom: spacing.xs,
+  },
+  emptyStateTitle: {
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+    marginBottom: 4,
+  },
+  emptyStateDescription: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+    textAlign: 'center',
+  },
+  miniLoaderBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+  },
+  miniLoaderText: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+  },
+
+  // ─── Filas de Menú (Políticas / Ayuda) ───────────────────────────
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  menuRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  menuIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.fondo,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuRowIcon: {
+    fontSize: 16,
+  },
+  menuRowText: {
+    fontSize: typography.cuerpo,
     fontWeight: typography.pesoMedio,
     color: colors.textoPrimario,
-    marginBottom: 2,
   },
-  movimientoFecha: {
+  menuRowSub: {
     fontSize: 11,
     color: colors.textoSecundario,
+    marginTop: 1,
   },
-  infoBanner: {
+  menuRowChevron: {
+    fontSize: 20,
+    color: colors.cafeClaro,
+    fontWeight: typography.pesoBold,
+    paddingLeft: spacing.sm,
+  },
+
+  // ─── Separador ───────────────────────────────────────────────────
+  separator: {
+    height: 1,
+    backgroundColor: colors.borde,
+    marginVertical: spacing.xs,
+  },
+
+  // ─── Footer y Logout ─────────────────────────────────────────────
+  logoutBtn: {
+    marginTop: spacing.xl,
+    borderRadius: 14,
+    height: 48,
+  },
+
+  // ─── Estilos Modo Invitado ───────────────────────────────────────
+  guestHeroCard: {
+    backgroundColor: colors.cafeOscuro,
+    borderRadius: 20,
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  guestAvatar: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
     backgroundColor: colors.crema,
-    borderRadius: 16,
-    padding: spacing.md,
-    marginTop: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
   },
-  infoBannerText: {
+  guestAvatarText: {
+    fontSize: 34,
+  },
+  guestTitle: {
+    fontSize: typography.titulo,
+    fontWeight: typography.pesoBold,
+    color: colors.blanco,
+  },
+  guestSubtitle: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.bordeOscuro,
+    marginTop: 2,
+  },
+  roleBadge: {
+    marginTop: spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  roleBadgeText: {
+    color: colors.blanco,
     fontSize: 11,
-    color: colors.textoSecundario,
-    lineHeight: 18,
-    textAlign: 'center',
+    fontWeight: typography.pesoBold,
   },
   actionButton: {
     marginTop: spacing.xl,
-  },
-  logoutButton: {
-    height: 50,
     borderRadius: 14,
-    marginTop: spacing.xl,
+    height: 48,
   },
-  // ─── Modal de Edición ──────────────────────────────────────────────
+
+  // ─── Modales ─────────────────────────────────────────────────────
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -948,10 +1812,13 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     backgroundColor: colors.blanco,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: spacing.xl,
-    paddingBottom: Platform.OS === 'ios' ? 40 : spacing.xl,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: Platform.OS === 'ios' ? 88 : 80,
+    marginBottom: -64,
+    maxHeight: '92%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -975,7 +1842,30 @@ const styles = StyleSheet.create({
   modalSubtitle: {
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  modalEditScroll: {
+    flexShrink: 1,
+  },
+  modalEditScrollContent: {
+    paddingBottom: spacing.sm,
+  },
+  modalScroll: {
+    marginVertical: spacing.sm,
+    maxHeight: 320,
+  },
+  modalBodyTitle: {
+    fontSize: typography.cuerpo,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+    marginTop: spacing.sm,
+    marginBottom: 2,
+  },
+  modalBodyText: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+    lineHeight: 19,
+    marginBottom: spacing.sm,
   },
   modalErrorBox: {
     backgroundColor: colors.rojoBg,
@@ -987,11 +1877,79 @@ const styles = StyleSheet.create({
     color: colors.rojo,
     fontSize: typography.cuerpoPequeno,
   },
-  modalActions: {
+  modalActionsRow: {
     flexDirection: 'row',
-    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borde,
+    marginTop: spacing.xs,
+  },
+  protectedSection: {
+    backgroundColor: colors.fondo,
+    borderRadius: 14,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borde,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  protectedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  protectedHeaderIcon: {
+    fontSize: 14,
+  },
+  protectedHeaderText: {
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
+  },
+  protectedItem: {
+    paddingVertical: 2,
+  },
+  protectedItemLabel: {
+    fontSize: 11,
+    fontWeight: typography.pesoBold,
+    color: colors.textoSecundario,
+  },
+  protectedItemValue: {
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoMedio,
+    color: colors.cafeOscuro,
+    marginTop: 1,
+  },
+  protectedItemHint: {
+    fontSize: 10,
+    color: colors.textoDeshabilitado,
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  protectedDivider: {
+    height: 1,
+    backgroundColor: colors.borde,
+    marginVertical: spacing.sm,
+  },
+  contactItemBox: {
+    backgroundColor: colors.fondo,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  contactLabel: {
+    fontSize: 11,
+    color: colors.textoSecundario,
+    marginBottom: 2,
+  },
+  contactLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  contactLabelIcon: { fontSize: 12, color: colors.cafeOscuro, marginBottom: 2 },
+  contactValue: {
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.cafeOscuro,
   },
 });
 
 export default PerfilScreen;
-

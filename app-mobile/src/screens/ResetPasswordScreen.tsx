@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import Button from '../components/Button';
@@ -80,7 +81,7 @@ const ResetPasswordScreen = ({ onDone }: Props) => {
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
           <View style={styles.successCircle}>
-            <Text style={styles.successMark}>✓</Text>
+            <AppIcon name="check" style={styles.successMark} />
           </View>
           <Text style={styles.title}>Contraseña actualizada</Text>
           <Text style={styles.subtitle}>
@@ -167,17 +168,13 @@ const ResetPasswordScreen = ({ onDone }: Props) => {
           {/* Reglas de validación, se muestran en vivo */}
           <Card variant="default" padding="none" style={styles.rulesBox}>
             <View style={styles.ruleRow}>
-              <Text style={[styles.ruleMark, cumpleReglas && styles.ruleOk]}>
-                {cumpleReglas ? '✓' : '○'}
-              </Text>
+              <AppIcon name={cumpleReglas ? 'success' : 'pending'} style={[styles.ruleMark, cumpleReglas && styles.ruleOk]} />
               <Text style={[styles.ruleText, cumpleReglas && styles.ruleTextOk]}>
                 Al menos 8 caracteres
               </Text>
             </View>
             <View style={styles.ruleRow}>
-              <Text style={[styles.ruleMark, coinciden && styles.ruleOk]}>
-                {coinciden ? '✓' : '○'}
-              </Text>
+              <AppIcon name={coinciden ? 'success' : 'pending'} style={[styles.ruleMark, coinciden && styles.ruleOk]} />
               <Text style={[styles.ruleText, coinciden && styles.ruleTextOk]}>
                 Las dos contraseñas coinciden
               </Text>

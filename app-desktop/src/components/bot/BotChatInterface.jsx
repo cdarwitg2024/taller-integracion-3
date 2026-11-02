@@ -26,8 +26,8 @@ import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import ScienceOutlinedIcon from '@mui/icons-material/ScienceOutlined';
 
-import { botService } from '../../service/botService';
-import { telegramDuenoService } from '../../service/telegram_dueno';
+import { botService } from '../../services/botService';
+import { telegramDuenoService } from '../../services/telegram_dueno';
 
 const CONSULTAS_RAPIDAS = [
   {
@@ -204,8 +204,8 @@ function BotChatInterface({ currentUser, serviceHealth, telegramConfig }) {
 
     try {
       const resp = await botService.procesarConsulta(textoFinal, {
-        usuarioId: currentUser?.id || 1,
-        cafeteriaId: currentUser?.cafeteria_id || 1,
+        usuarioId: currentUser?.id ?? null,
+        cafeteriaId: currentUser?.cafeteria_id ?? null,
       });
 
       // Si la respuesta indica un fallo de conexión con el servicio

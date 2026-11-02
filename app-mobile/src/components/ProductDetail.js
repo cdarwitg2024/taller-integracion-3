@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import AppIcon from './AppIcon';
 
 /**
  * Detalle de un producto — FR-08
@@ -16,14 +17,15 @@ import {
  * monta (ver `ProductDetailScreen`).
  *
  * Contrato del producto:
- *   id, name, description, price, imageUrl, emoji, stock, stockMin,
+ *   id, name, description, price, imageUrl, iconName, stock, stockMin,
  *   available, category, cafeteriaName, modifications (array de strings)
  */
 const ProductDetail = ({ product, onAdd, onClose, cafeteriaName }) => {
   // Si la URL de la imagen existe pero no carga (404, host caído), caemos al
-  // emoji en vez de dejar el hueco vacío sin explicación. El hook va antes
+  // icono de categoría en vez de dejar el hueco vacío. El hook va antes
   // del `return null` de abajo para respetar el orden de los hooks.
   const [imagenCaida, setImagenCaida] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     setImagenCaida(false);
@@ -49,7 +51,7 @@ const ProductDetail = ({ product, onAdd, onClose, cafeteriaName }) => {
               onError={() => setImagenCaida(true)}
             />
           ) : (
-            <Text style={styles.heroEmoji}>{product.emoji}</Text>
+            <AppIcon name={product.iconName || 'food'} style={styles.heroIcon} />
           )}
 
           {!available && (
@@ -64,7 +66,7 @@ const ProductDetail = ({ product, onAdd, onClose, cafeteriaName }) => {
             accessibilityRole="button"
             accessibilityLabel="Cerrar detalle"
           >
-            <Text style={styles.closeText}>✕</Text>
+            <AppIcon name="close" style={styles.closeText} />
           </TouchableOpacity>
         </View>
 
@@ -174,14 +176,19 @@ const ProductDetail = ({ product, onAdd, onClose, cafeteriaName }) => {
         </View>
 
         <TouchableOpacity
-          style={[styles.addButton, !available && styles.addButtonDisabled]}
-          onPress={() => available && onAdd?.(product)}
-          disabled={!available}
+          style={[styles.addButton, (!available || adding) && styles.addButtonDisabled]}
+          onPress={() => {
+            if (!available || adding) return;
+            setAdding(true);
+            setTimeout(() => setAdding(false), 250);
+            onAdd?.(product);
+          }}
+          disabled={!available || adding}
           accessibilityRole="button"
-          accessibilityState={{ disabled: !available }}
+          accessibilityState={{ disabled: !available || adding }}
         >
           <Text style={styles.addButtonText}>
-            {available ? 'Añadir al carrito' : 'No disponible'}
+            {available ? (adding ? 'Agregando...' : 'Añadir al carrito') : 'No disponible'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -211,7 +218,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  heroEmoji: {
+  heroIcon: {
     fontSize: 92,
   },
 

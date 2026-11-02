@@ -1,4 +1,7 @@
-﻿apiVersion: networking.k8s.io/v1
+# Enruta el host público al Service gateway:80 usando el controlador nginx.
+# La anotación external-dns declara un destino; requiere ese controlador
+# para gestionar DNS. Este manifiesto no configura un certificado TLS.
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api-cdarwitg-ingress

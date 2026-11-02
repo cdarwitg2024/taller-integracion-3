@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,9 @@ import {
   BackHandler,
   RefreshControl,
   TextInput,
+  AppState,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 
 import ProductCard from '../components/ProductCard';
 import ProductDetail from '../components/ProductDetail';
@@ -17,6 +19,8 @@ import CategoryFilter from '../components/CategoryFilter';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { supabase } from '../lib/supabase';
+import { productoPorId } from '../utils/productos';
+import { aplicarPreciosPromocion } from '../services/promociones';
 import { useDisponibilidadProductos } from '../hooks/useDisponibilidadProductos';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -39,22 +43,18 @@ import { typography } from '../theme/typography';
  * bigint en el checkout.
  */
 
-const DEFAULT_EMOJI = '🍽';
-
-const EMOJI_RULES = [
-  { cv: /café|cafe|espresso|capuchino|americano|latte/i, emoji: '☕' },
-  { cv: /té|\bte\b|chai|infusión|infusion/i, emoji: '🍵' },
-  { cv: /leche|lácteo|lacteo|yogur/i, emoji: '🥛' },
-  { cv: /sándwich|sandwich|ave |jamón|jamon|queso|croissant/i, emoji: '🥪' },
-  { cv: /empanada|pan|medialuna|bollo/i, emoji: '🥐' },
-  { cv: /muffin|galleta|cookie|kuchen|torta|pastel|reposter/i, emoji: '🧁' },
-  { cv: /jugo|bebida|refresco|agua|limonada/i, emoji: '🧃' },
+const PRODUCT_ICON_RULES = [
+  { cv: /café|cafe|espresso|capuchino|americano|latte|té|\bte\b|chai|infusión|infusion/i, iconName: 'mug' },
+  { cv: /leche|lácteo|lacteo|yogur|jugo|bebida|refresco|agua|limonada/i, iconName: 'drink' },
+  { cv: /sándwich|sandwich|ave |jamón|jamon|queso/i, iconName: 'sandwich' },
+  { cv: /empanada|pan|medialuna|bollo|croissant/i, iconName: 'bread' },
+  { cv: /muffin|galleta|cookie|kuchen|torta|pastel|reposter/i, iconName: 'cookie' },
 ];
 
-/** Elige un emoji a partir del nombre, la categoría y la descripción. */
-export const getEmoji = ({ name = '', description = '', category = '' }) => {
-  const rule = EMOJI_RULES.find((r) => r.cv.test(`${category} ${name} ${description}`));
-  return rule ? rule.emoji : DEFAULT_EMOJI;
+/** Elige un icono Font Awesome según el producto; usa cubiertos como opción general. */
+export const getProductIcon = ({ name = '', description = '', category = '' }) => {
+  const rule = PRODUCT_ICON_RULES.find((r) => r.cv.test(`${category} ${name} ${description}`));
+  return rule ? rule.iconName : 'food';
 };
 
 /**
@@ -77,6 +77,7 @@ export const mapProduct = (raw) => {
     name: raw.nombre || 'Producto',
     description: raw.descripcion || '',
     price: Number(raw.precio) || 0,
+    basePrice: Number(raw.precio_base ?? raw.precio) || 0,
     imageUrl: raw.imagen_url || null,
 
     stock,
@@ -86,7 +87,7 @@ export const mapProduct = (raw) => {
     // FR-07: el filtro trabaja por id, no por nombre. Guardamos ambos.
     categoryId: Number.isFinite(Number(raw.categoria_id)) ? Number(raw.categoria_id) : null,
     category: raw.categorias?.nombre || 'General',
-    emoji: getEmoji({
+    iconName: getProductIcon({
       name: raw.nombre || '',
       description: raw.descripcion || '',
       category: raw.categorias?.nombre || '',
@@ -111,6 +112,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const ultimaCarga = useRef(0);
 
   // FR-07: categoría activa. 'todos' = sin filtro
   const [categoriaActiva, setCategoriaActiva] = useState('todos');
@@ -118,9 +120,17 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
   const [busqueda, setBusqueda] = useState('');
   const [busquedaDebounced, setBusquedaDebounced] = useState('');
   const [orden, setOrden] = useState('precio_asc');
-  // FR-08: producto abierto en detalle. La cafetería NO se pasa: el detalle se
-  // muestra encima del menú, así que el contexto se mantiene solo.
-  const [productoDetalle, setProductoDetalle] = useState(null);
+  // FR-08: producto abierto en detalle. Guardamos el id, no el objeto: así el
+  // detalle abierto sigue el estado real de la lista (stock, precio,
+  // disponibilidad) y se cierra solo si el producto deja de estar disponible.
+  // La cafetería NO se pasa: el detalle se muestra encima del menú, así que el
+  // contexto se mantiene solo.
+  const [productoDetalleId, setProductoDetalleId] = useState(null);
+
+  const productoDetalle = useMemo(
+    () => productoPorId(products, productoDetalleId),
+    [products, productoDetalleId]
+  );
 
   const cafeteriaId = cafeteria?.id ?? null;
 
@@ -128,40 +138,24 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
   // El hook se suscribe, se desuscribe solo y no duplica canales.
   const { connected, cambios } = useDisponibilidadProductos(cafeteriaId);
 
-  // Aplicamos el cambio en el producto afectado sin volver a traer la lista
-  // entera. Es lo que hace que la UI se vea instantánea.
+  // Releer disponibilidad y precio promocional juntos cuando cambia un producto.
   useEffect(() => {
     if (!cambios.length) return;
     const pendiente = cambios[0];
 
-    // Producto nuevo o eliminado en cascada: recargamos la lista
+    // Producto nuevo, reactivado o eliminado en cascada: recargamos la lista
     if (pendiente.recargar || pendiente.eliminadoId) {
       fetchProducts({ silent: true });
       return;
     }
 
-    if (Number.isFinite(pendiente.id)) {
-      setProducts((prev) =>
-        prev.map((p) => {
-          if (p.id !== pendiente.id) return p;
-
-          const stock = pendiente.stock;
-          const activo = pendiente.activo;
-          const eliminado = Boolean(pendiente.eliminadoEn);
-
-          // Si lo dejaron inactivo o lo borraron, sale de la lista
-          if (!activo || eliminado) {
-            return prev.filter((x) => x.id !== pendiente.id);
-          }
-
-          return { ...p, stock, available: stock > 0 };
-        })
-      );
-    }
+    // Un precio base recibido por Realtime no debe borrar un descuento vigente.
+    if (Number.isFinite(pendiente.id)) fetchProducts({ silent: true });
   }, [cambios]);
 
   const fetchProducts = useCallback(
     async ({ silent = false } = {}) => {
+      const solicitud = ++ultimaCarga.current;
       if (!cafeteriaId) {
         setProducts([]);
         setLoading(false);
@@ -189,8 +183,11 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
         );
 
         // productsMap mantiene el id numérico, que es lo que necesita el carrito
-        setProducts(propios.map(mapProduct).filter((p) => Number.isFinite(p.id)));
+        const cotizados = await aplicarPreciosPromocion(propios);
+        if (solicitud !== ultimaCarga.current) return;
+        setProducts(cotizados.map(mapProduct).filter((p) => Number.isFinite(p.id)));
       } catch (err) {
+        if (solicitud !== ultimaCarga.current) return;
         console.warn('[MenuScreen] No se pudieron cargar los productos:', err);
         setProducts([]);
         setError(
@@ -199,8 +196,10 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
             : 'No se pudo cargar el menú de esta cafetería.'
         );
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (solicitud === ultimaCarga.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
     [cafeteriaId]
@@ -208,6 +207,15 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
 
   useEffect(() => {
     fetchProducts();
+    return () => { ultimaCarga.current++; };
+  }, [fetchProducts]);
+
+  useEffect(() => {
+    // Las campañas también empiezan/terminan por hora, sin cambios en productos.
+    const actualizar = () => { if (AppState.currentState === 'active') fetchProducts({ silent: true }); };
+    const timer = setInterval(actualizar, 15000);
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') actualizar(); });
+    return () => { clearInterval(timer); listener.remove(); };
   }, [fetchProducts]);
 
   // FR-15: debounce de 300 ms para no refiltrar en cada tecla que se escribe.
@@ -276,7 +284,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
   // Al cambiar de cafetería, el filtro y el detalle se reinician
   useEffect(() => {
     setCategoriaActiva('todos');
-    setProductoDetalle(null);
+    setProductoDetalleId(null);
   }, [cafeteriaId]);
 
   // El detalle de producto es un overlay sobre el menú, no una pantalla
@@ -288,7 +296,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     if (!productoDetalle) return undefined;
 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      setProductoDetalle(null);
+      setProductoDetalleId(null);
       return true;
     });
 
@@ -300,16 +308,24 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     fetchProducts({ silent: true });
   };
 
+  const [addingId, setAddingId] = useState(null);
+
   const handleAdd = (product) => {
     // Cinturón de seguridad también del lado del carrito: nunca agregar
     // un producto que no sea de esta cafetería o que esté agotado.
     if (!product?.available) return;
     if (Number(product.cafeteriaId) !== Number(cafeteriaId)) return;
+    // Pequeña transición/feedback de carga moderado al agregar desde catálogo
+    const pid = product?.id;
+    if (pid != null) {
+      setAddingId(pid);
+      setTimeout(() => setAddingId(null), 250);
+    }
     // Se pasa la cafetería para que el carrito sepa a qué pedido pertenece
     // cada ítem y no mezcle productos de dos menus distintos.
     onAddToCart?.(product, cafeteria);
     // Si venía desde el detalle, se cierra para volver al menú
-    setProductoDetalle(null);
+    setProductoDetalleId(null);
   };
 
   const renderBody = () => {
@@ -320,7 +336,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     if (error) {
       return (
         <View style={styles.stateContainer}>
-          <Text style={styles.stateEmoji}>📡</Text>
+          <AppIcon name="wifi" style={styles.stateIcon} />
           <Text style={styles.stateTitle}>Sin conexión con el menú</Text>
           <Text style={styles.stateText}>{error}</Text>
           <Button
@@ -337,7 +353,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
     if (products.length === 0) {
       return (
         <View style={styles.stateContainer}>
-          <Text style={styles.stateEmoji}>☕</Text>
+          <AppIcon name="mug" style={styles.stateIcon} />
           <Text style={styles.stateTitle}>Esta cafetería no tiene menú</Text>
           <Text style={styles.stateText}>
             Todavía no hay productos cargados en {cafeteria?.nombre || 'esta cafetería'}.
@@ -359,7 +375,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
       if (busquedaDebounced) {
         return (
           <View style={styles.stateContainer}>
-            <Text style={styles.stateEmoji}>🔍</Text>
+            <AppIcon name="search" style={styles.stateIcon} />
             <Text style={styles.stateTitle}>Sin resultados</Text>
             <Text style={styles.stateText}>
               No encontramos productos que coincidan con “{busquedaDebounced}”.
@@ -380,7 +396,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
       const catNombre = categories.find((c) => String(c.id) === String(categoriaActiva))?.nombre;
       return (
         <View style={styles.stateContainer}>
-          <Text style={styles.stateEmoji}>🔍</Text>
+          <AppIcon name="search" style={styles.stateIcon} />
           <Text style={styles.stateTitle}>Sin productos en esta categoría</Text>
           <Text style={styles.stateText}>
             No hay productos disponibles en {catNombre || 'la categoría seleccionada'}.
@@ -419,7 +435,8 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
                 key={product.id}
                 product={product}
                 onAdd={handleAdd}
-                onPress={setProductoDetalle}
+                onPress={(p) => setProductoDetalleId(p.id)}
+                adding={addingId != null && String(addingId) === String(product.id)}
               />
             ))}
           </View>
@@ -444,7 +461,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
           <Text style={styles.title}>Menú</Text>
 
           <View style={styles.headerIcon}>
-            <Text style={styles.headerIconText}>▣</Text>
+            <AppIcon name="food" style={styles.headerIconText} />
           </View>
         </View>
 
@@ -483,7 +500,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
         />
         {busqueda.length > 0 && (
           <TouchableOpacity onPress={() => setBusqueda('')} style={styles.searchClear}>
-            <Text style={styles.searchClearText}>✕</Text>
+            <AppIcon name="close" style={styles.searchClearText} />
           </TouchableOpacity>
         )}
       </View>
@@ -516,7 +533,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
             product={productoDetalle}
             cafeteriaName={cafeteria?.nombre}
             onAdd={handleAdd}
-            onClose={() => setProductoDetalle(null)}
+            onClose={() => setProductoDetalleId(null)}
           />
         </View>
       )}
@@ -751,7 +768,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
 
-  stateEmoji: {
+  stateIcon: {
     fontSize: 48,
     marginBottom: spacing.lg,
   },

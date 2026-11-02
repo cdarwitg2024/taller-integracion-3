@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Modal,
 } from 'react-native';
+import AppIcon from './AppIcon';
 
 const CartItem = ({
   item,
@@ -26,9 +27,7 @@ const CartItem = ({
   return (
     <View style={styles.container}>
       <View style={styles.imagePlaceholder}>
-        <Text style={styles.imageEmoji}>
-          {item.emoji}
-        </Text>
+        <AppIcon name={item.iconName || 'food'} style={styles.imageIcon} />
       </View>
 
       <View style={styles.content}>
@@ -105,9 +104,7 @@ const CartItem = ({
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalIconContainer}>
-              <Text style={styles.modalEmoji}>
-                {item.emoji}
-              </Text>
+              <AppIcon name={item.iconName || 'food'} style={styles.modalIcon} />
             </View>
 
             <Text style={styles.modalTitle}>
@@ -175,7 +172,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  imageEmoji: {
+  imageIcon: {
     fontSize: 32,
   },
 
@@ -303,7 +300,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
-  modalEmoji: {
+  modalIcon: {
     fontSize: 32,
   },
 

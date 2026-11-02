@@ -30,7 +30,9 @@ const Input = ({
   autoCapitalize = 'none',
   autoCorrect = true,
   error = undefined,
+  onBlur = undefined,
   style = {},
+  ...rest
 }) => {
   return (
     <View style={[styles.container, style]}>
@@ -45,6 +47,9 @@ const Input = ({
         secureTextEntry={secureTextEntry}
         maxLength={maxLength}
         autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
+        onBlur={onBlur}
+        {...rest}
       />
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>

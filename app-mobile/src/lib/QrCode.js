@@ -1,54 +1,40 @@
 import React, { useMemo } from 'react';
-import { View } from 'react-native';
+import Svg, { Path, Rect } from 'react-native-svg';
 
 import qrcode from './vendor/qrcode-generator';
 
 /**
- * Renderiza un QRCode en formato matricial usando Views nativas.
- * No requiere dependencias nativas (funciona en Expo / RN puro).
+ * Dibuja la matriz en un solo SVG: las celdas conservan sus coordenadas
+ * y no dependen del redondeo ni del salto de fila del layout nativo.
  */
-function QrCode({ value, size = 200, quiet = 2, bgColor = '#FFFFFF', fgColor = '#1A110C' }) {
-  const { matrix, count } = useMemo(() => {
+function QrCode({ value, size = 220, quiet = 4, bgColor = '#FFFFFF', fgColor = '#000000' }) {
+  const { path, count } = useMemo(() => {
     const qr = qrcode(0, 'M');
     qr.addData(String(value || ''));
     qr.make();
     const c = qr.getModuleCount();
-    const rows = [];
+    const modules = [];
     for (let r = 0; r < c; r++) {
-      const row = [];
-      for (let col = 0; col < c; col++) row.push(qr.isDark(r, col));
-      rows.push(row);
+      for (let col = 0; col < c; col++) {
+        if (qr.isDark(r, col)) modules.push(`M${col},${r}h1v1h-1z`);
+      }
     }
-    return { matrix: rows, count: c };
+    return { path: modules.join(''), count: c };
   }, [value]);
 
-  const total = count + quiet * 2;
-  const cell = size / total;
+  const margin = Math.max(4, quiet);
+  const total = count + margin * 2;
 
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        backgroundColor: bgColor,
-        padding: quiet * cell,
-      }}
+    <Svg
+      width={size}
+      height={size}
+      viewBox={`${-margin} ${-margin} ${total} ${total}`}
+      accessibilityLabel="QR de retiro del pedido"
     >
-      {matrix.flatMap((row, r) =>
-        row.map((dark, c) => (
-          <View
-            key={`${r}-${c}`}
-            style={{
-              width: cell,
-              height: cell,
-              backgroundColor: dark ? fgColor : bgColor,
-            }}
-          />
-        ))
-      )}
-    </View>
+      <Rect x={-margin} y={-margin} width={total} height={total} fill={bgColor} />
+      <Path d={path} fill={fgColor} />
+    </Svg>
   );
 }
 

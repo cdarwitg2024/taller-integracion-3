@@ -1,0 +1,49 @@
+# ms-cafeterias: escalado por CPU; requiere Metrics API y CPU requests en los Pods.
+# Objetivo 70% del request de 50m (aprox. 35m por Pod), no del límite de 150m.
+# El cálculo depende de métricas, tolerancias y capacidad/cuota del namespace.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ms-cafeterias
+  namespace: student-cdarwitg
+  labels:
+    app: ms-cafeterias
+    ms: cafeterias
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ms-cafeterias
+  # Mínimo y máximo de réplicas deseadas; no garantizan que todos los Pods
+  # puedan programarse ni que una prueba de carga alcance el máximo.
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    # Max elige la política más permisiva: +100% o +3 Pods por 15 s,
+    # siempre limitado por maxReplicas. Sin ventana adicional al subir.
+    scaleUp:
+      selectPolicy: Max
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 3
+          periodSeconds: 15
+      stabilizationWindowSeconds: 0
+    # Ventana de recomendaciones de 300 s para amortiguar bajadas.
+    # No es un temporizador exacto ni permite bajar de minReplicas.
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      selectPolicy: Max
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60

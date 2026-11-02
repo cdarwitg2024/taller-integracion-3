@@ -1,3 +1,28 @@
+-- =============================================================================
+-- RPC procesar_pago (Wallet) — definicion VERSIONADA reconciliada con la
+-- contrato de pago existente + control transaccional de existencias.
+-- Pendiente de aplicar en Cloud: este archivo no despliega cambios remotos.
+-- =============================================================================
+-- SINCRONIZACION (respeta lo que existe en la BD real):
+--   * v_wallet_id es BIGINT (antes decia UUID, que NO coincide con wallets.id).
+--   * El usuario se resuelve con public.get_current_user_id().
+--   * El pedido se crea con estado='pendiente' y pago_estado='pagado'.
+--   * pagos.estado se sigue insertando como 'aprobado'.
+--
+-- DEPENDENCIA NO VERSIONADA:
+--   public.get_current_user_id() existe en la BD real pero NO en el
+--   repositorio. NO se inventa su SQL: se referencia tal cual lo hace la
+--   funcion desplegada. Si se recrea procesar_pago desde cero, esa funcion
+--   debe existir antes.
+--
+-- IMPORTANTE: este archivo NO se ejecuta automaticamente. Aplicar en Supabase
+-- es manual.
+-- =============================================================================
+
+-- Sin backfill: pedidos históricos NO prueban un descuento previo.
+-- Aplicar pago y cancelación juntos antes de habilitar compras con stock.
+ALTER TABLE public.pedidos ADD COLUMN IF NOT EXISTS stock_descontado boolean NOT NULL DEFAULT false;
+
 CREATE OR REPLACE FUNCTION public.procesar_pago(
   p_cafeteria_id  BIGINT,
   p_items         JSONB,
@@ -10,22 +35,23 @@ SET search_path = public
 AS $$
 DECLARE
   v_usuario_id   BIGINT;
-  v_wallet_id    UUID;
+  v_wallet_id    BIGINT;
   v_saldo        INTEGER;
   v_total        INTEGER  := 0;
   v_item         JSONB;
   v_producto_id  BIGINT;
   v_cantidad     INTEGER;
   v_precio       NUMERIC;
+  v_stock        INTEGER;
   v_subtotal     NUMERIC;
   v_pedido_id    BIGINT;
   v_metodo_id    BIGINT;
   v_detalles     JSONB := '[]'::jsonb;
-  v_faltantes    TEXT    := '';
   v_qr_token     UUID;
   v_codigo_retiro TEXT;
 BEGIN
-  v_usuario_id := public.mi_usuario_id();
+  -- Resolver de usuario de la funcion desplegada. NO versionado en el repo.
+  v_usuario_id := public.get_current_user_id();
 
   IF v_usuario_id IS NULL THEN
     RAISE EXCEPTION 'sin_sesion'
@@ -41,25 +67,53 @@ BEGIN
     );
   END IF;
 
-  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
-    v_producto_id := (v_item ->> 'producto_id')::BIGINT;
-    v_cantidad    := (v_item ->> 'cantidad')::INTEGER;
+  -- Validar todo antes de escribir. Rechazar cantidades fraccionarias y NULL.
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(p_items) i
+    WHERE (i->>'producto_id') IS NULL OR (i->>'cantidad') IS NULL
+       OR (i->>'producto_id') !~ '^[0-9]+$' OR (i->>'cantidad') !~ '^[0-9]+$'
+       OR (i->>'producto_id')::NUMERIC <= 0 OR (i->>'cantidad')::NUMERIC <= 0
+  ) THEN
+    RETURN jsonb_build_object('ok', false, 'motivo', 'item_invalido');
+  END IF;
 
-    IF v_producto_id IS NULL OR v_cantidad IS NULL OR v_cantidad <= 0 THEN
-      RETURN jsonb_build_object(
-        'ok', false,
-        'motivo', 'item_invalido',
-        'mensaje', 'El carrito tiene un producto invalido.'
-      );
+  -- Orden de bloqueo estable: productos por id -> wallet. Sumar duplicados
+  -- evita aprobar dos líneas que individualmente caben pero juntas exceden stock.
+  FOR v_item IN
+    SELECT jsonb_build_object('producto_id', (i->>'producto_id')::BIGINT,
+                             'cantidad', sum((i->>'cantidad')::BIGINT))
+    FROM jsonb_array_elements(p_items) i
+    GROUP BY (i->>'producto_id')::BIGINT ORDER BY (i->>'producto_id')::BIGINT
+  LOOP
+    v_producto_id := (v_item ->> 'producto_id')::BIGINT;
+    v_cantidad := (v_item ->> 'cantidad')::INTEGER;
+    SELECT precio, stock INTO v_precio, v_stock
+    FROM public.productos
+    WHERE id = v_producto_id AND cafeteria_id = p_cafeteria_id
+      AND activo = true AND eliminado_en IS NULL
+    FOR UPDATE;
+    IF NOT FOUND OR v_precio IS NULL THEN
+      RETURN jsonb_build_object('ok', false, 'motivo', 'producto_no_disponible');
+    END IF;
+    IF v_stock IS NULL OR v_stock < v_cantidad THEN
+      RETURN jsonb_build_object('ok', false, 'motivo', 'stock_insuficiente',
+        'mensaje', 'Stock insuficiente para completar la compra.', 'producto_id', v_producto_id);
     END IF;
 
-    SELECT precio INTO v_precio
-    FROM public.productos
-    WHERE id = v_producto_id AND activo = true AND eliminado_en IS NULL;
-
-    IF v_precio IS NULL THEN
-      v_faltantes := v_faltantes || v_producto_id || ',';
-      CONTINUE;
+    -- Activación opcional y coordinada con gestion_promociones_cafeteria.sql.
+    -- El precio de compra siempre parte del producto bloqueado, nunca del cliente.
+    IF to_regprocedure('public.precio_promocional(bigint,bigint,numeric)') IS NOT NULL THEN
+      v_precio := public.precio_promocional(v_producto_id, p_cafeteria_id, v_precio);
+    END IF;
+    -- Si la campaña/precio cambió desde que se agregó al carrito, no cobrar
+    -- un importe distinto sin que el estudiante revise el menú nuevamente.
+    IF EXISTS (
+      SELECT 1 FROM jsonb_array_elements(p_items) i
+      WHERE (i->>'producto_id')::BIGINT=v_producto_id AND i ? 'precio_esperado'
+        AND (i->>'precio_esperado')::NUMERIC IS DISTINCT FROM v_precio
+    ) THEN
+      RETURN jsonb_build_object('ok',false,'motivo','precio_actualizado',
+        'mensaje','El precio o la promoción cambió. Actualiza el menú y vuelve a agregar el producto antes de pagar.');
     END IF;
 
     v_subtotal := v_precio * v_cantidad;
@@ -72,15 +126,6 @@ BEGIN
       'subtotal',        v_subtotal
     ));
   END LOOP;
-
-  IF v_faltantes <> '' THEN
-    RETURN jsonb_build_object(
-      'ok', false,
-      'motivo', 'producto_no_disponible',
-      'mensaje', 'Uno o mas productos ya no estan disponibles.',
-      'productos', v_faltantes
-    );
-  END IF;
 
   IF v_total <= 0 THEN
     RETURN jsonb_build_object(
@@ -104,7 +149,7 @@ BEGIN
     );
   END IF;
 
-  IF v_saldo < v_total THEN
+  IF v_saldo IS NULL OR v_saldo < v_total THEN
     RETURN jsonb_build_object(
       'ok', false,
       'motivo', 'saldo_insuficiente',
@@ -115,16 +160,23 @@ BEGIN
     );
   END IF;
 
+  -- Las filas siguen bloqueadas. Cualquier excepción posterior revierte
+  -- stock, wallet, pedido, detalles y pago en la misma transacción.
+  UPDATE public.productos p
+  SET stock = p.stock - (d->>'cantidad')::INTEGER
+  FROM jsonb_array_elements(v_detalles) d
+  WHERE p.id = (d->>'producto_id')::BIGINT;
+
   UPDATE public.wallets
      SET saldo_actual = saldo_actual - v_total
    WHERE id = v_wallet_id
   RETURNING saldo_actual INTO v_saldo;
 
   INSERT INTO public.pedidos (
-    usuario_id, cafeteria_id, total, estado, pago_estado, metodo_pago, franja_retiro
+    usuario_id, cafeteria_id, total, estado, pago_estado, metodo_pago, franja_retiro, stock_descontado
   )
   VALUES (
-    v_usuario_id, p_cafeteria_id, v_total, 'Pagado', 'aprobado', 'wallet', p_franja_retiro
+    v_usuario_id, p_cafeteria_id, v_total, 'pendiente', 'pagado', 'wallet', p_franja_retiro, true
   )
   RETURNING id INTO v_pedido_id;
 
@@ -174,8 +226,8 @@ BEGIN
     'pedido_id', v_pedido_id,
     'total', v_total,
     'saldo_restante', v_saldo,
-    'estado', 'Pagado',
-    'pago_estado', 'aprobado',
+    'estado', 'pendiente',
+    'pago_estado', 'pagado',
     'franja_retiro', p_franja_retiro,
     'qr_token', v_qr_token,
     'codigo_retiro', v_codigo_retiro

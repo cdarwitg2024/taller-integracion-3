@@ -1,4 +1,7 @@
-﻿apiVersion: apps/v1
+# Gateway Nginx: recibe tráfico del Service gateway y lo enruta por /api/.
+# La configuración procede del ConfigMap; la imagen de Nginx no contiene
+# el código de Node ni confirma la versión desplegada de los microservicios.
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: gateway
@@ -10,6 +13,7 @@ spec:
   selector:
     matchLabels:
       app: gateway
+  # Con una réplica y maxSurge=0 puede haber interrupción durante el rollout.
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -20,6 +24,7 @@ spec:
       labels:
         app: gateway
     spec:
+      # Usuario Linux 101 y grupo del volumen; conservar permisos de los mounts.
       securityContext:
         runAsNonRoot: true
         runAsUser: 101
@@ -31,6 +36,9 @@ spec:
           ports:
             - name: http
               containerPort: 80
+          # subPath monta solo nginx.conf. Cambiar el ConfigMap no recarga
+          # automáticamente este archivo ni el proceso Nginx: revisar el rollout.
+          # Cache y PID se escriben en emptyDir con la raíz en solo lectura.
           volumeMounts:
             - name: config
               mountPath: /etc/nginx/nginx.conf
@@ -40,6 +48,7 @@ spec:
               mountPath: /var/cache/nginx
             - name: nginx-run
               mountPath: /var/run
+          # CPU limitada mediante throttling; el límite de memoria puede causar OOM.
           resources:
             requests:
               cpu: 50m
@@ -47,6 +56,7 @@ spec:
             limits:
               cpu: 150m
               memory: 128Mi
+          # Salud del proceso Nginx, sin probar los upstream ni Supabase.
           readinessProbe:
             httpGet:
               path: /gateway/health

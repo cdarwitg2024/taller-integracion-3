@@ -13,22 +13,31 @@ import {
 import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
-import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 
 import pedidosService from '../services/pedidosService';
-
-const drawerWidth = 260;
+import { drawerWidth, kdsColors } from '../theme/theme';
 
 function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Panel de Control', currentUser }) {
   const [pendientesCount, setPendientesCount] = useState(0);
 
+  // S2-T18: `pedidosService.getAll` exige la cafetería autorizada desde
+  // S2-T12. El badge de pedidos activos debe consultar solo la del usuario.
+  const cafeteriaId =
+    currentUser?.cafeteria_id ?? currentUser?.cafeteriaId ?? null;
+
   useEffect(() => {
     let isMounted = true;
+
+    if (cafeteriaId === null || cafeteriaId === undefined || cafeteriaId === '') {
+      setPendientesCount(0);
+      return undefined;
+    }
+
     const updateCount = async () => {
       try {
-        const pedidos = await pedidosService.getAll();
+        const pedidos = await pedidosService.getAll({ cafeteriaId });
         if (isMounted && Array.isArray(pedidos)) {
           const count = pedidos.filter(
             (p) => p.estado === 'pendiente' || p.estado === 'preparando'
@@ -45,7 +54,7 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [cafeteriaId]);
 
   const defaultMenuItems = [
     {
@@ -60,13 +69,8 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
     },
     {
       id: 'productos',
-      label: 'Productos',
+      label: 'Productos y Stock',
       icon: <MenuBookOutlinedIcon fontSize="small" />,
-    },
-    {
-      id: 'inventario',
-      label: 'Inventario',
-      icon: <Inventory2OutlinedIcon fontSize="small" />,
     },
     {
       id: 'bot',
@@ -86,8 +90,8 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
         '& .MuiDrawer-paper': {
           width: drawerWidth,
           boxSizing: 'border-box',
-          backgroundColor: '#433225', // Fondo café oscuro de los prototipos
-          color: '#FFFFFF',
+          backgroundColor: kdsColors.sidebar, // Fondo café oscuro de los prototipos
+          color: kdsColors.onDark,
           borderRight: 'none',
           display: 'flex',
           flexDirection: 'column',
@@ -97,21 +101,21 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
     >
       <Box>
         {/* Cabecera del Sidebar */}
-        <Box sx={{ p: 3, pb: 2.5 }}>
+        <Box sx={{ px: 3, pt: 3, pb: 2 }}>
           <Typography
             variant="h5"
             fontWeight={800}
             sx={{
-              color: '#FFFFFF',
+              color: kdsColors.onDark,
               letterSpacing: '-0.5px',
             }}
           >
-            CoffeeFaster
+            CoffeeFast
           </Typography>
           <Typography
             variant="caption"
             sx={{
-              color: '#C8B6A6',
+              color: kdsColors.onDarkMuted,
               fontWeight: 600,
               letterSpacing: '0.4px',
               display: 'block',
@@ -148,24 +152,24 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
                     px: 2,
                     borderRadius: '10px',
                     backgroundColor: isActive ? 'rgba(255, 255, 255, 0.16)' : 'transparent',
-                    color: isActive ? '#FFFFFF' : '#D0C0B4',
+                    color: isActive ? kdsColors.onDark : kdsColors.onDarkSoft,
                     '&.Mui-selected': {
                       backgroundColor: 'rgba(255, 255, 255, 0.16)',
-                      color: '#FFFFFF',
+                      color: kdsColors.onDark,
                       '&:hover': {
                         backgroundColor: 'rgba(255, 255, 255, 0.20)',
                       },
                     },
                     '&:hover': {
                       backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                      color: '#FFFFFF',
+                      color: kdsColors.onDark,
                     },
                   }}
                 >
                   <ListItemIcon
                     sx={{
                       minWidth: 38,
-                      color: isActive ? '#FFFFFF' : '#C4B5A7',
+                      color: isActive ? kdsColors.onDark : kdsColors.onDarkSoft,
                     }}
                   >
                     {iconElement}
@@ -201,7 +205,7 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
             <Typography
               variant="caption"
               sx={{
-                color: '#FFFFFF',
+                color: kdsColors.onDark,
                 fontWeight: 700,
                 fontSize: '0.82rem',
                 display: 'block',
@@ -215,7 +219,7 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
             <Typography
               variant="caption"
               sx={{
-                color: '#C8B6A6',
+                color: kdsColors.onDarkMuted,
                 fontSize: '0.72rem',
                 textTransform: 'capitalize',
                 display: 'block',
@@ -233,14 +237,14 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
               py: 1.1,
               px: 2,
               borderRadius: '10px',
-              color: '#C8B8AB',
+              color: kdsColors.onDarkMuted,
               '&:hover': {
                 backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                color: '#FFFFFF',
+                color: kdsColors.onDark,
               },
             }}
           >
-            <ListItemIcon sx={{ minWidth: 38, color: '#C8B8AB' }}>
+            <ListItemIcon sx={{ minWidth: 38, color: kdsColors.onDarkMuted }}>
               <LogoutOutlinedIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText

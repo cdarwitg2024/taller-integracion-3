@@ -22,7 +22,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import ErrorOutlinedIcon from '@mui/icons-material/ErrorOutlined';
 
-import { productos as productosService } from '../../service/productos';
+import { productos as productosService } from '../../services/productos';
 
 /**
  * Diálogo para Modificar Stock (FR-47)
@@ -150,7 +150,7 @@ function ModificarStockDialog({
   };
 
   const handleGuardar = async () => {
-    if (!producto) return;
+    if (!producto || saving) return;
 
     if (nuevoStock.trim() === '') {
       setErrorMsg('El stock es obligatorio.');
@@ -187,17 +187,19 @@ function ModificarStockDialog({
     try {
       if (modoSolicitud && onSolicitar) {
         await onSolicitar(stockFinal);
+        // El cierre del diálogo lo decide el padre tras éxito
         return;
       }
       // Actualizar en Supabase mediante el servicio dedicado (FR-47)
       const productoActualizado = await productosService.updateStock(
         producto.id,
         stockFinal,
-        minimoFinal
+        minimoFinal,
+        producto.stock
       );
 
       if (onSuccess) {
-        onSuccess(
+        await onSuccess(
           productoActualizado,
           `Stock de "${producto.nombre}" actualizado a ${stockFinal} ${unidad}.`
         );

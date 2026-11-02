@@ -1,16 +1,7 @@
-# ms-menus — Service interno.
-#
-# ClusterIP: lo consumen el gateway (GET /api/menus) y ms-pedidos
-# (POST /api/menus/precios). Exponerlo por Ingress saltaria el gateway y
-# dejaria POST /api/menus/precios accesible desde internet.
-#
-# `port` es el PUERTO DEL CONTENEDOR (3003), no 80. El llamador lo tiene fijo:
-# ms-pedidos pide `http://ms-menus:3003/api/menus/precios` (ver
-# services/ms-pedidos/src/modules/pedidos/pedidos.service.js) y el nginx hace
-# `upstream ms_menus { server ms-menus:3003; }`. Con `port: 80` el Service no
-# escucha en 3003 y esas llamadas darian connection refused. Es el mismo
-# contrato de DNS que usa el compose local, para que la misma URL valga en los
-# dos ambientes.
+# ms-menus: dirección estable dentro del namespace student-cdarwitg.
+# selector.app debe coincidir con las etiquetas del Pod; port es el puerto
+# del Service y targetPort debe resolver al puerto HTTP del contenedor.
+# ClusterIP no publica el servicio en Internet: el acceso exterior pasa por gateway.
 apiVersion: v1
 kind: Service
 metadata:
@@ -26,5 +17,5 @@ spec:
   ports:
     - name: http
       port: 3003
-      targetPort: http   # -> 3003
+      targetPort: http
       protocol: TCP

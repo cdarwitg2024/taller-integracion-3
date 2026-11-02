@@ -93,3 +93,106 @@ export function formatearHoraBucket(valor) {
   const fecha = parsearFecha(valor) || new Date();
   return `${String(fecha.getHours()).padStart(2, '0')}:00`;
 }
+
+/**
+ * Franja de retiro elegida por el estudiante, tal como llega en el pedido real.
+ *
+ * Devuelve el texto de la franja (ej: "12:00-12:15") solo cuando el pedido
+ * trae una franja válida. Si viene vacía, con solo espacios o no es texto,
+ * devuelve null para que la pantalla no muestre un dato inexistente.
+ *
+ * @param {{ franja_retiro?: string }} pedido
+ * @returns {string|null}
+ */
+export function franjaRetiroPedido(pedido) {
+  const franja = pedido?.franja_retiro;
+  if (typeof franja !== 'string') return null;
+  const limpia = franja.trim();
+  return limpia ? limpia : null;
+}
+
+/**
+ * Origen del dato de retiro de un pedido, para poder distinguir en pantalla lo
+ * que es información REAL del pedido de lo que es una estimación nuestra:
+ *  - "franja": franja de retiro elegida por el estudiante (dato real);
+ *  - "hora":   hora exacta de retiro guardada en el pedido (dato real);
+ *  - "estimado": calculado a partir de la creación (+15 min), no es un dato real;
+ *  - null:     no hay ningún dato disponible.
+ *
+ * @param {{ hora_retiro?: string, franja_retiro?: string, creado_en?: string|Date }} pedido
+ * @returns {{ tipo: 'franja'|'hora'|'estimado'|null, valor: string|null }}
+ */
+export function origenRetiroPedido(pedido) {
+  // La franja elegida por el estudiante tiene prioridad: es el dato que el KDS
+  // debe mostrar, porque es el que el pedido realmente trae.
+  const franja = franjaRetiroPedido(pedido);
+  if (franja) return { tipo: 'franja', valor: franja };
+
+  if (pedido?.hora_retiro) {
+    const hora = formatearHora(pedido.hora_retiro);
+    if (hora !== '--:--') return { tipo: 'hora', valor: hora };
+  }
+
+  if (pedido?.creado_en) {
+    const fecha = parsearFecha(pedido.creado_en);
+    if (fecha) {
+      return { tipo: 'estimado', valor: formatearHora(new Date(fecha.getTime() + 15 * 60000)) };
+    }
+  }
+
+  return { tipo: null, valor: null };
+}
+
+/**
+ * Calcula cuántos minutos faltan para el horario de retiro del pedido.
+ * Prioriza franja_retiro (hora de inicio), luego hora_retiro y luego estimado +15 min.
+ * Úsalo solo para señales visuales (no para lógica de negocio).
+ */
+export function minutosHastaRetiro(pedido) {
+  if (!pedido) return null;
+
+  const ahora = Date.now();
+  let instante = null;
+
+  // 1) Franja elegida por el estudiante: tomar hora de inicio
+  const franja = franjaRetiroPedido(pedido);
+  if (franja) {
+    const inicio = franja.split(/[-–—]/)[0]?.trim();
+    if (inicio) {
+      const m = inicio.match(/^(\d{1,2}):(\d{2})/);
+      if (m) {
+        const h = Number(m[1]);
+        const min = Number(m[2]);
+        const base = parsearFecha(pedido.creado_en) || new Date();
+        const d = new Date(base);
+        d.setHours(h, min, 0, 0);
+        instante = d.getTime();
+      }
+    }
+  }
+
+  // 2) Hora exacta de retiro
+  if (instante === null && pedido.hora_retiro) {
+    const hora = formatearHora(pedido.hora_retiro);
+    if (hora && hora !== '--:--') {
+      const m = hora.match(/^(\d{1,2}):(\d{2})/);
+      if (m) {
+        const h = Number(m[1]);
+        const min = Number(m[2]);
+        const base = parsearFecha(pedido.creado_en) || new Date();
+        const d = new Date(base);
+        d.setHours(h, min, 0, 0);
+        instante = d.getTime();
+      }
+    }
+  }
+
+  // 3) Estimado: creado_en + 15 min
+  if (instante === null && pedido.creado_en) {
+    const fecha = parsearFecha(pedido.creado_en);
+    if (fecha) instante = fecha.getTime() + 15 * 60000;
+  }
+
+  if (instante === null) return null;
+  return Math.round((instante - ahora) / 60000);
+}

@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 
 import CartItem from '../components/CartItem';
 import { useCartTotals } from '../hooks/useCartTotals';
@@ -16,15 +16,10 @@ import Header from '../components/Header';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { franjaRetiroActual } from '../utils/franjas';
 
-const FRANJAS = [
-  { id: '12:00-12:15', label: '12:00 - 12:15' },
-  { id: '12:15-12:30', label: '12:15 - 12:30' },
-  { id: '12:30-12:45', label: '12:30 - 12:45' },
-  { id: '12:45-13:00', label: '12:45 - 13:00' },
-  { id: '13:00-13:15', label: '13:00 - 13:15' },
-  { id: '13:15-13:30', label: '13:15 - 13:30' },
-];
+// Referencia horaria explícita utilizada para validar vencimiento
+const getReferenciaHoraria = () => new Date();
 
 const CartScreen = ({
   cart,
@@ -41,19 +36,30 @@ const CartScreen = ({
   // falso. Ahora el nombre sale de los ítems del carrito y, si no hay, se
   // dice que no se pudo determinar.
   const cafeName = cafeteriaName || 'la cafetería de tu pedido';
-  // Franja de retiro elegida (T3, de tu compañero). Se manda a la RPC
-  // `procesar_pago` como p_franja_retiro. NO se persiste en AsyncStorage:
-  // es un dato de ESTE pedido, y una franja vieja guardada podría estar
-  // obsoleta (ya pasó la hora o el carrito cambió). Se elige en cada pedido.
-  const [franjaSeleccionada, setFranjaSeleccionada] = useState(null);
+  // Retiro inmediato elegido localmente. No depende de tablas de horarios.
+  // Se conserva franja_retiro como HH:mm-HH:mm para backend y KDS.
+  const [franjaSeleccionada, setFranjaSeleccionada] = useState(false);
+  const [ahora, setAhora] = useState(() => getReferenciaHoraria());
   const { totalProducts, subtotal, total } = useCartTotals(cart);
 
+  // Actualizar referencia horaria mientras la pantalla esté visible
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setAhora(getReferenciaHoraria());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const franjaActual = useMemo(() => franjaRetiroActual(ahora), [ahora]);
+
   const handleCheckout = () => {
+    if (paying) return;
     if (!franjaSeleccionada) {
-      alert('Por favor selecciona una franja horaria para el retiro.');
+      alert('Selecciona retirar lo antes posible para continuar.');
       return;
     }
-    onCheckout({ franja: franjaSeleccionada });
+    // Se calcula al confirmar: no enviar un horario viejo si cambió el minuto.
+    onCheckout({ franja: franjaRetiroActual(getReferenciaHoraria()).id });
   };
 
   return (
@@ -63,14 +69,14 @@ const CartScreen = ({
         onBack={onBack}
         rightElement={
           <View style={styles.headerIcon}>
-            <Text style={styles.headerIconText}>▣</Text>
+            <AppIcon name="cart" style={styles.headerIconText} />
           </View>
         }
       />
 
       {cart.length === 0 ? (
         <Card padding="lg" style={styles.emptyCard}>
-          <Text style={styles.emptyEmoji}>🛒</Text>
+          <AppIcon name="cart" style={styles.emptyIcon} />
 
           <Text style={styles.emptyTitle}>
             Tu carrito está vacío
@@ -90,7 +96,7 @@ const CartScreen = ({
             <>
               <Card padding="sm" style={styles.pickupCard}>
                 <View style={styles.locationCircle}>
-                  <Text>●</Text>
+                  <AppIcon name="location" style={styles.locationCircleIcon} />
                 </View>
 
                 <View style={styles.pickupInfo}>
@@ -113,36 +119,23 @@ const CartScreen = ({
               {/* Sección de Selección de Franja Horaria */}
               <View style={styles.franjaSection}>
                 <Text style={styles.franjaTitle}>
-                  Selecciona tu horario de retiro
+                  Selecciona el retiro
                 </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.franjaContainer}
+                <TouchableOpacity
+                  style={[styles.franjaChip, franjaSeleccionada && styles.franjaChipSelected]}
+                  onPress={() => setFranjaSeleccionada(true)}
+                  disabled={paying}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retirar lo antes posible"
+                  accessibilityState={{ disabled: paying, selected: Boolean(franjaSeleccionada) }}
                 >
-                  {FRANJAS.map((item) => {
-                    const isSelected = franjaSeleccionada === item.id;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[
-                          styles.franjaChip,
-                          isSelected && styles.franjaChipSelected,
-                        ]}
-                        onPress={() => setFranjaSeleccionada(item.id)}
-                      >
-                        <Text
-                          style={[
-                            styles.franjaText,
-                            isSelected && styles.franjaTextSelected,
-                          ]}
-                        >
-                          {item.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+                  <Text style={[styles.franjaText, franjaSeleccionada && styles.franjaTextSelected]}>
+                    Retirar lo antes posible
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.franjaEmptyText}>
+                  Franja actual: {franjaActual.label}
+                </Text>
               </View>
             </>
           }
@@ -204,6 +197,7 @@ const CartScreen = ({
                 title={paying ? 'Procesando pago...' : 'Proceder al Pago'}
                 onPress={handleCheckout}
                 disabled={paying || !franjaSeleccionada}
+                loading={paying}
               />
 
               <Text style={styles.footerText}>
@@ -257,6 +251,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  locationCircleIcon: { fontSize: 14, color: colors.cafeOscuro },
 
   pickupInfo: {
     flex: 1,
@@ -319,6 +314,12 @@ const styles = StyleSheet.create({
     borderColor: colors.cafeOscuro,
   },
 
+  franjaChipDisabled: {
+    backgroundColor: colors.fondo,
+    borderColor: colors.borde,
+    opacity: 0.5,
+  },
+
   franjaText: {
     fontSize: 11,
     fontWeight: typography.pesoMedio,
@@ -327,6 +328,16 @@ const styles = StyleSheet.create({
 
   franjaTextSelected: {
     color: colors.blanco,
+  },
+
+  franjaTextDisabled: {
+    color: colors.textoSecundario,
+  },
+
+  franjaEmptyText: {
+    marginTop: spacing.sm,
+    fontSize: 10,
+    color: colors.textoSecundario,
   },
 
   readyCard: {
@@ -424,7 +435,7 @@ const styles = StyleSheet.create({
     margin: spacing.lg,
   },
 
-  emptyEmoji: {
+  emptyIcon: {
     fontSize: 48,
     marginBottom: spacing.lg,
   },

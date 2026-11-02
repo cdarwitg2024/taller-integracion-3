@@ -27,24 +27,13 @@ import CheckIcon from '@mui/icons-material/Check';
 import DownloadIcon from '@mui/icons-material/Download';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import ReplayIcon from '@mui/icons-material/Replay';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 
 import EstadoChip from './EstadoChip';
-import { parsearFecha, formatearHora } from '../utils/dateUtils';
+import { origenRetiroPedido } from '../utils/dateUtils';
 import { generarBoletaBlob } from '../services/boletaPdfService';
 import impresionService from '../services/impresionService';
 import pedidosService from '../services/pedidosService';
-
-function getHoraRetiro(pedido) {
-  if (pedido?.hora_retiro) return formatearHora(pedido.hora_retiro);
-  if (pedido?.franja_retiro) return pedido.franja_retiro;
-  if (pedido?.creado_en) {
-    const fecha = parsearFecha(pedido.creado_en);
-    if (fecha) {
-      return formatearHora(new Date(fecha.getTime() + 15 * 60000));
-    }
-  }
-  return '—';
-}
 
 function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
   const [pedidoDetallado, setPedidoDetallado] = useState(pedido);
@@ -251,9 +240,18 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
                     />
                   )}
                 </Stack>
-                <Typography fontWeight={800} sx={{ color: '#4A3B32' }}>
-                  🕐 Retiro: {getHoraRetiro(pedidoActual)}
-                </Typography>
+                <Stack direction="row" spacing={0.75} alignItems="center">
+                  <AccessTimeIcon sx={{ fontSize: 18, color: '#4A3B32' }} />
+                  <Typography fontWeight={800} sx={{ color: '#4A3B32' }}>
+                    {(() => {
+                      const retiro = origenRetiroPedido(pedidoActual);
+                      if (retiro.tipo === 'franja') return `Franja: ${retiro.valor}`;
+                      if (retiro.tipo === 'hora') return `Retiro: ${retiro.valor}`;
+                      if (retiro.tipo === 'estimado') return `Estimado: ${retiro.valor}`;
+                      return 'Sin franja de retiro';
+                    })()}
+                  </Typography>
+                </Stack>
               </Stack>
 
               {/* Información comercial y de cliente (coherente con boleta M4) */}

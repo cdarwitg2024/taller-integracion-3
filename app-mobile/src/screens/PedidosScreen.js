@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,14 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Modal,
-  Image,
+  ScrollView,
+  AppState,
+  Alert,
 } from 'react-native';
+import AppIcon from '../components/AppIcon';
 
 import { supabase } from '../lib/supabase';
+import { apiPatch } from '../services/backendClient';
 import QrCode from '../lib/QrCode';
 import Button from '../components/Button';
 import Card from '../components/Card';
@@ -75,7 +79,7 @@ const totalItems = (detalles = []) =>
 // 'pagado' (filas antiguas) -> 'pendiente', 'preparando' -> 'en_preparacion'.
 const normalizarEstado = (e) => {
   if (!e) return 'pendiente';
-  const v = String(e).toLowerCase();
+  const v = String(e).trim().toLowerCase().replace(/\s+/g, '_');
   if (v === 'pagado') return 'pendiente';
   if (v === 'preparando') return 'en_preparacion';
   return v;
@@ -91,7 +95,7 @@ const mapPedido = (p) => ({
   codigo_retiro_diario: p.codigo_retiro_diario || null,
   franja_retiro: p.franja_retiro || null,
   cafeteria_nombre: p.cafeterias?.nombre || 'Cafetería',
-  cafeteria_direccion: p.cafeterias?.direccion || null,
+  cafeteria_direccion: p.cafeterias?.campus_sedes?.direccion || p.cafeterias?.direccion || null,
   cafeteria_telefono: p.cafeterias?.telefono || null,
   cafeteria_rut: p.cafeterias?.rut || null,
   metodo_pago: p.metodo_pago || null,
@@ -101,69 +105,158 @@ const mapPedido = (p) => ({
   // Se usa para el recibo: si el pedido ya fue retirado, el QR deja de tener
   // sentido y en su lugar se muestra el detalle de lo que se compro y cuando.
   entregado_en: p.entregado_en || null,
-  detalles: (p.detalles_pedido || []).map((d) => ({
-    nombre: d.productos?.nombre || 'Producto',
-    cantidad: Number(d.cantidad) || 1,
-    precio: Number(d.productos?.precio) || 0,
-  })),
+  detalles: (p.detalles_pedido || []).map((d) => {
+    const cantidad = Number(d.cantidad) || 1;
+    // S2-T13: Priorizar el precio histórico persistido al momento de la compra
+    const precio = Number(d.precio_unitario ?? d.productos?.precio ?? 0);
+    // S2-T13: Priorizar el subtotal histórico del pedido
+    const subtotal = d.subtotal != null ? Number(d.subtotal) : cantidad * precio;
+    return {
+      nombre: d.productos?.nombre || 'Producto',
+      cantidad,
+      precio,
+      subtotal,
+    };
+  }),
 });
-
-// URL del backend Node. Viene de EXPO_PUBLIC_API_URL (ver app-mobile/.env).
-// En un teléfono físico debe ser la IP de la PC, no 127.0.0.1.
-const API_URL = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '');
-
-// Pide el QR al backend, que es quien lo dibuja y lo registra. Si el backend no
-// responde (teléfono sin red contra la PC, API apagada) se degrada al QR local
-// con el token crudo, que el KDS también acepta.
-const obtenerQrDesdeBackend = async (pedidoId) => {
-  if (!API_URL) return null;
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
-    const res = await fetch(`${API_URL}/api/pedidos/${pedidoId}/qr`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json?.success && json?.data ? json.data : null;
-  } catch (e) {
-    return null;
-  }
-};
 
 const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState(null);
-  const [qrBackend, setQrBackend] = useState(null);
   // Pestaña del conmutador: 'activos' (pendientes de retirar) o 'inactivos'
   // (historial entregado/cancelado).
   const [tab, setTab] = useState('activos');
-  // Guarda qué pedido está abierto: si la respuesta del backend llega tarde,
-  // no debe pintar el QR de un pedido que el estudiante ya cerró.
-  const pedidoAbierto = useRef(null);
+  const [cancelando, setCancelando] = useState(false);
+  const cerrarPedido = useCallback(() => setSelected(null), []);
 
-  const cerrarPedido = useCallback(() => {
-    pedidoAbierto.current = null;
-    setSelected(null);
-    setQrBackend(null);
+  // S2-T17: Cancelación autónoma de pedidos con reembolso automático a Wallet
+  const solicitarCancelacion = useCallback((pedido) => {
+    if (!pedido || pedido.estado !== 'pendiente') {
+      Alert.alert(
+        'No cancelable',
+        'Solo puedes cancelar pedidos que se encuentren en estado Pendiente (antes del inicio de su preparación).'
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Cancelar pedido',
+      `¿Deseas cancelar el pedido ${pedido.codigo_pedido} por $${pedido.total.toLocaleString('es-CL')}?\n\nEl monto se reembolsará automáticamente al 100% en tu Billetera Virtual (Wallet).`,
+      [
+        { text: 'Mantener pedido', style: 'cancel' },
+        {
+          text: 'Sí, cancelar y reembolsar',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelando(true);
+            try {
+              let resultado = null;
+              let exito = false;
+
+              // 1. Vía microservicio ms-pedidos (PATCH /api/pedidos/:id/estado)
+              try {
+                const res = await apiPatch(`/api/pedidos/${pedido.id}/estado`, {
+                  estado: 'cancelado',
+                }, { timeoutMs: 7000 });
+
+                if (res && res.ok) {
+                  resultado = res;
+                  exito = true;
+                }
+              } catch (apiErr) {
+                if (apiErr instanceof ApiError && apiErr.status === 409) {
+                  const motivo = apiErr.detalle || apiErr.message;
+                  if (/ya_cancelado/i.test(motivo)) {
+                    Alert.alert('Pedido ya cancelado', 'Este pedido ya había sido cancelado previamente.');
+                  } else {
+                    Alert.alert(
+                      'No es posible cancelar',
+                      'La cafetería ya comenzó a preparar tu pedido o ya está listo para retiro.'
+                    );
+                  }
+                  return;
+                }
+                console.warn('[PedidosScreen] Falló ms-pedidos, intentando fallback RPC Supabase:', apiErr?.message);
+              }
+
+              // 2. Fallback vía RPC cancelar_pedido en Supabase
+              if (!exito) {
+                const { data: rpcRes, error: rpcErr } = await supabase.rpc('cancelar_pedido', {
+                  p_pedido_id: Number(pedido.id),
+                });
+
+                if (rpcErr) {
+                  throw rpcErr;
+                }
+
+                if (rpcRes?.ok) {
+                  resultado = rpcRes;
+                  exito = true;
+                } else if (rpcRes?.motivo) {
+                  if (rpcRes.motivo === 'no_cancelable') {
+                    Alert.alert(
+                      'No es posible cancelar',
+                      'La cafetería ya comenzó a preparar tu pedido o ya está listo para retiro.'
+                    );
+                    return;
+                  }
+                  if (rpcRes.motivo === 'ya_cancelado') {
+                    Alert.alert('Pedido ya cancelado', 'Este pedido ya había sido cancelado previamente.');
+                    return;
+                  }
+                  if (rpcRes.motivo === 'no_autorizado') {
+                    Alert.alert('No autorizado', 'No tienes permisos para cancelar este pedido.');
+                    return;
+                  }
+                  Alert.alert('Aviso', `No se pudo cancelar el pedido (${rpcRes.motivo}).`);
+                  return;
+                }
+              }
+
+              if (exito) {
+                const monto = resultado?.monto_reembolsado ?? pedido.total;
+                const nuevoSaldo = resultado?.saldo_nuevo;
+
+                const pedidoActualizado = {
+                  ...pedido,
+                  estado: 'cancelado',
+                  cancelado_en: new Date().toISOString(),
+                };
+
+                setSelected(pedidoActualizado);
+                setOrders((prev) =>
+                  prev.map((o) => (String(o.id) === String(pedido.id) ? pedidoActualizado : o))
+                );
+
+                Alert.alert(
+                  '¡Pedido cancelado!',
+                  `Tu orden ${pedido.codigo_pedido} fue cancelada exitosamente.\n\nSe reembolsaron $${monto.toLocaleString('es-CL')} a tu Wallet${
+                    nuevoSaldo != null ? ` (Saldo actual: $${nuevoSaldo.toLocaleString('es-CL')})` : ''
+                  }.`
+                );
+              }
+            } catch (err) {
+              console.warn('[PedidosScreen] Error cancelando pedido:', err);
+              Alert.alert(
+                'Error al cancelar',
+                'No pudimos procesar la cancelación. Verifica tu conexión a internet e inténtalo nuevamente.'
+              );
+            } finally {
+              setCancelando(false);
+            }
+          },
+        },
+      ]
+    );
   }, []);
 
-  // Al abrir un pedido se pide su QR al backend. `qrBackend` es null mientras
-  // carga, y queda null si la API no respondió (se usa el QR local).
-  // Un pedido ya entregado no pide QR: se muestra el recibo en su lugar.
-  const abrirPedido = useCallback(async (item) => {
-    pedidoAbierto.current = item.id;
-    setSelected(item);
-    setQrBackend(null);
-    if (!item.qr_token || !esActivo(item.estado)) return;
-    // Solo se pide QR para pedidos ACTIVOS. Un pedido inactivo (entregado o
-    // cancelado) nunca debe solicitar el QR: no sirve y no conviene exponerlo.
-    const data = await obtenerQrDesdeBackend(item.id);
-    if (pedidoAbierto.current !== item.id) return;
-    setQrBackend(data);
-  }, []);
+  // La lista se consulta con la sesión Supabase y el usuario interno del titular.
+  // Sus credenciales persistidas se muestran de inmediato, sin una segunda
+  // autorización del backend que pueda ocultar un pedido ya accesible al titular.
+  const abrirPedido = useCallback((item) => setSelected(item), []);
 
   const aplicarOrden = useCallback((nuevos) => {
     setOrders(nuevos.sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en)));
@@ -197,25 +290,27 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
       const usuarioId = await obtenerUsuarioId();
 
       if (!usuarioId) {
-        console.warn('La sesion no tiene usuario interno asociado.');
-        aplicarOrden([]);
-        return;
+        throw new Error('La sesión no tiene usuario interno asociado.');
       }
 
       const { data, error } = await supabase
         .from('pedidos')
-        .select('*, cafeterias(nombre, direccion, telefono, rut), detalles_pedido(productos(nombre, precio), cantidad)')
+        .select('*, cafeterias(nombre, telefono, campus_sedes(direccion)), detalles_pedido(cantidad, precio_unitario, subtotal, productos(nombre, precio))')
         .eq('usuario_id', usuarioId)
         .order('creado_en', { ascending: false });
 
       if (error) throw error;
 
-      aplicarOrden((data || []).map(mapPedido));
+      const pedidos = (data || []).map(mapPedido);
+      aplicarOrden(pedidos);
+      setSelected((prev) => prev ? pedidos.find((pedido) => pedido.id === prev.id) || null : null);
+      setLoadError(null);
     } catch (err) {
       console.warn('No se pudieron cargar los pedidos:', err);
-      aplicarOrden([]);
+      setLoadError('No pudimos cargar tus pedidos. Comprueba tu conexión e inténtalo nuevamente.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [userId, obtenerUsuarioId, aplicarOrden]);
 
@@ -261,14 +356,35 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 const idx = prev.findIndex((o) => o.id === String(nuevo.id));
                 if (idx === -1) return prev;
                 const siguiente = [...prev];
-                siguiente[idx] = mapPedido(nuevo);
+                const mapeado = mapPedido(nuevo);
+                siguiente[idx] = {
+                  ...prev[idx],
+                  ...mapeado,
+                  qr_token: nuevo.qr_token === undefined ? prev[idx].qr_token : mapeado.qr_token,
+                  codigo_retiro_diario: nuevo.codigo_retiro_diario === undefined ? prev[idx].codigo_retiro_diario : mapeado.codigo_retiro_diario,
+                  detalles: nuevo.detalles_pedido ? mapeado.detalles : prev[idx].detalles,
+                  cafeteria_nombre: nuevo.cafeterias ? mapeado.cafeteria_nombre : prev[idx].cafeteria_nombre,
+                  cafeteria_direccion: nuevo.cafeterias ? mapeado.cafeteria_direccion : prev[idx].cafeteria_direccion,
+                  cafeteria_telefono: nuevo.cafeterias ? mapeado.cafeteria_telefono : prev[idx].cafeteria_telefono,
+                  cafeteria_rut: nuevo.cafeterias ? mapeado.cafeteria_rut : prev[idx].cafeteria_rut,
+                };
                 return siguiente;
               });
-              setSelected((prevSel) =>
-                prevSel && String(prevSel.id) === String(nuevo.id)
-                  ? mapPedido(nuevo)
-                  : prevSel
-              );
+              setSelected((prevSel) => {
+                if (!prevSel || String(prevSel.id) !== String(nuevo.id)) return prevSel;
+                const mapeado = mapPedido(nuevo);
+                return {
+                  ...prevSel,
+                  ...mapeado,
+                  qr_token: nuevo.qr_token === undefined ? prevSel.qr_token : mapeado.qr_token,
+                  codigo_retiro_diario: nuevo.codigo_retiro_diario === undefined ? prevSel.codigo_retiro_diario : mapeado.codigo_retiro_diario,
+                  detalles: nuevo.detalles_pedido ? mapeado.detalles : prevSel.detalles,
+                  cafeteria_nombre: nuevo.cafeterias ? mapeado.cafeteria_nombre : prevSel.cafeteria_nombre,
+                  cafeteria_direccion: nuevo.cafeterias ? mapeado.cafeteria_direccion : prevSel.cafeteria_direccion,
+                  cafeteria_telefono: nuevo.cafeterias ? mapeado.cafeteria_telefono : prevSel.cafeteria_telefono,
+                  cafeteria_rut: nuevo.cafeterias ? mapeado.cafeteria_rut : prevSel.cafeteria_rut,
+                };
+              });
             }
           )
           .on(
@@ -291,6 +407,14 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
     };
   }, [userId, obtenerUsuarioId, fetchOrders]);
 
+  useEffect(() => {
+    if (!userId) return undefined;
+    const actualizar = () => { if (AppState.currentState === 'active') fetchOrders(); };
+    const timer = setInterval(actualizar, 10000);
+    const listener = AppState.addEventListener('change', (state) => { if (state === 'active') fetchOrders(); });
+    return () => { clearInterval(timer); listener.remove(); };
+  }, [userId, fetchOrders]);
+
   const renderItem = ({ item }) => {
     const estado = ESTADOS[item.estado] || ESTADOS.pendiente;
     const detalles = item.detalles || [];
@@ -298,6 +422,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
       <TouchableOpacity
         activeOpacity={0.85}
         style={styles.cardWrapper}
+        accessibilityRole="button"
+        accessibilityLabel={`Ver pedido ${item.codigo_pedido}`}
         onPress={() => abrirPedido(item)}
       >
         <Card variant="elevated" padding="lg">
@@ -320,6 +446,9 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
             {detalles.map((d) => `${d.cantidad}× ${d.nombre}`).join(' · ')}
           </Text>
         )}
+        <Text style={styles.cardDetalle}>
+          {esActivo(item.estado) ? 'Ver QR y token de contingencia' : 'Ver comprobante'}
+        </Text>
         </Card>
       </TouchableOpacity>
     );
@@ -337,7 +466,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
         title="Mis Pedidos"
         rightElement={
           <View style={styles.headerIcon}>
-            <Text style={styles.headerIconText}>▣</Text>
+            <AppIcon name="receipt" style={styles.headerIconText} />
           </View>
         }
       />
@@ -346,6 +475,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
         <ActivityIndicator size="large" color={colors.cafeOscuro} style={{ marginTop: 48 }} />
       ) : (
         <>
+          {loadError && (
+            <View style={styles.infoBanner}>
+              <Text accessibilityRole="alert" style={styles.infoBannerText}>{loadError}</Text>
+              <Button title="Reintentar" onPress={() => { setRefreshing(true); fetchOrders(); }} />
+            </View>
+          )}
           {/* Conmutador Activos/Inactivos, con contador en cada pestaña */}
           <View style={styles.switcherRow}>
             <TouchableOpacity
@@ -369,6 +504,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
           <FlatList
             data={tab === 'activos' ? activos : inactivos}
             keyExtractor={(item) => item.id}
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); fetchOrders(); }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.list}
             ListHeaderComponent={
@@ -382,9 +519,9 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
             }
             renderItem={renderItem}
             ListEmptyComponent={
-              tab === 'activos' ? (
+              loadError ? null : tab === 'activos' ? (
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyEmoji}>📦</Text>
+                  <AppIcon name="box" style={styles.emptyIcon} />
                   <Text style={styles.emptyTitle}>No tienes pedidos activos</Text>
                   <Text style={styles.emptyDescription}>
                     Cuando tengas un pedido pendiente, en preparación o listo para retiro, aparecerá aquí con su QR y token.
@@ -398,7 +535,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 </View>
               ) : (
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyEmoji}>🗂️</Text>
+                  <AppIcon name="archive" style={styles.emptyIcon} />
                   <Text style={styles.emptyTitle}>Todavía no tienes historial</Text>
                   <Text style={styles.emptyDescription}>
                     Cuando un pedido quede entregado o cancelado, aparecerá aquí y podrás ver su boleta.
@@ -419,18 +556,19 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
       >
         <View style={styles.modalBackdrop}>
           <Card variant="elevated" padding="lg" style={styles.modalCard}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
             {pedidoConfirmado && (
               <>
                 <View style={styles.confirmacionHeader}>
                   <View style={styles.confirmacionIcono}>
-                    <Text style={styles.confirmacionIconoTexto}>✓</Text>
+                    <AppIcon name="check" style={styles.confirmacionIconoTexto} />
                   </View>
                   <Text style={styles.confirmacionTitulo}>¡Pedido Confirmado!</Text>
                   <TouchableOpacity
                     style={styles.modalClose}
                     onPress={onConfirmacionVista}
                   >
-                    <Text style={styles.modalCloseText}>✕</Text>
+                    <AppIcon name="close" style={styles.modalCloseText} />
                   </TouchableOpacity>
                 </View>
 
@@ -464,22 +602,30 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 </View>
 
                 <View style={styles.confirmacionQrSection}>
-                  <Text style={styles.confirmacionQrTitulo}>
-                    Tu QR de retiro
-                  </Text>
-                  <Text style={styles.confirmacionQrHint}>
-                    Presenta este código al llegar a la cafetería
-                  </Text>
-                  <View style={styles.confirmacionQrBox}>
-                    <Text style={styles.confirmacionQrTexto}>
-                      {pedidoConfirmado.qr_token
-                        ? `QR-${pedidoConfirmado.qr_token.substring(0, 8).toUpperCase()}`
-                        : `QR-${pedidoConfirmado.pedido_id.toString().padStart(6, '0')}`}
+                  <Text style={styles.confirmacionQrTitulo}>Tu QR de retiro</Text>
+                  {esActivo(normalizarEstado(pedidoConfirmado.estado)) && pedidoConfirmado.qr_token ? (
+                    <>
+                      <View style={styles.confirmacionQrBox}>
+                        <QrCode value={pedidoConfirmado.qr_token} size={220} />
+                      </View>
+                      <Text style={styles.confirmacionQrHint}>
+                        Presenta este QR al llegar a la cafetería
+                      </Text>
+                    </>
+                  ) : (
+                    <Text style={styles.confirmacionQrHint}>
+                      QR no disponible. Consulta el detalle en Mis pedidos.
                     </Text>
-                  </View>
-                  <Text style={styles.confirmacionTokenTexto}>
-                    Token de contingencia: {pedidoConfirmado.codigo_retiro || `CF-${pedidoConfirmado.pedido_id.toString().padStart(4, '0')}`}
-                  </Text>
+                  )}
+                  {esActivo(normalizarEstado(pedidoConfirmado.estado)) && pedidoConfirmado.codigo_retiro ? (
+                    <Text style={styles.confirmacionTokenTexto}>
+                      Token de contingencia: {pedidoConfirmado.codigo_retiro}
+                    </Text>
+                  ) : (
+                    <Text style={styles.confirmacionTokenTexto}>
+                      Código de contingencia no disponible.
+                    </Text>
+                  )}
                 </View>
 
                 <Button
@@ -489,6 +635,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 />
               </>
             )}
+            </ScrollView>
           </Card>
         </View>
       </Modal>
@@ -501,6 +648,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
       >
         <View style={styles.modalBackdrop}>
           <Card variant="elevated" padding="lg" style={styles.modalCard}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
             {selected && (
               <>
                 <View style={styles.modalHeader}>
@@ -519,7 +667,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                     style={styles.modalClose}
                     onPress={cerrarPedido}
                   >
-                    <Text style={styles.modalCloseText}>✕</Text>
+                    <AppIcon name="close" style={styles.modalCloseText} />
                   </TouchableOpacity>
                 </View>
 
@@ -530,7 +678,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                         {d.cantidad}× {d.nombre}
                       </Text>
                       <Text style={styles.detallePrecio}>
-                        ${(d.cantidad * d.precio).toLocaleString('es-CL')}
+                        ${(d.subtotal ?? (d.cantidad * d.precio)).toLocaleString('es-CL')}
                       </Text>
                     </View>
                   ))}
@@ -546,9 +694,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                      QR ni token de contingencia. En su lugar se muestra la
                      boleta/comprobante con los datos de la cafetería. */
                   <View style={styles.reciboBox}>
-                    <Text style={styles.reciboTitulo}>
-                      {selected.estado === 'cancelado' ? '✕ Pedido cancelado' : '✓ Pedido entregado'}
-                    </Text>
+                    <View style={styles.reciboTitleRow}>
+                      <AppIcon name={selected.estado === 'cancelado' ? 'close' : 'check'} style={styles.reciboTitleIcon} />
+                      <Text style={styles.reciboTitulo}>
+                        {selected.estado === 'cancelado' ? 'Pedido cancelado' : 'Pedido entregado'}
+                      </Text>
+                    </View>
                     <Text style={styles.reciboSubtitulo}>
                       {selected.estado === 'cancelado'
                         ? 'Este pedido fue cancelado. Conserva esta boleta, sin QR ni token.'
@@ -622,39 +773,55 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                   <View style={styles.qrContainer}>
                     {selected.qr_token ? (
                       <>
-                        {/* El backend genera la imagen y el contenido va en JSON;
-                            si la API no responde se cae al QR local con el token
-                            crudo, que el KDS también acepta. */}
-                        {qrBackend?.qr_image ? (
-                          <Image
-                            source={{ uri: qrBackend.qr_image }}
-                            style={styles.qrImagen}
-                            resizeMode="contain"
-                          />
-                        ) : (
-                          <QrCode value={selected.qr_token} size={190} />
-                        )}
+                        <QrCode value={selected.qr_token} size={220} />
                         <Text style={styles.qrHint}>
                           Presenta este QR al llegar a la cafetería para retirar tu pedido.
                         </Text>
-                        <View style={styles.contingenciaBox}>
-                          <Text style={styles.contingenciaTitulo}>
-                            ¿No puedes escanear? Di este código
-                          </Text>
-                          <Text style={styles.contingenciaCodigo}>
-                            {qrBackend?.codigo_legible || selected.codigo_retiro_diario}
-                          </Text>
-                        </View>
                       </>
                     ) : (
                       <Text style={styles.qrHint}>
-                        El QR de retiro aparecerá aquí una vez confirmado el pago de tu pedido.
+                        Este pedido no tiene un QR de retiro guardado.
                       </Text>
+                    )}
+                    <View style={styles.contingenciaBox}>
+                      <Text style={styles.contingenciaTitulo}>Token de contingencia</Text>
+                      <Text selectable style={styles.contingenciaCodigo}>
+                        {selected.codigo_retiro_diario || 'Este pedido no tiene un token de contingencia guardado.'}
+                      </Text>
+                    </View>
+
+                    {/* S2-T17: Opciones de Cancelación y Reembolso */}
+                    {selected.estado === 'pendiente' && (
+                      <View style={styles.cancelarBox}>
+                        <Text style={styles.cancelarHint}>
+                          ¿Tuviste un imprevisto? Mientras la orden esté pendiente de preparación, puedes cancelarla y recibir el reembolso completo a tu Wallet.
+                        </Text>
+                        <Button
+                          title={cancelando ? 'Cancelando orden...' : 'Cancelar pedido y reembolsar'}
+                          variant="danger"
+                          size="sm"
+                          onPress={() => solicitarCancelacion(selected)}
+                          disabled={cancelando}
+                          loading={cancelando}
+                        />
+                      </View>
+                    )}
+
+                    {selected.estado !== 'pendiente' && esActivo(selected.estado) && (
+                      <View style={styles.noCancelableBox}>
+                        <View style={styles.noCancelableRow}>
+                          <AppIcon name="lock" style={styles.noCancelableIcon} />
+                          <Text style={styles.noCancelableText}>
+                            Comanda en preparación o lista: no admite cancelación porque la cafetería ya comenzó a elaborar tus productos.
+                          </Text>
+                        </View>
+                      </View>
                     )}
                   </View>
                 )}
               </>
             )}
+            </ScrollView>
           </Card>
         </View>
       </Modal>
@@ -744,7 +911,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     marginTop: spacing.sm,
   },
-  emptyEmoji: { fontSize: 40, marginBottom: spacing.md },
+  emptyIcon: { fontSize: 40, marginBottom: spacing.md },
   emptyTitle: { fontSize: typography.subtitulo, fontWeight: typography.pesoBold, color: colors.cafeOscuro, textAlign: 'center' },
   emptyDescription: {
     fontSize: typography.cuerpoPequeno,
@@ -760,6 +927,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   modalCard: {
+    maxHeight: '90%',
     borderRadius: 24,
   },
   modalHeader: {
@@ -795,6 +963,39 @@ const styles = StyleSheet.create({
   },
   qrContainer: { alignItems: 'center', marginTop: spacing.xl },
   qrImagen: { width: 200, height: 200 },
+  qrErrorBox: {
+    padding: spacing.md,
+    backgroundColor: colors.rojoBg || '#FEE2E2',
+    borderRadius: 14,
+    alignItems: 'center',
+    marginVertical: spacing.md,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: colors.rojo || '#DC2626',
+  },
+  qrErrorIcon: { fontSize: 26, marginBottom: spacing.xs },
+  qrErrorTitulo: {
+    fontSize: typography.cuerpoPequeno,
+    fontWeight: typography.pesoBold,
+    color: colors.rojo || '#DC2626',
+    textAlign: 'center',
+  },
+  qrErrorMensaje: {
+    fontSize: typography.etiqueta,
+    color: colors.textoSecundario,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  offlineAviso: {
+    fontSize: typography.etiqueta,
+    color: colors.naranja,
+    fontWeight: typography.pesoBold,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+  },
+  offlineAvisoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
+  offlineAvisoIcon: { fontSize: 13, color: colors.cafeMedio },
   qrHint: {
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,
@@ -838,6 +1039,8 @@ const styles = StyleSheet.create({
     borderColor: colors.bordeOscuro,
   },
   reciboTitulo: { fontSize: 15, fontWeight: typography.pesoExtraBold, color: colors.verde },
+  reciboTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  reciboTitleIcon: { fontSize: 16, color: colors.verde },
   reciboSubtitulo: {
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,
@@ -922,11 +1125,6 @@ const styles = StyleSheet.create({
   },
   confirmacionQrBox: {
     backgroundColor: colors.blanco,
-    borderWidth: 2,
-    borderColor: colors.cafeOscuro,
-    borderRadius: 16,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.xxl,
     marginBottom: spacing.md,
   },
   confirmacionQrTexto: {
@@ -940,6 +1138,38 @@ const styles = StyleSheet.create({
     color: colors.textoSecundario,
     textAlign: 'center',
   },
+  cancelarBox: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borde,
+    alignItems: 'center',
+    width: '100%',
+  },
+  cancelarHint: {
+    fontSize: typography.cuerpoPequeno,
+    color: colors.textoSecundario,
+    textAlign: 'center',
+    lineHeight: 16,
+    marginBottom: spacing.sm,
+  },
+  noCancelableBox: {
+    marginTop: spacing.md,
+    backgroundColor: colors.fondo,
+    padding: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borde,
+    width: '100%',
+  },
+  noCancelableText: {
+    fontSize: typography.etiqueta + 1,
+    color: colors.cafeMedio,
+    textAlign: 'center',
+    lineHeight: 15,
+  },
+  noCancelableRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  noCancelableIcon: { fontSize: 15, color: colors.cafeMedio },
 });
 
 export default PedidosScreen;

@@ -61,10 +61,29 @@ export const useDisponibilidadProductos = (cafeteriaId) => {
         (payload) => {
           const nuevo = payload.new;
           if (!nuevo) return;
+          const activo = nuevo.activo !== false && nuevo.activo !== null;
+          const eliminado = Boolean(nuevo.eliminado_en);
+          // Si se reactiva un producto (pasa a activo y sin eliminación),
+          // no está en la lista actual filtrada por activo=true. Forzamos recarga
+          // para incorporarlo sin duplicados y con toda su información.
+          if (activo && !eliminado) {
+            const anterior = payload.old || {};
+            const sinOld = !payload.old || Object.keys(anterior).length === 0;
+            const estabaInactivo = anterior.activo === false || anterior.activo === null || Boolean(anterior.eliminado_en);
+            // Fallback: si Realtime no entrega payload.old, tratamos como posible
+            // reactivación para no depender únicamente de ese campo.
+            if (estabaInactivo || sinOld) {
+              setCambios((prev) => [{ recargar: true, ts: Date.now() }, ...prev.slice(0, 19)]);
+              return;
+            }
+          }
           setCambios((prev) => [
             {
               id: Number(nuevo.id),
               stock: Number(nuevo.stock) || 0,
+              // El precio también viaja: un cambio de precio debe verse en el
+              // menú sin recargar, igual que el stock.
+              precio: Number(nuevo.precio),
               activo: nuevo.activo,
               eliminadoEn: nuevo.eliminado_en ?? null,
               ts: Date.now(),
