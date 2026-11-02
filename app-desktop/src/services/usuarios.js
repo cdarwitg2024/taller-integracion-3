@@ -226,7 +226,7 @@ export const usuarios = {
 
       const usuarioFinal = {
         ...userProfile,
-        cafeteria_id: cafeteriaAsignada || 1,
+        cafeteria_id: cafeteriaAsignada ?? null,
       };
 
       return { success: true, user: usuarioFinal };
@@ -311,7 +311,7 @@ export const usuarios = {
 
       const usuarioFinal = {
         ...userProfile,
-        cafeteria_id: cafeteriaAsignada || 1,
+        cafeteria_id: cafeteriaAsignada ?? null,
       };
 
       return { success: true, user: usuarioFinal };
@@ -413,7 +413,7 @@ export const usuarios = {
       const usuarioFinal = {
         ...userProfile,
         rol: rolNombre,
-        cafeteria_id: cafeteriaAsignada || 1,
+        cafeteria_id: cafeteriaAsignada ?? null,
       };
 
       return { success: true, user: usuarioFinal };
@@ -449,7 +449,7 @@ export const usuarios = {
       const rolNombre = String(userProfile?.roles?.nombre || '')
         .trim()
         .toLowerCase();
-      return { success: true, user: { ...userProfile, rol: rolNombre, cafeteria_id: cafeteriaAsignada || userProfile.cafeteria_id || 1 }, rol: rolNombre };
+      return { success: true, user: { ...userProfile, rol: rolNombre, cafeteria_id: cafeteriaAsignada ?? null }, rol: rolNombre };
     } catch (err) {
       // Error de red u otro no definitivo: no se cierra la sesión.
       console.warn('Error consultando perfil de sesión:', err);

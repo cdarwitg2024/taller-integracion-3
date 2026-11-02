@@ -5,7 +5,7 @@
 -- la pagina Stock. El DUENO la consulta desde el panel administrativo.
 --
 -- Mapeo de nombres: el enunciado pedia `id_producto` y `estados`,
--- pero el codigo ya escrito en app-desktop/src/service/
+-- pero el codigo ya escrito en app-desktop/src/services/
 -- solicitudes_stock.js inserta `producto_id` y `estado`. Se usan los
 -- nombres del CODIGO para que el INSERT del empleado no reviente.
 --

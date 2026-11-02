@@ -29,16 +29,16 @@ function KpiCards({ stats }) {
   const cards = [
     {
       id: 'ventas',
-      title: 'Ventas del Día',
+      title: 'Ventas acumuladas',
       value: `$${(stats?.totalVentas || 0).toLocaleString('es-CL')}`,
-      subtitle: (stats?.totalVentas || 0) > 0 ? 'Total facturado en la jornada' : 'Sin ventas registradas hoy',
+      subtitle: (stats?.totalVentas || 0) > 0 ? 'Total de ventas de la cafetería' : 'Sin ventas registradas',
       ...ICON_CONFIG.ventas,
     },
     {
       id: 'pedidos',
       title: 'Total Pedidos',
       value: stats?.totalPedidos || 0,
-      subtitle: 'Registrados en el turno',
+      subtitle: 'Registrados en la cafetería',
       ...ICON_CONFIG.pedidos,
     },
     {

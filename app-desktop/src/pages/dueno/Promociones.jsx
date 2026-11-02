@@ -1,415 +1,107 @@
-// ─── Pantalla: Promociones (Panel Dueño) ──────────────────────────────────────
-// Gestión de promociones activas de la cafetería.
-// Accesible solo para usuarios con rol "dueño".
-//
-// Flujo:
-//   1. app.jsx define la ruta /dueno/promociones y el ítem del menú.
-//   2. Sidebar renderiza el ítem "Promociones".
-//   3. Al hacer clic, se renderiza este componente dentro de AppLayout.
-//   4. AppLayout inyecta automáticamente el PageHeader consistente (título y subtítulo).
-
-import React, { useState } from 'react';
-import {
-  Box,
-  Typography,
-  Grid,
-  CardContent,
-  Stack,
-  TableRow,
-  Chip,
-} from '@mui/material';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, InputAdornment, MenuItem, Paper, Skeleton, Stack, Switch, TextField, Tooltip, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
-import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
-import ErrorOutlinedIcon from '@mui/icons-material/ErrorOutlined';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import SearchIcon from '@mui/icons-material/Search';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import { promocionesCafeteria } from '../../services/administracionCafeteria';
+import { productos as productosService } from '../../services/productos';
+import { supabase } from '../../services/supabase';
 
-import BaseCard from '../../components/ui/BaseCard';
-import BaseButton from '../../components/ui/BaseButton';
-import Input from '../../components/ui/BaseInput';
-import {
-  BaseTableContainer,
-  BaseTable,
-  BaseTableHead,
-  BaseTableBody,
-  BaseTableCell,
-} from '../../components/ui/BaseTable';
-import {
-  BaseDialog,
-  BaseDialogTitle,
-  BaseDialogContent,
-  BaseDialogActions,
-} from '../../components/ui/BaseDialog';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER } from '../../design/tokens';
-
-const initialPromociones = [
-  { id: 1, nombre: 'Café Americano 2x1', descripcion: 'Lunes y martes de 7:00 a 10:00', descuento: '50%', activo: true },
-  { id: 2, nombre: 'Combo Desayuno', descripcion: 'Café + medialuna + jugo', descuento: '20%', activo: true },
-  { id: 3, nombre: 'Tarde de Té', descripcion: 'Té + pastelería desde las 16:00', descuento: '30%', activo: false },
-];
+const nuevo = () => ({ nombre: '', descripcion: '', descuento_porcentaje: '', producto_id: '', inicio_en: '', fin_en: '', activo: true });
+const fechaLocal = (iso) => { if (!iso) return ''; const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+const fecha = (iso) => iso ? new Date(iso).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' }) : null;
+const estado = (p, now) => !p.activo ? 'Pausada' : p.fin_en && new Date(p.fin_en).getTime() <= now ? 'Finalizada' : p.inicio_en && new Date(p.inicio_en).getTime() > now ? 'Programada' : 'Vigente';
+const tonos = { Vigente: { bg: '#E6F3EB', fg: '#267248' }, Programada: { bg: '#FFF0D8', fg: '#97631D' }, Pausada: { bg: '#EFEBE7', fg: '#77685B' }, Finalizada: { bg: '#F5E7E3', fg: '#A45A45' } };
 
 export default function Promociones({ currentUser }) {
-  const [promociones, setPromociones] = useState(initialPromociones);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [promocionAEliminar, setPromocionAEliminar] = useState(null);
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ nombre: '', descripcion: '', descuento: '', activo: true });
-
-  const total = promociones.length;
-  const activas = promociones.filter((p) => p.activo).length;
-  const inactivas = total - activas;
-
-  const handleOpenDialog = () => {
-    setForm({ nombre: '', descripcion: '', descuento: '', activo: true });
-    setEditing(false);
-    setDialogOpen(true);
+  const cafeteriaId = currentUser?.cafeteria_id;
+  const [promociones, setPromociones] = useState([]);
+  const [productos, setProductos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [formError, setFormError] = useState('');
+  const [form, setForm] = useState(null);
+  const [eliminar, setEliminar] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
+  const [filtro, setFiltro] = useState('Todas');
+  const [now, setNow] = useState(Date.now());
+  const solicitud = useRef(0);
+  const cafeteriaActual = useRef(cafeteriaId);
+  cafeteriaActual.current = cafeteriaId;
+  const operando = useRef(false);
+  const cargar = useCallback(async (inicial = false) => {
+    const id = ++solicitud.current;
+    if (inicial) setLoading(true);
+    try {
+      if (!cafeteriaId) throw new Error('No tienes una cafetería asociada.');
+      const [rows, prods] = await Promise.all([promocionesCafeteria.listar(cafeteriaId), productosService.getAll(cafeteriaId)]);
+      if (id !== solicitud.current) return;
+      setPromociones(rows); setProductos(prods); setError('');
+    } catch (err) { if (id === solicitud.current) setError(err.message); }
+    finally { if (id === solicitud.current) setLoading(false); }
+  }, [cafeteriaId]);
+  useEffect(() => {
+    setPromociones([]); setProductos([]); setForm(null); setEliminar(null); setNotice(''); cargar(true);
+    if (!cafeteriaId) return () => { solicitud.current++; };
+    const canal = supabase.channel('dueno-promociones-' + cafeteriaId).on('postgres_changes', { event: '*', schema: 'public', table: 'promociones', filter: 'cafeteria_id=eq.' + cafeteriaId }, () => cargar()).subscribe();
+    const interval = setInterval(() => setNow(Date.now()), 30000);
+    return () => { solicitud.current++; clearInterval(interval); supabase.removeChannel(canal); };
+  }, [cafeteriaId, cargar]);
+  const stats = useMemo(() => ({ total: promociones.length, vigentes: promociones.filter(p => estado(p, now) === 'Vigente').length, programadas: promociones.filter(p => estado(p, now) === 'Programada').length }), [promociones, now]);
+  const visibles = promociones.filter(p => (filtro === 'Todas' || estado(p, now) === filtro) && (p.nombre + ' ' + (p.descripcion || '')).toLocaleLowerCase().includes(busqueda.trim().toLocaleLowerCase()));
+  const cambiar = key => e => setForm(prev => ({ ...prev, [key]: e.target.value }));
+  const guardar = async e => {
+    e.preventDefault(); if (operando.current) return;
+    operando.current = true; setBusy(true); setFormError(''); const ambito = cafeteriaId;
+    try { await promocionesCafeteria.guardar(cafeteriaId, form); if (ambito !== cafeteriaActual.current) return; setForm(null); setNotice('Promoción guardada. Se aplicará en las compras durante su vigencia.'); await cargar(); }
+    catch (err) { if (ambito === cafeteriaActual.current) setFormError(err.message); }
+    finally { operando.current = false; setBusy(false); }
   };
-
-  const handleEdit = (p) => {
-    setForm({ ...p });
-    setEditing(true);
-    setDialogOpen(true);
+  const borrar = async () => {
+    if (operando.current) return; operando.current = true; setBusy(true); setFormError(''); const ambito = cafeteriaId;
+    try { await promocionesCafeteria.eliminar(cafeteriaId, eliminar); if (ambito !== cafeteriaActual.current) return; setEliminar(null); setNotice('La promoción fue eliminada. Los pedidos anteriores conservan su precio.'); await cargar(); }
+    catch (err) { if (ambito === cafeteriaActual.current) setFormError(err.message); }
+    finally { operando.current = false; setBusy(false); }
   };
-
-  const handleConfirmDelete = (p) => {
-    setPromocionAEliminar(p);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeleteExecute = () => {
-    if (promocionAEliminar) {
-      setPromociones(promociones.filter((p) => p.id !== promocionAEliminar.id));
-    }
-    setDeleteDialogOpen(false);
-    setPromocionAEliminar(null);
-  };
-
-  const handleSave = () => {
-    if (!form.nombre || !form.descuento) return;
-
-    if (editing) {
-      setPromociones(
-        promociones.map((p) => (p.id === form.id ? { ...p, ...form } : p))
-      );
-    } else {
-      const newId = Math.max(...promociones.map((p) => p.id), 0) + 1;
-      setPromociones([...promociones, { ...form, id: newId }]);
-    }
-    setDialogOpen(false);
-  };
-
-  return (
-    <Box sx={{ width: '100%', pb: SPACING.xxxl }}>
-      
-      {/* Barra de Acción Superior (El título y subtítulo los inyecta AppLayout con PageHeader) */}
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
-          width: '100%',
-          mb: SPACING.lg,
-        }}
-      >
-        <BaseButton
-          className="variant-primary"
-          startIcon={<AddIcon />}
-          onClick={handleOpenDialog}
-        >
-          Agregar Promoción
-        </BaseButton>
-      </Box>
-
-      {/* Tarjetas de Resumen (KPIs compactos reutilizando BaseCard y tokens de diseño) */}
-      <Grid container spacing={2.5} sx={{ width: '100%', mb: SPACING.lg }}>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <BaseCard padding="md" sx={{ height: '100%', display: 'flex', alignItems: 'center' }}>
-            <CardContent sx={{ p: 0, width: '100%', '&:last-child': { pb: 0 } }}>
-              <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-                <Box
-                  sx={{
-                    p: 1.5,
-                    borderRadius: `${BORDER.radiusMd}px`,
-                    bgcolor: COLORS.primaryLight,
-                    color: COLORS.primary,
-                    display: 'flex',
-                  }}
-                >
-                  <LocalOfferOutlinedIcon />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={{ color: COLORS.textSecondary, fontWeight: TYPOGRAPHY.fontWeightSemibold }}>
-                    Total Promociones
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: TYPOGRAPHY.fontWeightExtraBold, color: COLORS.textPrimary }}>
-                    {total}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </BaseCard>
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <BaseCard
-            padding="md"
-            sx={{
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              bgcolor: COLORS.successBg,
-              border: `1px solid ${COLORS.success}`,
-            }}
-          >
-            <CardContent sx={{ p: 0, width: '100%', '&:last-child': { pb: 0 } }}>
-              <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-                <Box
-                  sx={{
-                    p: 1.5,
-                    borderRadius: `${BORDER.radiusMd}px`,
-                    bgcolor: 'rgba(46, 125, 50, 0.12)',
-                    color: COLORS.success,
-                    display: 'flex',
-                  }}
-                >
-                  <CheckCircleOutlinedIcon />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={{ color: COLORS.success, fontWeight: TYPOGRAPHY.fontWeightSemibold }}>
-                    Promociones Activas
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: TYPOGRAPHY.fontWeightExtraBold, color: COLORS.success }}>
-                    {activas}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </BaseCard>
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <BaseCard
-            padding="md"
-            sx={{
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              bgcolor: COLORS.errorBg,
-              border: `1px solid ${COLORS.error}`,
-            }}
-          >
-            <CardContent sx={{ p: 0, width: '100%', '&:last-child': { pb: 0 } }}>
-              <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-                <Box
-                  sx={{
-                    p: 1.5,
-                    borderRadius: `${BORDER.radiusMd}px`,
-                    bgcolor: 'rgba(198, 40, 40, 0.12)',
-                    color: COLORS.error,
-                    display: 'flex',
-                  }}
-                >
-                  <ErrorOutlinedIcon />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={{ color: COLORS.error, fontWeight: TYPOGRAPHY.fontWeightSemibold }}>
-                    Promociones Inactivas
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: TYPOGRAPHY.fontWeightExtraBold, color: COLORS.error }}>
-                    {inactivas}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </BaseCard>
-        </Grid>
-      </Grid>
-
-      {/* Tabla Principal de Promociones (Usando componentes compartidos BaseTable) */}
-      <BaseTableContainer>
-        <BaseTable size="small">
-          <BaseTableHead>
-            <TableRow>
-              <BaseTableCell sx={{ fontWeight: TYPOGRAPHY.fontWeightBold }}>NOMBRE</BaseTableCell>
-              <BaseTableCell sx={{ fontWeight: TYPOGRAPHY.fontWeightBold }}>DESCRIPCIÓN</BaseTableCell>
-              <BaseTableCell sx={{ fontWeight: TYPOGRAPHY.fontWeightBold }}>DESCUENTO</BaseTableCell>
-              <BaseTableCell sx={{ fontWeight: TYPOGRAPHY.fontWeightBold }}>ESTADO</BaseTableCell>
-              <BaseTableCell align="right" sx={{ fontWeight: TYPOGRAPHY.fontWeightBold }}>ACCIONES</BaseTableCell>
-            </TableRow>
-          </BaseTableHead>
-          <BaseTableBody>
-            {promociones.length === 0 ? (
-              <TableRow>
-                <BaseTableCell colSpan={5} align="center" sx={{ py: 4, color: COLORS.textMuted }}>
-                  No hay promociones registradas.
-                </BaseTableCell>
-              </TableRow>
-            ) : (
-              promociones.map((p) => (
-                <TableRow key={p.id} hover sx={{ '&:hover': { backgroundColor: COLORS.surfaceAlt } }}>
-                  <BaseTableCell sx={{ fontWeight: TYPOGRAPHY.fontWeightSemibold, color: COLORS.textPrimary }}>
-                    {p.nombre}
-                  </BaseTableCell>
-                  <BaseTableCell sx={{ color: COLORS.textSecondary }}>{p.descripcion}</BaseTableCell>
-                  <BaseTableCell sx={{ fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.primary }}>
-                    {p.descuento}
-                  </BaseTableCell>
-                  <BaseTableCell>
-                    <Chip
-                      size="small"
-                      label={p.activo ? 'Activo' : 'Inactivo'}
-                      sx={{
-                        backgroundColor: p.activo ? COLORS.successBg : COLORS.errorBg,
-                        color: p.activo ? COLORS.success : COLORS.error,
-                        fontWeight: TYPOGRAPHY.fontWeightBold,
-                        fontSize: TYPOGRAPHY.caption,
-                        borderRadius: `${BORDER.radiusSm}px`,
-                        height: 24,
-                        '& .MuiChip-label': {
-                          px: 1.2,
-                        },
-                      }}
-                    />
-                  </BaseTableCell>
-                  <BaseTableCell align="right">
-                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                      <BaseButton
-                        className="variant-outlined size-sm"
-                        onClick={() => handleEdit(p)}
-                      >
-                        Editar
-                      </BaseButton>
-                      <BaseButton
-                        className="variant-danger size-sm"
-                        onClick={() => handleConfirmDelete(p)}
-                      >
-                        Eliminar
-                      </BaseButton>
-                    </Box>
-                  </BaseTableCell>
-                </TableRow>
-              ))
-            )}
-          </BaseTableBody>
-        </BaseTable>
-      </BaseTableContainer>
-
-      {/* Diálogo para Crear / Editar Promoción (Usando BaseDialog) */}
-      <BaseDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <BaseDialogTitle>
-          <Typography variant="h6" sx={{ fontWeight: TYPOGRAPHY.fontWeightBold, color: COLORS.textPrimary }}>
-            {editing ? 'Editar Promoción' : 'Nueva Promoción'}
-          </Typography>
-        </BaseDialogTitle>
-        <BaseDialogContent dividers sx={{ borderColor: COLORS.border }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, my: 1 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8 }}>
-              <Typography variant="body2" sx={{ fontWeight: TYPOGRAPHY.fontWeightSemibold, color: COLORS.textSecondary }}>
-                Nombre de la Promoción
-              </Typography>
-              <Input
-                placeholder="Ej. Café Americano 2x1"
-                value={form.nombre}
-                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-              />
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8 }}>
-              <Typography variant="body2" sx={{ fontWeight: TYPOGRAPHY.fontWeightSemibold, color: COLORS.textSecondary }}>
-                Descripción y Horario
-              </Typography>
-              <Input
-                placeholder="Ej. Lunes y martes de 7:00 a 10:00"
-                value={form.descripcion}
-                onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
-              />
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8 }}>
-              <Typography variant="body2" sx={{ fontWeight: TYPOGRAPHY.fontWeightSemibold, color: COLORS.textSecondary }}>
-                Descuento
-              </Typography>
-              <Input
-                placeholder="Ej. 50%"
-                value={form.descuento}
-                onChange={(e) => setForm({ ...form, descuento: e.target.value })}
-              />
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 0.5 }}>
-              <input
-                type="checkbox"
-                id="activo-check"
-                checked={form.activo}
-                onChange={(e) => setForm({ ...form, activo: e.target.checked })}
-                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: COLORS.primary }}
-              />
-              <label htmlFor="activo-check" style={{ cursor: 'pointer', userSelect: 'none' }}>
-                <Typography variant="body2" sx={{ fontWeight: TYPOGRAPHY.fontWeightSemibold, color: COLORS.textPrimary }}>
-                  Promoción activa actualmente
-                </Typography>
-              </label>
-            </Box>
-          </Box>
-        </BaseDialogContent>
-        <BaseDialogActions>
-          <BaseButton className="variant-outlined" onClick={() => setDialogOpen(false)}>
-            Cancelar
-          </BaseButton>
-          <BaseButton className="variant-primary" onClick={handleSave}>
-            Guardar Promoción
-          </BaseButton>
-        </BaseDialogActions>
-      </BaseDialog>
-
-      {/* Pop-up de Confirmación de Eliminación (Usando BaseDialog) */}
-      <BaseDialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <BaseDialogContent sx={{ textAlign: 'center', py: 3 }}>
-          <Box
-            sx={{
-              display: 'inline-flex',
-              p: 2,
-              borderRadius: '50%',
-              bgcolor: COLORS.errorBg,
-              color: COLORS.error,
-              mb: 2,
-            }}
-          >
-            <DeleteOutlined sx={{ fontSize: 36 }} />
-          </Box>
-          <Typography variant="h6" sx={{ fontWeight: TYPOGRAPHY.fontWeightExtraBold, color: COLORS.textPrimary }} gutterBottom>
-            ¿Eliminar Promoción?
-          </Typography>
-          <Typography variant="body2" sx={{ color: COLORS.textSecondary, px: 1 }}>
-            ¿Está seguro de que desea eliminar la promoción <strong>"{promocionAEliminar?.nombre}"</strong>? Esta acción no se puede deshacer.
-          </Typography>
-        </BaseDialogContent>
-        <BaseDialogActions sx={{ justifyContent: 'center', pb: 2.5, px: 2, gap: 1.5 }}>
-          <BaseButton
-            className="variant-outlined"
-            onClick={() => setDeleteDialogOpen(false)}
-            sx={{ flex: 1 }}
-          >
-            Cancelar
-          </BaseButton>
-          <BaseButton
-            className="variant-danger"
-            onClick={handleDeleteExecute}
-            sx={{ flex: 1 }}
-          >
-            Eliminar
-          </BaseButton>
-        </BaseDialogActions>
-      </BaseDialog>
-
+  return <Box sx={{ pb: 4 }}>
+    <Stack direction="row" justifyContent="flex-end" sx={{ mb: 3 }}>
+      <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setFormError(''); setForm(nuevo()); }} disabled={loading || Boolean(error)}>Nueva promoción</Button>
+    </Stack>
+    {error && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => cargar(true)} disabled={loading}>Reintentar</Button>}>{error}</Alert>}
+    {notice && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice('')}>{notice}</Alert>}
+    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 2, mb: 3 }}>
+      {[[stats.total, 'Promociones'], [stats.vigentes, 'Vigentes'], [stats.programadas, 'Programadas']].map(([count, label]) => <Paper key={label} elevation={0} sx={{ p: { xs: 1.5, md: 2.5 }, borderRadius: 3, border: '1px solid #E9E1D9' }}><Typography variant="h4" fontWeight={800}>{loading || error ? '—' : count}</Typography><Typography color="text.secondary" variant="body2">{label}</Typography></Paper>)}
     </Box>
-  );
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
+      <TextField size="small" label="Buscar promoción" value={busqueda} onChange={e => setBusqueda(e.target.value)} sx={{ flex: 1 }} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} />
+      <TextField select size="small" label="Estado" value={filtro} onChange={e => setFiltro(e.target.value)} sx={{ minWidth: 170 }}>{['Todas', 'Vigente', 'Programada', 'Pausada', 'Finalizada'].map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}</TextField>
+      <Button onClick={() => cargar(true)} startIcon={<RefreshIcon />} disabled={loading || busy}>Actualizar</Button>
+    </Stack>
+    {loading ? <Skeleton variant="rounded" height={250} /> : !error && (!visibles.length ? <Paper elevation={0} sx={{ border: '1px dashed #DCCBBA', borderRadius: 4, p: 6, textAlign: 'center' }}><LocalOfferOutlinedIcon sx={{ fontSize: 48, color: '#AB8563', mb: 1 }} /><Typography variant="h6" fontWeight={800}>{promociones.length ? 'No hay coincidencias' : 'Tu próxima promoción empieza aquí'}</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>{promociones.length ? 'Prueba con otro nombre o estado.' : 'Crea tu primera oferta. Los descuentos se aplican automáticamente al pagar.'}</Typography></Paper> : <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2,minmax(0,1fr))', xl: 'repeat(3,minmax(0,1fr))' }, gap: 2.5 }}>
+      {visibles.map(p => { const state = estado(p, now); const color = tonos[state]; const producto = productos.find(item => Number(item.id) === Number(p.producto_id)); return <Paper key={p.id} elevation={0} sx={{ borderRadius: 4, border: '1px solid #E9E1D9', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ p: 2.5, background: '#F6EDE3', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="h3" fontWeight={900} sx={{ color: '#7A482D', letterSpacing: -2 }}>−{p.descuento_porcentaje}%</Typography><Chip size="small" label={state} sx={{ bgcolor: color.bg, color: color.fg, fontWeight: 700 }} /></Box>
+        <Box sx={{ p: 2.5, flex: 1 }}><Typography variant="h6" fontWeight={800}>{p.nombre}</Typography><Typography variant="body2" color="text.secondary" sx={{ my: 1, overflowWrap: 'anywhere' }}>{p.descripcion || 'Sin descripción adicional'}</Typography><Chip size="small" variant="outlined" label={p.producto_id ? producto?.nombre || 'Producto #' + p.producto_id : 'Toda la cafetería'} />
+          <Typography variant="caption" sx={{ display: 'block', mt: 2 }} color="text.secondary">{p.inicio_en ? 'Desde ' + fecha(p.inicio_en) : 'Sin fecha de inicio'}<br />{p.fin_en ? 'Hasta ' + fecha(p.fin_en) : 'Sin fecha de término'}</Typography>
+        </Box><Stack direction="row" justifyContent="flex-end" sx={{ p: 1.5, borderTop: '1px solid #EFE7DF' }}><Button size="small" startIcon={<EditOutlinedIcon />} disabled={busy} onClick={() => { setFormError(''); setForm({ ...p, producto_id: p.producto_id || '', inicio_en: fechaLocal(p.inicio_en), fin_en: fechaLocal(p.fin_en) }); }}>Editar</Button><Tooltip title="Eliminar promoción"><IconButton aria-label={'Eliminar ' + p.nombre} color="error" disabled={busy} onClick={() => { setFormError(''); setEliminar(p); }}><DeleteOutlineIcon /></IconButton></Tooltip></Stack>
+      </Paper>; })}
+    </Box>)}
+    <Typography variant="body2" color="text.secondary" sx={{ mt: 3 }}>Si coinciden varias promociones, se aplica el mayor descuento por producto. Los descuentos no se acumulan.</Typography>
+    <Dialog open={Boolean(form)} onClose={() => { if (!busy) setForm(null); }} maxWidth="sm" fullWidth>
+      <Box component="form" onSubmit={guardar}><DialogTitle fontWeight={800}>{form?.id ? 'Editar promoción' : 'Una nueva razón para volver'}</DialogTitle><DialogContent dividers>{form && <Stack spacing={2.5} sx={{ pt: 1 }}>
+        {formError && <Alert severity="error">{formError}</Alert>}
+        <TextField label="Nombre de la promoción" value={form.nombre} onChange={cambiar('nombre')} required disabled={busy} inputProps={{ maxLength: 120 }} />
+        <TextField label="Descripción" value={form.descripcion || ''} onChange={cambiar('descripcion')} multiline minRows={2} disabled={busy} inputProps={{ maxLength: 2000 }} />
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><TextField label="Descuento" type="number" required value={form.descuento_porcentaje} onChange={cambiar('descuento_porcentaje')} disabled={busy} inputProps={{ min: 1, max: 99, step: .01 }} InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }} fullWidth /><TextField select label="Aplicar a" value={form.producto_id || ''} onChange={cambiar('producto_id')} disabled={busy} fullWidth><MenuItem value="">Toda la cafetería</MenuItem>{productos.map(p => <MenuItem key={p.id} value={p.id}>{p.nombre}{!p.activo ? ' (inactivo)' : ''}</MenuItem>)}</TextField></Stack>
+        <TextField label="Inicio (opcional)" type="datetime-local" value={form.inicio_en} onChange={cambiar('inicio_en')} disabled={busy} InputLabelProps={{ shrink: true }} />
+        <TextField label="Fin (opcional)" type="datetime-local" value={form.fin_en} onChange={cambiar('fin_en')} disabled={busy} InputLabelProps={{ shrink: true }} />
+        <FormControlLabel label="Promoción habilitada" control={<Switch checked={form.activo} disabled={busy} onChange={e => setForm(prev => ({ ...prev, activo: e.target.checked }))} />} />
+      </Stack>}</DialogContent><DialogActions sx={{ p: 2.5 }}><Button disabled={busy} onClick={() => setForm(null)}>Cancelar</Button><Button type="submit" variant="contained" disabled={busy}>{busy ? 'Guardando…' : 'Guardar promoción'}</Button></DialogActions></Box>
+    </Dialog>
+    <Dialog open={Boolean(eliminar)} onClose={() => { if (!busy) setEliminar(null); }} maxWidth="xs" fullWidth><DialogTitle fontWeight={800}>Eliminar promoción</DialogTitle><DialogContent>{formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}<Typography>¿Eliminar «{eliminar?.nombre}»? Dejará de aplicarse en nuevas compras. Los pedidos anteriores conservan su precio.</Typography></DialogContent><DialogActions sx={{ p: 2 }}><Button disabled={busy} onClick={() => setEliminar(null)}>Conservar</Button><Button color="error" variant="contained" disabled={busy} onClick={borrar}>{busy ? 'Eliminando…' : 'Eliminar'}</Button></DialogActions></Dialog>
+  </Box>;
 }

@@ -4,7 +4,7 @@ export const BASE_BACKEND =
 export const CAFETERIA_ID =
   import.meta.env?.VITE_CAFETERIA_ID ? Number(import.meta.env.VITE_CAFETERIA_ID) : null;
 
-import { supabase } from '../service/supabase';
+import { supabase } from './supabase';
 
 async function getAccessToken() {
   try {
@@ -40,7 +40,7 @@ async function request(url, options = {}) {
   return body;
 }
 
-/** PATCH /api/pedidos/:id/estado en backend-node */
+/** PATCH /api/pedidos/:id/estado en ms-pedidos (gateway) */
 export async function cambiarEstadoPedido(pedidoId, estado) {
   const enviado = estado === 'en_preparacion' ? 'preparando' : estado;
   const body = await request(`${BASE_BACKEND}/api/pedidos/${pedidoId}/estado`, {
@@ -50,7 +50,7 @@ export async function cambiarEstadoPedido(pedidoId, estado) {
   return body?.pedido || body;
 }
 
-/** POST /api/pedidos/validar-qr en backend-node (escaneo de entrega desde el KDS) */
+/** POST /api/pedidos/validar-qr en ms-pedidos (escaneo de entrega desde el KDS) */
 export async function validarQr(token) {
   const accessToken = await getAccessToken();
   if (!accessToken) {
@@ -60,7 +60,7 @@ export async function validarQr(token) {
   const res = await fetch(`${BASE_BACKEND}/api/pedidos/validar-qr`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ token: String(token) }),
+    body: JSON.stringify({ qr_token: String(token) }),
   });
   const body = await res.json().catch(() => null);
   if (res.status === 401) {

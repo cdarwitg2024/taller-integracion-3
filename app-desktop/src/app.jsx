@@ -7,7 +7,6 @@ import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
-import PriceChangeOutlinedIcon from '@mui/icons-material/PriceChangeOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
@@ -20,15 +19,13 @@ import Login from './pages/auth/Login';
 import AccesoNoAutorizado from './components/AccesoNoAutorizado';
 import Dashboard from './pages/dueno/Dashboard';
 import Productos from './pages/dueno/Productos';
-import Inventario from './pages/dueno/Inventario';
 import SolicitudesReposicion from './pages/dueno/SolicitudesReposicion';
 import BotDueno from './pages/dueno/BotDueno';
-import GestorPrecioStock from './pages/dueno/GestorPrecioStock';
 import LogsValidacion from './pages/dueno/LogsValidacion';
 import Comandas from './pages/empleado/Comandas';
 import StockEmpleado from './pages/empleado/Stock.jsx';
-import { supabase } from './service/supabase';
-import { usuarios } from './service/usuarios';
+import { supabase } from './services/supabase';
+import { usuarios } from './services/usuarios';
 
 // Layout compartido con Sidebar adaptado al rol y la ruta activa
 import AppLayout from './layouts/AppLayout';
@@ -51,12 +48,6 @@ function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
       path: '/dueno/productos',
       label: 'Productos y Stock',
       icon: <MenuBookOutlinedIcon fontSize="small" />,
-    },
-    {
-      id: 'inventario',
-      path: '/dueno/inventario',
-      label: 'Inventario',
-      icon: <Inventory2OutlinedIcon fontSize="small" />,
     },
     {
       id: 'solicitudes-reposicion',
@@ -135,11 +126,7 @@ function buildDuenoHeader(pathname) {
     },
     '/dueno/productos': {
       title: 'Productos y Stock',
-      subtitle: 'Administra el catálogo de productos, precios y disponibilidad de la cafetería.',
-    },
-    '/dueno/inventario': {
-      title: 'Inventario',
-      subtitle: 'Control de stock de insumos y alertas de productos por debajo del mínimo.',
+      subtitle: 'Catálogo, precios e inventario de tu cafetería, con existencias sincronizadas tras cada compra.',
     },
     '/dueno/solicitudes-reposicion': {
       title: 'Solicitudes de Reposición',
@@ -392,16 +379,7 @@ function App() {
         <Route path="/dueno/precios-stock" element={<Navigate to="/dueno/productos" replace />} />
         <Route path="/dueno/precio-stock" element={<Navigate to="/dueno/productos" replace />} />
 
-        <Route
-          path="/dueno/inventario"
-          element={
-            <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
-              <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
-                <Inventario currentUser={currentUser} />
-              </AuthenticatedLayout>
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/dueno/inventario" element={<Navigate to="/dueno/productos" replace />} />
 
         <Route
           path="/dueno/solicitudes-reposicion"

@@ -4,15 +4,14 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 
-// Importar rutas principales
+// Rutas legacy aún conservadas. El catálogo y el pago Wallet actuales viven
+// en Microservices/ y Supabase; no montar aquí implementaciones duplicadas.
 const tiemposRoutes = require('./modules/tiempos/tiemposRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 // ✅ Importar rutas QR y Pedidos
 const qrRoutes = require('./modules/qr/routes/qrRoutes');
 const pedidosRoutes = require('./modules/pedidos/pedidos.routes');
 const authRoutes = require('./modules/auth/auth.routes');
-const cafeteriasRoutes = require('./modules/catalogo/cafeterias.routes');
-const pagosRoutes = require('./modules/pagos/pagos.routes');
 const notificacionesRoutes = require('./modules/notificaciones/notificaciones.routes');
 
 const app = express();
@@ -32,8 +31,6 @@ app.use('/api/tiempos', tiemposRoutes);
 app.use('/api/qr', qrRoutes);
 app.use('/api/pedidos', pedidosRoutes);
 app.use('/auth', authRoutes);
-app.use('/cafeterias', cafeteriasRoutes);
-app.use('/api/pagos', pagosRoutes);
 app.use('/api/notificaciones', notificacionesRoutes);
 app.use('/health', healthRoutes);
 
@@ -46,8 +43,6 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       auth: '/auth',
-      cafeterias: '/cafeterias',
-      pagos: '/api/pagos',
       notificaciones: '/api/notificaciones',
       tiempos: '/api/tiempos',
       qr: '/api/qr',

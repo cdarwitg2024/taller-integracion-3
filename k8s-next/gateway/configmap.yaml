@@ -1,6 +1,10 @@
+# Configuración que monta el gateway. Mantener data.nginx.conf idéntico
+# a gateway/nginx.conf; se conserva el objeto y namespace de la versión de Git.
 apiVersion: v1
 data:
   nginx.conf: |-
+    # Gateway de Kubernetes: archivo completo montado en /etc/nginx/nginx.conf.
+    # Compose usa Microservices/gateway/nginx.conf, un fragmento distinto.
     worker_processes auto;
     error_log /var/log/nginx/error.log notice;
     pid /var/run/nginx.pid;
@@ -21,21 +25,27 @@ data:
       sendfile on;
       keepalive_timeout 65;
 
+      # DNS específico de este clúster; verificarlo al cambiar de entorno.
+      # Las variables en proxy_pass usan este resolver para resolver los upstream.
       resolver 10.43.40.162 valid=5s ipv6=off;
 
       server {
         listen 80;
         server_name _;
 
+        # Salud local del gateway: no consulta los microservicios ni la base.
         location /gateway/health {
           return 200 'gateway ok\n';
           add_header Content-Type text/plain;
         }
 
+        # Cotización interna ms-pedidos -> ms-menus: no exponerla en el gateway.
         location ~ ^/api/menus/precios/?$ {
           return 404;
         }
 
+        # Se conserva la URI completa y las cabeceras originales de esta configuración.
+        # Nginx no autoriza pedidos: esa validación corresponde a ms-pedidos.
         location /api/cafeterias {
           set $up_caf http://ms-cafeterias.student-cdarwitg.svc.cluster.local:3002;
           proxy_pass $up_caf$request_uri;

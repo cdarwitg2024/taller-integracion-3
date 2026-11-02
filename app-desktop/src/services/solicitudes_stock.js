@@ -6,6 +6,19 @@ import { supabase } from './supabase';
  * Nota: requiere tabla 'solicitudes_stock'. Si no existe, el backend devolverá error.
  */
 export const solicitudesStock = {
+  async resolverSolicitud({ id, cafeteriaId, usuarioId, estado }) {
+    if (![id, cafeteriaId, usuarioId].every(v => Number.isSafeInteger(Number(v)) && Number(v) > 0)) {
+      throw new Error('Se requiere solicitud, cafetería y usuario válidos.');
+    }
+    if (!['aprobado', 'rechazado'].includes(estado)) throw new Error('Resolución inválida.');
+    const { data, error } = await supabase.from('solicitudes_stock')
+      .update({ estado, fecha_respuesta: new Date().toISOString(), usuario_responde_id: Number(usuarioId) })
+      .eq('id', id).eq('cafeteria_id', cafeteriaId).eq('estado', 'pendiente')
+      .select().maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('La solicitud ya fue resuelta o no tienes permiso para resolverla.');
+    return data;
+  },
   /**
    * Verifica si ya existe una solicitud pendiente equivalente
    * Equivalencia: misma cafetería, mismo producto y estado 'pendiente'

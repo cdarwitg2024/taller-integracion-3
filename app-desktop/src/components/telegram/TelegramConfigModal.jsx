@@ -27,7 +27,7 @@ import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 
-import { telegramDuenoService } from '../../service/telegram_dueno';
+import { telegramDuenoService } from '../../services/telegram_dueno';
 
 function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
   const [chatId, setChatId] = useState('');
@@ -40,8 +40,8 @@ function TelegramConfigModal({ open, onClose, currentUser, onConfigUpdated }) {
   const [feedback, setFeedback] = useState({ type: '', message: '' });
 
 
-  const duenoId = currentUser?.id || 1;
-  const cafeteriaId = currentUser?.cafeteria_id || 1;
+  const duenoId = currentUser?.id ?? null;
+  const cafeteriaId = currentUser?.cafeteria_id ?? null;
 
   const loadConfig = async () => {
     if (!open) return;

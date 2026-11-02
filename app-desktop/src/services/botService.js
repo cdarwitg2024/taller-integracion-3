@@ -78,7 +78,10 @@ export const botService = {
   /**
    * Envía una alerta de prueba al servicio del bot y valida la entrega.
    */
-  async enviarAlertaPrueba({ usuarioId = 1, cafeteriaId = 1, telegramChatId }) {
+  async enviarAlertaPrueba({ usuarioId, cafeteriaId, telegramChatId }) {
+    if (!usuarioId || !cafeteriaId || !telegramChatId) {
+      return { ok: false, error: 'Se requiere usuario, cafetería y Chat ID vinculados.' };
+    }
     const baseUrl = getBotBaseUrl();
 
     // Validar primero si el servicio responde
@@ -114,94 +117,41 @@ export const botService = {
   /**
    * Obtiene la información del dueño y su cafetería asignada.
    */
-  async getContextoDueno(usuarioId = 1) {
-    let duenoNombre = 'Carlos Dueño';
-    let cafeteriaNombre = 'Cafetería Central';
-    let cafeteriaId = 1;
-    let telegramChatId = null;
-    let notificacionesActivas = true;
-
-    if (isSupabaseConfigured) {
-      try {
-        const { data: uData } = await supabase
-          .from('usuarios')
-          .select('id, nombre, apellido, roles(nombre)')
-          .eq('id', usuarioId)
-          .maybeSingle();
-
-        if (uData) {
-          duenoNombre = `${uData.nombre} ${uData.apellido || ''}`.trim();
-        }
-
-        const { data: cuData } = await supabase
-          .from('cafeteria_usuarios')
-          .select('cafeteria_id, cafeterias(id, nombre)')
-          .eq('usuario_id', usuarioId)
-          .maybeSingle();
-
-        if (cuData) {
-          cafeteriaId = cuData.cafeteria_id;
-          if (cuData.cafeterias?.nombre) cafeteriaNombre = cuData.cafeterias.nombre;
-        }
-
-        const configTg = await telegramDuenoService.getConfiguracion(usuarioId);
-        if (configTg) {
-          telegramChatId = configTg.telegram_chat_id;
-          notificacionesActivas = configTg.notificaciones_activas !== false;
-        }
-      } catch (err) {
-        console.warn('Error resolviendo contexto de dueño:', err);
-      }
-    }
-
+  async getContextoDueno(usuarioId) {
+    if (!usuarioId) throw new Error('No se pudo determinar el usuario autenticado.');
+    if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+    const { data: uData, error: uError } = await supabase.from('usuarios')
+      .select('id, nombre, apellido, roles(nombre)').eq('id', usuarioId).maybeSingle();
+    if (uError) throw new Error('No se pudo obtener el perfil del dueño.');
+    if (!uData) throw new Error('No se encontró el perfil del dueño.');
+    const { data: asignaciones, error: cuError } = await supabase.from('cafeteria_usuarios')
+      .select('cafeteria_id, cafeterias(id, nombre)').eq('usuario_id', usuarioId).limit(1);
+    if (cuError) throw new Error('No se pudo obtener la cafetería asociada.');
+    const cuData = asignaciones?.[0];
+    const configTg = await telegramDuenoService.getConfiguracion(usuarioId);
     return {
-      usuarioId,
-      duenoNombre,
-      cafeteriaId,
-      cafeteriaNombre,
-      telegramChatId,
-      notificacionesActivas,
+      usuarioId: uData.id,
+      duenoNombre: [uData.nombre, uData.apellido].filter(Boolean).join(' ') || null,
+      cafeteriaId: cuData?.cafeteria_id ?? null,
+      cafeteriaNombre: cuData?.cafeterias?.nombre ?? null,
+      telegramChatId: configTg?.telegram_chat_id ?? null,
+      notificacionesActivas: configTg ? configTg.notificaciones_activas !== false : false,
     };
   },
 
-  /**
-   * Obtiene la lista de productos filtrada para la cafetería del dueño.
-   */
-  async getProductosCafeteria(cafeteriaId = 1) {
-    if (isSupabaseConfigured) {
-      try {
-        const { data, error } = await supabase
-          .from('productos')
-          .select('id, nombre, stock, stock_minimo, precio, activo, cafeteria_id, categorias(nombre)')
-          .eq('cafeteria_id', cafeteriaId)
-          .eq('activo', true)
-          .is('eliminado_en', null)
-          .order('nombre', { ascending: true });
-
-        if (!error && data) {
-          return data.map((p) => ({
-            id: p.id,
-            nombre: p.nombre,
-            stock: Number(p.stock ?? 0),
-            stock_minimo: Number(p.stock_minimo ?? 10),
-            precio: Number(p.precio ?? 0),
-            categoria: p.categorias?.nombre || 'General',
-          }));
-        }
-      } catch (err) {
-        console.warn('Error obteniendo productos de cafetería:', err);
-      }
-    }
-
-    // Fallback de desarrollo con datos reales coherentes
-    return [
-      { id: 1, nombre: 'Café Espresso Doble', stock: 4, stock_minimo: 10, precio: 2200, categoria: 'Cafetería' },
-      { id: 2, nombre: 'Leche Entera 1L', stock: 8, stock_minimo: 12, precio: 1500, categoria: 'Insumos' },
-      { id: 3, nombre: 'Muffin de Arándanos', stock: 0, stock_minimo: 8, precio: 1800, categoria: 'Pastelería' },
-      { id: 4, nombre: 'Café Americano Grande', stock: 25, stock_minimo: 10, precio: 2500, categoria: 'Cafetería' },
-      { id: 5, nombre: 'Medialuna Tradicional', stock: 15, stock_minimo: 10, precio: 1200, categoria: 'Pastelería' },
-      { id: 6, nombre: 'Té Verde Matcha', stock: 0, stock_minimo: 5, precio: 2900, categoria: 'Bebidas' },
-    ];
+  async getProductosCafeteria(cafeteriaId) {
+    if (!cafeteriaId) throw new Error('No tienes una cafetería asociada.');
+    if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+    const { data, error } = await supabase.from('productos')
+      .select('id, nombre, stock, stock_minimo, precio, activo, cafeteria_id, categorias(nombre)')
+      .eq('cafeteria_id', cafeteriaId).eq('activo', true).is('eliminado_en', null)
+      .order('nombre', { ascending: true });
+    if (error) throw new Error('No se pudieron obtener los productos.');
+    return (data ?? []).map((p) => ({
+      id: p.id, nombre: p.nombre, stock: Number(p.stock ?? 0),
+      stock_minimo: Number(p.stock_minimo ?? 10), precio: Number(p.precio ?? 0),
+      categoria: p.categorias?.nombre || 'General',
+    }));
   },
 
   /**
@@ -213,8 +163,7 @@ export const botService = {
    */
   async procesarConsulta(comando, contexto = {}) {
     const rawCmd = String(comando || '').trim().toLowerCase();
-    const dueno = await this.getContextoDueno(contexto.usuarioId || 1);
-    const cafeteriaId = dueno.cafeteriaId;
+
 
     // Normalizar comando
     let accion = 'desconocido';
@@ -275,6 +224,17 @@ export const botService = {
       };
     }
 
+    let dueno;
+    try {
+      dueno = await this.getContextoDueno(contexto.usuarioId);
+    } catch (err) {
+      return { ok: false, tipo: 'error_datos', texto: err.message };
+    }
+    const cafeteriaId = dueno.cafeteriaId;
+    if (!cafeteriaId) {
+      return { ok: false, tipo: 'sin_cafeteria', texto: 'No tienes una cafetería asociada.' };
+    }
+
     // 2. Consulta: PROBAR ALERTA DE STOCK (Contacto con servicio)
     if (accion === 'test_alerta') {
       const health = await this.checkHealth(2500);
@@ -295,7 +255,7 @@ export const botService = {
       const resPrueba = await this.enviarAlertaPrueba({
         usuarioId: dueno.usuarioId,
         cafeteriaId: dueno.cafeteriaId,
-        telegramChatId: dueno.telegramChatId || 12345678,
+        telegramChatId: dueno.telegramChatId,
       });
 
       if (!resPrueba.ok) {
@@ -315,14 +275,22 @@ export const botService = {
         texto: `✅ <b>Prueba de Notificación Exitosa</b>\n` +
           `━━━━━━━━━━━━━━━━━━━\n` +
           `• <b>Servicio:</b> Webhook FastAPI activo en <code>${health.url}</code>\n` +
-          `• <b>Destinatario:</b> ${dueno.duenoNombre} (Chat ID: ${dueno.telegramChatId || 'Simulado'})\n` +
+          `• <b>Destinatario:</b> ${dueno.duenoNombre} (Chat ID: ${dueno.telegramChatId})\n` +
           `• <b>Mensaje:</b> ${resPrueba.message || 'Alerta enviada correctamente.'}`,
       };
     }
 
     // 3. Consulta: CONSULTAR STOCK GENERAL
     if (accion === 'stock') {
-      const prods = await this.getProductosCafeteria(cafeteriaId);
+      let prods;
+      try {
+        prods = await this.getProductosCafeteria(cafeteriaId);
+      } catch (err) {
+        return { ok: false, tipo: 'error_datos', texto: err.message };
+      }
+      if (prods.length === 0) {
+        return { ok: true, tipo: accion, texto: 'No hay productos registrados.', datos: { productos: [], cantidad: 0, total: 0 } };
+      }
       const total = prods.length;
       const agotados = prods.filter((p) => p.stock <= 0);
       const bajos = prods.filter((p) => p.stock > 0 && p.stock <= Math.max(p.stock_minimo, 10));
@@ -362,7 +330,15 @@ export const botService = {
 
     // 4. Consulta: STOCK BAJO (≤ 10 un.)
     if (accion === 'stock_bajo') {
-      const prods = await this.getProductosCafeteria(cafeteriaId);
+      let prods;
+      try {
+        prods = await this.getProductosCafeteria(cafeteriaId);
+      } catch (err) {
+        return { ok: false, tipo: 'error_datos', texto: err.message };
+      }
+      if (prods.length === 0) {
+        return { ok: true, tipo: accion, texto: 'No hay productos registrados.', datos: { productos: [], cantidad: 0, total: 0 } };
+      }
       const bajos = prods.filter((p) => p.stock > 0 && p.stock <= Math.max(p.stock_minimo, 10));
 
       if (bajos.length === 0) {
@@ -402,7 +378,15 @@ export const botService = {
 
     // 5. Consulta: PRODUCTOS AGOTADOS (0 un.)
     if (accion === 'agotados') {
-      const prods = await this.getProductosCafeteria(cafeteriaId);
+      let prods;
+      try {
+        prods = await this.getProductosCafeteria(cafeteriaId);
+      } catch (err) {
+        return { ok: false, tipo: 'error_datos', texto: err.message };
+      }
+      if (prods.length === 0) {
+        return { ok: true, tipo: accion, texto: 'No hay productos registrados.', datos: { productos: [], cantidad: 0, total: 0 } };
+      }
       const agotados = prods.filter((p) => p.stock <= 0);
 
       if (agotados.length === 0) {
@@ -446,7 +430,7 @@ export const botService = {
       try {
         listaAlertas = await alertasStock.getByCafeteria(cafeteriaId);
       } catch (err) {
-        console.warn('Error consultando alertas:', err);
+        return { ok: false, tipo: 'error_datos', texto: 'No se pudieron obtener las alertas.' };
       }
 
       if (!listaAlertas || listaAlertas.length === 0) {

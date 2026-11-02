@@ -1,5 +1,7 @@
 # Notificaciones push (FCM) — Backend listo, pendiente el lado móvil
 
+> **Estado vigente — 1 de noviembre de 2026:** esta implementación corresponde a backend-node legacy. El checkout/estado actual mediante ms-pedidos no integra sus disparadores y el gateway no expone /api/notificaciones. Mobile no incluye registro de token ni recepción push; no se encontraron credenciales FCM locales configuradas y el servicio legacy usa simulación sin ellas. Por tanto, no falta únicamente configurar Firebase: también hay que conectar el flujo vigente y el cliente móvil. Telegram y voz del KDS son mecanismos diferentes. El cuerpo describe el componente legacy y propuestas, no una funcionalidad push E2E activa.
+
 Estado actual: **el backend ya está completo y probado**. Falta únicamente que el
 equipo de `app-mobile` registre el token FCM del dispositivo y configure su
 proyecto de Firebase.

@@ -545,6 +545,7 @@ function AppContent() {
         items: cart.map((item) => ({
           producto_id: item.id,
           cantidad: item.quantity,
+          precio_esperado: item.price,
         })),
         franja_retiro: franjaRetiro.franja,
       };

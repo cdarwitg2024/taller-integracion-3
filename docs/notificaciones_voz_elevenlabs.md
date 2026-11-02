@@ -1,5 +1,7 @@
 # Notificaciones de voz en el KDS con ElevenLabs (TTS)
 
+> **Estado vigente — 1 de noviembre de 2026:** el cuerpo conserva investigación, propuestas y pruebas históricas. La función voz-pedido fue publicada con empleado rol 4. La prueba autenticada con pedido_id=0 devolvió 400 pedido_invalido en vez de 403 sin_permiso; no generó audio ni modificó anuncios. Falta validar reproducción audible. Comandas.jsx solo llama a anunciar() en ingresos nuevos por Realtime, con voz activada: no al cargar historial, por polling o al pasar a listo. Se intenta ElevenLabs y después voz del sistema. Los roles/ausencias de tablas y resultados de audio del cuerpo son históricos; no asumirlos para Cloud actual. Ver [estado actual](estado-actual.md).
+
 > Documento técnico de investigación y propuesta de mejora.
 > Alcance evaluado: **solo el aviso sonoro de ingreso de un pedido nuevo a la cocina**. Quedan fuera los comandos por voz.
 
@@ -452,5 +454,5 @@ muestra aparte para que no tape el resultado real del audio.
 - **Prototipo de origen:** `/home/elias/Documentos/test_botKDS/kds-voice-prototype.html` (620 líneas, sin build). De ahí se toma la metodología: cascada de TTS, manejo de errores sin romper el flujo, control de reproducción en serie.
 - **API de ElevenLabs:** `POST /v1/text-to-speech/{voice_id}` · `GET /v1/voices` · header `xi-api-key`.
 - **Puntos de integración en el proyecto:** `app-desktop/src/services/kdsRealtime.js` (callback `onComanda`) y `app-desktop/src/pages/empleado/Comandas.jsx`.
-- **Precedente de configuración con RLS:** `app-desktop/src/service/telegram_dueno.js`.
+- **Precedente de configuración con RLS:** `app-desktop/src/services/telegram_dueno.js`.
 - **Precedente de migración SQL:** `database/fixes/` es el único árbol de migraciones SQL del proyecto (la carpeta `scrips_database/` era un duplicado exacto y fue eliminada).

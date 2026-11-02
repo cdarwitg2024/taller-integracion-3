@@ -1,5 +1,7 @@
 # Retiro de ms-inventario legado
 
+> **Informe histórico de una ejecución o tarea anterior.** Sus Pods, métricas, réplicas y comandos reflejan ese momento; no certifican el estado actual. Para operación vigente consultar [estado Kubernetes](estado-actual.md) y [guía de despliegue](../../k8s-next/DESPLIEGUE.md). Revisión documental: 1 de noviembre de 2026.
+
 > Tarea: limpieza controlada de `ms-inventario`
 > Fecha: 2026-10-16
 > Rama: `S2-T5-Camilodg-Configurar_Horizontal_Pod_Autoscaler`
@@ -165,3 +167,15 @@ consumiendo métricas reales.
 - `gateway` y `Fortio` permanecen activos.
 - **No** se modificó Supabase/BD, RBAC, Metrics Server, ResourceQuota ni LimitRange.
 - **No** se hizo commit ni push.
+
+
+## Revisión de dependencias legacy — Bloques 3 y 4
+
+El retiro del cliente HTTP de `backend-node` queda pendiente por decisión del usuario.
+`pedidos.service.js` todavía lo utiliza para verificar y descontar stock al crear
+pedidos y reponer al cancelar. La RPC `procesar_pago` versionada en
+`app-mobile/tabla_mobile/rpc_qr.sql` no valida ni actualiza stock; el servicio
+actual de pedidos tampoco lo hace. No se comprobó un trigger equivalente en Cloud.
+Por eso se conservan el cliente, sus llamadas y los mocks de sus pruebas hasta
+definir el reemplazo o retirar de forma explícita los flujos legacy afectados.
+La arquitectura de despliegue vigente continúa sin este microservicio.

@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase.js';
+import { usuarios } from './usuarios.js';
 
 const TABLE = 'productos';
 
@@ -33,14 +34,14 @@ export const productos = {
       throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from(TABLE)
-      .select('*, cafeterias(*), categorias(*)')  // ← Incluir relación con categorías
-      .order('id', { ascending: true });
-    let query = supabase.from(TABLE).select('*, cafeterias(*)');
+      .select('*, cafeterias(*), categorias(*)');  // ← Incluir relación con categorías
+
     if (Number.isFinite(cid)) {
       query = query.eq('cafeteria_id', cid);
     }
+
     if (soloActivos) {
       query = query.eq('activo', true);
     }
@@ -101,8 +102,11 @@ export const productos = {
   async create(nuevoProducto) {
     asegurarConexion();
 
+    if (!Number.isFinite(Number(nuevoProducto.cafeteria_id)) || Number(nuevoProducto.cafeteria_id) <= 0) {
+      throw new Error('Selecciona una cafetería válida para crear el producto.');
+    }
     const dbPayload = {
-      cafeteria_id: nuevoProducto.cafeteria_id ? Number(nuevoProducto.cafeteria_id) : 1,
+      cafeteria_id: Number(nuevoProducto.cafeteria_id),
       categoria_id: nuevoProducto.categoria_id ? Number(nuevoProducto.categoria_id) : null,
       nombre: nuevoProducto.nombre,
       descripcion: nuevoProducto.descripcion || '',
@@ -131,9 +135,25 @@ export const productos = {
   /**
    * Actualiza los datos de un producto directamente en Supabase.
    */
-  async update(id, updates) {
+  async update(id, updates, stockAnterior) {
     asegurarConexion();
 
+    let cafeteriaId = null;
+    if (updates.stock !== undefined || updates.stock_minimo !== undefined || updates.minimo !== undefined) {
+      const perfil = await usuarios.getPerfilSesion();
+      cafeteriaId = perfil.user?.cafeteria_id;
+      if (!perfil.success || !['dueño', 'dueno'].includes(perfil.rol) || !cafeteriaId) {
+        throw new Error('No tienes una cafetería autorizada para modificar stock.');
+      }
+      for (const valor of [updates.stock, updates.stock_minimo ?? updates.minimo]) {
+        if (valor !== undefined && (valor === '' || valor === null || !Number.isSafeInteger(Number(valor)) || Number(valor) < 0)) {
+          throw new Error('El stock y su mínimo deben ser enteros no negativos.');
+        }
+      }
+      if (updates.cafeteria_id !== undefined && Number(updates.cafeteria_id) !== Number(cafeteriaId)) {
+        throw new Error('El producto debe pertenecer a tu cafetería autorizada.');
+      }
+    }
     const dbPayload = {};
     if (updates.nombre !== undefined) dbPayload.nombre = updates.nombre;
     if (updates.descripcion !== undefined) dbPayload.descripcion = updates.descripcion;
@@ -148,14 +168,15 @@ export const productos = {
     if (updates.unidad !== undefined) dbPayload.unidad = updates.unidad?.trim() || 'un';
     dbPayload.actualizado_en = new Date().toISOString();
 
-    const { data, error } = await supabase
-      .from(TABLE)
-      .update(dbPayload)
-      .eq('id', id)
-      .select('*, cafeterias(*), categorias(*)')
-      .single();
+    let query = supabase.from(TABLE).update(dbPayload).eq('id', id);
+    if (cafeteriaId) query = query.eq('cafeteria_id', cafeteriaId);
+    if (stockAnterior !== undefined) query = query.eq('stock', stockAnterior);
+    const { data, error } = await query.select('*, cafeterias(*), categorias(*)').single();
 
     if (error) {
+      if (stockAnterior !== undefined && error.code === 'PGRST116') {
+        throw new Error('El stock cambió mientras editabas o el producto ya no está disponible. Actualiza la lista antes de reintentar.');
+      }
       console.error('Error al actualizar en Supabase:', error);
       throw new Error(`No se pudo actualizar el producto en la base de datos: ${error.message || 'Sin conexión'}`);
     }
@@ -205,7 +226,7 @@ export const productos = {
   /**
    * Operación de Modificación de Stock (FR-47)
    */
-  async updateStock(id, nuevoStock, nuevoStockMinimo) {
+  async updateStock(id, nuevoStock, nuevoStockMinimo, stockAnterior) {
     if (!id) throw new Error('El identificador del producto es requerido.');
     if (nuevoStock === '' || nuevoStock === null || nuevoStock === undefined) {
       throw new Error('El stock es obligatorio.');
@@ -226,7 +247,7 @@ export const productos = {
       payload.minimo = minNum;
     }
 
-    return this.update(id, payload);
+    return this.update(id, payload, stockAnterior);
   },
 };
 

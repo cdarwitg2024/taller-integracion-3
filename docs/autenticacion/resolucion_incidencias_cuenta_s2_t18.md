@@ -1,5 +1,8 @@
 # Validación y Resolución de Incidencias de Cuenta (S2-T18)
 
+> **Evidencia de una revisión anterior.** Las cuentas, resultados y entorno del cuerpo corresponden a esa prueba, no al Cloud actual. Para arquitectura y pendientes ver [estado vigente](../estado-actual.md). Clasificado el 1 de noviembre de 2026.
+
+
 **Tarea:** S2-T18-Diego Vásquez — Corregir incidencias de cuenta  
 **Rama:** `S2-T18-Diego-Vásquez-Corregir-incidencias-de-cuenta`  
 **Fecha:** 31 de Octubre de 2026  

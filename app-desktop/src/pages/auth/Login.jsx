@@ -19,7 +19,7 @@ import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import LocalCafeOutlinedIcon from '@mui/icons-material/LocalCafeOutlined';
 import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
-import { usuarios } from '../../service/usuarios';
+import { usuarios } from '../../services/usuarios';
 
 // Convierte los mensajes técnicos de autenticación en avisos claros para el
 // usuario (mismos criterios que usaban los antiguos login de Dueño/Empleado).

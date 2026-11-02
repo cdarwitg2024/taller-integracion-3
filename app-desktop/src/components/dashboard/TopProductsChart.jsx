@@ -27,14 +27,14 @@ function TopProductsChart({ data }) {
           Productos Más Populares
         </Typography>
         <Typography variant="caption" sx={{ color: '#8C7A6F' }}>
-          Unidades preparadas durante la jornada de hoy
+          Unidades vendidas en los pedidos de la cafetería
         </Typography>
       </Box>
 
       <Box sx={{ flexGrow: 1, width: '100%', minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {!hasData ? (
           <Typography variant="body2" sx={{ color: '#8C7A6F', textAlign: 'center' }}>
-            No hay registros de productos vendidos hoy.
+            No hay registros de productos vendidos.
           </Typography>
         ) : (
           <ResponsiveContainer width="100%" height="100%">

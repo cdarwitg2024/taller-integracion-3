@@ -1,29 +1,31 @@
-import { supabase, isSupabaseConfigured } from '../service/supabase';
-import { CAFETERIA_ID } from './backendApi';
+import { supabase, isSupabaseConfigured } from './supabase';
 
 import { codigoEnPalabras } from './vozNumeros.js';
 
 // ============================================================
 // T16 · Avisos de voz del KDS (ElevenLabs TTS)
 // ============================================================
-// Cuando entra un pedido nuevo, la cocina lo escucha: "Nueva
-// comanda, número 42. 2 cafés, 1 medialuna."
+// El KDS tiene DOS avisos legítimos:
+//   * NUEVA_COMANDA: entró un pedido pendiente.
+//   * PEDIDO_LISTO:   un pedido pasó de en_preparacion a listo.
 //
 // DISEÑO (docs/notificaciones_voz_elevenlabs.md):
 //   * Cascada: ElevenLabs (vía Edge Function "voz-pedido") -> voz
 //     del sistema (Web Speech) -> nada. El pedido JAMÁS se pierde
 //     por un problema de audio: la tarjeta ya está en pantalla.
 //   * La API key vive en el servidor. El navegador no la tiene.
-//   * Un pedido se anuncia una sola vez. Lo garantiza la tabla
-//     anuncios_pedido (pedido_id UNIQUE) del lado servidor, así
-//     que funciona aunque haya varias pantallas abiertas.
-//   * Si entran varios pedidos juntos se agrupan en un aviso
-//     ("Entraron 3 comandas nuevas") y los audios nunca se
-//     superponen: van en cola.
+//   * La idempotencia es por pedido + tipo de anuncio. Un pedido
+//     puede tener un NUEVA_COMANDA y un PEDIDO_LISTO, pero cada
+//     uno una sola vez, aunque haya varias pantallas abiertas.
+//   * Si entran varias comandas juntas se agrupan en un aviso
+//     ("Entraron 3 comandas nuevas"). Los pedidos listos se
+//     anuncian individualmente y los audios nunca se superponen:
+//     van en cola.
 //
 // Uso en el KDS:
 //   useEffect(() => vozKds.suscribir(setEstadoVoz), []);
-//   const agregar = (c) => { setPedidos(...); vozKds.anunciar(c); };
+//   const agregar = (c) => { setPedidos(...); vozKds.anunciarNuevaComanda(c); };
+//   const listo = (c) => vozKds.anunciarPedidoListo(c);
 //   <KdsTopBar onActivarVoz={vozKds.activar} onSilenciarVoz={vozKds.silenciar} />
 
 const PREFS_KEY = 'kds_voz_prefs_v1';
@@ -32,6 +34,11 @@ const PREFS_KEY = 'kds_voz_prefs_v1';
 export const VOZ_APAGADA = 'apagada';
 export const VOZ_ACTIVA = 'activa';
 export const VOZ_SILENCIADA = 'silenciada';
+
+// Tipos de anuncio. Deben coincidir con el CHECK de anuncios_pedido y con
+// el `tipo` que valida la Edge Function voz-pedido.
+export const TIPO_NUEVA_COMANDA = 'NUEVA_COMANDA';
+export const TIPO_PEDIDO_LISTO = 'PEDIDO_LISTO';
 
 const MAX_ITEMS_HABLA = 4;
 const MAX_CARACTERES = 300;

@@ -80,22 +80,16 @@ export const telegramDuenoService = {
           .maybeSingle();
         if (cu?.cafeteria_id) {
           resolvedCafeteriaId = cu.cafeteria_id;
-        } else {
-          const { data: caf } = await supabase
-            .from("cafeterias")
-            .select("id")
-            .limit(1)
-            .maybeSingle();
-          if (caf?.id) resolvedCafeteriaId = caf.id;
         }
       } catch (err) {
         console.warn("Error resolviendo cafetería desde DB:", err);
       }
     }
 
+    if (!resolvedCafeteriaId) throw new Error("No tienes una cafetería asociada.");
     const payload = {
       usuario_id: Number(usuarioId),
-      cafeteria_id: Number(resolvedCafeteriaId || 1),
+      cafeteria_id: Number(resolvedCafeteriaId),
       telegram_chat_id: Number(telegramChatId),
       notificaciones_activas: Boolean(notificacionesActivas),
       actualizado_en: new Date().toISOString(),
@@ -201,6 +195,7 @@ export const telegramDuenoService = {
     productoId,
     productoNombre,
   }) {
+    if (!usuarioId) throw new Error("El usuario es obligatorio para la prueba.");
     if (!telegramChatId) {
       throw new Error("El Chat ID de Telegram es obligatorio para la prueba.");
     }
@@ -236,6 +231,8 @@ export const telegramDuenoService = {
         console.warn("Error resolviendo usuario/cafetería desde DB:", err);
       }
     }
+
+    if (!targetCafeteriaId) throw new Error("No tienes una cafetería asociada.");
 
     // 2. Obtener producto real desde la base de datos
     let targetProdId = productoId;
@@ -298,7 +295,7 @@ export const telegramDuenoService = {
         stock_actual: finalStockActual,
         stock_anterior: finalStockActual + 5,
         stock_minimo_configurado: finalStockMinimo,
-        cafeteria_id: Number(targetCafeteriaId || 1),
+        cafeteria_id: Number(targetCafeteriaId),
       },
       umbral_disparo: 10,
       timestamp: new Date().toISOString(),
