@@ -1,5 +1,7 @@
 # S2-T16 — Dependencias SQL del flujo de pedidos
 
+> **Evidencia histórica, no receta del estado actual.** Se conserva el contenido y sus resultados originales. La versión local cambió Dashboard, solicitudes y el ciclo transaccional de stock; no está todo aplicado en Cloud. Consultar [estado vigente](../estado-actual.md). Revisión documental: 1 de noviembre de 2026.
+
 Auditoría local: 31-10-2026. Rama: `S2-T16-Camilodg-Inventariar_dependencias_SQ_Ldel_flujo_de_pedidos`.
 Base inspeccionada: `72f534de2ca42537831588bbd50a69d7938f3513`. No se consultó Supabase.
 

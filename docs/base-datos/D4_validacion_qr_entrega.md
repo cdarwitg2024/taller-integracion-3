@@ -1,5 +1,7 @@
 # D.4 — Validación QR y entrega de pedido (traspaso a Base de Datos)
 
+> **Evidencia histórica, no receta del estado actual.** Se conserva el contenido y sus resultados originales. La versión local cambió Dashboard, solicitudes y el ciclo transaccional de stock; no está todo aplicado en Cloud. Consultar [estado vigente](../estado-actual.md). Revisión documental: 1 de noviembre de 2026.
+
 > **Documento de traspaso.** La base de datos y Supabase son responsabilidad de
 > otro integrante del equipo. Este documento describe **cómo es hoy** el flujo QR
 > (lo verificado en el repositorio) y **qué debe revisar/confirmar** el responsable

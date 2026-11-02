@@ -1,5 +1,8 @@
 # Implementación y Verificación del Flujo de Confirmación de Cuenta (S2-T2)
 
+> **Evidencia de una revisión anterior.** Las cuentas, resultados y entorno del cuerpo corresponden a esa prueba, no al Cloud actual. Para arquitectura y pendientes ver [estado vigente](../estado-actual.md). Clasificado el 1 de noviembre de 2026.
+
+
 > **Tarea:** S2-T2-Diego Vásquez — Corregir flujo de confirmación de cuenta  
 > **Fecha:** 2026-10-17  
 > **Rama:** `S2-T2-Diego-Vásquez-Corregir-flujo-de-confirmación-de-cuenta`  

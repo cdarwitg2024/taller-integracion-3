@@ -1,5 +1,8 @@
 # Microservicios de CoffeeFast — entorno local
 
+> **Revisión 1 de noviembre de 2026:** ver [estado funcional](../docs/estado-actual.md) y [Kubernetes](../docs/kubernetes/estado-actual.md). Las apps utilizan este gateway para operaciones de pedidos. El SQL local de procesar_pago/cancelar_pedido ahora contempla stock, pero sigue pendiente de aplicación en Cloud. FCM permanece en backend-node legacy y no está integrado en ms-pedidos. Los tags de build/push deben revisarse contra el Deployment antes de publicar.
+
+
 Servicios Node/Express sobre Supabase, detrás de un gateway nginx. Todo corre
 en Docker contra el Supabase local del host.
 

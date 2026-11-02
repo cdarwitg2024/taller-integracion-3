@@ -1,5 +1,8 @@
 # S2-T19 - Incidencias Mobile encontradas en pruebas integradas
 
+> **Evidencia de una revisión anterior.** Las cuentas, resultados y entorno del cuerpo corresponden a esa prueba, no al Cloud actual. Para arquitectura y pendientes ver [estado vigente](../estado-actual.md). Clasificado el 1 de noviembre de 2026.
+
+
 Fecha: 2026-10-31
 Rama actual: S2-T19-Elias-Corregir-incidencias-Mobile
 Base revisada: develop
