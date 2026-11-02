@@ -198,3 +198,6 @@ k8s-next/**/*secret*.local.yaml
 k8s-next/**/*secrets*.local.yaml
 k8s-next/**/env.local.yaml
 !k8s-next/**/env.local.example
+
+# Estado local de Supabase CLI; funciones y config.toml sí se versionan.
+supabase/.temp/
