@@ -1,5 +1,7 @@
 # S2-T15 - Validación flujo integrado y recuperación del KDS
 
+> **Evidencia histórica, no receta del estado actual.** Se conserva el contenido y sus resultados originales. La versión local cambió Dashboard, solicitudes y el ciclo transaccional de stock; no está todo aplicado en Cloud. Consultar [estado vigente](../../docs/estado-actual.md). Revisión documental: 1 de noviembre de 2026.
+
 **Responsable:** Ariel Díaz  
 **Rama:** `S2-T15-Ariel-Díaz-Validar-Flujo-Integrado-Recuperación-KDS`  
 **Fecha:** 2026-10-31  
@@ -13,8 +15,8 @@ Validar el flujo integrado del KDS tras las correcciones S2-T7 a S2-T14: autenti
 | Archivo | Función / Componente | Rol |
 |---|---|---|
 | `src/pages/auth/Login.jsx` | Login KDS/empleado | Autenticación con Supabase Auth (email/password). |
-| `src/service/usuarios.js` | `login()`, `getPerfilSesion()`, `fetchPerfilYCafeteria()` | Obtiene perfil, rol y `cafeteria_id` desde `usuarios` + `roles`. Al refrescar sesión se incluye `cafeteria_id`. |
-| `src/service/supabase.js` | Cliente Supabase | Configura cliente con `VITE_SUPABASE_URL` y clave anon/publicable. |
+| `src/services/usuarios.js` | `login()`, `getPerfilSesion()`, `fetchPerfilYCafeteria()` | Obtiene perfil, rol y `cafeteria_id` desde `usuarios` + `roles`. Al refrescar sesión se incluye `cafeteria_id`. |
+| `src/services/supabase.js` | Cliente Supabase | Configura cliente con `VITE_SUPABASE_URL` y clave anon/publicable. |
 | `src/pages/empleado/Comandas.jsx` | Componente principal KDS | Orquesta carga, polling, Realtime, filtrado por búsqueda, bloqueo por pedido (`procesando`), recuperación ante errores. |
 | `src/services/pedidosService.js` | `getAll()`, `updateEstado()`, `getById()`, `ordenarPedidos()` | Carga filtrada por `cafeteria_id` (estricto), validación de transiciones, cambio de estado vía backend con fallback controlado. |
 | `src/services/backendApi.js` | `cambiarEstadoPedido()`, `validarQr()`, `request()` | Cliente HTTP centralizado. Obtiene `access_token` desde `supabase.auth.getSession()`, añade `Authorization: Bearer <token>`. Exige sesión válida y trata 401 como error de autenticación. |

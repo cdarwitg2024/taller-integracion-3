@@ -156,11 +156,11 @@ Deno.serve(async (req) => {
     .eq('auth_user_id', authData.user.id)
     .maybeSingle();
 
-  // La voz de aviso es del KDS, o sea del empleado (rol 2). El dueño
-  // (rol 3) queda fuera a propósito: no tiene una pantalla de cocina
+  // La voz de aviso es del KDS, o sea del empleado (rol 4). El dueño
+  // queda fuera a propósito: no tiene una pantalla de cocina
   // delante y su panel no necesita que las comandas le hablen. También
   // evita que su token sirva para generar audio con la cuota del local.
-  if (!usuario || usuario.rol_id !== 2) {
+  if (!usuario || usuario.rol_id !== 4) {
     return json({ error: 'sin_permiso' }, 403);
   }
 

@@ -1,5 +1,7 @@
 # S2-T17 - Validación flujo completo del KDS
 
+> **Evidencia histórica, no receta del estado actual.** Se conserva el contenido y sus resultados originales. La versión local cambió Dashboard, solicitudes y el ciclo transaccional de stock; no está todo aplicado en Cloud. Consultar [estado vigente](../../docs/estado-actual.md). Revisión documental: 1 de noviembre de 2026.
+
 **Responsable:** Ariel Díaz  
 **Rama:** `S2-T17-Ariel-Díaz-Probar-Flujo-Completo-KDS`  
 **Fecha:** 2026-10-31  
