@@ -21,14 +21,19 @@
 --   * Idempotencia / doble reembolso: se bloquea el pedido con FOR UPDATE y
 --     se valida su estado DENTRO de la transaccion. Una segunda cancelacion
 --     concurrente espera el lock y ve el pedido ya 'cancelado'.
---   * Orden de locks: pedido -> wallet (procesar_pago solo bloquea wallet, por
---     lo que no hay ciclo de deadlock).
+--   * Orden de locks: pedido -> productos por id -> wallet. Compra también
+--     bloquea productos por id antes de wallet, sin ciclo entre ambas RPC.
 --
--- NO toca: pagos.estado, stock, QR, otros timestamps.
+-- Solo repone si stock_descontado=true. No cambia pagos.estado ni QR;
+-- el reembolso se registra en movimientos_wallet, como en el contrato previo.
 --
 -- IMPORTANTE: este archivo NO se ejecuta automaticamente. Aplicar en Supabase
 -- es manual.
 -- =============================================================================
+
+-- Sin backfill: pedidos históricos NO prueban un descuento previo.
+-- Aplicar pago y cancelación juntos antes de habilitar compras con stock.
+ALTER TABLE public.pedidos ADD COLUMN IF NOT EXISTS stock_descontado boolean NOT NULL DEFAULT false;
 
 CREATE OR REPLACE FUNCTION public.cancelar_pedido(
   p_pedido_id BIGINT
@@ -47,6 +52,9 @@ DECLARE
   v_wallet_id      BIGINT;
   v_saldo          INTEGER;
   v_saldo_nuevo    INTEGER;
+  v_stock_descontado boolean;
+  v_detalle RECORD;
+  v_stock INTEGER;
 BEGIN
   -- 1) Resolver el usuario autenticado (id interno desde auth.uid()).
   v_usuario_id := public.mi_usuario_id();
@@ -62,8 +70,8 @@ BEGIN
   END IF;
 
   -- 2) Bloquear el pedido (serializa cancelaciones concurrentes).
-  SELECT p.usuario_id, p.estado, p.total
-    INTO v_ped_usuario_id, v_estado, v_total
+  SELECT p.usuario_id, p.estado, p.total, p.stock_descontado
+    INTO v_ped_usuario_id, v_estado, v_total, v_stock_descontado
     FROM public.pedidos p
    WHERE p.id = p_pedido_id
      FOR UPDATE;
@@ -102,6 +110,29 @@ BEGIN
 
   v_monto := v_total::INTEGER;
 
+  -- La marca se escribe solo en la compra que descontó stock; no inferirla
+  -- del estado, fecha, pago ni del formato de las credenciales.
+  IF v_stock_descontado THEN
+    IF NOT EXISTS (SELECT 1 FROM public.detalles_pedido WHERE pedido_id=p_pedido_id)
+       OR EXISTS (SELECT 1 FROM public.detalles_pedido WHERE pedido_id=p_pedido_id
+                  AND (producto_id IS NULL OR cantidad IS NULL OR cantidad <= 0)) THEN
+      RAISE EXCEPTION 'Detalles inválidos para reponer stock' USING ERRCODE='23514';
+    END IF;
+    FOR v_detalle IN
+      SELECT producto_id, sum(cantidad)::BIGINT AS cantidad
+      FROM public.detalles_pedido WHERE pedido_id=p_pedido_id
+      GROUP BY producto_id ORDER BY producto_id
+    LOOP
+      SELECT stock INTO v_stock FROM public.productos
+      WHERE id=v_detalle.producto_id FOR UPDATE;
+      IF NOT FOUND OR v_stock IS NULL OR v_stock < 0
+         OR v_detalle.cantidad > 2147483647::BIGINT - v_stock THEN
+        RAISE EXCEPTION 'No se puede reponer stock del producto %', v_detalle.producto_id
+          USING ERRCODE='23514';
+      END IF;
+    END LOOP;
+  END IF;
+
   -- 7) Bloquear la Wallet del usuario.
   SELECT w.id, w.saldo_actual
     INTO v_wallet_id, v_saldo
@@ -114,8 +145,15 @@ BEGIN
   END IF;
 
   -- 8) Validar overflow antes de acreditar (INTEGER MAX).
-  IF v_saldo > 2147483647 - v_monto THEN
+  IF v_saldo IS NULL OR v_saldo > 2147483647 - v_monto THEN
     RETURN jsonb_build_object('ok', false, 'motivo', 'saldo_invalido');
+  END IF;
+
+  IF v_stock_descontado THEN
+    UPDATE public.productos p SET stock=p.stock+d.cantidad::INTEGER
+    FROM (SELECT producto_id, sum(cantidad)::BIGINT AS cantidad
+          FROM public.detalles_pedido WHERE pedido_id=p_pedido_id GROUP BY producto_id) d
+    WHERE p.id=d.producto_id;
   END IF;
 
   -- 9) Acreditar el saldo (patron inverso de procesar_pago).
@@ -136,6 +174,7 @@ BEGIN
   -- 11) Cerrar el pedido: estado canonico + timestamp de cancelacion.
   UPDATE public.pedidos
      SET estado       = 'cancelado',
+         stock_descontado = false,
          cancelado_en = CURRENT_TIMESTAMP
    WHERE id = p_pedido_id;
 
