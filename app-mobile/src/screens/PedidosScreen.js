@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,14 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Modal,
-  Image,
+  ScrollView,
+  AppState,
   Alert,
 } from 'react-native';
 import AppIcon from '../components/AppIcon';
 
 import { supabase } from '../lib/supabase';
-import { apiGet, apiPatch, ApiError } from '../services/backendClient';
+import { apiPatch } from '../services/backendClient';
 import QrCode from '../lib/QrCode';
 import Button from '../components/Button';
 import Card from '../components/Card';
@@ -78,7 +79,7 @@ const totalItems = (detalles = []) =>
 // 'pagado' (filas antiguas) -> 'pendiente', 'preparando' -> 'en_preparacion'.
 const normalizarEstado = (e) => {
   if (!e) return 'pendiente';
-  const v = String(e).toLowerCase();
+  const v = String(e).trim().toLowerCase().replace(/\s+/g, '_');
   if (v === 'pagado') return 'pendiente';
   if (v === 'preparando') return 'en_preparacion';
   return v;
@@ -119,54 +120,17 @@ const mapPedido = (p) => ({
   }),
 });
 
-// S2-T14: Consulta autenticada de la credencial QR contra ms-pedidos (GET /api/pedidos/:id/qr).
-// Utiliza el JWT de la sesión y maneja de forma diferenciada 401, 404, 409 y fallos de red.
-const obtenerQrDesdeBackend = async (pedidoId) => {
-  try {
-    const data = await apiGet(`/api/pedidos/${pedidoId}/qr`, { timeoutMs: 5000 });
-    return { ok: true, qr_token: data?.qr_token || null };
-  } catch (err) {
-    if (err instanceof ApiError) {
-      // Diferenciar 404 de "Pedido ajeno / rol no autorizado" (devuelto por ms-pedidos)
-      // de un 404 de "Ruta no encontrada" (cuando el endpoint no está levantado en el puerto configurado).
-      const esRutaInexistente = /ruta no encontrada|cannot get|no se encontró la ruta/i.test(err.message || '');
-      if (esRutaInexistente) {
-        return { ok: false, status: 0, mensaje: 'Servicio de pedidos no disponible', esAuth: false };
-      }
-      return {
-        ok: false,
-        status: err.status,
-        mensaje: err.message,
-        esAuth: err.status === 401 || err.status === 404,
-      };
-    }
-    return { ok: false, status: 0, mensaje: 'Error de red o conexión', esAuth: false };
-  }
-};
-
 const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState(null);
-  const [qrResultado, setQrResultado] = useState({
-    cargando: false,
-    token: null,
-    error: null,
-    esOffline: false,
-  });
   // Pestaña del conmutador: 'activos' (pendientes de retirar) o 'inactivos'
   // (historial entregado/cancelado).
   const [tab, setTab] = useState('activos');
   const [cancelando, setCancelando] = useState(false);
-  // Guarda qué pedido está abierto: si la respuesta del backend llega tarde,
-  // no debe pintar el QR de un pedido que el estudiante ya cerró.
-  const pedidoAbierto = useRef(null);
-
-  const cerrarPedido = useCallback(() => {
-    pedidoAbierto.current = null;
-    setSelected(null);
-    setQrResultado({ cargando: false, token: null, error: null, esOffline: false });
-  }, []);
+  const cerrarPedido = useCallback(() => setSelected(null), []);
 
   // S2-T17: Cancelación autónoma de pedidos con reembolso automático a Wallet
   const solicitarCancelacion = useCallback((pedido) => {
@@ -289,56 +253,10 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
     );
   }, []);
 
-  // Al abrir un pedido activo se solicita su credencial QR autenticada a ms-pedidos.
-  // Si el pedido ya está en estado terminal (entregado/cancelado), nunca se pide QR.
-  const abrirPedido = useCallback(async (item) => {
-    pedidoAbierto.current = item.id;
-    setSelected(item);
-    setQrResultado({ cargando: true, token: null, error: null, esOffline: false });
-
-    // S2-T14: Pedidos terminales (inactivos) no solicitan ni presentan QR
-    if (!esActivo(item.estado)) {
-      setQrResultado({ cargando: false, token: null, error: null, esOffline: false });
-      return;
-    }
-
-    const res = await obtenerQrDesdeBackend(item.id);
-    if (pedidoAbierto.current !== item.id) return;
-
-    if (res.ok && res.qr_token) {
-      setQrResultado({ cargando: false, token: res.qr_token, error: null, esOffline: false });
-    } else if (res.esAuth) {
-      // S2-T14: Error 401 o 404: El fallback NUNCA debe ocultar errores de autorización
-      setQrResultado({
-        cargando: false,
-        token: null,
-        error: {
-          status: res.status,
-          mensaje:
-            res.status === 401
-              ? 'Sesión no autorizada o expirada. Inicia sesión nuevamente.'
-              : 'No tienes autorización para consultar el QR de este pedido.',
-        },
-        esOffline: false,
-      });
-    } else if (res.status === 409) {
-      // S2-T14: Estado inválido en el backend (ej. terminal o sin QR disponible)
-      setQrResultado({
-        cargando: false,
-        token: null,
-        error: { status: 409, mensaje: 'El QR no está disponible en el estado actual del pedido.' },
-        esOffline: false,
-      });
-    } else {
-      // Error de red (status 0): se permite credencial local únicamente en modo offline si es activo
-      setQrResultado({
-        cargando: false,
-        token: item.qr_token || null,
-        error: null,
-        esOffline: true,
-      });
-    }
-  }, []);
+  // La lista se consulta con la sesión Supabase y el usuario interno del titular.
+  // Sus credenciales persistidas se muestran de inmediato, sin una segunda
+  // autorización del backend que pueda ocultar un pedido ya accesible al titular.
+  const abrirPedido = useCallback((item) => setSelected(item), []);
 
   const aplicarOrden = useCallback((nuevos) => {
     setOrders(nuevos.sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en)));
@@ -372,9 +290,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
       const usuarioId = await obtenerUsuarioId();
 
       if (!usuarioId) {
-        console.warn('La sesion no tiene usuario interno asociado.');
-        aplicarOrden([]);
-        return;
+        throw new Error('La sesión no tiene usuario interno asociado.');
       }
 
       const { data, error } = await supabase
@@ -385,12 +301,16 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
 
       if (error) throw error;
 
-      aplicarOrden((data || []).map(mapPedido));
+      const pedidos = (data || []).map(mapPedido);
+      aplicarOrden(pedidos);
+      setSelected((prev) => prev ? pedidos.find((pedido) => pedido.id === prev.id) || null : null);
+      setLoadError(null);
     } catch (err) {
       console.warn('No se pudieron cargar los pedidos:', err);
-      aplicarOrden([]);
+      setLoadError('No pudimos cargar tus pedidos. Comprueba tu conexión e inténtalo nuevamente.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [userId, obtenerUsuarioId, aplicarOrden]);
 
@@ -440,6 +360,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 siguiente[idx] = {
                   ...prev[idx],
                   ...mapeado,
+                  qr_token: nuevo.qr_token === undefined ? prev[idx].qr_token : mapeado.qr_token,
+                  codigo_retiro_diario: nuevo.codigo_retiro_diario === undefined ? prev[idx].codigo_retiro_diario : mapeado.codigo_retiro_diario,
                   detalles: nuevo.detalles_pedido ? mapeado.detalles : prev[idx].detalles,
                   cafeteria_nombre: nuevo.cafeterias ? mapeado.cafeteria_nombre : prev[idx].cafeteria_nombre,
                   cafeteria_direccion: nuevo.cafeterias ? mapeado.cafeteria_direccion : prev[idx].cafeteria_direccion,
@@ -454,6 +376,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 return {
                   ...prevSel,
                   ...mapeado,
+                  qr_token: nuevo.qr_token === undefined ? prevSel.qr_token : mapeado.qr_token,
+                  codigo_retiro_diario: nuevo.codigo_retiro_diario === undefined ? prevSel.codigo_retiro_diario : mapeado.codigo_retiro_diario,
                   detalles: nuevo.detalles_pedido ? mapeado.detalles : prevSel.detalles,
                   cafeteria_nombre: nuevo.cafeterias ? mapeado.cafeteria_nombre : prevSel.cafeteria_nombre,
                   cafeteria_direccion: nuevo.cafeterias ? mapeado.cafeteria_direccion : prevSel.cafeteria_direccion,
@@ -483,6 +407,14 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
     };
   }, [userId, obtenerUsuarioId, fetchOrders]);
 
+  useEffect(() => {
+    if (!userId) return undefined;
+    const actualizar = () => { if (AppState.currentState === 'active') fetchOrders(); };
+    const timer = setInterval(actualizar, 10000);
+    const listener = AppState.addEventListener('change', (state) => { if (state === 'active') fetchOrders(); });
+    return () => { clearInterval(timer); listener.remove(); };
+  }, [userId, fetchOrders]);
+
   const renderItem = ({ item }) => {
     const estado = ESTADOS[item.estado] || ESTADOS.pendiente;
     const detalles = item.detalles || [];
@@ -490,6 +422,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
       <TouchableOpacity
         activeOpacity={0.85}
         style={styles.cardWrapper}
+        accessibilityRole="button"
+        accessibilityLabel={`Ver pedido ${item.codigo_pedido}`}
         onPress={() => abrirPedido(item)}
       >
         <Card variant="elevated" padding="lg">
@@ -512,6 +446,9 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
             {detalles.map((d) => `${d.cantidad}× ${d.nombre}`).join(' · ')}
           </Text>
         )}
+        <Text style={styles.cardDetalle}>
+          {esActivo(item.estado) ? 'Ver QR y token de contingencia' : 'Ver comprobante'}
+        </Text>
         </Card>
       </TouchableOpacity>
     );
@@ -538,6 +475,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
         <ActivityIndicator size="large" color={colors.cafeOscuro} style={{ marginTop: 48 }} />
       ) : (
         <>
+          {loadError && (
+            <View style={styles.infoBanner}>
+              <Text accessibilityRole="alert" style={styles.infoBannerText}>{loadError}</Text>
+              <Button title="Reintentar" onPress={() => { setRefreshing(true); fetchOrders(); }} />
+            </View>
+          )}
           {/* Conmutador Activos/Inactivos, con contador en cada pestaña */}
           <View style={styles.switcherRow}>
             <TouchableOpacity
@@ -561,6 +504,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
           <FlatList
             data={tab === 'activos' ? activos : inactivos}
             keyExtractor={(item) => item.id}
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); fetchOrders(); }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.list}
             ListHeaderComponent={
@@ -574,7 +519,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
             }
             renderItem={renderItem}
             ListEmptyComponent={
-              tab === 'activos' ? (
+              loadError ? null : tab === 'activos' ? (
                 <View style={styles.emptyContainer}>
                   <AppIcon name="box" style={styles.emptyIcon} />
                   <Text style={styles.emptyTitle}>No tienes pedidos activos</Text>
@@ -611,6 +556,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
       >
         <View style={styles.modalBackdrop}>
           <Card variant="elevated" padding="lg" style={styles.modalCard}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
             {pedidoConfirmado && (
               <>
                 <View style={styles.confirmacionHeader}>
@@ -656,22 +602,30 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 </View>
 
                 <View style={styles.confirmacionQrSection}>
-                  <Text style={styles.confirmacionQrTitulo}>
-                    Tu QR de retiro
-                  </Text>
-                  <Text style={styles.confirmacionQrHint}>
-                    Presenta este código al llegar a la cafetería
-                  </Text>
-                  <View style={styles.confirmacionQrBox}>
-                    <Text style={styles.confirmacionQrTexto}>
-                      {pedidoConfirmado.qr_token
-                        ? `QR-${pedidoConfirmado.qr_token.substring(0, 8).toUpperCase()}`
-                        : `QR-${pedidoConfirmado.pedido_id.toString().padStart(6, '0')}`}
+                  <Text style={styles.confirmacionQrTitulo}>Tu QR de retiro</Text>
+                  {esActivo(normalizarEstado(pedidoConfirmado.estado)) && pedidoConfirmado.qr_token ? (
+                    <>
+                      <View style={styles.confirmacionQrBox}>
+                        <QrCode value={pedidoConfirmado.qr_token} size={220} />
+                      </View>
+                      <Text style={styles.confirmacionQrHint}>
+                        Presenta este QR al llegar a la cafetería
+                      </Text>
+                    </>
+                  ) : (
+                    <Text style={styles.confirmacionQrHint}>
+                      QR no disponible. Consulta el detalle en Mis pedidos.
                     </Text>
-                  </View>
-                  <Text style={styles.confirmacionTokenTexto}>
-                    Token de contingencia: {pedidoConfirmado.codigo_retiro || `CF-${pedidoConfirmado.pedido_id.toString().padStart(4, '0')}`}
-                  </Text>
+                  )}
+                  {esActivo(normalizarEstado(pedidoConfirmado.estado)) && pedidoConfirmado.codigo_retiro ? (
+                    <Text style={styles.confirmacionTokenTexto}>
+                      Token de contingencia: {pedidoConfirmado.codigo_retiro}
+                    </Text>
+                  ) : (
+                    <Text style={styles.confirmacionTokenTexto}>
+                      Código de contingencia no disponible.
+                    </Text>
+                  )}
                 </View>
 
                 <Button
@@ -681,6 +635,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 />
               </>
             )}
+            </ScrollView>
           </Card>
         </View>
       </Modal>
@@ -693,6 +648,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
       >
         <View style={styles.modalBackdrop}>
           <Card variant="elevated" padding="lg" style={styles.modalCard}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
             {selected && (
               <>
                 <View style={styles.modalHeader}>
@@ -815,46 +771,24 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                   </View>
                 ) : (
                   <View style={styles.qrContainer}>
-                    {qrResultado.cargando ? (
-                      <ActivityIndicator size="small" color={colors.cafeOscuro} style={{ marginVertical: 32 }} />
-                    ) : qrResultado.error ? (
-                      <View style={styles.qrErrorBox}>
-                        <AppIcon name="warning" style={styles.qrErrorIcon} />
-                        <Text style={styles.qrErrorTitulo}>
-                          {qrResultado.error.status === 401
-                            ? 'Sesión no autorizada'
-                            : qrResultado.error.status === 404
-                              ? 'Pedido no encontrado o ajeno'
-                              : 'QR no disponible'}
-                        </Text>
-                        <Text style={styles.qrErrorMensaje}>{qrResultado.error.mensaje}</Text>
-                      </View>
-                    ) : qrResultado.token ? (
+                    {selected.qr_token ? (
                       <>
-                        <QrCode value={qrResultado.token} size={190} />
-                        {qrResultado.esOffline && (
-                          <View style={styles.offlineAvisoRow}>
-                            <AppIcon name="wifi" style={styles.offlineAvisoIcon} />
-                            <Text style={styles.offlineAviso}>Modo sin conexión: credencial de respaldo</Text>
-                          </View>
-                        )}
+                        <QrCode value={selected.qr_token} size={220} />
                         <Text style={styles.qrHint}>
                           Presenta este QR al llegar a la cafetería para retirar tu pedido.
                         </Text>
-                        <View style={styles.contingenciaBox}>
-                          <Text style={styles.contingenciaTitulo}>
-                            ¿No puedes escanear? Di este código
-                          </Text>
-                          <Text style={styles.contingenciaCodigo}>
-                            {selected.codigo_retiro_diario || `CF-${selected.id}`}
-                          </Text>
-                        </View>
                       </>
                     ) : (
                       <Text style={styles.qrHint}>
-                        El QR de retiro aparecerá aquí una vez confirmado el pago de tu pedido.
+                        Este pedido no tiene un QR de retiro guardado.
                       </Text>
                     )}
+                    <View style={styles.contingenciaBox}>
+                      <Text style={styles.contingenciaTitulo}>Token de contingencia</Text>
+                      <Text selectable style={styles.contingenciaCodigo}>
+                        {selected.codigo_retiro_diario || 'Este pedido no tiene un token de contingencia guardado.'}
+                      </Text>
+                    </View>
 
                     {/* S2-T17: Opciones de Cancelación y Reembolso */}
                     {selected.estado === 'pendiente' && (
@@ -887,6 +821,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 )}
               </>
             )}
+            </ScrollView>
           </Card>
         </View>
       </Modal>
@@ -992,6 +927,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   modalCard: {
+    maxHeight: '90%',
     borderRadius: 24,
   },
   modalHeader: {
@@ -1189,11 +1125,6 @@ const styles = StyleSheet.create({
   },
   confirmacionQrBox: {
     backgroundColor: colors.blanco,
-    borderWidth: 2,
-    borderColor: colors.cafeOscuro,
-    borderRadius: 16,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.xxl,
     marginBottom: spacing.md,
   },
   confirmacionQrTexto: {

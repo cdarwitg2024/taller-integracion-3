@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   BackHandler,
   RefreshControl,
   TextInput,
+  AppState,
 } from 'react-native';
 import AppIcon from '../components/AppIcon';
 
@@ -18,7 +19,8 @@ import CategoryFilter from '../components/CategoryFilter';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { supabase } from '../lib/supabase';
-import { aplicarCambioProducto, productoPorId } from '../utils/productos';
+import { productoPorId } from '../utils/productos';
+import { aplicarPreciosPromocion } from '../services/promociones';
 import { useDisponibilidadProductos } from '../hooks/useDisponibilidadProductos';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -75,6 +77,7 @@ export const mapProduct = (raw) => {
     name: raw.nombre || 'Producto',
     description: raw.descripcion || '',
     price: Number(raw.precio) || 0,
+    basePrice: Number(raw.precio_base ?? raw.precio) || 0,
     imageUrl: raw.imagen_url || null,
 
     stock,
@@ -109,6 +112,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const ultimaCarga = useRef(0);
 
   // FR-07: categoría activa. 'todos' = sin filtro
   const [categoriaActiva, setCategoriaActiva] = useState('todos');
@@ -134,8 +138,7 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
   // El hook se suscribe, se desuscribe solo y no duplica canales.
   const { connected, cambios } = useDisponibilidadProductos(cafeteriaId);
 
-  // Aplicamos el cambio en el producto afectado sin volver a traer la lista
-  // entera. Es lo que hace que la UI se vea instantánea.
+  // Releer disponibilidad y precio promocional juntos cuando cambia un producto.
   useEffect(() => {
     if (!cambios.length) return;
     const pendiente = cambios[0];
@@ -146,18 +149,13 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
       return;
     }
 
-    if (Number.isFinite(pendiente.id)) {
-      setProducts((prev) => {
-        const { productos, recargar } = aplicarCambioProducto(prev, pendiente);
-        // Si no estaba en la lista, hay que traerlo con toda su información
-        if (recargar) fetchProducts({ silent: true });
-        return productos;
-      });
-    }
+    // Un precio base recibido por Realtime no debe borrar un descuento vigente.
+    if (Number.isFinite(pendiente.id)) fetchProducts({ silent: true });
   }, [cambios]);
 
   const fetchProducts = useCallback(
     async ({ silent = false } = {}) => {
+      const solicitud = ++ultimaCarga.current;
       if (!cafeteriaId) {
         setProducts([]);
         setLoading(false);
@@ -185,8 +183,11 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
         );
 
         // productsMap mantiene el id numérico, que es lo que necesita el carrito
-        setProducts(propios.map(mapProduct).filter((p) => Number.isFinite(p.id)));
+        const cotizados = await aplicarPreciosPromocion(propios);
+        if (solicitud !== ultimaCarga.current) return;
+        setProducts(cotizados.map(mapProduct).filter((p) => Number.isFinite(p.id)));
       } catch (err) {
+        if (solicitud !== ultimaCarga.current) return;
         console.warn('[MenuScreen] No se pudieron cargar los productos:', err);
         setProducts([]);
         setError(
@@ -195,8 +196,10 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
             : 'No se pudo cargar el menú de esta cafetería.'
         );
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (solicitud === ultimaCarga.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
     [cafeteriaId]
@@ -204,6 +207,15 @@ const MenuScreen = ({ cafeteria, onAddToCart, onBack }) => {
 
   useEffect(() => {
     fetchProducts();
+    return () => { ultimaCarga.current++; };
+  }, [fetchProducts]);
+
+  useEffect(() => {
+    // Las campañas también empiezan/terminan por hora, sin cambios en productos.
+    const actualizar = () => { if (AppState.currentState === 'active') fetchProducts({ silent: true }); };
+    const timer = setInterval(actualizar, 15000);
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') actualizar(); });
+    return () => { clearInterval(timer); listener.remove(); };
   }, [fetchProducts]);
 
   // FR-15: debounce de 300 ms para no refiltrar en cada tecla que se escribe.

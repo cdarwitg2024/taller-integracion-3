@@ -211,7 +211,7 @@ export async function apiPost<T>(
 }
 
 /**
- * `GET` autenticado contra el backend (S2-T14).
+ * `GET` autenticado contra el backend (S2-T14); el catálogo público puede omitir sesión.
  *
  * Utiliza el JWT de la sesión activa de Supabase Auth en `Authorization: Bearer <token>`.
  * Retorna el cuerpo JSON tipado y lanza `ApiError` con el código HTTP correspondiente
@@ -219,11 +219,11 @@ export async function apiPost<T>(
  * o status 0 ante fallos de red / timeout.
  *
  * @param ruta ruta relativa, p. ej. `/api/pedidos/123/qr`.
- * @param opciones configuración opcional, como `timeoutMs`.
+ * @param opciones `timeoutMs` y `publico` para endpoints de catálogo sin autenticación.
  */
-export async function apiGet<T>(ruta: string, opciones?: { timeoutMs?: number }): Promise<T> {
+export async function apiGet<T>(ruta: string, opciones?: { timeoutMs?: number; publico?: boolean }): Promise<T> {
   const url = `${urlBase()}${normalizarRuta(ruta)}`;
-  const token = await tokenActual();
+  const token = opciones?.publico ? null : await tokenActual();
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opciones?.timeoutMs ?? 6000);
@@ -233,7 +233,7 @@ export async function apiGet<T>(ruta: string, opciones?: { timeoutMs?: number })
     respuesta = await fetch(url, {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         Accept: 'application/json',
       },
       signal: controller.signal,

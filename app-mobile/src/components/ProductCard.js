@@ -123,7 +123,13 @@ const ProductCard = ({ product, onAdd, onPress, adding = false }) => {
         </View>
 
         <View style={styles.bottomRow}>
-          <Text style={styles.price}>${product.price.toLocaleString('es-CL')}</Text>
+          <View>
+            {product.basePrice > product.price && <Text style={{ textDecorationLine: 'line-through', color: '#82766D', fontSize: 12 }}>
+              ${product.basePrice.toLocaleString('es-CL')}
+            </Text>}
+            <Text style={styles.price}>${product.price.toLocaleString('es-CL')}</Text>
+            {product.basePrice > product.price && <Text style={{ color: '#267248', fontSize: 11, fontWeight: '700' }}>Precio en promoción</Text>}
+          </View>
 
           <TouchableOpacity
             style={[styles.addButton, (!available || adding) && styles.disabledButton]}

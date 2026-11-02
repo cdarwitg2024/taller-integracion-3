@@ -5,7 +5,6 @@ import {
   FlatList,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
 } from 'react-native';
 import AppIcon from '../components/AppIcon';
 
@@ -17,7 +16,7 @@ import Header from '../components/Header';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
-import { FRANJAS, franjasConVencimiento } from '../utils/franjas';
+import { franjaRetiroActual } from '../utils/franjas';
 
 // Referencia horaria explícita utilizada para validar vencimiento
 const getReferenciaHoraria = () => new Date();
@@ -37,11 +36,9 @@ const CartScreen = ({
   // falso. Ahora el nombre sale de los ítems del carrito y, si no hay, se
   // dice que no se pudo determinar.
   const cafeName = cafeteriaName || 'la cafetería de tu pedido';
-  // Franja de retiro elegida (T3, de tu compañero). Se manda a la RPC
-  // `procesar_pago` como p_franja_retiro. NO se persiste en AsyncStorage:
-  // es un dato de ESTE pedido, y una franja vieja guardada podría estar
-  // obsoleta (ya pasó la hora o el carrito cambió). Se elige en cada pedido.
-  const [franjaSeleccionada, setFranjaSeleccionada] = useState(null);
+  // Retiro inmediato elegido localmente. No depende de tablas de horarios.
+  // Se conserva franja_retiro como HH:mm-HH:mm para backend y KDS.
+  const [franjaSeleccionada, setFranjaSeleccionada] = useState(false);
   const [ahora, setAhora] = useState(() => getReferenciaHoraria());
   const { totalProducts, subtotal, total } = useCartTotals(cart);
 
@@ -53,39 +50,16 @@ const CartScreen = ({
     return () => clearInterval(timer);
   }, []);
 
-  const franjasDisponibles = useMemo(
-    () => franjasConVencimiento(FRANJAS, ahora),
-    [ahora]
-  );
-
-  // Si la franja seleccionada vence antes del checkout/estado actual, deja de ser válida
-  useEffect(() => {
-    if (!franjaSeleccionada) return;
-    const actual = franjasDisponibles.find((f) => f.id === franjaSeleccionada);
-    if (actual && actual.vencida) {
-      setFranjaSeleccionada(null);
-    }
-  }, [franjaSeleccionada, franjasDisponibles]);
-
-  const hayFranjasDisponibles = franjasDisponibles.some((f) => !f.vencida);
+  const franjaActual = useMemo(() => franjaRetiroActual(ahora), [ahora]);
 
   const handleCheckout = () => {
+    if (paying) return;
     if (!franjaSeleccionada) {
-      alert('Por favor selecciona una franja horaria para el retiro.');
+      alert('Selecciona retirar lo antes posible para continuar.');
       return;
     }
-    // Referencia fresca: la franja pudo vencer entre el último tick y este toque.
-    const referencia = getReferenciaHoraria();
-    const actual = franjasConVencimiento(FRANJAS, referencia).find(
-      (f) => f.id === franjaSeleccionada
-    );
-    if (!actual || actual.vencida) {
-      setAhora(referencia);
-      setFranjaSeleccionada(null);
-      alert('La franja horaria seleccionada ya no está disponible. Selecciona una franja vigente.');
-      return;
-    }
-    onCheckout({ franja: franjaSeleccionada });
+    // Se calcula al confirmar: no enviar un horario viejo si cambió el minuto.
+    onCheckout({ franja: franjaRetiroActual(getReferenciaHoraria()).id });
   };
 
   return (
@@ -145,49 +119,23 @@ const CartScreen = ({
               {/* Sección de Selección de Franja Horaria */}
               <View style={styles.franjaSection}>
                 <Text style={styles.franjaTitle}>
-                  Selecciona tu horario de retiro
+                  Selecciona el retiro
                 </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.franjaContainer}
+                <TouchableOpacity
+                  style={[styles.franjaChip, franjaSeleccionada && styles.franjaChipSelected]}
+                  onPress={() => setFranjaSeleccionada(true)}
+                  disabled={paying}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retirar lo antes posible"
+                  accessibilityState={{ disabled: paying, selected: Boolean(franjaSeleccionada) }}
                 >
-                  {franjasDisponibles.map((item) => {
-                    const isSelected = franjaSeleccionada === item.id;
-                    const disabled = item.vencida;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[
-                          styles.franjaChip,
-                          isSelected && styles.franjaChipSelected,
-                          disabled && styles.franjaChipDisabled,
-                        ]}
-                        onPress={() => {
-                          if (disabled) return;
-                          setFranjaSeleccionada(item.id);
-                        }}
-                        disabled={disabled}
-                        accessibilityState={{ disabled }}
-                      >
-                        <Text
-                          style={[
-                            styles.franjaText,
-                            isSelected && styles.franjaTextSelected,
-                            disabled && styles.franjaTextDisabled,
-                          ]}
-                        >
-                          {item.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-                {!hayFranjasDisponibles && (
-                  <Text style={styles.franjaEmptyText}>
-                    No hay franjas de retiro disponibles en este momento.
+                  <Text style={[styles.franjaText, franjaSeleccionada && styles.franjaTextSelected]}>
+                    Retirar lo antes posible
                   </Text>
-                )}
+                </TouchableOpacity>
+                <Text style={styles.franjaEmptyText}>
+                  Franja actual: {franjaActual.label}
+                </Text>
               </View>
             </>
           }
@@ -248,7 +196,7 @@ const CartScreen = ({
               <Button
                 title={paying ? 'Procesando pago...' : 'Proceder al Pago'}
                 onPress={handleCheckout}
-                disabled={paying || !franjaSeleccionada || !hayFranjasDisponibles}
+                disabled={paying || !franjaSeleccionada}
                 loading={paying}
               />
 

@@ -52,8 +52,7 @@ const chip = (tree, etiqueta) => {
 
 const botonPagar = (tree) => tree.root.findAllByType(Button)[0];
 
-// Reloj fijo: las franjas son 12:00-13:30, así que sin esto el resultado
-// dependería de la hora real en que corre el test.
+// Reloj fijo para comprobar el intervalo local enviado al pedido.
 beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(new Date(2026, 0, 15, 12, 14, 0));
@@ -65,46 +64,41 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-describe('CartScreen - franjas de retiro', () => {
-  test('una franja vencida queda deshabilitada', () => {
-    jest.setSystemTime(new Date(2026, 0, 15, 12, 20, 0));
+describe('CartScreen - retiro inmediato', () => {
+  test('permite seleccionar retiro después de las 13:30 sin horarios Cloud', () => {
+    jest.setSystemTime(new Date(2026, 0, 15, 18, 20));
     const tree = montar();
-    expect(chip(tree, '12:00 - 12:15').props.disabled).toBe(true);
-    expect(chip(tree, '12:15 - 12:30').props.disabled).toBe(false);
-  });
-
-  test('si la franja elegida vence, la selección deja de ser válida', () => {
-    const tree = montar();
-    act(() => chip(tree, '12:00 - 12:15').props.onPress());
+    expect(chip(tree, 'Retirar lo antes posible').props.disabled).toBe(false);
+    expect(botonPagar(tree).props.disabled).toBe(true);
+    act(() => chip(tree, 'Retirar lo antes posible').props.onPress());
     expect(botonPagar(tree).props.disabled).toBe(false);
-
-    // 12:14:00 -> 12:15:01: la franja venció con la pantalla abierta
-    act(() => {
-      jest.advanceTimersByTime(61000);
-    });
-
-    expect(chip(tree, '12:00 - 12:15').props.disabled).toBe(true);
-    expect(botonPagar(tree).props.disabled).toBe(true);
+    expect(textos(tree)).toContain('18:15 - 18:30');
+    expect(textos(tree)).not.toContain('No hay franjas de retiro disponibles');
   });
 
-  test('sin franjas disponibles muestra el mensaje y bloquea el pago', () => {
-    jest.setSystemTime(new Date(2026, 0, 15, 14, 0, 0));
+  test('actualiza la franja sin perder la elección al pasar de intervalo', () => {
     const tree = montar();
-    expect(textos(tree)).toContain('No hay franjas de retiro disponibles');
-    expect(botonPagar(tree).props.disabled).toBe(true);
+    act(() => chip(tree, 'Retirar lo antes posible').props.onPress());
+    act(() => jest.advanceTimersByTime(61000));
+    expect(botonPagar(tree).props.disabled).toBe(false);
+    expect(textos(tree)).toContain('12:15 - 12:30');
   });
 
-  test('el checkout revalida con referencia fresca, no con el último tick', () => {
+  test('checkout calcula la hora fresca aunque no haya corrido el intervalo', () => {
     const onCheckout = jest.fn();
     const tree = montar({ onCheckout });
-    act(() => chip(tree, '12:00 - 12:15').props.onPress());
-
-    // La franja vence, pero el intervalo todavía no corrió.
+    act(() => chip(tree, 'Retirar lo antes posible').props.onPress());
     jest.setSystemTime(new Date(2026, 0, 15, 12, 15, 30));
     act(() => botonPagar(tree).props.onPress());
+    expect(onCheckout).toHaveBeenCalledWith({ franja: '12:15-12:30' });
+  });
 
+  test('no permite confirmar sin seleccionar el botón', () => {
+    const onCheckout = jest.fn();
+    const tree = montar({ onCheckout });
+    act(() => botonPagar(tree).props.onPress());
     expect(onCheckout).not.toHaveBeenCalled();
-    expect(botonPagar(tree).props.disabled).toBe(true);
+    expect(global.alert).toHaveBeenCalled();
   });
 });
 
@@ -128,7 +122,7 @@ describe('CartScreen - carrito y pago', () => {
   test('con franja vigente, pagar envía una sola solicitud', () => {
     const onCheckout = jest.fn();
     const tree = montar({ onCheckout });
-    act(() => chip(tree, '12:00 - 12:15').props.onPress());
+    act(() => chip(tree, 'Retirar lo antes posible').props.onPress());
     act(() => botonPagar(tree).props.onPress());
     expect(onCheckout).toHaveBeenCalledTimes(1);
     expect(onCheckout).toHaveBeenCalledWith({ franja: '12:00-12:15' });

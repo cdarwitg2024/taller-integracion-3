@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import AppIcon from '../components/AppIcon';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '../lib/supabase';
+import { apiGet } from '../services/backendClient';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { colors } from '../theme/colors';
@@ -79,12 +79,8 @@ export const CafeteriaListScreen = ({
     setErrorMessage(null);
 
     try {
-      const { data, error } = await supabase
-        .from('cafeterias')
-        .select('*')
-        .eq('activa', true);
-
-      if (error) throw error;
+      const { data } = await apiGet<{ data: Cafeteria[] }>('/api/cafeterias', { publico: true });
+      if (!Array.isArray(data)) throw new Error('Respuesta de cafeterías inválida.');
 
       setCafeterias((data as Cafeteria[]) ?? []);
     } catch (err) {
