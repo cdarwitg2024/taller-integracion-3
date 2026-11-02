@@ -13,7 +13,6 @@ import {
 import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
-import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 
@@ -70,13 +69,8 @@ function Sidebar({ currentPage, onNavigate, onLogout, menuItems, subtitle = 'Pan
     },
     {
       id: 'productos',
-      label: 'Productos',
+      label: 'Productos y Stock',
       icon: <MenuBookOutlinedIcon fontSize="small" />,
-    },
-    {
-      id: 'inventario',
-      label: 'Inventario',
-      icon: <Inventory2OutlinedIcon fontSize="small" />,
     },
     {
       id: 'bot',

@@ -27,8 +27,8 @@ import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import ErrorOutlineOutlinedIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 
-import { productos as productosService } from '../../service/productos';
-import { solicitudesStock as solicitudesStockService } from '../../service/solicitudes_stock';
+import { productos as productosService } from '../../services/productos';
+import { solicitudesStock as solicitudesStockService } from '../../services/solicitudes_stock';
 import ModificarStockDialog from '../../components/productos/ModificarStockDialog';
 
 /**

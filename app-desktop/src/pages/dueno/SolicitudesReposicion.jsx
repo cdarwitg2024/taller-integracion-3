@@ -1,9 +1,8 @@
 // ─── Pantalla: Solicitudes de Reposición (Panel Dueño) ───────────────────────
-// S2-T17: vista de SOLO LECTURA para que el dueño consulte las solicitudes de
+// El dueño consulta y resuelve las solicitudes de
 // reposición generadas por los empleados de su cafetería.
 //
-// Esta pantalla NO procesa solicitudes ni modifica inventario: únicamente lee
-// lo que el sistema ya persistió en `solicitudes_stock`.
+// Resolver aprueba o rechaza administrativamente; no modifica inventario.
 //
 // Flujo:
 //   1. app.jsx define la ruta /dueno/solicitudes-reposicion y el ítem del menú.
@@ -11,9 +10,10 @@
 //      (currentUser.cafeteria_id).
 //   3. Se muestran estados de carga, error y vacío.
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Box,
+  Button,
   Paper,
   Table,
   TableBody,
@@ -32,7 +32,7 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 
-import { solicitudesStock } from '../../service/solicitudes_stock';
+import { solicitudesStock } from '../../services/solicitudes_stock';
 import { parsearFecha, formatearHora } from '../../utils/dateUtils';
 
 /**
@@ -80,6 +80,24 @@ const cantidadSolicitada = (solicitud) => {
 };
 
 function SolicitudesReposicion({ currentUser }) {
+  const resolviendoRef = useRef(false);
+  const [resolviendo, setResolviendo] = useState(false);
+  const resolver = async (solicitud, estado) => {
+    if (resolviendoRef.current) return;
+    resolviendoRef.current = true;
+    setResolviendo(true);
+    setError(null);
+    try {
+      await solicitudesStock.resolverSolicitud({ id: solicitud.id, cafeteriaId,
+        usuarioId: currentUser?.id, estado });
+      await cargarSolicitudes();
+    } catch (err) {
+      setError(err.message || 'No se pudo resolver la solicitud.');
+    } finally {
+      resolviendoRef.current = false;
+      setResolviendo(false);
+    }
+  };
   const [solicitudes, setSolicitudes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -131,7 +149,10 @@ function SolicitudesReposicion({ currentUser }) {
 
   return (
     <Box>
-      {/* Barra de consulta: solo lectura, sin acciones sobre las solicitudes */}
+      <Alert severity="info" sx={{ mb: 2 }}>
+        Aceptar una solicitud autoriza la reposición; no agrega unidades al stock.
+        Cuando recibas los productos, registra las existencias desde Productos y Stock.
+      </Alert>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1.5}
@@ -233,6 +254,7 @@ function SolicitudesReposicion({ currentUser }) {
                 <TableCell sx={{ fontWeight: 800, color: '#4A3B32' }}>
                   Estado
                 </TableCell>
+                <TableCell>Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -274,6 +296,12 @@ function SolicitudesReposicion({ currentUser }) {
                           Sin estado
                         </Typography>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      {estadoRaw.toLowerCase() === 'pendiente' && <Stack direction="row" spacing={1}>
+                        <Button disabled={resolviendo} onClick={() => resolver(solicitud, 'aprobado')}>Aceptar</Button>
+                        <Button disabled={resolviendo} color="error" onClick={() => resolver(solicitud, 'rechazado')}>Rechazar</Button>
+                      </Stack>}
                     </TableCell>
                   </TableRow>
                 );

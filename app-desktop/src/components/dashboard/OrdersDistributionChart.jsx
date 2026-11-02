@@ -43,7 +43,7 @@ function OrdersDistributionChart({ stats }) {
     },
   ];
 
-  const totalActivos = pendientes + preparando;
+  const totalActivos = pendientes + preparando + listos;
 
   return (
     <Paper

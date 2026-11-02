@@ -14,7 +14,7 @@ const CREDENCIAL_SEGURA = /^[A-Za-z0-9_-]+$/;
 
 // ─── Criterio comun de ventas para indicadores administrativos (S2-T11) ───
 // Periodo operativo compartido por los indicadores que representan ventas.
-const PERIOD_INDICADOR_VENTAS = 'hoy';
+// Solo el gráfico por hora restringe la consulta a hoy.
 
 // Estados que se consideran como venta para los indicadores administrativos.
 // Los cancelados quedan fuera (tratamiento consistente con el criterio de venta).
@@ -26,7 +26,8 @@ const ESTADOS_VENTAS = ['entregado', 'listo', 'preparando', 'en_preparacion'];
  */
 function esPedidoDeVentas(pedido) {
   const estado = String(pedido?.estado || '').toLowerCase();
-  if (estado === 'cancelado') return false;
+  if (estado === 'cancelado' || ['rechazado', 'reembolsado'].includes(pedido?.pago_estado)) return false;
+  if (estado === 'pendiente' || estado === 'pagado') return pedido?.pago_estado === 'pagado';
   return ESTADOS_VENTAS.includes(estado);
 }
 
@@ -383,6 +384,8 @@ export const pedidosService = {
       if (updated) return updated;
       throw new Error('No se pudo obtener el pedido actualizado tras el cambio de estado.');
     } catch (err) {
+      // Cancelar exige la RPC transaccional: nunca degradar a UPDATE de estado.
+      if (nuevoEstado === 'cancelado') throw err;
       const status = err?.status;
       const code = err?.code;
       // Errores de autorización/prohibidos/conflictos: NO hacer fallback alternativo
@@ -536,16 +539,16 @@ export const pedidosService = {
   async getEstadisticas(pedidos = null) {
     const lista = pedidos ?? (await this.getAll());
 
-    // Criterio comun de ventas (S2-T11): periodo 'hoy' y conjunto de ventas validas
-    const pedidosDelDia = obtenerPedidosDelDia(lista);
-    const totalVentas = obtenerVentasDelDia(pedidosDelDia);
+    // Mismo alcance de pedidos que el KDS, sin descartar fechas anteriores.
+    const pedidosDelAlcance = lista;
+    const totalVentas = obtenerVentasDelDia(pedidosDelAlcance);
 
-    const pendientes = pedidosDelDia.filter((p) => p.estado === 'pendiente').length;
-    const preparando = pedidosDelDia.filter((p) => p.estado === 'preparando' || p.estado === 'en_preparacion').length;
-    const listos = pedidosDelDia.filter((p) => p.estado === 'listo').length;
-    const entregados = pedidosDelDia.filter((p) => p.estado === 'entregado').length;
+    const pendientes = pedidosDelAlcance.filter((p) => p.estado === 'pendiente').length;
+    const preparando = pedidosDelAlcance.filter((p) => p.estado === 'preparando' || p.estado === 'en_preparacion').length;
+    const listos = pedidosDelAlcance.filter((p) => p.estado === 'listo').length;
+    const entregados = pedidosDelAlcance.filter((p) => p.estado === 'entregado').length;
 
-    const tiempos = pedidosDelDia
+    const tiempos = pedidosDelAlcance
       .filter((p) => p.tiempo_real_min && Number(p.tiempo_real_min) > 0)
       .map((p) => Number(p.tiempo_real_min));
     const tiempoPromedioMin =
@@ -555,7 +558,7 @@ export const pedidosService = {
 
     return {
       totalVentas,
-      totalPedidos: pedidosDelDia.length,
+      totalPedidos: pedidosDelAlcance.length,
       pendientes,
       preparando,
       listos,
@@ -612,8 +615,7 @@ export const pedidosService = {
     const lista = pedidos ?? (await this.getAll());
     const productCountMap = {};
 
-    const pedidosDelDia = obtenerPedidosDelDia(lista);
-    const pedidosDeVentas = obtenerPedidosDeVentasDelDia(pedidosDelDia);
+    const pedidosDeVentas = lista.filter(esPedidoDeVentas);
 
     pedidosDeVentas.forEach((p) => {
       const items = p.productos || p.detalles_pedido || [];

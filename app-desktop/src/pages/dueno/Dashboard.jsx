@@ -60,7 +60,7 @@ function Dashboard({ currentUser }) {
     } catch (err) {
       console.error('Error cargando datos del dashboard:', err);
       setDbError(
-        'Sin conexión con la base de datos Supabase. Verifique que el servicio de base de datos se encuentre iniciado.'
+        err.message || 'No se pudieron consultar los datos del Dashboard.'
       );
       setStats(null);
       setPedidos([]);
@@ -72,9 +72,17 @@ function Dashboard({ currentUser }) {
   };
 
   useEffect(() => {
-    loadData(true);
-
-    if (!isSupabaseConfigured) return;
+    let activo = true;
+    let cargando = false;
+    const refrescar = async (inicial = false) => {
+      if (!activo || cargando) return;
+      cargando = true;
+      try { await loadData(inicial); } finally { cargando = false; }
+    };
+    refrescar(true);
+    // Igual que KDS: respaldo de 10 segundos si Realtime pierde un evento.
+    const poll = setInterval(() => refrescar(false), 10000);
+    if (!isSupabaseConfigured) return () => { activo = false; clearInterval(poll); };
 
     const canalDashboard = supabase.channel('dueno-dashboard-realtime');
 
@@ -83,19 +91,21 @@ function Dashboard({ currentUser }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'pedidos' },
         () => {
-          loadData(false);
+          refrescar(false);
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'detalles_pedido' },
         () => {
-          loadData(false);
+          refrescar(false);
         }
       )
       .subscribe();
 
     return () => {
+      activo = false;
+      clearInterval(poll);
       supabase.removeChannel(canalDashboard);
     };
   }, [cafeteriaId]);
@@ -131,6 +141,12 @@ function Dashboard({ currentUser }) {
         </Alert>
       )}
 
+      {!loading && !dbError && stats?.totalPedidos === 0 && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          No hay pedidos registrados para esta cafetería.
+        </Alert>
+      )}
+      {!loading && !dbError && <>
       {/* 2. Tarjetas de Indicadores Principales (KPIs) */}
       <KpiCards stats={stats} />
 
@@ -153,6 +169,7 @@ function Dashboard({ currentUser }) {
           <RecentOrdersTable pedidos={pedidos} />
         </Grid>
       </Grid>
+      </>}
     </Box>
   );
 }

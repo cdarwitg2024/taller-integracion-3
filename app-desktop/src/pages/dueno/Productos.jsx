@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -34,6 +33,7 @@ import {
 } from '@mui/material';
 
 import AddIcon from '@mui/icons-material/Add';
+import DownloadIcon from '@mui/icons-material/Download';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -52,15 +52,17 @@ import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalance
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 
-import { productos as productosService } from '../../service/productos';
-import { cafeterias as cafeteriasService } from '../../service/cafeterias';
-import { categorias as categoriasService } from '../../service/categorias';
-import { supabase, isSupabaseConfigured } from '../../service/supabase';
+import { productos as productosService } from '../../services/productos';
+import { cafeterias as cafeteriasService } from '../../services/cafeterias';
+import { categorias as categoriasService } from '../../services/categorias';
+import { supabase, isSupabaseConfigured } from '../../services/supabase';
 import ModificarPrecioDialog from '../../components/productos/ModificarPrecioDialog';
 import ModificarStockDialog from '../../components/productos/ModificarStockDialog';
 
-function CatalogoProductos() {
-  const navigate = useNavigate();
+function CatalogoProductos({ currentUser }) {
+  const cafeteriaId = currentUser?.cafeteria_id ?? null;
+  const cargaActual = useRef(0);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const [productos, setProductos] = useState([]);
   const [cafeteriasList, setCafeteriasList] = useState([]);
@@ -69,7 +71,6 @@ function CatalogoProductos() {
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState('todas');
-  const [selectedCafeteria, setSelectedCafeteria] = useState('todas');
   const [selectedEstado, setSelectedEstado] = useState('todos');
   const [sortBy, setSortBy] = useState('nombre_asc');
   
@@ -170,75 +171,66 @@ function CatalogoProductos() {
   // Snackbar para notificaciones
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  const loadProductos = async (showLoading = true) => {
+  const loadProductos = useCallback(async (showLoading = true) => {
+    const solicitud = ++cargaActual.current;
     if (showLoading) setLoading(true);
     try {
-      const data = await productosService.getAll();
+      if (!cafeteriaId) throw new Error('No tienes una cafetería asociada.');
+      const data = await productosService.getAll(cafeteriaId);
+      if (solicitud !== cargaActual.current) return;
       setProductos(data || []);
       setDbError(null);
+      setLastUpdated(new Date().toLocaleTimeString('es-CL'));
     } catch (err) {
+      if (solicitud !== cargaActual.current) return;
       console.error('Error al cargar productos desde la base de datos:', err);
       setDbError(err.message || 'Sin conexión con la base de datos Supabase.');
-      setProductos([]);
-      if (showLoading) {
-        setSnackbar({
-          open: true,
-          message: 'Error de conexión: No se pudo conectar a la base de datos.',
-          severity: 'error',
-        });
-      }
     } finally {
-      if (showLoading) setLoading(false);
+      if (solicitud === cargaActual.current) setLoading(false);
     }
-  };
-
-  const loadCafeterias = async () => {
-    try {
-      const data = await cafeteriasService.getAll();
-      setCafeteriasList(data || []);
-      if (data && data.length > 0) {
-        setCreateForm((prev) => ({
-          ...prev,
-          cafeteria_id: prev.cafeteria_id || data[0].id,
-        }));
-      }
-    } catch (err) {
-      console.error('Error al cargar cafeterías:', err);
-    }
-  };
-
-  const loadCategorias = async () => {
-    try {
-      const data = await categoriasService.getAll();
-      setCategoriasList(data || []);
-    } catch (err) {
-      console.error('Error al cargar categorías:', err);
-    }
-  };
+  }, [cafeteriaId]);
 
   useEffect(() => {
+    let vigente = true;
+    setProductos([]);
+    setCafeteriasList([]);
+    setLastUpdated(null);
+    setCreateDialogOpen(false);
+    setDialogOpen(false);
+    setPrecioDialogOpen(false);
+    setStockDialogOpen(false);
     loadProductos(true);
-    loadCafeterias();
-    loadCategorias();
+    if (!cafeteriaId || !isSupabaseConfigured) return () => { cargaActual.current++; };
 
-    if (!isSupabaseConfigured) return;
+    cafeteriasService.getById(cafeteriaId).then((cafeteria) => {
+      if (!vigente) return;
+      setCafeteriasList(cafeteria ? [cafeteria] : []);
+      setCreateForm((prev) => ({ ...prev, cafeteria_id: cafeteriaId }));
+    }).catch((err) => { if (vigente) setDbError(err.message); });
+    categoriasService.getAll().then((data) => {
+      if (vigente) setCategoriasList(data || []);
+    }).catch((err) => console.error('Error al cargar categorías:', err));
 
-    const canalProds = supabase.channel('dueno-productos-realtime');
-
-    canalProds
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'productos' },
-        () => {
-          loadProductos(false);
-        }
-      )
+    // El stock se descuenta en procesar_pago; esta vista solo relee el saldo
+    // persistido. No vuelve a descontarlo al recibir eventos de una compra.
+    const refrescar = () => loadProductos(false);
+    const canal = supabase.channel('dueno-productos-' + cafeteriaId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'productos', filter: 'cafeteria_id=eq.' + cafeteriaId }, refrescar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos', filter: 'cafeteria_id=eq.' + cafeteriaId }, refrescar)
       .subscribe();
-
+    const refrescarVisible = () => { if (document.visibilityState === 'visible') refrescar(); };
+    const timer = setInterval(refrescarVisible, 5000);
+    window.addEventListener('focus', refrescarVisible);
+    document.addEventListener('visibilitychange', refrescarVisible);
     return () => {
-      supabase.removeChannel(canalProds);
+      vigente = false;
+      cargaActual.current++;
+      clearInterval(timer);
+      window.removeEventListener('focus', refrescarVisible);
+      document.removeEventListener('visibilitychange', refrescarVisible);
+      supabase.removeChannel(canal);
     };
-  }, []);
+  }, [cafeteriaId, loadProductos]);
 
   // --- Apertura y manejo de Creación (FR-43) ---
   const handleOpenCreate = () => {
@@ -326,7 +318,7 @@ function CatalogoProductos() {
         stock: Number(createForm.stock),
         stock_minimo: Number(createForm.stock_minimo || 0),
         activo: Boolean(createForm.activo),
-        cafeteria_id: Number(createForm.cafeteria_id),
+        cafeteria_id: Number(cafeteriaId),
         categoria_id: createForm.categoria_id ? Number(createForm.categoria_id) : null,
         unidad: createForm.unidad?.trim() || 'un',
         descripcion: createForm.descripcion?.trim() || '',
@@ -411,11 +403,11 @@ function CatalogoProductos() {
         minimo: Number(editForm.minimo),
         unidad: editForm.unidad?.trim() || 'un',
         activo: Boolean(editForm.activo),
-        cafeteria_id: editForm.cafeteria_id ? Number(editForm.cafeteria_id) : selectedProducto.cafeteria_id,
+        cafeteria_id: Number(cafeteriaId),
         categoria_id: editForm.categoria_id ? Number(editForm.categoria_id) : selectedProducto.categoria_id,
       };
 
-      const updated = await productosService.update(selectedProducto.id, payload);
+      const updated = await productosService.update(selectedProducto.id, payload, selectedProducto.stock);
 
       // Actualizar la lista tras editar (FR-44)
       setProductos((prev) =>
@@ -521,14 +513,12 @@ function CatalogoProductos() {
   const hasActiveFilters =
     Boolean(searchTerm.trim()) ||
     selectedCategoria !== 'todas' ||
-    selectedCafeteria !== 'todas' ||
     selectedEstado !== 'todos' ||
     sortBy !== 'nombre_asc';
 
   const handleResetFilters = () => {
     setSearchTerm('');
     setSelectedCategoria('todas');
-    setSelectedCafeteria('todas');
     setSelectedEstado('todos');
     setSortBy('nombre_asc');
   };
@@ -550,12 +540,7 @@ function CatalogoProductos() {
         String(p.categoria_id) === String(selectedCategoria) ||
         (p.categoria || '').toLowerCase() === selectedCategoria.toLowerCase();
 
-      // 3. Filtro de Cafetería
-      const matchCafeteria =
-        selectedCafeteria === 'todas' ||
-        String(p.cafeteria_id) === String(selectedCafeteria);
-
-      // 4. Filtro de Estado / Disponibilidad
+      // 3. Filtro de Estado / Disponibilidad
       const stockNum = Number(p.stock || 0);
       const minVal = Number(p.stock_minimo ?? p.minimo ?? 0);
       const isSinStock = stockNum <= 0;
@@ -578,7 +563,7 @@ function CatalogoProductos() {
         matchEstado = !isActivo;
       }
 
-      return matchSearch && matchCat && matchCafeteria && matchEstado;
+      return matchSearch && matchCat && matchEstado;
     });
 
     result.sort((a, b) => {
@@ -601,7 +586,24 @@ function CatalogoProductos() {
     });
 
     return result;
-  }, [productos, searchTerm, selectedCategoria, selectedCafeteria, selectedEstado, sortBy]);
+  }, [productos, searchTerm, selectedCategoria, selectedEstado, sortBy]);
+
+  const handleExport = () => {
+    // Escapar nombres y evitar que se interpreten como fórmulas al exportar.
+    const csvCell = (value) => '"' + String(value ?? '').replace(/^[=+@-]/, (prefix) => "'" + prefix).replaceAll('"', '""') + '"';
+    const rows = filtered.map((p) => [p.nombre, p.categoria, p.precio, p.stock,
+      p.stock_minimo, Number(p.stock) - Number(p.stock_minimo), p.unidad, Number(p.precio) * Number(p.stock)]);
+    const csv = '\uFEFF' + [['Producto', 'Categoría', 'Precio', 'Stock disponible', 'Stock mínimo', 'Balance vs mínimo', 'Unidad', 'Valor inventario'], ...rows]
+      .map((row) => row.map(csvCell).join(';')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'inventario_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   return (
     <Box sx={{ flexGrow: 1, pb: 4 }}>
@@ -632,17 +634,20 @@ function CatalogoProductos() {
                 Gestión de Productos y Stock
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Catálogo general, control de precios, existencias y valorización de inventario
+                Catálogo, precios y control de inventario de tu cafetería{lastUpdated ? ` · Actualizado: ${lastUpdated}` : ''}
               </Typography>
             </Box>
           </Stack>
         </Box>
 
-        <Stack direction="row" spacing={1.5}>
+        <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleExport} disabled={loading || Boolean(dbError) || !filtered.length}>
+            Exportar inventario
+          </Button>
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
-            onClick={loadProductos}
+            onClick={() => loadProductos(true)}
             disabled={loading}
             sx={{
               borderColor: '#C8B2A1',
@@ -960,7 +965,7 @@ function CatalogoProductos() {
             {/* Fila 1: Buscador de texto, Categoría, Cafetería, Estado y Orden */}
             <Grid container spacing={1.5} sx={{ alignItems: 'center' }}>
               {/* Buscador de texto con icono y botón de borrado */}
-              <Grid size={{ xs: 12, md: cafeteriasList.length > 1 ? 3.5 : 4.5 }}>
+              <Grid size={{ xs: 12, md: 4.5 }}>
                 <TextField
                   size="small"
                   fullWidth
@@ -995,7 +1000,7 @@ function CatalogoProductos() {
               </Grid>
 
               {/* Selector de Categoría */}
-              <Grid size={{ xs: 12, sm: 6, md: cafeteriasList.length > 1 ? 2.5 : 2.5 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
                 <FormControl size="small" fullWidth>
                   <Select
                     value={selectedCategoria}
@@ -1017,33 +1022,8 @@ function CatalogoProductos() {
                 </FormControl>
               </Grid>
 
-              {/* Selector de Cafetería (si hay más de 1) */}
-              {cafeteriasList.length > 1 && (
-                <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-                  <FormControl size="small" fullWidth>
-                    <Select
-                      value={selectedCafeteria}
-                      onChange={(e) => setSelectedCafeteria(e.target.value)}
-                      displayEmpty
-                      sx={{
-                        borderRadius: '12px',
-                        backgroundColor: '#FAF7F5',
-                        fontSize: '0.85rem',
-                      }}
-                    >
-                      <MenuItem value="todas">Todas las Cafeterías</MenuItem>
-                      {cafeteriasList.map((caf) => (
-                        <MenuItem key={caf.id} value={caf.id}>
-                          {caf.nombre}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              )}
-
               {/* Selector de Estado / Disponibilidad (SIN EMOJIS) */}
-              <Grid size={{ xs: 12, sm: 6, md: cafeteriasList.length > 1 ? 2 : 2.5 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
                 <FormControl size="small" fullWidth>
                   <Select
                     value={selectedEstado}
@@ -1097,7 +1077,7 @@ function CatalogoProductos() {
               </Grid>
 
               {/* Selector de Ordenamiento */}
-              <Grid size={{ xs: 12, sm: 6, md: cafeteriasList.length > 1 ? 2 : 2.5 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
                 <FormControl size="small" fullWidth>
                   <Select
                     value={sortBy}
@@ -1283,11 +1263,6 @@ function CatalogoProductos() {
                 <TableCell sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
                   CATEGORÍA
                 </TableCell>
-                {cafeteriasList.length > 1 && (
-                  <TableCell sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
-                    CAFETERÍA
-                  </TableCell>
-                )}
                 <TableCell align="right" sx={{ fontWeight: 700, color: '#5C4535', fontSize: '0.75rem', py: 1.5 }}>
                   PRECIO
                 </TableCell>
@@ -1312,7 +1287,7 @@ function CatalogoProductos() {
             <TableBody>
               {filtered.length === 0 && !loading ? (
                 <TableRow>
-                  <TableCell colSpan={cafeteriasList.length > 1 ? 9 : 8} align="center" sx={{ py: 4, color: '#8C7A6F' }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#8C7A6F' }}>
                     {hasActiveFilters ? (
                       <Stack spacing={1} sx={{ py: 2, alignItems: 'center'}}>
                         <Typography variant="body2" sx={{ color: '#8C7A6F', fontWeight: 600 }}>
@@ -1381,12 +1356,6 @@ function CatalogoProductos() {
                         />
                       </TableCell>
 
-                      {/* Cafetería (si hay más de 1) */}
-                      {cafeteriasList.length > 1 && (
-                        <TableCell sx={{ color: '#5C4535', fontSize: '0.82rem' }}>
-                          {prod.cafeteria_nombre || prod.cafeterias?.nombre || 'Cafetería Central'}
-                        </TableCell>
-                      )}
 
                       {/* Precio Unitario Modificable */}
                       <TableCell
@@ -1642,6 +1611,7 @@ function CatalogoProductos() {
                 <FormControl fullWidth size="small">
                   <Select
                     value={createForm.cafeteria_id}
+                    disabled
                     onChange={(e) => setCreateForm({ ...createForm, cafeteria_id: e.target.value })}
                     displayEmpty
                     sx={{
@@ -1931,6 +1901,7 @@ function CatalogoProductos() {
                 <FormControl fullWidth size="small">
                   <Select
                     value={editForm.cafeteria_id}
+                    disabled
                     onChange={(e) => setEditForm({ ...editForm, cafeteria_id: e.target.value })}
                     sx={{
                       borderRadius: '12px',

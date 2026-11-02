@@ -18,7 +18,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import RemoveIcon from '@mui/icons-material/Remove';
 
-import { productos as productosService } from '../../service/productos';
+import { productos as productosService } from '../../services/productos';
 
 /**
  * Diálogo para Modificar Precio (FR-46)

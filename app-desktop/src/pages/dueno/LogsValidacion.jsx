@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
-import logsValidacionQr from '../../service/logs_validacion_qr';
+import logsValidacionQr from '../../services/logs_validacion_qr';
 import { formatearHora } from '../../utils/dateUtils';
 
 const resultadoColor = {

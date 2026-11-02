@@ -16,8 +16,8 @@ import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 
 import BotChatInterface from '../../components/bot/BotChatInterface';
 import TelegramConfigModal from '../../components/telegram/TelegramConfigModal';
-import { botService } from '../../service/botService';
-import { telegramDuenoService } from '../../service/telegram_dueno';
+import { botService } from '../../services/botService';
+import { telegramDuenoService } from '../../services/telegram_dueno';
 
 function BotDueno({ currentUser }) {
   const [configModalOpen, setConfigModalOpen] = useState(false);
@@ -25,8 +25,8 @@ function BotDueno({ currentUser }) {
   const [serviceHealth, setServiceHealth] = useState(null);
   const [loadingHealth, setLoadingHealth] = useState(true);
 
-  const duenoId = currentUser?.id || 1;
-  const cafeteriaId = currentUser?.cafeteria_id || 1;
+  const duenoId = currentUser?.id ?? null;
+  const cafeteriaId = currentUser?.cafeteria_id ?? null;
 
   const loadData = async () => {
     setLoadingHealth(true);
