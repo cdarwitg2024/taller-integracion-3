@@ -1,0 +1,33 @@
+name: CI Desktop
+on:
+  push:
+    branches: [develop]
+    paths: ['app-desktop/**', 'package*.json', '.npmrc', '.github/**']
+  pull_request:
+    branches: [develop, main]
+    paths: ['app-desktop/**', 'package*.json', '.npmrc', '.github/**']
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: app-desktop
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app-desktop/package-lock.json
+      # react-qr-reader declares React 16/17 peers; the existing app uses React 18.
+      - run: npm ci --legacy-peer-deps
+      - run: node --test tests/*.test.cjs
+      - run: npm run build
