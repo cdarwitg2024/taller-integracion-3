@@ -26,6 +26,14 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: Microservices/${{ matrix.service }}/package-lock.json
+      - name: Check microservice source language
+        run: |
+          sources=(Microservices/${{ matrix.service }}/src Microservices/shared/src)
+          incompatible=$(find "${sources[@]}" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.cts' -o -name '*.jsx' -o -name '*.mjs' -o -name '*.cjs' \) -print)
+          if [[ -n "$incompatible" ]]; then
+            printf 'Microservice source uses JavaScript CommonJS in .js files. Review:\n%s\n' "$incompatible" >&2
+            exit 1
+          fi
       - name: Install shared dependencies from the service lockfile
         run: npm ci --prefix Microservices/${{ matrix.service }}
       - name: Resolve the shared package dependencies

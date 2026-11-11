@@ -17,10 +17,9 @@ Esas rutas ya no se montan en `src/app.js`; este servidor devuelve 404 para ella
 | Módulo | Motivo |
 |---|---|
 | notificaciones | FCM y registro de dispositivos aún no migrados al flujo actual |
-| auth | Lo necesitan notificaciones, QR y tiempos del servidor legacy |
+| auth | Lo necesitan notificaciones y QR del servidor legacy |
 | pedidos y clients/inventario.client.js | Conservan integración legacy de inventario y disparo de FCM; no retirarlos como si toda su funcionalidad estuviera migrada |
 | qr | Endpoints legacy de imágenes y tokens; la app actual dibuja el QR persistido de Supabase |
-| tiempos | Estimación/colas legacy sin sustituto completo en los tres microservicios |
 
 Conservar código no significa que esos flujos estén activos en Mobile ni que sus mocks históricos sean datos productivos válidos. La integración push de Mobile continúa pendiente.
 

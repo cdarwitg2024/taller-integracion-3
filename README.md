@@ -8,7 +8,7 @@ Aplicación full-stack para pedidos anticipados en cafeterías universitarias. P
 |---|---|
 | App móvil | React Native + Expo |
 | App de escritorio (KDS) | React + Vite + Electron + MUI |
-| Microservicios (backend vigente) | Node.js / Express — gateway Nginx, ms-cafeterias, ms-menus, ms-pedidos |
+| Microservicios (backend vigente) | JavaScript CommonJS, Node.js 22 y Express. Gateway Nginx para cafeterías, menús y pedidos |
 | Base de datos | Supabase (PostgreSQL + Auth + Edge Functions) |
 | Infraestructura | Docker Compose (local) / Kubernetes (producción) |
 

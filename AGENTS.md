@@ -20,6 +20,8 @@
 
 ## Contratos que conviene preservar
 
+- En `Microservices/`, los tres servicios y `shared` usan JavaScript CommonJS en archivos `.js` sobre Node.js 22. Sigue el [estándar de microservicios](docs/microservicios/operacion/README.md#estándar-de-lenguaje).
+
 - La compra móvil entra por el gateway y `ms-pedidos`. El servicio consulta los precios de `ms-menus` y ejecuta `procesar_pago` con la sesión del comprador. `backend-node` conserva funciones legacy.
 - La cancelación y el reembolso se realizan mediante `cancelar_pedido`. La reposición depende de `stock_descontado`. Los pedidos históricos pueden tener esa marca en `false`.
 - El UUID de Supabase Auth se vincula al ID interno de `usuarios`. Comprueba el alcance por usuario o cafetería en los cambios de acceso. Las credenciales de retiro se leen de los valores persistidos.

@@ -1,5 +1,11 @@
 # Microservicios de CoffeeFast — entorno local
 
+## Estándar de lenguaje
+
+`ms-cafeterias`, `ms-menus`, `ms-pedidos` y `shared` usan JavaScript con CommonJS (`require` y `module.exports`) sobre Node.js 22. Los servicios HTTP usan Express. Su código ejecutable en `src/` se escribe en archivos `.js` y se ejecuta directamente con Node. CI revisa las extensiones del código fuente y valida su sintaxis.
+
+Se adopta el lenguaje que comparten los tres servicios. Esto mantiene los mismos puntos de entrada, el paquete compartido y las imágenes Docker sin introducir una etapa de compilación. El estándar se aplica a estos microservicios y a `shared`. Las aplicaciones cliente y las funciones de Supabase tienen sus propios entornos.
+
 Revisado el 11 de noviembre de 2026. Las apps utilizan el gateway para las operaciones de pedidos. La activación de compra y cancelación con stock en Cloud se registró el 1 de noviembre. FCM permanece en backend-node legacy. Ver [estado funcional](../../estado-actual.md) y [procedimiento de entrega por digest](../../calidad/ci-cd/CI-CD.md).
 
 

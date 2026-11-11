@@ -8,7 +8,7 @@
     "dev": "nodemon server.js",
     "test": "jest",
     "lint": "eslint src/**/*.js",
-    "test:qr": "node src/services/tiempos/qr/test.js"
+    "test:qr": "jest --runInBand --runTestsByPath tests/qr.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.38.0",
