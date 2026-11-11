@@ -4,6 +4,7 @@
   "description": "App de escritorio para cafeterías",
   "main": "electron/main.js",
   "scripts": {
+    "test": "node --test tests/*.test.cjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
@@ -35,6 +36,7 @@
     "cross-env": "^7.0.3",
     "electron": "^27.1.2",
     "electron-builder": "^24.6.4",
+    "esbuild": "0.18.20",
     "vite": "^4.5.0",
     "wait-on": "^9.1.0"
   }

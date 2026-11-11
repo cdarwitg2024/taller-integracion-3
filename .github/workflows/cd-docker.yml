@@ -27,7 +27,7 @@ jobs:
     needs: guard
     uses: ./.github/workflows/ci-microservices.yml
   publish:
-    needs: [mobile, desktop, microservices]
+    needs: [mobile, desktop, microservices, functional]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: dockerhub
@@ -72,3 +72,6 @@ jobs:
       - name: Remove registry session
         if: always()
         run: docker logout
+  functional:
+    needs: guard
+    uses: ./.github/workflows/ci-functional.yml

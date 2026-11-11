@@ -29,5 +29,7 @@ jobs:
           cache-dependency-path: app-desktop/package-lock.json
       # react-qr-reader declares React 16/17 peers; the existing app uses React 18.
       - run: npm ci --legacy-peer-deps
-      - run: node --test tests/*.test.cjs
+      - run: npm test
+      - name: Verify tests detect missing concurrent stock protection
+        run: node ../.github/scripts/verify-unit-sensitivity.cjs desktop
       - run: npm run build

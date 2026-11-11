@@ -33,6 +33,8 @@ jobs:
         run: ln -s ../${{ matrix.service }}/node_modules Microservices/shared/node_modules
       - run: npm test --prefix Microservices/shared
       - run: npm test --prefix Microservices/${{ matrix.service }} -- --ci
+      - name: Verify tests detect a functional defect in this service
+        run: node .github/scripts/verify-unit-sensitivity.cjs ${{ matrix.service }}
       - name: Check JavaScript syntax
         run: find Microservices/${{ matrix.service }}/src Microservices/shared/src -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: Build the real Dockerfile without publishing

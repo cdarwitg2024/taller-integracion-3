@@ -37,6 +37,8 @@ jobs:
       - name: Check Expo dependency compatibility
         run: npx --no-install expo install --check
       - run: npm test -- --ci --runInBand
+      - name: Verify tests detect broken product availability
+        run: node ../.github/scripts/verify-unit-sensitivity.cjs mobile
       - name: Bundle Android JavaScript and assets
         run: npx --no-install expo export --platform android --output-dir dist-ci
       # The existing lint script lacks eslint and @react-native/eslint-config.
