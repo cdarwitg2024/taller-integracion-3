@@ -4,10 +4,10 @@
 
 - Móvil: 68 pruebas, 11 suites aprobadas. La prueba de App comprueba login y navegación a registro; antes podía quedarse en carga sin detectar problemas.
 - Microservicios: cafeterías 22, menús 36, pedidos/auth 131 aprobadas.
-- Backend legacy: 51 pruebas, 4 suites aprobadas.
+- Backend legacy: 51 pruebas en 4 suites en la auditoría original. La suite retirada tenía 15 casos. La ejecución posterior del backend aprobó las 36 pruebas restantes en 3 suites.
 - Escritorio: 7 aprobadas; shared: 5 aprobadas.
 - Telegram: 11 pruebas aprobadas, incluida la integración con PostgreSQL 15 real, ejecutadas dentro de un contenedor Python temporal.
-- Total de pruebas Node/Jest/Python: 331 aprobadas (los componentes no móviles conservan los resultados de la ejecución anterior).
+- Total de la auditoría antes del retiro de esa suite: 331 pruebas Node/Jest/Python aprobadas.
 - SQL: 8 escenarios de compra, 8 de cancelación y 2 concurrentes aprobados en PostgreSQL 15, la versión usada por CI. También se ejecutaron en PostgreSQL 17 local.
 - Catálogo: 7 escenarios HTTP con Express, supabase-js, PostgREST y PostgreSQL 15 reales aprobados.
 - Sensibilidad: 11 defectos deliberados detectados (7 JavaScript y 4 SQL), introducidos exclusivamente en copias temporales. No es un porcentaje de mutation coverage global.
@@ -46,7 +46,7 @@ La integración Telegram ejecuta el repositorio real contra PostgreSQL, crea un 
 
 La integración de catálogo comprueba listas, ordenamiento, filtros, registros inactivos/eliminados, precios autoritativos, actualizaciones SQL visibles desde HTTP y rechazo 503 tras revocar permisos reales. Crea y elimina su propia red y contenedores; no usa respuestas prefabricadas ni modifica el entorno activo del usuario. El JWT se firma para el PostgREST aislado: no sustituye una prueba de Supabase Auth.
 
-Todavía no existe una prueba end-to-end que recorra móvil/escritorio, gateway, microservicios y Supabase Auth/RLS real. Los 7 tests de escritorio usan un transporte en memoria y no validan la interfaz Electron. FCM y Telegram externos tampoco quedan verificados por estas pruebas. Para cerrar esas brechas hace falta un entorno Supabase local reproducible con esquema, políticas y usuarios de prueba versionados.
+Todavía no existe una prueba end-to-end que recorra móvil/escritorio, gateway, microservicios y Supabase Auth/RLS real. Los 7 tests de escritorio usan un transporte en memoria y no validan la interfaz Electron. La entrega de mensajes por Telegram queda fuera de estas pruebas. Para cerrar esas brechas hace falta un entorno Supabase local reproducible con esquema, políticas y usuarios de prueba versionados.
 
 ## Ejecución
 

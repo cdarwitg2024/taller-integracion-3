@@ -7,9 +7,9 @@ Revisión documental del 11 de noviembre de 2026. El estado del código y las pr
 - Mobile: React Native + Expo. Auth, perfil, wallet, menú con stock, lectura de pedidos/QR y Realtime usan Supabase; cafeterías, creación de pedidos y cambios de estado utilizan el gateway. Cancelación mantiene respaldo a su RPC autenticada. La configuración local apunta al gateway de Compose, no a backend-node.
 - Desktop: React/Vite/Electron. Usa Supabase para lecturas y gestión; estados de pedidos y validación QR se envían al gateway.
 - Gateway Nginx: /api/cafeterias → ms-cafeterias:3002; /api/menus → ms-menus:3003; /api/pedidos → ms-pedidos:3005. POST /api/menus/precios es interno y está bloqueado en el gateway.
-- backend-node sigue presente como legacy: contiene FCM y el cliente de inventario anterior. No es el backend objetivo de la compra Mobile actual.
+- `backend-node` sigue presente como servidor legacy y conserva el cliente de inventario anterior.
 - Se retiraron de backend-node el catálogo duplicado, sus dos mocks exclusivos y el endpoint de pago no implementado. Se conserva lo que aún tiene dependencias legacy; ver [alcance del retiro](backend-node/guias/README.md).
-- BotTelegramCoffeFaster es un servicio separado. Telegram no equivale a push móvil.
+- `BotTelegramCoffeFaster` es un servicio separado para alertas de stock.
 
 ## Estado funcional
 
@@ -25,7 +25,6 @@ Revisión documental del 11 de noviembre de 2026. El estado del código y las pr
 | QR | Apertura del detalle con QR y token confirmada en Android. La lista mostró únicamente los pedidos de la cuenta activa en la prueba con dos cuentas | Escaneo, entrega y rechazo del segundo uso en el entorno final |
 | Compra y cancelación | Activadas en Cloud: descuento/reposición transaccional y marca stock_descontado | Verificadas con compra/cancelación reversibles; pedidos históricos conservan marca false |
 | Voz KDS | voz-pedido publicada; validación del empleado rol 4 comprobada sin generar audio | Confirmar reproducción audible con un pedido real |
-| Push | FCM implementado en backend legacy; sin registro/recepción Mobile ni disparo en ms-pedidos | Integración completa pendiente |
 
 El aviso de voz se dispara por un pedido nuevo recibido por Realtime con voz activada. No se dispara al abrir la pantalla, por polling ni al pasar a listo. Los comentarios sobre PEDIDO_LISTO no demuestran una integración existente.
 
@@ -43,7 +42,7 @@ El aviso de voz se dispara por un pedido nuevo recibido por Realtime con voz act
 ## Últimas validaciones registradas
 
 - Mobile: 68 pruebas en 11 suites, con regresiones de sesión vencida y recuperación de pedidos. Las lecturas reintentan una vez tras renovar el JWT. El flujo de compra y cancelación conserva sus llamadas de escritura sin reintento automático por vencimiento.
-- Desktop: 7 pruebas de servicios. Backend legacy: 51. Microservicios: 189, además de 5 de shared. Telegram: 11, incluida una integración con PostgreSQL.
+- Desktop: 7 pruebas de servicios. Backend legacy: 36 pruebas vigentes aprobadas. Microservicios: 189, además de 5 de shared. Telegram: 11, incluida una integración con PostgreSQL.
 - PostgreSQL aislado: 18 escenarios de compra, cancelación y concurrencia. Catálogo: 7 escenarios HTTP con PostgREST y PostgreSQL. Las pruebas detectaron 11 defectos introducidos en copias temporales.
 - La ejecución en GitHub Actions, la prueba manual de retiro y la cobertura completa de Supabase Auth/RLS se verifican por separado. Ver [evidencia y alcance](calidad/validacion/revision-pruebas.md).
 
@@ -61,4 +60,4 @@ git diff --check
 
 El runner SQL crea y elimina una BD temporal cf_panel_test_* en PostgreSQL local. Requiere Docker y, por defecto, supabase_db_db_CoffeeFaster; puede configurarse TEST_POSTGRES_CONTAINER. Nunca apunta a Cloud.
 
-Ver [puesta en marcha](microservicios/operacion/puesta_en_marcha_flujo_pedidos.md), [estado Kubernetes](kubernetes/estado-actual.md), [voz](desktop/notificaciones/notificaciones_voz_elevenlabs.md) y [push](backend-node/notificaciones/notificaciones_push_fcm.md).
+Ver [puesta en marcha](microservicios/operacion/puesta_en_marcha_flujo_pedidos.md), [estado Kubernetes](kubernetes/estado-actual.md) y [voz del KDS](desktop/notificaciones/notificaciones_voz_elevenlabs.md).

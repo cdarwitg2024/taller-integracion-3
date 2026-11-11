@@ -16,12 +16,10 @@ Esas rutas ya no se montan en `src/app.js`; este servidor devuelve 404 para ella
 
 | Módulo | Motivo |
 |---|---|
-| notificaciones | FCM y registro de dispositivos aún no migrados al flujo actual |
-| auth | Lo necesitan notificaciones y QR del servidor legacy |
-| pedidos y clients/inventario.client.js | Conservan integración legacy de inventario y disparo de FCM; no retirarlos como si toda su funcionalidad estuviera migrada |
+| auth | Autenticación de las rutas protegidas del servidor legacy |
+| pedidos y clients/inventario.client.js | Conservan la integración legacy de inventario |
 | qr | Endpoints legacy de imágenes y tokens; la app actual dibuja el QR persistido de Supabase |
 
-Conservar código no significa que esos flujos estén activos en Mobile ni que sus mocks históricos sean datos productivos válidos. La integración push de Mobile continúa pendiente.
 
 Las pruebas de este servidor utilizan un transporte Supabase de prueba. CI Functional ejecuta la suite y comprueba que detecte un estado inicial de pedido incorrecto introducido en una copia temporal. El código legacy de inventario permanece en el repositorio. La activación Cloud del SQL de compra y cancelación de Mobile está registrada en [promociones y configuración](../../base-datos/promociones-configuracion-dueno.md).
 

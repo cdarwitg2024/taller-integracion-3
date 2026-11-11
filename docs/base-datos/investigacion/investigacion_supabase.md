@@ -130,7 +130,6 @@ La experiencia es la misma que en web: usas el client library de tu plataforma. 
 ### Detalles específicos de móvil
 
 - **Deep links**: para magic links o confirmación de email, se configura un *redirect URL* tipo `miapp://login-callback` y se registra en el sistema (AndroidManifest, Info.plist, etc.).
-- **Notificaciones**: se integra con proveedores de push (por ejemplo, Expo Notifications o FCM).
 - **Sesión offline/guardado**: el SDK guarda la sesión en el dispositivo para mantener el login.
 
 ### Ejemplo mínimo en Kotlin (supabase-kt)

@@ -61,10 +61,6 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 
 - [Investigación: Node.js con Express](backend-node/investigacion/investigacion_Nodejs.md)
 
-### Notificaciones
-
-- [Notificaciones push (FCM) — Backend listo, pendiente el lado móvil](backend-node/notificaciones/notificaciones_push_fcm.md)
-
 ## Microservicios
 
 ### Operación

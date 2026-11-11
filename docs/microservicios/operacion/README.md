@@ -6,7 +6,7 @@
 
 Se adopta el lenguaje que comparten los tres servicios. Esto mantiene los mismos puntos de entrada, el paquete compartido y las imágenes Docker sin introducir una etapa de compilación. El estándar se aplica a estos microservicios y a `shared`. Las aplicaciones cliente y las funciones de Supabase tienen sus propios entornos.
 
-Revisado el 11 de noviembre de 2026. Las apps utilizan el gateway para las operaciones de pedidos. La activación de compra y cancelación con stock en Cloud se registró el 1 de noviembre. FCM permanece en backend-node legacy. Ver [estado funcional](../../estado-actual.md) y [procedimiento de entrega por digest](../../calidad/ci-cd/CI-CD.md).
+Revisado el 11 de noviembre de 2026. Las apps utilizan el gateway para las operaciones de pedidos. La activación de compra y cancelación con stock en Cloud se registró el 1 de noviembre. Ver [estado funcional](../../estado-actual.md) y [procedimiento de entrega por digest](../../calidad/ci-cd/CI-CD.md).
 
 
 Servicios Node/Express sobre Supabase, detrás de un gateway nginx. Todo corre

@@ -186,7 +186,6 @@ async def recibir_alerta_stock(payload: AlertaStockPayload):
     # Aquí integras el canal de salida:
     # - Bot de Telegram (usando telegram-bot API)
     # - Webhook de Discord
-    # - Notificación Push (Firebase Cloud Messaging usando tokens de dispositivos)
     # - Correo o SMS
     
     return {

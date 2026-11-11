@@ -11,7 +11,6 @@ const healthRoutes = require('./routes/healthRoutes');
 const qrRoutes = require('./modules/qr/routes/qrRoutes');
 const pedidosRoutes = require('./modules/pedidos/pedidos.routes');
 const authRoutes = require('./modules/auth/auth.routes');
-const notificacionesRoutes = require('./modules/notificaciones/notificaciones.routes');
 
 const app = express();
 
@@ -29,7 +28,6 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/qr', qrRoutes);
 app.use('/api/pedidos', pedidosRoutes);
 app.use('/auth', authRoutes);
-app.use('/api/notificaciones', notificacionesRoutes);
 app.use('/health', healthRoutes);
 
 // Ruta raíz
@@ -41,7 +39,6 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       auth: '/auth',
-      notificaciones: '/api/notificaciones',
       qr: '/api/qr',
       pedidos: '/api/pedidos',
       inventario: '(microservicio independiente: inventario-service)'
