@@ -95,4 +95,4 @@ Anteriormente, la aplicación móvil realizaba un `fetch` sin cabeceras de autor
 5. **Un fallback no oculta errores de autorización:**
    Ante respuestas 401 y 404, el componente **nunca** cae al token local; despliega un banner de error explícito de autorización.
 6. **Documentación del flujo:**
-   Documentado en este archivo `docs/seguridad/consulta_qr_ms_pedidos_s2_t14.md`.
+   Documentado en este archivo `docs/microservicios/seguridad/consulta_qr_ms_pedidos_s2_t14.md`.

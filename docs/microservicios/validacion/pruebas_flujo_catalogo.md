@@ -1,6 +1,6 @@
 # Prueba del flujo de catálogo — T11
 
-> **Evidencia histórica, no receta del estado actual.** Se conserva el contenido y sus resultados originales. La versión local cambió Dashboard, solicitudes y el ciclo transaccional de stock; no está todo aplicado en Cloud. Consultar [estado vigente](estado-actual.md). Revisión documental: 1 de noviembre de 2026.
+> **Evidencia histórica, no receta del estado actual.** Se conserva el contenido y sus resultados originales. La versión local cambió Dashboard, solicitudes y el ciclo transaccional de stock; no está todo aplicado en Cloud. Consultar [estado vigente](../../estado-actual.md). Revisión documental: 1 de noviembre de 2026.
 
 **Alcance:** Registro → Login → Cafeterías → seleccionar cafetería → Menú → Producto → disponibilidad
 

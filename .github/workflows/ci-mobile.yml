@@ -44,4 +44,4 @@ jobs:
       # The existing lint script lacks eslint and @react-native/eslint-config.
       - name: Report unavailable lint
         if: always()
-        run: echo '::warning::Mobile lint requires eslint and @react-native/eslint-config; see CI-CD.md.'
+        run: echo '::warning::Mobile lint requires eslint and @react-native/eslint-config; see docs/calidad/ci-cd/CI-CD.md.'

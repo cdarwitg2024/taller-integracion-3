@@ -1,6 +1,12 @@
 # Despliegue Kubernetes de CoffeeFast
 
-Revisado: 1 de noviembre de 2026. Procedimiento para ejecutar únicamente con autorización; editar documentación no despliega nada. Ver [estado observado](../docs/kubernetes/estado-actual.md).
+Revisado el 11 de noviembre de 2026 contra los workflows y manifiestos locales. La última inspección documentada del clúster conserva su fecha. Ver [estado observado](../estado-actual.md).
+
+## Entrega de una versión de main
+
+1. Ejecutar **CD Docker** en `main` con la publicación habilitada. El workflow exige los cuatro CI y publica un manifiesto `release.json` con el SHA y los digests de los tres microservicios.
+2. Ejecutar **CD Kubernetes** para el mismo SHA con el ID del run exitoso y la autorización del workflow. El validador comprueba el manifiesto antes de acceder al clúster y el workflow actualiza las imágenes por digest.
+3. Conservar el SHA, el manifiesto, el resultado del rollout y el `imageID` de los Pods listos como evidencia de trazabilidad. Consultar los pasos y comandos en [CI/CD](../../calidad/ci-cd/CI-CD.md#revisar-errores-y-reconocer-el-commit-desplegado).
 
 ## Antes de publicar
 
@@ -15,9 +21,9 @@ Los comandos vuelven a estar separados: `comandos-build.ps1` construye, `comando
 
 Revisión local de manifiestos: los valores operativos de Deployment/Service/HPA/Ingress/Fortio se conservaron respecto de HEAD; se corrigieron comentarios. El archivo Nginx y el contenido del ConfigMap se mantienen idénticos. Ninguna de estas ediciones aplica cambios al clúster.
 
-## Aplicación controlada (tras revisar imágenes y obtener autorización)
+## Mantenimiento de manifiestos
 
-Aplicar manifiestos explícitos y revisar cada rollout antes de continuar. Los HPA gobiernan las réplicas: no aplicar replicas:1 repetidamente durante una medición de carga.
+Usar estos comandos para cambios de manifiesto autorizados. Antes de aplicar un Deployment, comparar su imagen con la imagen efectiva para evitar reemplazar un digest del CD con el tag histórico del archivo. Los HPA gobiernan las réplicas durante las mediciones de carga.
 
 ~~~powershell
 kubectl apply -f k8s-next/ms-cafeterias/deployment.yaml

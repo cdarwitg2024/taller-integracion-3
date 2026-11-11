@@ -1,6 +1,6 @@
 # S2-T18 — Validación integrada del panel administrativo
 
-> **Evidencia histórica, no receta del estado actual.** Se conserva el contenido y sus resultados originales. La versión local cambió Dashboard, solicitudes y el ciclo transaccional de stock; no está todo aplicado en Cloud. Consultar [estado vigente](estado-actual.md). Revisión documental: 1 de noviembre de 2026.
+> **Evidencia histórica, no receta del estado actual.** Se conserva el contenido y sus resultados originales. La versión local cambió Dashboard, solicitudes y el ciclo transaccional de stock; no está todo aplicado en Cloud. Consultar [estado vigente](../../estado-actual.md). Revisión documental: 1 de noviembre de 2026.
 
 **Rama:** `S2-T18-DiegoC-Validar_flujo_administrativo_e_indicadores`
 **Base:** `develop` (`17883ab`)

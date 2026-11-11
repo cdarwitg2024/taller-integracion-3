@@ -89,7 +89,7 @@ flowchart LR
 
 ## 1. Dockerización de los servicios
 
-[`backend-node/Dockerfile`](../backend-node/Dockerfile):
+[`backend-node/Dockerfile`](../../backend-node/Dockerfile):
 
 ```dockerfile
 FROM node:22-alpine
@@ -101,7 +101,7 @@ EXPOSE 3000
 CMD ["node", "server.js"]
 ```
 
-[`inventario-service/Dockerfile`](../inventario-service/Dockerfile) es equivalente, con
+`inventario-service/Dockerfile` era equivalente, con
 `EXPOSE 3001` y `CMD ["node", "src/server.js"]`.
 
 > **Node 22 es obligatorio:** `@supabase/supabase-js` requiere Node 22 o superior
@@ -130,8 +130,7 @@ docker push cdarwitg2024/inventario-service:v1.0.1
 
 ## 2. Manifiestos de Kubernetes Aplicados
 
-Los manifiestos versionados están en [`k8s/`](../k8s). El Ingress también vive
-dentro de `k8s/`, en [`k8s/ingress.yaml`](../k8s/ingress.yaml):
+Los manifiestos de esa versión estaban en `k8s/`, incluido `k8s/ingress.yaml`:
 
 | Archivo | Recurso | Aplicar con |
 |---|---|---|
@@ -143,10 +142,10 @@ dentro de `k8s/`, en [`k8s/ingress.yaml`](../k8s/ingress.yaml):
 
 > **No uses `kubectl apply -f k8s/ --recursive`.** Aplica archivo por archivo o
 > por subcarpeta (`k8s/pedidos`, `k8s/inventario`). Ver la advertencia de
-> seguridad en el [README](../README.md).
+> seguridad en el [README](../../README.md).
 
 > **No hay manifiesto de Secret en `k8s/`.** La plantilla de referencia está en
-> [`docs/secrets/supabase-secret.example.yaml`](../docs/secrets/supabase-secret.example.yaml),
+> [`docs/secrets/supabase-secret.example.yaml`](../secrets/supabase-secret.example.yaml),
 > fuera del árbol que se aplica, justamente para que un `apply` recursivo no
 > pueda sobrescribir el Secret real del clúster.
 
@@ -225,7 +224,7 @@ spec:
 ### C. Secret de credenciales
 Las credenciales de Supabase **no** se versionan. Se crean una vez en el clúster
 (la plantilla está en
-[`docs/secrets/supabase-secret.example.yaml`](../docs/secrets/supabase-secret.example.yaml)):
+[`docs/secrets/supabase-secret.example.yaml`](../secrets/supabase-secret.example.yaml)):
 
 ```powershell
 kubectl create secret generic coffeesecret-supabase `
@@ -260,7 +259,7 @@ dominio no resuelve.
 
 > **Inventario no se expone por el Ingress a propósito:** es una dependencia
 > interna de Pedidos, que lo consume por HTTP con `INVENTARIO_SERVICE_URL`
-> (ver [`backend-node/src/clients/inventario.client.js`](../backend-node/src/clients/inventario.client.js)).
+> (ver [`backend-node/src/clients/inventario.client.js`](../../backend-node/src/clients/inventario.client.js)).
 > Dentro del clúster se llega como `http://inventario-service/api/inventario`.
 
 ```yaml

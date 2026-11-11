@@ -1,6 +1,6 @@
 # Retiro de ms-inventario legado
 
-> **Informe histórico de una ejecución o tarea anterior.** Sus Pods, métricas, réplicas y comandos reflejan ese momento; no certifican el estado actual. Para operación vigente consultar [estado Kubernetes](estado-actual.md) y [guía de despliegue](../../k8s-next/DESPLIEGUE.md). Revisión documental: 1 de noviembre de 2026.
+> **Informe histórico de una ejecución o tarea anterior.** Sus Pods, métricas, réplicas y comandos reflejan ese momento; no certifican el estado actual. Para operación vigente consultar [estado Kubernetes](estado-actual.md) y [guía de despliegue](operacion/DESPLIEGUE.md). Revisión documental: 1 de noviembre de 2026.
 
 > Tarea: limpieza controlada de `ms-inventario`
 > Fecha: 2026-10-16
@@ -99,8 +99,8 @@ No se eliminaron Secrets, ConfigMaps, PVCs ni el namespace.
 - `docs/obsoleto/arquitectura-microservicios.md` y
   `docs/obsoleto/despliegue_kubernetes_backend.md`: documentación **histórica**
   archivada.
-- `README.md`, `docs/README.md`, `Microservices/README.md`,
-  `k8s-next/DESPLIEGUE.md`: menciones de estado/históricas.
+- `README.md`, `docs/README.md`, `docs/microservicios/operacion/README.md`,
+  `docs/kubernetes/operacion/DESPLIEGUE.md`: menciones de estado/históricas.
 - Comentarios en `k8s-next/*/hpa.yaml`: mencionan `ms-inventario` como Pod fijo
   en el cálculo de `maxReplicas`. **No se modificaron** (la tarea prohíbe tocar
   los HPA de los 3 MS actuales).

@@ -1,6 +1,6 @@
 # S2-T15 - Validación flujo integrado y recuperación del KDS
 
-> **Evidencia histórica, no receta del estado actual.** Se conserva el contenido y sus resultados originales. La versión local cambió Dashboard, solicitudes y el ciclo transaccional de stock; no está todo aplicado en Cloud. Consultar [estado vigente](../../docs/estado-actual.md). Revisión documental: 1 de noviembre de 2026.
+> **Evidencia histórica, no receta del estado actual.** Se conserva el contenido y sus resultados originales. La versión local cambió Dashboard, solicitudes y el ciclo transaccional de stock; no está todo aplicado en Cloud. Consultar [estado vigente](../../estado-actual.md). Revisión documental: 1 de noviembre de 2026.
 
 **Responsable:** Ariel Díaz  
 **Rama:** `S2-T15-Ariel-Díaz-Validar-Flujo-Integrado-Recuperación-KDS`  

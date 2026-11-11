@@ -1,25 +1,26 @@
 # CI/CD de CoffeeFast
 
-CI comprueba cambios antes de integrarlos. CD entrega imágenes verificadas y prepara su despliegue con autorización. Toda la configuración está en el repositorio.
+Revisado el 11 de noviembre de 2026 contra los workflows del repositorio. CI comprueba cambios antes de integrarlos. CD publica las imágenes del commit validado y despliega por digest.
 
-**Estado:** publicación y despliegue deshabilitados hasta configurar sus variables. Ningún push ni Pull Request publica o despliega. No se hicieron commits, pushes, merges, publicaciones, cambios de secretos, operaciones Kubernetes ni cambios en Supabase Cloud durante esta tarea.
+La publicación y el despliegue se inician manualmente en `main` y requieren sus respectivas variables de habilitación. El estado real de esas variables y de los Environments se verifica en GitHub.
 
 ## Auditoría y conservación de la versión congelada
 
 La auditoría inicial encontró `main` en `68bea2c1f0916472f2cc359f2bcd659059f53d51`, con `develop` y numerosas ramas `S1-*`, `S2-*` y `feature/*`. No había workflows ni instrucciones `AGENTS.md` aplicables encontradas. Se inspeccionaron referencias locales, sin sincronizar ramas.
 
-Tras el cambio solicitado por el usuario se restauraron estos archivos en **`S3-Camilodg-GitHub`**, sobre `3d2a9fb6586591bd75890ab95865115e20ecbed6`. Se verificó que `app-mobile/`, `app-desktop/`, `Microservices/` y `k8s-next/` no difieren del contenido auditado en el commit congelado. Solo se agregan los cinco workflows, el validador de entrega y este documento; no se modifica código de negocio, dependencias, lockfiles, Dockerfiles ni manifiestos.
+El commit `dab27e5` incorporó la configuración inicial. El commit `433c408` añadió CI Functional, integraciones con PostgreSQL y PostgREST, comprobaciones con defectos deliberados y regresiones para pedidos y sesión móvil.
 
 Los dos CD rechazan ejecutar el SHA congelado. Kubernetes exige también autorización escrita para reemplazar su versión en una operación futura. La rama de trabajo permite revisar e integrar la configuración sin trabajar sobre `main`; CD sigue restringido a `main`.
 
 | Componente | Comandos utilizados | Pruebas y comprobaciones |
 | --- | --- | --- |
-| Mobile | `npm ci`; `npm test -- --ci --runInBand`; CLI Expo instalada | Expo 52, React Native 0.76.9, Jest 29. Diez suites, 58 pruebas: pantallas, carrito, disponibilidad, productos, franjas y pago. Configuración Expo, compatibilidad de dependencias y exportación Android JS/assets. |
-| Desktop | `npm ci --legacy-peer-deps`; `node --test tests/*.test.cjs`; `npm run build` | Siete pruebas existentes del panel del dueño. Build Vite sin empaquetar Electron. No tiene scripts `test` ni `lint`. |
+| Mobile | `npm ci`, `npm test -- --ci --runInBand` | 68 pruebas en 11 suites en la última ejecución local. CI verifica también defectos en disponibilidad y cancelación, configuración Expo, dependencias y exportación Android. |
+| Desktop | `npm ci --legacy-peer-deps`, `npm test`, `npm run build` | Siete pruebas del panel del dueño, comprobación de stock concurrente con un defecto deliberado y compilación Vite. |
 | ms-cafeterias | `npm ci`; `npm test -- --ci` | Jest/Supertest: 22 pruebas de cafeterías, validaciones, errores y salud. |
 | ms-menus | `npm ci`; `npm test -- --ci` | Jest/Supertest: 36 pruebas de menús, precios, filtros, contratos y errores. |
 | ms-pedidos | `npm ci`; `npm test -- --ci` | Jest/Supertest: 131 pruebas de pedidos, autenticación, autorización, estados y contingencia. |
 | shared | Dependencias del servicio consumidor; `npm test --prefix Microservices/shared` | Cinco pruebas de la interfaz pública, ejecutadas por cada trabajo de microservicio. |
+| CI Functional | Node 22, Python 3.12 y PostgreSQL 15 aislado | Catálogo HTTP con PostgREST, pago y cancelación SQL, bot Telegram y backend legacy. Comprueba defectos deliberados en las transacciones SQL y el estado inicial de un pedido legacy. |
 
 Todos los CI usan Node 22, coincidente con `node:22-alpine` en los Dockerfiles. Mobile declara Node >=18; desktop no declara motor propio. Los microservicios son JavaScript interpretado sin scripts `build` ni `lint`: se comprueba sintaxis con `node --check`, pruebas y construcción de sus Dockerfiles reales.
 
@@ -32,7 +33,7 @@ Todos los CI usan Node 22, coincidente con `node:22-alpine` en los Dockerfiles. 
 - El gateway es Nginx, con `Microservices/gateway/nginx.conf` y configuración en `k8s-next/gateway/`; no tiene `package.json`. Este CD no cambia gateway, ingress, Services, HPA, secretos ni réplicas.
 - Deployments y contenedores tienen los mismos nombres: `ms-cafeterias`, `ms-menus`, `ms-pedidos`, namespace `student-cdarwitg`. Los manifiestos actuales usan `cdarwitg2024/ms-cafeterias:v1.0.0`, `ms-menus:v1.0.0` y `ms-pedidos:v1.0.3`, con `IfNotPresent`. `/health` comprueba HTTP, no Supabase ni RPC. `maxSurge: 0` y `maxUnavailable: 1` pueden causar interrupciones durante un rollout.
 - `k8s-next/comandos-build.ps1` y `comandos-push.ps1` conservan sus tags históricos. El script de publicación no verifica origen Git; Actions no lo invoca. Para este flujo utilizar exclusivamente los workflows nuevos.
-- Backend legacy, bot Telegram, datos ficticios, pruebas SQL con Postgres local, empaquetado Electron/APK/iOS y pruebas de extremo a extremo contra producción quedan fuera del alcance.
+- Quedan fuera del alcance el empaquetado Electron/APK/iOS y los flujos completos contra producción. La evidencia local y las comprobaciones manuales están en [revisión de pruebas](../validacion/revision-pruebas.md).
 
 ## Workflows y activadores
 
@@ -41,10 +42,11 @@ Todos los CI usan Node 22, coincidente con `node:22-alpine` en los Dockerfiles. 
 | `ci-mobile.yml` | Push a `develop`; PR abierto/actualizado/reabierto hacia `develop` o `main`; llamada reutilizable | Instala, valida Expo, prueba y exporta Android. |
 | `ci-desktop.yml` | Mismos eventos | Instala, prueba y construye Vite. |
 | `ci-microservices.yml` | Mismos eventos | Matriz de tres servicios: instalación, shared, Jest, sintaxis y Docker sin push. |
+| `ci-functional.yml` | Mismos eventos, sin filtros de rutas | Ejecuta catálogo, Telegram, SQL y backend legacy. |
 | `cd-docker.yml` | Solo **Run workflow** manual en `main` | Repite todos los CI del mismo commit; construye y publica si pasan. |
 | `cd-kubernetes.yml` | Solo **Run workflow** manual en `main`, con ID de publicación y autorización | Verifica entrega, espera protección del Environment y actualiza imágenes por digest. |
 
-Los CI filtran las carpetas de sus componentes. Cambios de `package*.json` raíz, `.npmrc` raíz o `.github/**` ejecutan todos. Cualquier cambio de `Microservices/**` (incluido shared) o `k8s-next/**` ejecuta toda la matriz de servicios. CD siempre llama a los tres CI completos, sin filtros de rutas. Los pushes de ramas de trabajo se comprueban mediante sus PR.
+Mobile, Desktop y Microservices filtran por componente. Los cambios en `package*.json` raíz, `.npmrc` raíz o `.github/**` coinciden con sus filtros. Los cambios en `Microservices/**` o `k8s-next/**` ejecutan la matriz de servicios. CD Docker llama a los cuatro CI sin filtros de rutas.
 
 Un workflow omitido por rutas puede quedar pendiente si se exige como check obligatorio de todos los PR. Evitar exigir indiscriminadamente checks con filtros; una política global requiere un check agregador que siempre se ejecute y trate explícitamente componentes no afectados. Esta tarea no configura reglas de ramas en GitHub.
 
@@ -53,7 +55,7 @@ Acciones fijadas por SHA; `GITHUB_TOKEN` tiene solo `contents: read`. Kubernetes
 ## Construcción y publicación Docker
 
 1. Lanzar manualmente `CD Docker` en `main` con publicación habilitada. `guard` rechaza otras ramas y el SHA congelado.
-2. Se ejecutan los tres CI reutilizables sobre el mismo commit. Un fallo bloquea `publish` mediante `needs`.
+2. Se ejecutan los cuatro CI reutilizables sobre el mismo commit. Un fallo bloquea `publish` mediante `needs`.
 3. El trabajo protegido por el Environment `dockerhub` construye **las tres** imágenes antes de autenticarse o publicar cualquiera. Usa Linux amd64: confirmar arquitectura de los nodos UCT antes del despliegue.
 4. Publica `cdarwitg2024/<servicio>:sha-<SHA completo>`, nunca `latest`. Etiquetas OCI registran commit y repositorio.
 5. Registra digests en `release.json`, artefacto `release-<SHA>` y resumen de ejecución. Retención solicitada: 90 días, sujeta a políticas de GitHub. Conservar artefactos e imágenes necesarios para recuperación.
@@ -91,7 +93,7 @@ Mobile consume `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` y `EX
 
 ## Habilitar y aprobar un despliegue futuro
 
-1. Revisar los archivos en `S3-Camilodg-GitHub` e integrarlos por el proceso del equipo. Esta tarea no hace commit/push. Habilitar Actions y comprobar los CI mediante PR. Los workflows manuales deben existir en la rama predeterminada para aparecer en la interfaz.
+1. Revisar los CI del PR y comprobar que los workflows manuales estén disponibles en la rama predeterminada.
 2. Configurar Environments, revisores, Secrets y Variables. Resolver/aceptar limitaciones, confirmar arquitectura, conectividad, kubectl y RBAC. Mantener Kubernetes deshabilitado mientras se verifica.
 3. Cuando el equipo autorice publicar, poner `DOCKER_PUBLISH_ENABLED=true`; abrir **Actions → CD Docker → Run workflow → main**, aprobar `dockerhub` si corresponde y esperar **success**.
 4. Revisar resumen y artefacto `release-<SHA>`; registrar ID numérico de ejecución de su URL. No usar un run de CI aislado, fallido o de otro commit.
@@ -112,10 +114,11 @@ Después de un despliegue autorizado, relacionar el resumen de Kubernetes, `rele
 ```sh
 kubectl -n student-cdarwitg get deployments ms-cafeterias ms-menus ms-pedidos \
   -o custom-columns='NAME:.metadata.name,IMAGES:.spec.template.spec.containers[*].image,READY:.status.readyReplicas'
-kubectl -n student-cdarwitg get pods -l 'app in (ms-cafeterias,ms-menus,ms-pedidos)' -o wide
+kubectl -n student-cdarwitg get pods -l 'app in (ms-cafeterias,ms-menus,ms-pedidos)' \
+  -o custom-columns='POD:.metadata.name,READY:.status.containerStatuses[*].ready,IMAGE_ID:.status.containerStatuses[*].imageID'
 ```
 
-Las etiquetas OCI también registran el commit. Un tag histórico por sí solo no demuestra el código desplegado; una sonda saludable tampoco prueba negocio/RPC.
+Registrar el SHA de `main`, el run de CD Docker, los digests de `release.json`, la imagen declarada en cada Deployment y el `imageID` de sus Pods listos. Si el runtime muestra un identificador distinto del digest publicado, consultar la relación entre el manifiesto de la imagen y su plataforma antes de afirmar que coinciden. Las etiquetas OCI también registran el commit.
 
 ## Revertir un despliegue fallido
 

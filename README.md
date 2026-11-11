@@ -35,10 +35,10 @@ Aplicación full-stack para pedidos anticipados en cafeterías universitarias. P
 
 ## Requisitos previos
 
-- Node.js >= 18
+- Node.js 22, la versión usada por CI
 - Docker Desktop (para levantar los microservicios localmente)
 - Supabase CLI (para desarrollo de Edge Functions o migraciones)
-- Expo CLI (`npm install -g expo-cli`) para la app móvil
+- Expo CLI del proyecto móvil, disponible con `npx expo` después de instalar dependencias
 - Variables de entorno configuradas (ver sección siguiente)
 
 ## Configuración de variables de entorno
@@ -65,7 +65,7 @@ La configuración Vite carga los `.env` de la **raíz del repositorio**. Complet
 
 ### App móvil
 
-Crear `app-mobile/.env` con las credenciales correspondientes. El dispositivo físico requiere que `SUPABASE_URL` apunte a la IP actual del PC en la red local, no a `localhost`.
+Crear `app-mobile/.env` desde su ejemplo. `EXPO_PUBLIC_SUPABASE_URL` y `EXPO_PUBLIC_SUPABASE_ANON_KEY` corresponden al proyecto Supabase. Para un gateway local, configurar `EXPO_PUBLIC_API_URL` con `http://10.0.2.2:8080` en el emulador Android o con la IP del PC y el puerto del gateway en un teléfono físico. Ver [guía móvil](docs/mobile/guias/react-native.md).
 
 ## Pasos para ejecutar la aplicación
 
@@ -88,7 +88,7 @@ docker compose down
 
 ```bash
 cd app-desktop
-npm install
+npm ci --legacy-peer-deps
 npm run electron:dev
 ```
 
@@ -104,7 +104,7 @@ npm run electron:build
 
 ```bash
 cd app-mobile
-npm install
+npm ci
 npm run android   # dispositivo o emulador Android
 # o
 npm run start     # abre el servidor Expo para escanear con Expo Go
@@ -112,7 +112,7 @@ npm run start     # abre el servidor Expo para escanear con Expo Go
 
 ### 4. Bot de Telegram (opcional)
 
-Ver instrucciones en `BotTelegramCoffeFaster/`.
+Ver la [guía del bot de Telegram](docs/bot-telegram/integracion/README.md).
 
 ## Roles y acceso
 
@@ -126,7 +126,7 @@ Las apps utilizan Supabase Auth. No hay cuentas de demostración integradas. Sol
 
 ## Despliegue en Kubernetes
 
-Ver [`k8s-next/DESPLIEGUE.md`](k8s-next/DESPLIEGUE.md) para el procedimiento completo, requisitos previos y advertencias de seguridad.
+Ver [`docs/kubernetes/operacion/DESPLIEGUE.md`](docs/kubernetes/operacion/DESPLIEGUE.md) para el procedimiento completo, requisitos previos y advertencias de seguridad.
 
 > **Importante:** nunca usar `kubectl apply --recursive` sobre el árbol de manifiestos. Aplicar siempre archivo por archivo o por subcarpeta explícita para evitar sobrescribir Secrets del cluster con valores de plantilla.
 
@@ -135,26 +135,24 @@ Ver [`k8s-next/DESPLIEGUE.md`](k8s-next/DESPLIEGUE.md) para el procedimiento com
 | Documento | Descripcion |
 |---|---|
 | [`docs/README.md`](docs/README.md) | Indice y clasificacion de la documentacion |
-| [`docs/puesta_en_marcha_flujo_pedidos.md`](docs/puesta_en_marcha_flujo_pedidos.md) | Guia completa para levantar el entorno y ejecutar el flujo de pedidos |
+| [`docs/microservicios/operacion/puesta_en_marcha_flujo_pedidos.md`](docs/microservicios/operacion/puesta_en_marcha_flujo_pedidos.md) | Guia completa para levantar el entorno y ejecutar el flujo de pedidos |
 | [`docs/estado-actual.md`](docs/estado-actual.md) | Funcionalidades implementadas y pendientes |
 | [`docs/kubernetes/estado-actual.md`](docs/kubernetes/estado-actual.md) | Estado del cluster Kubernetes |
 
 ## Ejecutar pruebas
 
+Desde la raíz, con las dependencias instaladas:
+
 ```bash
-# Microservicios
-cd Microservices/ms-pedidos && npm test
-cd Microservices/ms-cafeterias && npm test
-
-# App móvil
-cd app-mobile && npm test
-
-# App de escritorio
-cd app-desktop && npm test
-
-# Backend legacy
-cd backend-node && npm test
+npm test --prefix app-mobile -- --ci --runInBand
+npm test --prefix app-desktop
+npm test --prefix backend-node -- --ci --runInBand
+npm test --prefix Microservices/ms-cafeterias -- --ci
+npm test --prefix Microservices/ms-menus -- --ci
+npm test --prefix Microservices/ms-pedidos -- --ci
 ```
+
+Para resolver las dependencias de `shared` y ejecutar catálogo, PostgreSQL y Telegram, consultar [CI/CD](docs/calidad/ci-cd/CI-CD.md) y el [registro de validación](docs/calidad/validacion/revision-pruebas.md).
 
 ## Integrantes
 

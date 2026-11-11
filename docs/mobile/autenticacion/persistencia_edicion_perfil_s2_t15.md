@@ -1,6 +1,6 @@
 # Documentación Técnica: Persistencia Real al Editar Perfil (S2-T15)
 
-> **Evidencia de una revisión anterior.** Las cuentas, resultados y entorno del cuerpo corresponden a esa prueba, no al Cloud actual. Para arquitectura y pendientes ver [estado vigente](../estado-actual.md). Clasificado el 1 de noviembre de 2026.
+> **Evidencia de una revisión anterior.** Las cuentas, resultados y entorno del cuerpo corresponden a esa prueba, no al Cloud actual. Para arquitectura y pendientes ver [estado vigente](../../estado-actual.md). Clasificado el 1 de noviembre de 2026.
 
 
 ## 1. Identificación y Contexto

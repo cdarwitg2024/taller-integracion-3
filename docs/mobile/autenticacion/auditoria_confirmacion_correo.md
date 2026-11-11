@@ -1,6 +1,6 @@
 # Auditoría y Corrección de Confirmación de Correo y Redirección en Supabase Auth
 
-> **Evidencia de una revisión anterior.** Las cuentas, resultados y entorno del cuerpo corresponden a esa prueba, no al Cloud actual. Para arquitectura y pendientes ver [estado vigente](../estado-actual.md). Clasificado el 1 de noviembre de 2026.
+> **Evidencia de una revisión anterior.** Las cuentas, resultados y entorno del cuerpo corresponden a esa prueba, no al Cloud actual. Para arquitectura y pendientes ver [estado vigente](../../estado-actual.md). Clasificado el 1 de noviembre de 2026.
 
 
 > **Tarea:** S2-T1 — Diego Vásquez — Auditar confirmación de correo  

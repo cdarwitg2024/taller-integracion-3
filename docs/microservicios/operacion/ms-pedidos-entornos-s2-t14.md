@@ -147,8 +147,8 @@ verificada. Estar detras del gateway no concede autorizacion.
 | k8s-next/ms-pedidos/deployment.yaml | cdarwitg2024/ms-pedidos:v1.0.3 | Objetivo declarado K8s | Conservado |
 | k8s-next/comandos-build.ps1 | cdarwitg2024/ms-pedidos:v1.0.0 | Construccion para registro | Restaurado al original; discrepa del Deployment; no ejecutado |
 | k8s-next/comandos-push.ps1 | cdarwitg2024/ms-pedidos:v1.0.0 | Publicacion manual | Restaurado al original; discrepa del Deployment; NO ejecutado |
-| k8s-next/DESPLIEGUE.md | Indirecta a los scripts | Procedimiento operacional | Hereda discrepancia; no certifica version de publicacion |
-| Microservices/README.md | Compose con build | Desarrollo local | Usa :local |
+| docs/kubernetes/operacion/DESPLIEGUE.md | Indirecta a los scripts | Procedimiento operacional | Hereda discrepancia; no certifica version de publicacion |
+| docs/microservicios/operacion/README.md | Compose con build | Desarrollo local | Usa :local |
 | README.md | k8s-next vigente; k8s legacy | Procedimiento general | No fija otra imagen de pedidos |
 
 La busqueda global no encontro otra referencia directa activa a imagen/tag
