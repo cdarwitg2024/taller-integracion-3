@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Box, Grid, Alert, Button, LinearProgress, Typography } from '@mui/material';
 
 import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 import pedidosService from '../../services/pedidosService';
+import { crearCargadorDashboard } from '../../services/cargadorDashboard';
 import KpiCards from '../../components/dashboard/KpiCards';
 import SalesChart from '../../components/dashboard/SalesChart';
 import OrdersDistributionChart from '../../components/dashboard/OrdersDistributionChart';
@@ -10,103 +11,79 @@ import TopProductsChart from '../../components/dashboard/TopProductsChart';
 import RecentOrdersTable from '../../components/dashboard/RecentOrdersTable';
 
 function Dashboard({ currentUser }) {
-  const [stats, setStats] = useState(null);
-  const [pedidos, setPedidos] = useState([]);
-  const [salesData, setSalesData] = useState([]);
-  const [topProducts, setTopProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [dbError, setDbError] = useState(null);
-  const [ultimaActualizacionExitosa, setUltimaActualizacionExitosa] = useState(null);
-
-  // S2-T18: el alcance de cafetería proviene del perfil del dueño. Desde
-  // S2-T12 `getAll` exige cafeteriaId y no acepta un fallback fijo, así que
-  // el Dashboard debe pasarlo explícitamente.
+  // S2-T18: el alcance de cafetería proviene del perfil del dueño.
   const cafeteriaId =
     currentUser?.cafeteria_id ?? currentUser?.cafeteriaId ?? null;
 
-  const loadData = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
-    setDbError(null);
+  const [estado, setEstado] = useState({
+    stats: null,
+    pedidos: [],
+    salesData: [],
+    topProducts: [],
+    loading: true,
+    dbError: null,
+    ultimaActualizacionExitosa: null,
+  });
 
-    if (cafeteriaId === null || cafeteriaId === undefined || cafeteriaId === '') {
-      setDbError(
-        'Tu usuario no tiene una cafetería autorizada asociada. No es posible calcular los indicadores.'
-      );
-      setStats(null);
-      setPedidos([]);
-      setSalesData([]);
-      setTopProducts([]);
-      if (showLoading) setLoading(false);
-      return;
-    }
+  const {
+    stats,
+    pedidos,
+    salesData,
+    topProducts,
+    loading,
+    dbError,
+    ultimaActualizacionExitosa,
+  } = estado;
 
-    try {
-      // Snapshot comun de pedidos (S2-T12): un solo getAll; los indicadores derivan sus metricas
-      const pedidos = await pedidosService.getAll({ cafeteriaId });
-
-      const [resStats, resSales, resTop] = await Promise.all([
-        pedidosService.getEstadisticas(pedidos),
-        pedidosService.getVentasPorHora(pedidos),
-        pedidosService.getTopProductos(pedidos),
-      ]);
-
-      setStats(resStats);
-      setPedidos(pedidos);
-      setSalesData(resSales);
-      setTopProducts(resTop);
-
-      // Última actualización exitosa (S2-T13): solo se registra en una carga exitosa
-      setUltimaActualizacionExitosa(new Date().toISOString());
-    } catch (err) {
-      console.error('Error cargando datos del dashboard:', err);
-      setDbError(
-        err.message || 'No se pudieron consultar los datos del Dashboard.'
-      );
-      setStats(null);
-      setPedidos([]);
-      setSalesData([]);
-      setTopProducts([]);
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  };
+  const cargadorRef = useRef(null);
+  if (!cargadorRef.current) {
+    cargadorRef.current = crearCargadorDashboard({
+      pedidosService,
+      onEstadoCambiado: (nuevoEstado) => setEstado(nuevoEstado),
+    });
+  }
 
   useEffect(() => {
-    let activo = true;
-    let cargando = false;
-    const refrescar = async (inicial = false) => {
-      if (!activo || cargando) return;
-      cargando = true;
-      try { await loadData(inicial); } finally { cargando = false; }
-    };
-    refrescar(true);
-    // Igual que KDS: respaldo de 10 segundos si Realtime pierde un evento.
-    const poll = setInterval(() => refrescar(false), 10000);
-    if (!isSupabaseConfigured) return () => { activo = false; clearInterval(poll); };
+    const cargador = cargadorRef.current;
+    cargador.activar();
 
-    const canalDashboard = supabase.channel('dueno-dashboard-realtime');
+    // S3-T2: El cambio de cafetería invalida cargas pendientes y limpia de inmediato
+    // los indicadores del contexto anterior para no mostrarlos mientras se carga.
+    cargador.cambiarCafeteria(cafeteriaId);
 
-    canalDashboard
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'pedidos' },
-        () => {
-          refrescar(false);
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'detalles_pedido' },
-        () => {
-          refrescar(false);
-        }
-      )
-      .subscribe();
+    // Respaldo de 10 segundos si Realtime pierde un evento
+    const poll = setInterval(() => {
+      cargador.refrescar(false);
+    }, 10000);
+
+    let canalDashboard = null;
+    if (isSupabaseConfigured) {
+      canalDashboard = supabase.channel('dueno-dashboard-realtime');
+      canalDashboard
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'pedidos' },
+          () => {
+            cargador.refrescar(false);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'detalles_pedido' },
+          () => {
+            cargador.refrescar(false);
+          }
+        )
+        .subscribe();
+    }
 
     return () => {
-      activo = false;
+      // S3-T2: Desmontaje o cambio de cafetería invalida cargas pendientes
       clearInterval(poll);
-      supabase.removeChannel(canalDashboard);
+      if (canalDashboard && isSupabaseConfigured) {
+        supabase.removeChannel(canalDashboard);
+      }
+      cargador.desmontar();
     };
   }, [cafeteriaId]);
 
@@ -132,7 +109,11 @@ function Dashboard({ currentUser }) {
           severity="error"
           sx={{ mb: 3, borderRadius: '12px', fontWeight: 500 }}
           action={
-            <Button color="inherit" size="small" onClick={loadData}>
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => cargadorRef.current?.refrescar(true)}
+            >
               Reintentar
             </Button>
           }

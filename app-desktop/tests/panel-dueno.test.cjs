@@ -21,6 +21,7 @@ function cargar(archivo, nombre, dependencias) {
       './supabaseClient': ['supabase', 'isSupabaseConfigured'],
       './usuarios.js': ['usuarios'], './backendApi': ['backendApi', 'CAFETERIA_ID'],
       '../utils/dateUtils': ['parsearFecha', 'formatearHora', 'formatearHoraBucket'],
+      './pedidosService': ['pedidosService'],
     }[specifier];
     assert.ok(nombres, `Dependencia sin definir: ${specifier}`);
     return Object.fromEntries(nombres.map(k => [k, dependencias[k]]));
@@ -135,4 +136,97 @@ test('Dashboard incluye históricos en indicadores; solo ventas por hora filtra 
   assert.equal((await servicio.getTopProductos(filas))[0].cantidad, 5);
   assert.equal((await servicio.getVentasPorHora(filas)).reduce((s,h) => s+h.ventas, 0), 300);
   assert.equal((await servicio.getEstadisticas([])).totalVentas, 0);
+});
+
+test('Dashboard: cambio de cafetería y desmontaje invalidan cargas pendientes y descartan respuestas invertidas (S3-T2)', async () => {
+  const deferidos = {};
+  const llamadas = [];
+
+  const pedidosServiceMock = {
+    getAll: ({ cafeteriaId }) => {
+      llamadas.push(cafeteriaId);
+      return new Promise((resolve, reject) => {
+        deferidos[cafeteriaId] = { resolve, reject };
+      });
+    },
+    getEstadisticas: async (pedidos) => ({
+      totalVentas: pedidos.reduce((s, p) => s + (Number(p.total) || 0), 0),
+      totalPedidos: pedidos.length,
+      pendientes: pedidos.filter(p => p.estado === 'pendiente').length,
+    }),
+    getVentasPorHora: async () => [{ hora: '12:00', ventas: 100 }],
+    getTopProductos: async () => [{ nombre: 'Café', cantidad: 5 }],
+  };
+
+  const estadosNotificados = [];
+  const crearCargador = cargar('cargadorDashboard.js', 'crearCargadorDashboard', {
+    pedidosService: pedidosServiceMock,
+  });
+
+  const cargador = crearCargador({
+    pedidosService: pedidosServiceMock,
+    onEstadoCambiado: (e) => estadosNotificados.push(e),
+    obtenerFechaActual: () => '2026-11-12T12:00:00.000Z',
+  });
+
+  // 1. Inicia carga para Cafetería 1
+  const promesaA = cargador.cambiarCafeteria(1);
+  assert.equal(llamadas.length, 1);
+  assert.equal(llamadas[0], 1);
+
+  // Verificación: al cambiar a Cafetería 1, loading es true y los indicadores parten limpios
+  const estadoInicialA = cargador.obtenerEstado();
+  assert.equal(estadoInicialA.loading, true);
+  assert.equal(estadoInicialA.stats, null);
+  assert.deepEqual(estadoInicialA.pedidos, []);
+
+  // 2. Antes de que resuelva Cafetería 1, el usuario cambia a Cafetería 2
+  const promesaB = cargador.cambiarCafeteria(2);
+  assert.equal(llamadas.length, 2);
+  assert.equal(llamadas[1], 2);
+
+  // Criterio: "no muestra indicadores del contexto anterior"
+  // El cambio de cafetería debe limpiar de inmediato los indicadores anteriores
+  const estadoAlCambiarB = cargador.obtenerEstado();
+  assert.equal(estadoAlCambiarB.loading, true);
+  assert.equal(estadoAlCambiarB.stats, null);
+  assert.deepEqual(estadoAlCambiarB.pedidos, []);
+  assert.equal(estadoAlCambiarB.ultimaActualizacionExitosa, null);
+
+  // 3. Criterio: "Prueba con respuestas invertidas"
+  // Cafetería 2 (la más reciente) responde primero (out-of-order)
+  const datosB = [{ id: 201, cafeteria_id: 2, total: 500, estado: 'entregado' }];
+  deferidos[2].resolve(datosB);
+  await promesaB;
+
+  const estadoPostB = cargador.obtenerEstado();
+  assert.equal(estadoPostB.loading, false);
+  assert.equal(estadoPostB.stats.totalVentas, 500);
+  assert.equal(estadoPostB.pedidos[0].id, 201);
+  assert.equal(estadoPostB.ultimaActualizacionExitosa, '2026-11-12T12:00:00.000Z');
+
+  // Ahora responde tardíamente la petición antigua de Cafetería 1 (respuesta invertida)
+  const datosA = [{ id: 101, cafeteria_id: 1, total: 9999, estado: 'entregado' }];
+  deferidos[1].resolve(datosA);
+  await promesaA;
+
+  // Criterio: La respuesta antigua de Cafetería 1 DEBE descartarse y NO sobreescribir Cafetería 2
+  const estadoFinal = cargador.obtenerEstado();
+  assert.equal(estadoFinal.stats.totalVentas, 500, 'La respuesta invertida de Cafetería 1 no debe sobreescribir');
+  assert.equal(estadoFinal.pedidos[0].id, 201, 'Los pedidos deben permanecer los de Cafetería 2');
+
+  // 4. Criterio: "desmontaje invalida cargas pendientes"
+  const promesaC = cargador.cambiarCafeteria(3);
+  assert.equal(cargador.obtenerEstado().loading, true);
+
+  // Se desmonta el componente antes de que la carga pendiente resuelva
+  cargador.desmontar();
+
+  const numEstadosAntes = estadosNotificados.length;
+  // Resuelve la petición de Cafetería 3 tras desmontar
+  deferidos[3].resolve([{ id: 301, cafeteria_id: 3, total: 100 }]);
+  await promesaC;
+
+  // No debe haberse emitido ningún estado tras el desmontaje
+  assert.equal(estadosNotificados.length, numEstadosAntes, 'No se deben emitir estados tras el desmontaje');
 });
