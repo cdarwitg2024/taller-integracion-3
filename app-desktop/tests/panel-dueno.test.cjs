@@ -35,25 +35,52 @@ function transporte(filas) {
   let fallo = null;
   return {
     fallar(error) { fallo = error; },
-    rpc() {
+    rpc(nombre, params) {
       if (fallo) return Promise.resolve({ data: null, error: fallo });
+      if (nombre === 'confirmar_condiciones_campana') {
+        const campana = filas.find(f => f.id === params.p_campana_id && f.cafeteria_id === params.p_cafeteria_id);
+        if (!campana) {
+          return Promise.resolve({ data: null, error: { message: 'Campaña no encontrada o no pertenece a la cafetería autorizada' } });
+        }
+        if (String(params.p_version || '').trim() !== String(campana.version_condiciones || '').trim()) {
+          return Promise.resolve({ data: null, error: { message: 'La versión indicada no coincide con la versión vigente de la campaña' } });
+        }
+        if (!campana.confirmada_por_dueno) {
+          campana.confirmada_por_dueno = true;
+          campana.fecha_confirmacion = new Date().toISOString();
+          campana.usuario_confirma_id = params.p_usuario_id;
+          campana.version_confirmada = params.p_version;
+          campana.estado = 'activa';
+        }
+        return Promise.resolve({ data: { ...campana }, error: null });
+      }
       return Promise.resolve({ data: null, error: { code: 'PGRST202' } });
     },
     from() {
       const filtros = [];
+      const ordenamientos = [];
       let cambios;
       let unica = false;
       const q = {
         update(v) { cambios = v; return q; },
-        eq(k, v) { filtros.push([k, v]); return q; },
+        eq(k, v) { filtros.push(f => String(f[k]) === String(v)); return q; },
+        in(k, list) { filtros.push(f => list.map(String).includes(String(f[k]))); return q; },
+        gte(k, v) { filtros.push(f => !f[k] || new Date(f[k]).getTime() >= new Date(v).getTime()); return q; },
         select() { return q; },
-        order() { return q; },
+        order(k, opts = {}) { ordenamientos.push({ k, asc: opts.ascending !== false }); return q; },
         limit() { return q; },
         single() { unica = true; return q; },
         maybeSingle() { unica = true; return q; },
         then(resolve) {
           if (fallo) return Promise.resolve({ data: null, error: fallo }).then(resolve);
-          const seleccion = filas.filter(f => filtros.every(([k,v]) => String(f[k]) === String(v)));
+          let seleccion = filas.filter(f => filtros.every(fn => fn(f)));
+          for (const ord of ordenamientos) {
+            seleccion.sort((a, b) => {
+              if (a[ord.k] === b[ord.k]) return 0;
+              if (ord.asc) return a[ord.k] > b[ord.k] ? 1 : -1;
+              return a[ord.k] < b[ord.k] ? 1 : -1;
+            });
+          }
           seleccion.forEach(f => Object.assign(f, cambios));
           return Promise.resolve({ data: unica ? seleccion[0] ?? null : seleccion,
             error: unica && !seleccion.length && cambios?.stock !== undefined ? { code: 'PGRST116' } : null }).then(resolve);
@@ -144,23 +171,40 @@ test('Dashboard incluye históricos en indicadores; solo ventas por hora filtra 
   assert.equal((await servicio.getEstadisticas([])).totalVentas, 0);
 });
 
-test('campanasService: carga de versión, tasas y vigencia para la cafetería autorizada', async () => {
+test('campanasService: carga de versión, tasas y vigencia filtrando expiradas', async () => {
   const hoy = new Date().toISOString();
   const fin = new Date(Date.now() + 86400000 * 30).toISOString();
-  const filas = [{
-    id: 1,
-    cafeteria_id: 2,
-    nombre: 'Campaña Carrito Completo 2026',
-    tipo: 'carrito_completo',
-    estado: 'pendiente_aceptacion',
-    version_condiciones: 'v1.0',
-    tasa_descuento: 15,
-    tasa_comision: 5,
-    vigencia_desde: hoy,
-    vigencia_hasta: fin,
-    confirmada_por_dueno: false,
-    creado_en: hoy,
-  }];
+  const expirada = new Date(Date.now() - 86400000).toISOString();
+  const filas = [
+    {
+      id: 99,
+      cafeteria_id: 2,
+      nombre: 'Campaña Expirada',
+      tipo: 'carrito_completo',
+      estado: 'finalizada',
+      version_condiciones: 'v0.9',
+      tasa_descuento: 10,
+      tasa_comision: 3,
+      vigencia_desde: new Date(Date.now() - 86400000 * 10).toISOString(),
+      vigencia_hasta: expirada,
+      confirmada_por_dueno: true,
+      creado_en: hoy,
+    },
+    {
+      id: 1,
+      cafeteria_id: 2,
+      nombre: 'Campaña Carrito Completo 2026',
+      tipo: 'carrito_completo',
+      estado: 'pendiente_aceptacion',
+      version_condiciones: 'v1.0',
+      tasa_descuento: 15,
+      tasa_comision: 5,
+      vigencia_desde: hoy,
+      vigencia_hasta: fin,
+      confirmada_por_dueno: false,
+      creado_en: hoy,
+    },
+  ];
   const supabase = transporte(filas);
   const usuarios = {
     getPerfilSesion: async () => ({
@@ -177,6 +221,7 @@ test('campanasService: carga de versión, tasas y vigencia para la cafetería au
 
   const campana = await servicio.obtenerCampanaVigente(2);
   assert.ok(campana);
+  assert.equal(campana.id, 1);
   assert.equal(campana.version_condiciones, 'v1.0');
   assert.equal(campana.tasa_descuento, 15);
   assert.equal(campana.tasa_comision, 5);
@@ -222,7 +267,7 @@ test('campanasService: dueño confirma condiciones y persiste estado activo', as
   assert.equal(filas[0].confirmada_por_dueno, true);
 });
 
-test('campanasService: doble clic no duplica aceptación (idempotencia)', async () => {
+test('campanasService: llamadas concurrentes e idempotencia no duplican aceptación', async () => {
   const filas = [{
     id: 1,
     cafeteria_id: 2,
@@ -245,25 +290,61 @@ test('campanasService: doble clic no duplica aceptación (idempotencia)', async 
     usuarios,
   });
 
-  // Primera confirmación
-  const primera = await servicio.confirmarCondiciones({
-    campanaId: 1,
-    cafeteriaId: 2,
-    usuarioId: 9,
-    version: 'v1.0',
-  });
-  const fechaPrimera = primera.fecha_confirmacion;
+  // Ejecución concurrente simultánea (simula doble clic o dos sesiones)
+  const [primera, segunda] = await Promise.all([
+    servicio.confirmarCondiciones({
+      campanaId: 1,
+      cafeteriaId: 2,
+      usuarioId: 9,
+      version: 'v1.0',
+    }),
+    servicio.confirmarCondiciones({
+      campanaId: 1,
+      cafeteriaId: 2,
+      usuarioId: 9,
+      version: 'v1.0',
+    }),
+  ]);
 
-  // Segunda llamada (simula doble clic)
-  const segunda = await servicio.confirmarCondiciones({
-    campanaId: 1,
-    cafeteriaId: 2,
-    usuarioId: 9,
-    version: 'v1.0',
-  });
-
+  assert.equal(primera.confirmada_por_dueno, true);
   assert.equal(segunda.confirmada_por_dueno, true);
-  assert.equal(segunda.fecha_confirmacion, fechaPrimera);
+  assert.equal(segunda.fecha_confirmacion, primera.fecha_confirmacion);
+  assert.equal(filas[0].confirmada_por_dueno, true);
+});
+
+test('campanasService: rechazo ante versión discordante con la vigente', async () => {
+  const filas = [{
+    id: 1,
+    cafeteria_id: 2,
+    estado: 'pendiente_aceptacion',
+    version_condiciones: 'v1.0',
+    confirmada_por_dueno: false,
+    creado_en: new Date().toISOString(),
+  }];
+  const supabase = transporte(filas);
+  const usuarios = {
+    getPerfilSesion: async () => ({
+      success: true,
+      rol: 'dueño',
+      user: { cafeteria_id: 2, id: 9 },
+    }),
+  };
+  const servicio = cargar('campanasService.js', 'campanasService', {
+    supabase,
+    isSupabaseConfigured: true,
+    usuarios,
+  });
+
+  await assert.rejects(
+    () => servicio.confirmarCondiciones({
+      campanaId: 1,
+      cafeteriaId: 2,
+      usuarioId: 9,
+      version: 'v2.0',
+    }),
+    /versión/i
+  );
+  assert.equal(filas[0].confirmada_por_dueno, false);
 });
 
 test('campanasService: error en Supabase no aparece como éxito ni modifica confirmación', async () => {

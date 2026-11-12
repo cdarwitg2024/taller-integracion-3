@@ -41,10 +41,14 @@ export const campanasService = {
   async obtenerCampanaVigente(cafeteriaId) {
     await autorizar(cafeteriaId);
 
+    const ahora = new Date().toISOString();
     const { data, error } = await supabase
       .from('campanas')
       .select('id, cafeteria_id, nombre, descripcion, tipo, estado, version_condiciones, tasa_descuento, tasa_comision, vigencia_desde, vigencia_hasta, confirmada_por_dueno, fecha_confirmacion, usuario_confirma_id, version_confirmada, creado_en')
       .eq('cafeteria_id', cafeteriaId)
+      .in('estado', ['pendiente_aceptacion', 'activa'])
+      .gte('vigencia_hasta', ahora)
+      .order('confirmada_por_dueno', { ascending: true })
       .order('creado_en', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -71,8 +75,9 @@ export const campanasService = {
 
   /**
    * Confirma y acepta las condiciones de la campaña por parte del dueño.
-   * - Idempotente: Si ya está confirmada, no duplica el registro ni genera error.
-   * - Robusta: Si Supabase o la red fallan, lanza excepción y no permite que el error aparezca como éxito.
+   * - Atómica: Ejecutada exclusivamente en la base de datos vía RPC con bloqueo FOR UPDATE.
+   * - Idempotente: Si ya está confirmada con la misma versión, retorna sin duplicar ni generar error.
+   * - Segura: La RPC valida sesión (auth.uid), rol de dueño, cafetería y correspondencia estricta de versión.
    */
   async confirmarCondiciones({ campanaId, cafeteriaId, usuarioId, version }) {
     await autorizar(cafeteriaId);
@@ -87,86 +92,24 @@ export const campanasService = {
       throw new Error('La versión de condiciones es requerida para confirmar.');
     }
 
-    // Intentar confirmación atómica mediante RPC en Supabase
-    let resRpc = null;
-    let rpcNoExiste = false;
-
-    if (typeof supabase.rpc === 'function') {
-      try {
-        const { data, error } = await supabase.rpc('confirmar_condiciones_campana', {
-          p_campana_id: idCampana,
-          p_cafeteria_id: Number(cafeteriaId),
-          p_usuario_id: usuarioId ? Number(usuarioId) : null,
-          p_version: versionTexto,
-        });
-
-        if (error) {
-          // Si el código indica que la función no existe, recurrir al fallback
-          if (['PGRST202', '42883'].includes(error.code)) {
-            rpcNoExiste = true;
-          } else {
-            throw new Error(error.message || 'Error al confirmar las condiciones en el servidor.');
-          }
-        } else {
-          resRpc = data;
-        }
-      } catch (err) {
-        if (!rpcNoExiste) throw err;
-      }
-    } else {
-      rpcNoExiste = true;
+    if (!supabase || typeof supabase.rpc !== 'function') {
+      throw new Error('Cliente RPC de Supabase no disponible.');
     }
 
-    if (resRpc) {
-      return resRpc;
+    const { data, error } = await supabase.rpc('confirmar_condiciones_campana', {
+      p_campana_id: idCampana,
+      p_cafeteria_id: Number(cafeteriaId),
+      p_usuario_id: usuarioId ? Number(usuarioId) : null,
+      p_version: versionTexto,
+    });
+
+    comprobarError(error);
+
+    if (!data) {
+      throw new Error('No se pudo confirmar la campaña en el servidor.');
     }
 
-    // Fallback directo a la tabla campanas con verificación de estado previo (idempotencia)
-    const { data: actual, error: errConsulta } = await supabase
-      .from('campanas')
-      .select('id, cafeteria_id, confirmada_por_dueno, version_confirmada, fecha_confirmacion, estado')
-      .eq('id', idCampana)
-      .eq('cafeteria_id', cafeteriaId)
-      .single();
-
-    comprobarError(errConsulta);
-
-    if (!actual) {
-      throw new Error('No se encontró la campaña o no pertenece a tu cafetería.');
-    }
-
-    // Si ya estaba confirmada, retornar el estado existente sin duplicar ni reescribir
-    if (actual.confirmada_por_dueno) {
-      return actual;
-    }
-
-    const nuevoEstado = actual.estado === 'pendiente_aceptacion' || actual.estado === 'borrador'
-      ? 'activa'
-      : actual.estado;
-
-    const fechaAhora = new Date().toISOString();
-    const { data: updated, error: errUpdate } = await supabase
-      .from('campanas')
-      .update({
-        confirmada_por_dueno: true,
-        fecha_confirmacion: fechaAhora,
-        usuario_confirma_id: usuarioId ? Number(usuarioId) : null,
-        version_confirmada: versionTexto,
-        estado: nuevoEstado,
-        actualizado_en: fechaAhora,
-      })
-      .eq('id', idCampana)
-      .eq('cafeteria_id', cafeteriaId)
-      .select()
-      .single();
-
-    comprobarError(errUpdate);
-
-    if (!updated) {
-      throw new Error('No se pudo persistir la confirmación en Supabase.');
-    }
-
-    return updated;
+    return data;
   },
 };
 
