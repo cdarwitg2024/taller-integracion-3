@@ -11,10 +11,12 @@ import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurnedInOutlined';
 
 import PageHeader from './components/dueno/PageHeader';
 import Promociones from './pages/dueno/Promociones';
 import ConfiguracionCafeteria from './pages/dueno/ConfiguracionCafeteria';
+import CondicionesCampana from './pages/dueno/CondicionesCampana';
 import Login from './pages/auth/Login';
 import AccesoNoAutorizado from './components/AccesoNoAutorizado';
 import Dashboard from './pages/dueno/Dashboard';
@@ -143,6 +145,10 @@ function buildDuenoHeader(pathname) {
     '/dueno/promociones': {
       title: 'Promociones',
       subtitle: 'Administra las promociones vigentes de la cafetería.',
+    },
+    '/dueno/condiciones-campana': {
+      title: 'Condiciones de Campaña y Aceptación',
+      subtitle: 'Revisa versión, tasas y vigencia de la campaña de carrito completo, y confirma la adhesión de tu cafetería.',
     },
     '/dueno/configuracion': {
       title: 'Configuración de Cafetería',
@@ -420,6 +426,17 @@ function App() {
             <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
               <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
                 <Promociones currentUser={currentUser} />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dueno/condiciones-campana"
+          element={
+            <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
+              <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
+                <CondicionesCampana currentUser={currentUser} />
               </AuthenticatedLayout>
             </ProtectedRoute>
           }

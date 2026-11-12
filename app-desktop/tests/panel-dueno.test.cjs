@@ -19,6 +19,7 @@ function cargar(archivo, nombre, dependencias) {
       './supabase': ['supabase', 'isSupabaseConfigured'],
       './supabase.js': ['supabase', 'isSupabaseConfigured'],
       './supabaseClient': ['supabase', 'isSupabaseConfigured'],
+      './usuarios': ['usuarios'],
       './usuarios.js': ['usuarios'], './backendApi': ['backendApi', 'CAFETERIA_ID'],
       '../utils/dateUtils': ['parsearFecha', 'formatearHora', 'formatearHoraBucket'],
     }[specifier];
@@ -34,6 +35,10 @@ function transporte(filas) {
   let fallo = null;
   return {
     fallar(error) { fallo = error; },
+    rpc() {
+      if (fallo) return Promise.resolve({ data: null, error: fallo });
+      return Promise.resolve({ data: null, error: { code: 'PGRST202' } });
+    },
     from() {
       const filtros = [];
       let cambios;
@@ -42,6 +47,8 @@ function transporte(filas) {
         update(v) { cambios = v; return q; },
         eq(k, v) { filtros.push([k, v]); return q; },
         select() { return q; },
+        order() { return q; },
+        limit() { return q; },
         single() { unica = true; return q; },
         maybeSingle() { unica = true; return q; },
         then(resolve) {
@@ -135,4 +142,193 @@ test('Dashboard incluye históricos en indicadores; solo ventas por hora filtra 
   assert.equal((await servicio.getTopProductos(filas))[0].cantidad, 5);
   assert.equal((await servicio.getVentasPorHora(filas)).reduce((s,h) => s+h.ventas, 0), 300);
   assert.equal((await servicio.getEstadisticas([])).totalVentas, 0);
+});
+
+test('campanasService: carga de versión, tasas y vigencia para la cafetería autorizada', async () => {
+  const hoy = new Date().toISOString();
+  const fin = new Date(Date.now() + 86400000 * 30).toISOString();
+  const filas = [{
+    id: 1,
+    cafeteria_id: 2,
+    nombre: 'Campaña Carrito Completo 2026',
+    tipo: 'carrito_completo',
+    estado: 'pendiente_aceptacion',
+    version_condiciones: 'v1.0',
+    tasa_descuento: 15,
+    tasa_comision: 5,
+    vigencia_desde: hoy,
+    vigencia_hasta: fin,
+    confirmada_por_dueno: false,
+    creado_en: hoy,
+  }];
+  const supabase = transporte(filas);
+  const usuarios = {
+    getPerfilSesion: async () => ({
+      success: true,
+      rol: 'dueño',
+      user: { cafeteria_id: 2, id: 9 },
+    }),
+  };
+  const servicio = cargar('campanasService.js', 'campanasService', {
+    supabase,
+    isSupabaseConfigured: true,
+    usuarios,
+  });
+
+  const campana = await servicio.obtenerCampanaVigente(2);
+  assert.ok(campana);
+  assert.equal(campana.version_condiciones, 'v1.0');
+  assert.equal(campana.tasa_descuento, 15);
+  assert.equal(campana.tasa_comision, 5);
+  assert.equal(campana.vigencia_desde, hoy);
+  assert.equal(campana.confirmada_por_dueno, false);
+});
+
+test('campanasService: dueño confirma condiciones y persiste estado activo', async () => {
+  const filas = [{
+    id: 1,
+    cafeteria_id: 2,
+    estado: 'pendiente_aceptacion',
+    version_condiciones: 'v1.0',
+    confirmada_por_dueno: false,
+    creado_en: new Date().toISOString(),
+  }];
+  const supabase = transporte(filas);
+  const usuarios = {
+    getPerfilSesion: async () => ({
+      success: true,
+      rol: 'dueño',
+      user: { cafeteria_id: 2, id: 9 },
+    }),
+  };
+  const servicio = cargar('campanasService.js', 'campanasService', {
+    supabase,
+    isSupabaseConfigured: true,
+    usuarios,
+  });
+
+  const res = await servicio.confirmarCondiciones({
+    campanaId: 1,
+    cafeteriaId: 2,
+    usuarioId: 9,
+    version: 'v1.0',
+  });
+
+  assert.equal(res.confirmada_por_dueno, true);
+  assert.equal(res.version_confirmada, 'v1.0');
+  assert.equal(res.usuario_confirma_id, 9);
+  assert.equal(res.estado, 'activa');
+  assert.ok(res.fecha_confirmacion);
+  assert.equal(filas[0].confirmada_por_dueno, true);
+});
+
+test('campanasService: doble clic no duplica aceptación (idempotencia)', async () => {
+  const filas = [{
+    id: 1,
+    cafeteria_id: 2,
+    estado: 'pendiente_aceptacion',
+    version_condiciones: 'v1.0',
+    confirmada_por_dueno: false,
+    creado_en: new Date().toISOString(),
+  }];
+  const supabase = transporte(filas);
+  const usuarios = {
+    getPerfilSesion: async () => ({
+      success: true,
+      rol: 'dueño',
+      user: { cafeteria_id: 2, id: 9 },
+    }),
+  };
+  const servicio = cargar('campanasService.js', 'campanasService', {
+    supabase,
+    isSupabaseConfigured: true,
+    usuarios,
+  });
+
+  // Primera confirmación
+  const primera = await servicio.confirmarCondiciones({
+    campanaId: 1,
+    cafeteriaId: 2,
+    usuarioId: 9,
+    version: 'v1.0',
+  });
+  const fechaPrimera = primera.fecha_confirmacion;
+
+  // Segunda llamada (simula doble clic)
+  const segunda = await servicio.confirmarCondiciones({
+    campanaId: 1,
+    cafeteriaId: 2,
+    usuarioId: 9,
+    version: 'v1.0',
+  });
+
+  assert.equal(segunda.confirmada_por_dueno, true);
+  assert.equal(segunda.fecha_confirmacion, fechaPrimera);
+});
+
+test('campanasService: error en Supabase no aparece como éxito ni modifica confirmación', async () => {
+  const filas = [{
+    id: 1,
+    cafeteria_id: 2,
+    estado: 'pendiente_aceptacion',
+    version_condiciones: 'v1.0',
+    confirmada_por_dueno: false,
+    creado_en: new Date().toISOString(),
+  }];
+  const supabase = transporte(filas);
+  const usuarios = {
+    getPerfilSesion: async () => ({
+      success: true,
+      rol: 'dueño',
+      user: { cafeteria_id: 2, id: 9 },
+    }),
+  };
+  const servicio = cargar('campanasService.js', 'campanasService', {
+    supabase,
+    isSupabaseConfigured: true,
+    usuarios,
+  });
+
+  // Forzar error en el transporte
+  supabase.fallar(new Error('Fallo de conexión con la base de datos'));
+
+  await assert.rejects(
+    () => servicio.confirmarCondiciones({
+      campanaId: 1,
+      cafeteriaId: 2,
+      usuarioId: 9,
+      version: 'v1.0',
+    }),
+    /Fallo de conexión con la base de datos/
+  );
+
+  // El estado en la fila original no debe haber cambiado a confirmado
+  assert.equal(filas[0].confirmada_por_dueno, false);
+});
+
+test('campanasService: cafetería ajena o rol no dueño son rechazados', async () => {
+  const filas = [{ id: 1, cafeteria_id: 2, confirmada_por_dueno: false }];
+  const supabase = transporte(filas);
+  const usuarios = {
+    getPerfilSesion: async () => ({
+      success: true,
+      rol: 'empleado',
+      user: { cafeteria_id: 2, id: 5 },
+    }),
+  };
+  const servicio = cargar('campanasService.js', 'campanasService', {
+    supabase,
+    isSupabaseConfigured: true,
+    usuarios,
+  });
+
+  await assert.rejects(
+    () => servicio.confirmarCondiciones({
+      campanaId: 1,
+      cafeteriaId: 2,
+      usuarioId: 5,
+      version: 'v1.0',
+    }),
+    /Solo el dueño/
+  );
 });
