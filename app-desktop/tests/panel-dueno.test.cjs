@@ -2,14 +2,32 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { transformSync } = require('esbuild');
 
 // Ejecutar servicios reales con un transporte Supabase en memoria; sin Cloud.
 function cargar(archivo, nombre, dependencias) {
-  const codigo = fs.readFileSync(path.join(__dirname, '../src/services', archivo), 'utf8')
-    .replace(/^import .*;\r?\n/gm, '')
-    .replaceAll('export const ', 'const ').replaceAll('export function ', 'function ')
-    .replace(/^export default .*;\r?$/gm, '');
-  return Function(...Object.keys(dependencias), codigo + '\nreturn ' + nombre)(...Object.values(dependencias));
+  const ruta = path.join(__dirname, '../src/services', archivo);
+  const codigo = transformSync(fs.readFileSync(ruta, 'utf8'), {
+    format: 'cjs', sourcefile: ruta, target: 'node22',
+  }).code;
+  const modulo = { exports: {} };
+  const importar = specifier => {
+    // Verifica que cada import exista. Solo se sustituye el límite externo.
+    const destino = path.resolve(path.dirname(ruta), specifier);
+    assert.ok(fs.existsSync(destino) || fs.existsSync(destino + '.js'), `Import inexistente: ${specifier}`);
+    const nombres = {
+      './supabase': ['supabase', 'isSupabaseConfigured'],
+      './supabase.js': ['supabase', 'isSupabaseConfigured'],
+      './supabaseClient': ['supabase', 'isSupabaseConfigured'],
+      './usuarios.js': ['usuarios'], './backendApi': ['backendApi', 'CAFETERIA_ID'],
+      '../utils/dateUtils': ['parsearFecha', 'formatearHora', 'formatearHoraBucket'],
+    }[specifier];
+    assert.ok(nombres, `Dependencia sin definir: ${specifier}`);
+    return Object.fromEntries(nombres.map(k => [k, dependencias[k]]));
+  };
+  Function('require', 'module', 'exports', codigo)(importar, modulo, modulo.exports);
+  assert.ok(modulo.exports[nombre], `Export inexistente: ${nombre}`);
+  return modulo.exports[nombre];
 }
 
 function transporte(filas) {

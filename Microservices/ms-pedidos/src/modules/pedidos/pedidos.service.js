@@ -117,7 +117,6 @@ const CAMPOS_PEDIDO_PUBLICOS = [
   'franja_retiro',
   'nota',
   'qr_usado',
-  'tiempo_estimado_min',
   'tiempo_real_min',
   'creado_en',
   'inicio_preparacion_en',

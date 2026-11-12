@@ -1,0 +1,77 @@
+name: CD Docker
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cd-docker-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require main and an explicit registry enablement
+        env:
+          ENABLED: ${{ vars.DOCKER_PUBLISH_ENABLED }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" != 68bea2c1f0916472f2cc359f2bcd659059f53d51
+          test "$ENABLED" = true
+  mobile:
+    needs: guard
+    uses: ./.github/workflows/ci-mobile.yml
+  desktop:
+    needs: guard
+    uses: ./.github/workflows/ci-desktop.yml
+  microservices:
+    needs: guard
+    uses: ./.github/workflows/ci-microservices.yml
+  publish:
+    needs: [mobile, desktop, microservices, functional]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: dockerhub
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      - name: Build ALL images before allowing ANY push
+        run: |
+          set -euo pipefail
+          for service in ms-cafeterias ms-menus ms-pedidos; do
+            docker build --platform linux/amd64 \
+              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+              --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+              --tag "cdarwitg2024/$service:sha-$GITHUB_SHA" \
+              --file "Microservices/$service/Dockerfile" Microservices
+          done
+      - name: Authenticate to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          test -n "$DOCKERHUB_USERNAME" && test -n "$DOCKERHUB_TOKEN"
+          printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      - name: Publish and record immutable digests
+        run: |
+          set -euo pipefail
+          node -e 'require("fs").writeFileSync("release.json", JSON.stringify({sha:process.env.GITHUB_SHA,images:{}}))'
+          for service in ms-cafeterias ms-menus ms-pedidos; do
+            image="cdarwitg2024/$service:sha-$GITHUB_SHA"
+            docker push "$image"
+            digest=$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')
+            SERVICE="$service" DIGEST="$digest" node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync("release.json"));r.images[process.env.SERVICE]=process.env.DIGEST;fs.writeFileSync("release.json",JSON.stringify(r,null,2))'
+          done
+          cat release.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ github.sha }}
+          path: release.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Remove registry session
+        if: always()
+        run: docker logout
+  functional:
+    needs: guard
+    uses: ./.github/workflows/ci-functional.yml

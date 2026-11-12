@@ -1,0 +1,125 @@
+name: CD Kubernetes
+on:
+  workflow_dispatch:
+    inputs:
+      docker_run_id:
+        description: Successful CD Docker run ID for the current main commit
+        required: true
+        type: string
+      authorization:
+        description: Type AUTORIZO_REEMPLAZAR_VERSION_CONGELADA to authorize this rollout
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: kubernetes-student-cdarwitg
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require explicit enablement and authorization
+        env:
+          ENABLED: ${{ vars.K8S_DEPLOY_ENABLED }}
+          AUTHORIZATION: ${{ inputs.authorization }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" != 68bea2c1f0916472f2cc359f2bcd659059f53d51
+          test "$ENABLED" = true
+          test "$AUTHORIZATION" = AUTORIZO_REEMPLAZAR_VERSION_CONGELADA
+      - name: Verify the publication run and exact commit
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea9 # v7
+        env:
+          DOCKER_RUN_ID: ${{ inputs.docker_run_id }}
+        with:
+          script: |
+            const id = process.env.DOCKER_RUN_ID;
+            if (!/^[1-9][0-9]*$/.test(id)) throw new Error('Invalid run ID');
+            const {data: run} = await github.rest.actions.getWorkflowRun({
+              ...context.repo, run_id: Number(id)
+            });
+            if (run.path !== '.github/workflows/cd-docker.yml' ||
+                run.event !== 'workflow_dispatch' || run.head_branch !== 'main' ||
+                run.head_sha !== context.sha || run.status !== 'completed' ||
+                run.conclusion !== 'success') {
+              throw new Error('Requires successful CD Docker for this exact main commit');
+            }
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: kubernetes-uct
+    env:
+      NAMESPACE: student-cdarwitg
+    steps:
+      - name: Set temporary credential path
+        run: echo "KUBECONFIG=$RUNNER_TEMP/coffeefast-kubeconfig" >> "$GITHUB_ENV"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-${{ github.sha }}
+          path: release
+          run-id: ${{ inputs.docker_run_id }}
+          github-token: ${{ github.token }}
+      - name: Validate release manifest before accessing the cluster
+        run: node .github/scripts/validate-release.cjs release/release.json
+      - name: Install a cluster-compatible kubectl with checksum validation
+        env:
+          KUBECTL_VERSION: ${{ vars.KUBECTL_VERSION }}
+        run: |
+          set -euo pipefail
+          [[ "$KUBECTL_VERSION" =~ ^v1\.[0-9]+\.[0-9]+$ ]]
+          cd "$RUNNER_TEMP"
+          curl --fail --silent --show-error --location --output kubectl "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl"
+          curl --fail --silent --show-error --location --output kubectl.sha256 "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl.sha256"
+          echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+          chmod +x kubectl
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Configure cluster access
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$KUBE_CONFIG_B64"
+          umask 077
+          printf '%s' "$KUBE_CONFIG_B64" | base64 --decode > "$KUBECONFIG"
+      - name: Preflight and record previous images
+        run: |
+          set -euo pipefail
+          for service in ms-cafeterias ms-menus ms-pedidos; do
+            kubectl -n "$NAMESPACE" get deployment "$service" -o "jsonpath={.spec.template.spec.containers[?(@.name=='$service')].image}" > "$RUNNER_TEMP/$service.previous"
+            test -s "$RUNNER_TEMP/$service.previous"
+            image=$(node -p "require('./release/release.json').images['$service']")
+            kubectl -n "$NAMESPACE" set image "deployment/$service" "$service=$image" --dry-run=server -o name
+            printf '%s previous: %s\n' "$service" "$(cat "$RUNNER_TEMP/$service.previous")" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Update images and await rollouts
+        run: |
+          set -euo pipefail
+          for service in ms-cafeterias ms-menus ms-pedidos; do
+            image=$(node -p "require('./release/release.json').images['$service']")
+            kubectl -n "$NAMESPACE" set image "deployment/$service" "$service=$image"
+          done
+          for service in ms-cafeterias ms-menus ms-pedidos; do
+            kubectl -n "$NAMESPACE" rollout status "deployment/$service" --timeout=180s
+            image=$(node -p "require('./release/release.json').images['$service']")
+            actual=$(kubectl -n "$NAMESPACE" get deployment "$service" -o "jsonpath={.spec.template.spec.containers[?(@.name=='$service')].image}")
+            test "$actual" = "$image"
+            printf '%s commit=%s image=%s\n' "$service" "$GITHUB_SHA" "$actual" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Deployment and pod diagnostics
+        if: always()
+        run: |
+          if test -s "$KUBECONFIG" && command -v kubectl >/dev/null; then
+            kubectl -n "$NAMESPACE" get deployments ms-cafeterias ms-menus ms-pedidos -o wide
+            kubectl -n "$NAMESPACE" get pods -l 'app in (ms-cafeterias,ms-menus,ms-pedidos)' -o wide
+            kubectl -n "$NAMESPACE" get events --field-selector type=Warning --sort-by=.lastTimestamp
+          fi
+      - name: Remove cluster credentials
+        if: always()
+        run: rm -f "$KUBECONFIG"

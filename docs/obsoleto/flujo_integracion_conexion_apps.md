@@ -161,7 +161,7 @@ stateDiagram-v2
    - **Efecto**: Se registra `inicio_preparacion_en = NOW()`. En la App Móvil el indicador cambia a naranja con mensaje de preparación en curso.
 3. **`listo`**:
    - **Disparador**: El personal finaliza el armado y pulsa "Listo para Retiro" en el KDS.
-   - **Efecto**: La App Móvil emite notificación (Push / Realtime) con fondo azul/verde: *"Tu pedido está en el mostrador. Presenta este código QR"*.
+   - **Efecto**: La App Móvil actualiza el estado a `listo` en el detalle del pedido.
 4. **`entregado`**:
    - **Disparador**: El escáner del KDS lee el QR en el teléfono del alumno y valida el `qr_token` vía NestJS.
    - **Efecto**: Se registra `completado_en = NOW()`, se calcula `tiempo_real_min = (completado_en - inicio_preparacion_en)`. La comanda desaparece del tablero activo del KDS y pasa al historial de ventas.
@@ -231,9 +231,7 @@ stateDiagram-v2
 
 ### ⚠️ E. Suspensión de la App Móvil en Segundo Plano (*Doze Mode*)
 - **Riesgo**: El cocinero cambia el pedido a `listo`, pero el alumno tiene el teléfono en el bolsillo con la pantalla apagada. El sistema operativo congela los WebSockets de React Native y el alumno nunca se entera de que su pedido está listo.
-- **Mitigación**:
-  - No depender exclusivamente de WebSockets para notificaciones críticas.
-  - Implementar un disparador (Database Webhook o evento en NestJS) que, al transicionar a `listo`, envíe una **Notificación Push nativa (Firebase Cloud Messaging / APNs)** al token del dispositivo del estudiante.
+- **Mitigación**: Volver a consultar los pedidos al regresar al primer plano.
 
 ---
 

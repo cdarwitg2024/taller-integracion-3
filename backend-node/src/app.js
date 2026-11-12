@@ -6,13 +6,11 @@ const path = require('path');
 
 // Rutas legacy aún conservadas. El catálogo y el pago Wallet actuales viven
 // en Microservices/ y Supabase; no montar aquí implementaciones duplicadas.
-const tiemposRoutes = require('./modules/tiempos/tiemposRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 // ✅ Importar rutas QR y Pedidos
 const qrRoutes = require('./modules/qr/routes/qrRoutes');
 const pedidosRoutes = require('./modules/pedidos/pedidos.routes');
 const authRoutes = require('./modules/auth/auth.routes');
-const notificacionesRoutes = require('./modules/notificaciones/notificaciones.routes');
 
 const app = express();
 
@@ -27,11 +25,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Rutas
-app.use('/api/tiempos', tiemposRoutes);
 app.use('/api/qr', qrRoutes);
 app.use('/api/pedidos', pedidosRoutes);
 app.use('/auth', authRoutes);
-app.use('/api/notificaciones', notificacionesRoutes);
 app.use('/health', healthRoutes);
 
 // Ruta raíz
@@ -43,8 +39,6 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       auth: '/auth',
-      notificaciones: '/api/notificaciones',
-      tiempos: '/api/tiempos',
       qr: '/api/qr',
       pedidos: '/api/pedidos',
       inventario: '(microservicio independiente: inventario-service)'
