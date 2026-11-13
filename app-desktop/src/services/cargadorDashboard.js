@@ -1,5 +1,22 @@
 import { pedidosService as pedidosServiceOriginal } from './pedidosService';
 
+export function normalizarCafeteriaId(id) {
+  return id === null || id === undefined ? null : String(id).trim() || null;
+}
+
+export function crearEstadoInicialDashboard(cafeteriaId = null) {
+  return {
+    cafeteriaId,
+    stats: null,
+    pedidos: [],
+    salesData: [],
+    topProducts: [],
+    loading: true,
+    dbError: null,
+    ultimaActualizacionExitosa: null,
+  };
+}
+
 /**
  * Controlador de ciclo de vida y carga para el Dashboard del dueño (S3-T2).
  * Responsabilidades:
@@ -17,15 +34,7 @@ export function crearCargadorDashboard({
   let activo = true;
   let cafeteriaActual = null;
 
-  let estado = {
-    stats: null,
-    pedidos: [],
-    salesData: [],
-    topProducts: [],
-    loading: true,
-    dbError: null,
-    ultimaActualizacionExitosa: null,
-  };
+  let estado = crearEstadoInicialDashboard();
 
   const notificar = () => {
     if (activo && onEstadoCambiado) {
@@ -67,9 +76,9 @@ export function crearCargadorDashboard({
       estado.topProducts = [];
     } finally {
       if (activo && currentRequestId === requestId) {
-        if (showLoading) {
-          estado.loading = false;
-        }
+        // La carga vigente cierra también un indicador abierto por una
+        // solicitud anterior, aunque este refresco haya sido silencioso.
+        estado.loading = false;
         notificar();
       }
     }
@@ -82,26 +91,14 @@ export function crearCargadorDashboard({
 
     cambiarCafeteria(nuevaCafeteriaId) {
       activo = true;
-      cafeteriaActual = nuevaCafeteriaId;
+      cafeteriaActual = normalizarCafeteriaId(nuevaCafeteriaId);
       requestId++;
       const currentRequestId = requestId;
 
       // Criterio S3-T2: No mostrar indicadores del contexto anterior
-      estado = {
-        stats: null,
-        pedidos: [],
-        salesData: [],
-        topProducts: [],
-        loading: Boolean(nuevaCafeteriaId !== null && nuevaCafeteriaId !== undefined && nuevaCafeteriaId !== ''),
-        dbError: null,
-        ultimaActualizacionExitosa: null,
-      };
+      estado = crearEstadoInicialDashboard(cafeteriaActual);
 
-      if (
-        nuevaCafeteriaId === null ||
-        nuevaCafeteriaId === undefined ||
-        nuevaCafeteriaId === ''
-      ) {
+      if (cafeteriaActual === null) {
         estado.dbError =
           'Tu usuario no tiene una cafetería autorizada asociada. No es posible calcular los indicadores.';
         estado.loading = false;

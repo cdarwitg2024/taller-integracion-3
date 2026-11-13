@@ -18,6 +18,11 @@ const cases = [
     'import { apiPatch, ApiError }', 'import { apiPatch }', 'src/screens/PedidosScreen.test.js'],
   ['desktop', 'app-desktop', 'src/services/productos.js',
     "if (stockAnterior !== undefined) query = query.eq('stock', stockAnterior);", '', 'tests/panel-dueno.test.cjs'],
+  ['desktop', 'app-desktop', 'src/services/cargadorDashboard.js',
+    '        estado.loading = false;\n        notificar();\n      }\n    }\n  };',
+    '        if (showLoading) estado.loading = false;\n        notificar();\n      }\n    }\n  };', 'tests/dashboard.test.cjs'],
+  ['desktop', 'app-desktop', 'src/pages/dueno/Dashboard.jsx',
+    'estado.cafeteriaId === normalizarCafeteriaId(cafeteriaId)', 'true', 'tests/dashboard.test.cjs'],
   ['backend', 'backend-node', 'src/modules/pedidos/pedidos.maquina-estados.js',
     "const ESTADO_INICIAL = 'Pagado';", "const ESTADO_INICIAL = 'Creado';", 'tests/maquina-estados.test.js'],
 ];

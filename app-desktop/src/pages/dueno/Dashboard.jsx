@@ -3,7 +3,11 @@ import { Box, Grid, Alert, Button, LinearProgress, Typography } from '@mui/mater
 
 import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 import pedidosService from '../../services/pedidosService';
-import { crearCargadorDashboard } from '../../services/cargadorDashboard';
+import {
+  crearCargadorDashboard,
+  crearEstadoInicialDashboard,
+  normalizarCafeteriaId,
+} from '../../services/cargadorDashboard';
 import KpiCards from '../../components/dashboard/KpiCards';
 import SalesChart from '../../components/dashboard/SalesChart';
 import OrdersDistributionChart from '../../components/dashboard/OrdersDistributionChart';
@@ -12,28 +16,11 @@ import RecentOrdersTable from '../../components/dashboard/RecentOrdersTable';
 
 function Dashboard({ currentUser }) {
   // S2-T18: el alcance de cafetería proviene del perfil del dueño.
-  const cafeteriaId =
-    currentUser?.cafeteria_id ?? currentUser?.cafeteriaId ?? null;
+  const cafeteriaId = normalizarCafeteriaId(
+    currentUser?.cafeteria_id ?? currentUser?.cafeteriaId
+  );
 
-  const [estado, setEstado] = useState({
-    stats: null,
-    pedidos: [],
-    salesData: [],
-    topProducts: [],
-    loading: true,
-    dbError: null,
-    ultimaActualizacionExitosa: null,
-  });
-
-  const {
-    stats,
-    pedidos,
-    salesData,
-    topProducts,
-    loading,
-    dbError,
-    ultimaActualizacionExitosa,
-  } = estado;
+  const [estado, setEstado] = useState(crearEstadoInicialDashboard);
 
   const cargadorRef = useRef(null);
   if (!cargadorRef.current) {
@@ -88,6 +75,31 @@ function Dashboard({ currentUser }) {
   }, [cafeteriaId]);
 
   return (
+    <VistaDashboard
+      cafeteriaId={cafeteriaId}
+      estado={estado}
+      onReintentar={() => cargadorRef.current?.refrescar(true)}
+    />
+  );
+}
+
+export function VistaDashboard({ cafeteriaId, estado, onReintentar }) {
+  // El render ocurre antes de que useEffect limpie la cafetería anterior.
+  // Ocultar todo su estado desde el primer render del nuevo contexto.
+  const estadoVisible = estado.cafeteriaId === normalizarCafeteriaId(cafeteriaId)
+    ? estado
+    : crearEstadoInicialDashboard(normalizarCafeteriaId(cafeteriaId));
+  const {
+    stats,
+    pedidos,
+    salesData,
+    topProducts,
+    loading,
+    dbError,
+    ultimaActualizacionExitosa,
+  } = estadoVisible;
+
+  return (
     <Box sx={{ width: '100%', maxWidth: '100%', pb: 4, boxSizing: 'border-box' }}>
       {/* Estado de Carga */}
       {loading && (
@@ -112,7 +124,7 @@ function Dashboard({ currentUser }) {
             <Button
               color="inherit"
               size="small"
-              onClick={() => cargadorRef.current?.refrescar(true)}
+              onClick={onReintentar}
             >
               Reintentar
             </Button>

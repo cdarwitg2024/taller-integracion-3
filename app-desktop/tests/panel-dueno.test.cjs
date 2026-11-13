@@ -172,7 +172,7 @@ test('Dashboard: cambio de cafetería y desmontaje invalidan cargas pendientes y
   // 1. Inicia carga para Cafetería 1
   const promesaA = cargador.cambiarCafeteria(1);
   assert.equal(llamadas.length, 1);
-  assert.equal(llamadas[0], 1);
+  assert.equal(llamadas[0], '1');
 
   // Verificación: al cambiar a Cafetería 1, loading es true y los indicadores parten limpios
   const estadoInicialA = cargador.obtenerEstado();
@@ -183,7 +183,7 @@ test('Dashboard: cambio de cafetería y desmontaje invalidan cargas pendientes y
   // 2. Antes de que resuelva Cafetería 1, el usuario cambia a Cafetería 2
   const promesaB = cargador.cambiarCafeteria(2);
   assert.equal(llamadas.length, 2);
-  assert.equal(llamadas[1], 2);
+  assert.equal(llamadas[1], '2');
 
   // Criterio: "no muestra indicadores del contexto anterior"
   // El cambio de cafetería debe limpiar de inmediato los indicadores anteriores
