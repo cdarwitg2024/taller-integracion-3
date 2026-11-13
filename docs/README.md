@@ -93,6 +93,10 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 
 - [Revisión de pruebas para CI/CD](calidad/validacion/revision-pruebas.md)
 
+## Afiliados
+
+- [C01 · Reglas del piloto de afiliados](reglas-piloto-afiliados.md)
+
 ## Base de datos
 
 - [D.2.1 — Cancelación de pedido con reembolso a Wallet (traspaso a Base de Datos)](base-datos/D2.1_cancelacion_reembolso.md)
