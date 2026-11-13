@@ -96,6 +96,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 ## Afiliados
 
 - [C01 · Reglas del piloto de afiliados](reglas-piloto-afiliados.md)
+- [C02 · Contratos de integración de afiliados](contratos-integracion-afiliados.md)
 
 ## Base de datos
 
