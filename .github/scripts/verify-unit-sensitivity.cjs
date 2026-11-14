@@ -22,6 +22,12 @@ const cases = [
     'campana.version_confirmada?.trim() === campana.version_condiciones.trim()', 'true', 'tests/campanas.test.cjs'],
   ['desktop', 'app-desktop', 'src/pages/dueno/CondicionesCampana.jsx',
     'consentimiento === clave', 'true', 'tests/campanas.test.cjs'],
+
+  ['desktop', 'app-desktop', 'src/services/cargadorDashboard.js',
+    '        estado.loading = false;\n        notificar();\n      }\n    }\n  };',
+    '        if (showLoading) estado.loading = false;\n        notificar();\n      }\n    }\n  };', 'tests/dashboard.test.cjs'],
+  ['desktop', 'app-desktop', 'src/pages/dueno/Dashboard.jsx',
+    'estado.cafeteriaId === normalizarCafeteriaId(cafeteriaId)', 'true', 'tests/dashboard.test.cjs'],
   ['backend', 'backend-node', 'src/modules/pedidos/pedidos.maquina-estados.js',
     "const ESTADO_INICIAL = 'Pagado';", "const ESTADO_INICIAL = 'Creado';", 'tests/maquina-estados.test.js'],
 ];

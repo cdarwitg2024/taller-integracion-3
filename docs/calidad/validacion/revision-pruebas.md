@@ -2,6 +2,10 @@
 
 ## S3-T4: condiciones y aceptación de campañas
 
+Integración del 14 de noviembre de 2026 con el develop que contiene S3-T2:
+35 pruebas de escritorio y cinco regresiones deliberadas detectadas, conservando
+ambas tareas. Compilación aprobada; conflictos de pruebas y documentación resueltos.
+
 Validación local del 13 de noviembre de 2026 con Node 22.16.0:
 
 - Escritorio: 21 pruebas aprobadas, incluidas 8 nuevas de componentes montados y servicio.
@@ -11,7 +15,7 @@ Validación local del 13 de noviembre de 2026 con Node 22.16.0:
 - Compilación Vite aprobada; permanece la advertencia de tamaño del paquete. `git diff --check` aprobado.
 
 La migración y sus pruebas SQL pertenecen exclusivamente a `Diego24Vas/db_CoffeeFaster`, rama
-`S3-T4-Diego_Vasquez-Asegurar_aceptacion_campanas`. Allí, la migración `0019` retira la firma
+`develop`, commit `56508f9`. Allí, la migración `0019` retira la firma
 antigua de confirmación y añade `obtener_campana_vigente`. Debe aplicarse coordinadamente
 con esta versión de la aplicación; no se aplicó a Cloud. Las condiciones ya aceptadas
 son inmutables: para otras condiciones se crea otra campaña, conservando la evidencia anterior.
@@ -20,6 +24,23 @@ Las pruebas React utilizan el ciclo de vida real con `react-test-renderer` y sus
 MUI y las conexiones externas. No equivalen a una prueba manual en Electron ni a una
 validación de Supabase Auth. Las pruebas de PostgreSQL, sus comandos y límites se
 documentan en `tests/README.md` del repositorio de base de datos.
+
+## Validación S3-T2: concurrencia y cambio de cafetería del Dashboard
+
+13 de noviembre de 2026, ejecución local con Node.js 22.16.0 en la rama
+`S3-T2-Diego_Vasquez-Descartar_respuestas_antiguas_del_Dashboard`.
+
+- `npm test --prefix app-desktop`: 21 pruebas aprobadas (8 existentes y 13 regresiones nuevas).
+- Las regresiones comprueban carga inicial solapada con refresco silencioso, éxito y error, respuestas antiguas antes/después, reintento, cálculos pendientes, desmontaje y reactivación.
+- El estado incluye la cafetería a la que pertenece. El render descarta su contenido si no corresponde a la cafetería seleccionada, antes de la limpieza de `useEffect`.
+- Dos casos integran el cargador con el render real de `VistaDashboard` mediante ReactDOMServer: primero cargan y muestran datos de A, luego renderizan B o un usuario sin cafetería conservando todavía el estado de A. Verifican que no se muestren indicadores, pedidos, errores ni la última actualización de A.
+- `node .github/scripts/verify-unit-sensitivity.cjs desktop`: tres defectos detectados mediante aserciones, introducidos solo en copias temporales: pérdida de protección de stock concurrente, cierre de carga condicionado a `showLoading` y eliminación de la comprobación de cafetería en el render.
+- `npm run build --prefix app-desktop`: compilación aprobada. Vite advierte de un paquete mayor de 500 kB; no impide compilar.
+- `git diff --check`: aprobado.
+
+Estas pruebas sustituyen las conexiones externas y los componentes visuales hijos.
+No verifican un navegador montado, Electron, Supabase Auth/RLS ni la recepción real
+de eventos Realtime. La validación no modifica datos remotos ni acredita un despliegue.
 
 ## Resultado local
 
@@ -67,7 +88,7 @@ La integración Telegram ejecuta el repositorio real contra PostgreSQL, crea un 
 
 La integración de catálogo comprueba listas, ordenamiento, filtros, registros inactivos/eliminados, precios autoritativos, actualizaciones SQL visibles desde HTTP y rechazo 503 tras revocar permisos reales. Crea y elimina su propia red y contenedores; no usa respuestas prefabricadas ni modifica el entorno activo del usuario. El JWT se firma para el PostgREST aislado: no sustituye una prueba de Supabase Auth.
 
-Todavía no existe una prueba end-to-end que recorra móvil/escritorio, gateway, microservicios y Supabase Auth/RLS real. Los 7 tests de escritorio usan un transporte en memoria y no validan la interfaz Electron. La entrega de mensajes por Telegram queda fuera de estas pruebas. Para cerrar esas brechas hace falta un entorno Supabase local reproducible con esquema, políticas y usuarios de prueba versionados.
+Todavía no existe una prueba end-to-end que recorra móvil/escritorio, gateway, microservicios y Supabase Auth/RLS real. Las pruebas de servicios de escritorio usan un transporte en memoria; las regresiones S3-T2 añaden render con ReactDOMServer, pero no validan la interfaz Electron. La entrega de mensajes por Telegram queda fuera de estas pruebas. Para cerrar esas brechas hace falta un entorno Supabase local reproducible con esquema, políticas y usuarios de prueba versionados.
 
 ## Ejecución
 
