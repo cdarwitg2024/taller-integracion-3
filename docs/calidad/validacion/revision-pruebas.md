@@ -1,5 +1,30 @@
 # Revisión de pruebas para CI/CD
 
+## S3-T4: condiciones y aceptación de campañas
+
+Integración del 14 de noviembre de 2026 con el develop que contiene S3-T2:
+35 pruebas de escritorio y cinco regresiones deliberadas detectadas, conservando
+ambas tareas. Compilación aprobada; conflictos de pruebas y documentación resueltos.
+
+Validación local del 13 de noviembre de 2026 con Node 22.16.0:
+
+- Escritorio: 21 pruebas aprobadas, incluidas 8 nuevas de componentes montados y servicio.
+- Se comprueban doble clic, consentimiento por versión, cambios de cafetería, respuestas tardías incluso en el mismo lote, reintento, actualización del badge y errores de consulta visibles.
+- El servicio rechaza perfiles inválidos y respuestas que no confirman la campaña, cafetería y versión solicitadas. No envía el ID del firmante.
+- La sensibilidad detecta tres regresiones en copias temporales: stock concurrente, versión aceptada y omisión del consentimiento.
+- Compilación Vite aprobada; permanece la advertencia de tamaño del paquete. `git diff --check` aprobado.
+
+La migración y sus pruebas SQL pertenecen exclusivamente a `Diego24Vas/db_CoffeeFaster`, rama
+`develop`, commit `56508f9`. Allí, la migración `0019` retira la firma
+antigua de confirmación y añade `obtener_campana_vigente`. Debe aplicarse coordinadamente
+con esta versión de la aplicación; no se aplicó a Cloud. Las condiciones ya aceptadas
+son inmutables: para otras condiciones se crea otra campaña, conservando la evidencia anterior.
+
+Las pruebas React utilizan el ciclo de vida real con `react-test-renderer` y sustituyen
+MUI y las conexiones externas. No equivalen a una prueba manual en Electron ni a una
+validación de Supabase Auth. Las pruebas de PostgreSQL, sus comandos y límites se
+documentan en `tests/README.md` del repositorio de base de datos.
+
 ## Validación S3-T2: concurrencia y cambio de cafetería del Dashboard
 
 13 de noviembre de 2026, ejecución local con Node.js 22.16.0 en la rama

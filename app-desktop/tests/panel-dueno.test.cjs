@@ -12,6 +12,9 @@ function cargar(archivo, nombre, dependencias) {
   }).code;
   const modulo = { exports: {} };
   const importar = specifier => {
+    if (specifier === '../utils/condicionesCampana') {
+      return { campanaAceptada: cargar('../utils/condicionesCampana.js', 'campanaAceptada', {}) };
+    }
     // Verifica que cada import exista. Solo se sustituye el límite externo.
     const destino = path.resolve(path.dirname(ruta), specifier);
     assert.ok(fs.existsSync(destino) || fs.existsSync(destino + '.js'), `Import inexistente: ${specifier}`);
@@ -19,6 +22,7 @@ function cargar(archivo, nombre, dependencias) {
       './supabase': ['supabase', 'isSupabaseConfigured'],
       './supabase.js': ['supabase', 'isSupabaseConfigured'],
       './supabaseClient': ['supabase', 'isSupabaseConfigured'],
+      './usuarios': ['usuarios'],
       './usuarios.js': ['usuarios'], './backendApi': ['backendApi', 'CAFETERIA_ID'],
       '../utils/dateUtils': ['parsearFecha', 'formatearHora', 'formatearHoraBucket'],
       './pedidosService': ['pedidosService'],
@@ -35,19 +39,59 @@ function transporte(filas) {
   let fallo = null;
   return {
     fallar(error) { fallo = error; },
+    rpc(nombre, params) {
+      if (nombre === 'obtener_campana_vigente') return {
+        maybeSingle: async () => ({
+          data: filas.find(f => f.cafeteria_id === params.p_cafeteria_id &&
+            ['activa', 'pendiente_aceptacion'].includes(f.estado) && new Date(f.vigencia_hasta) > new Date()) || null,
+          error: fallo,
+        }),
+      };
+      if (fallo) return Promise.resolve({ data: null, error: fallo });
+      if (nombre === 'confirmar_condiciones_campana') {
+        const campana = filas.find(f => f.id === params.p_campana_id && f.cafeteria_id === params.p_cafeteria_id);
+        if (!campana) {
+          return Promise.resolve({ data: null, error: { message: 'Campaña no encontrada o no pertenece a la cafetería autorizada' } });
+        }
+        if (String(params.p_version || '').trim() !== String(campana.version_condiciones || '').trim()) {
+          return Promise.resolve({ data: null, error: { message: 'La versión indicada no coincide con la versión vigente de la campaña' } });
+        }
+        if (!campana.confirmada_por_dueno) {
+          campana.confirmada_por_dueno = true;
+          campana.fecha_confirmacion = new Date().toISOString();
+          campana.usuario_confirma_id = 9; // Identidad del JWT del transporte, no del cliente.
+          campana.version_confirmada = params.p_version;
+          campana.estado = 'activa';
+        }
+        return Promise.resolve({ data: { ...campana }, error: null });
+      }
+      return Promise.resolve({ data: null, error: { code: 'PGRST202' } });
+    },
     from() {
       const filtros = [];
+      const ordenamientos = [];
       let cambios;
       let unica = false;
       const q = {
         update(v) { cambios = v; return q; },
-        eq(k, v) { filtros.push([k, v]); return q; },
+        eq(k, v) { filtros.push(f => String(f[k]) === String(v)); return q; },
+        in(k, list) { filtros.push(f => list.map(String).includes(String(f[k]))); return q; },
+        gte(k, v) { filtros.push(f => !f[k] || new Date(f[k]).getTime() >= new Date(v).getTime()); return q; },
         select() { return q; },
+        order(k, opts = {}) { ordenamientos.push({ k, asc: opts.ascending !== false }); return q; },
+        limit() { return q; },
         single() { unica = true; return q; },
         maybeSingle() { unica = true; return q; },
         then(resolve) {
           if (fallo) return Promise.resolve({ data: null, error: fallo }).then(resolve);
-          const seleccion = filas.filter(f => filtros.every(([k,v]) => String(f[k]) === String(v)));
+          let seleccion = filas.filter(f => filtros.every(fn => fn(f)));
+          for (const ord of ordenamientos) {
+            seleccion.sort((a, b) => {
+              if (a[ord.k] === b[ord.k]) return 0;
+              if (ord.asc) return a[ord.k] > b[ord.k] ? 1 : -1;
+              return a[ord.k] < b[ord.k] ? 1 : -1;
+            });
+          }
           seleccion.forEach(f => Object.assign(f, cambios));
           return Promise.resolve({ data: unica ? seleccion[0] ?? null : seleccion,
             error: unica && !seleccion.length && cambios?.stock !== undefined ? { code: 'PGRST116' } : null }).then(resolve);
@@ -136,6 +180,249 @@ test('Dashboard incluye históricos en indicadores; solo ventas por hora filtra 
   assert.equal((await servicio.getTopProductos(filas))[0].cantidad, 5);
   assert.equal((await servicio.getVentasPorHora(filas)).reduce((s,h) => s+h.ventas, 0), 300);
   assert.equal((await servicio.getEstadisticas([])).totalVentas, 0);
+});
+
+test('campanasService: carga de versión, tasas y vigencia filtrando expiradas', async () => {
+  const hoy = new Date().toISOString();
+  const fin = new Date(Date.now() + 86400000 * 30).toISOString();
+  const expirada = new Date(Date.now() - 86400000).toISOString();
+  const filas = [
+    {
+      id: 99,
+      cafeteria_id: 2,
+      nombre: 'Campaña Expirada',
+      tipo: 'carrito_completo',
+      estado: 'finalizada',
+      version_condiciones: 'v0.9',
+      tasa_descuento: 10,
+      tasa_comision: 3,
+      vigencia_desde: new Date(Date.now() - 86400000 * 10).toISOString(),
+      vigencia_hasta: expirada,
+      confirmada_por_dueno: true,
+      creado_en: hoy,
+    },
+    {
+      id: 1,
+      cafeteria_id: 2,
+      nombre: 'Campaña Carrito Completo 2026',
+      tipo: 'carrito_completo',
+      estado: 'pendiente_aceptacion',
+      version_condiciones: 'v1.0',
+      tasa_descuento: 15,
+      tasa_comision: 5,
+      vigencia_desde: hoy,
+      vigencia_hasta: fin,
+      confirmada_por_dueno: false,
+      creado_en: hoy,
+    },
+  ];
+  const supabase = transporte(filas);
+  const usuarios = {
+    getPerfilSesion: async () => ({
+      success: true,
+      rol: 'dueño',
+      user: { cafeteria_id: 2, id: 9 },
+    }),
+  };
+  const servicio = cargar('campanasService.js', 'campanasService', {
+    supabase,
+    isSupabaseConfigured: true,
+    usuarios,
+  });
+
+  const campana = await servicio.obtenerCampanaVigente(2);
+  assert.ok(campana);
+  assert.equal(campana.id, 1);
+  assert.equal(campana.version_condiciones, 'v1.0');
+  assert.equal(campana.tasa_descuento, 15);
+  assert.equal(campana.tasa_comision, 5);
+  assert.equal(campana.vigencia_desde, hoy);
+  assert.equal(campana.confirmada_por_dueno, false);
+});
+
+test('campanasService: dueño confirma condiciones y persiste estado activo', async () => {
+  const filas = [{
+    id: 1,
+    cafeteria_id: 2,
+    estado: 'pendiente_aceptacion',
+    version_condiciones: 'v1.0',
+    confirmada_por_dueno: false,
+    creado_en: new Date().toISOString(),
+  }];
+  const supabase = transporte(filas);
+  const usuarios = {
+    getPerfilSesion: async () => ({
+      success: true,
+      rol: 'dueño',
+      user: { cafeteria_id: 2, id: 9 },
+    }),
+  };
+  const servicio = cargar('campanasService.js', 'campanasService', {
+    supabase,
+    isSupabaseConfigured: true,
+    usuarios,
+  });
+
+  const res = await servicio.confirmarCondiciones({
+    campanaId: 1,
+    cafeteriaId: 2,
+    usuarioId: 9,
+    version: 'v1.0',
+  });
+
+  assert.equal(res.confirmada_por_dueno, true);
+  assert.equal(res.version_confirmada, 'v1.0');
+  assert.equal(res.usuario_confirma_id, 9);
+  assert.equal(res.estado, 'activa');
+  assert.ok(res.fecha_confirmacion);
+  assert.equal(filas[0].confirmada_por_dueno, true);
+});
+
+test('campanasService: llamadas concurrentes e idempotencia no duplican aceptación', async () => {
+  const filas = [{
+    id: 1,
+    cafeteria_id: 2,
+    estado: 'pendiente_aceptacion',
+    version_condiciones: 'v1.0',
+    confirmada_por_dueno: false,
+    creado_en: new Date().toISOString(),
+  }];
+  const supabase = transporte(filas);
+  const usuarios = {
+    getPerfilSesion: async () => ({
+      success: true,
+      rol: 'dueño',
+      user: { cafeteria_id: 2, id: 9 },
+    }),
+  };
+  const servicio = cargar('campanasService.js', 'campanasService', {
+    supabase,
+    isSupabaseConfigured: true,
+    usuarios,
+  });
+
+  // Ejecución concurrente simultánea (simula doble clic o dos sesiones)
+  const [primera, segunda] = await Promise.all([
+    servicio.confirmarCondiciones({
+      campanaId: 1,
+      cafeteriaId: 2,
+      usuarioId: 9,
+      version: 'v1.0',
+    }),
+    servicio.confirmarCondiciones({
+      campanaId: 1,
+      cafeteriaId: 2,
+      usuarioId: 9,
+      version: 'v1.0',
+    }),
+  ]);
+
+  assert.equal(primera.confirmada_por_dueno, true);
+  assert.equal(segunda.confirmada_por_dueno, true);
+  assert.equal(segunda.fecha_confirmacion, primera.fecha_confirmacion);
+  assert.equal(filas[0].confirmada_por_dueno, true);
+});
+
+test('campanasService: rechazo ante versión discordante con la vigente', async () => {
+  const filas = [{
+    id: 1,
+    cafeteria_id: 2,
+    estado: 'pendiente_aceptacion',
+    version_condiciones: 'v1.0',
+    confirmada_por_dueno: false,
+    creado_en: new Date().toISOString(),
+  }];
+  const supabase = transporte(filas);
+  const usuarios = {
+    getPerfilSesion: async () => ({
+      success: true,
+      rol: 'dueño',
+      user: { cafeteria_id: 2, id: 9 },
+    }),
+  };
+  const servicio = cargar('campanasService.js', 'campanasService', {
+    supabase,
+    isSupabaseConfigured: true,
+    usuarios,
+  });
+
+  await assert.rejects(
+    () => servicio.confirmarCondiciones({
+      campanaId: 1,
+      cafeteriaId: 2,
+      usuarioId: 9,
+      version: 'v2.0',
+    }),
+    /versión/i
+  );
+  assert.equal(filas[0].confirmada_por_dueno, false);
+});
+
+test('campanasService: error en Supabase no aparece como éxito ni modifica confirmación', async () => {
+  const filas = [{
+    id: 1,
+    cafeteria_id: 2,
+    estado: 'pendiente_aceptacion',
+    version_condiciones: 'v1.0',
+    confirmada_por_dueno: false,
+    creado_en: new Date().toISOString(),
+  }];
+  const supabase = transporte(filas);
+  const usuarios = {
+    getPerfilSesion: async () => ({
+      success: true,
+      rol: 'dueño',
+      user: { cafeteria_id: 2, id: 9 },
+    }),
+  };
+  const servicio = cargar('campanasService.js', 'campanasService', {
+    supabase,
+    isSupabaseConfigured: true,
+    usuarios,
+  });
+
+  // Forzar error en el transporte
+  supabase.fallar(new Error('Fallo de conexión con la base de datos'));
+
+  await assert.rejects(
+    () => servicio.confirmarCondiciones({
+      campanaId: 1,
+      cafeteriaId: 2,
+      usuarioId: 9,
+      version: 'v1.0',
+    }),
+    /Fallo de conexión con la base de datos/
+  );
+
+  // El estado en la fila original no debe haber cambiado a confirmado
+  assert.equal(filas[0].confirmada_por_dueno, false);
+});
+
+test('campanasService: cafetería ajena o rol no dueño son rechazados', async () => {
+  const filas = [{ id: 1, cafeteria_id: 2, confirmada_por_dueno: false }];
+  const supabase = transporte(filas);
+  const usuarios = {
+    getPerfilSesion: async () => ({
+      success: true,
+      rol: 'empleado',
+      user: { cafeteria_id: 2, id: 5 },
+    }),
+  };
+  const servicio = cargar('campanasService.js', 'campanasService', {
+    supabase,
+    isSupabaseConfigured: true,
+    usuarios,
+  });
+
+  await assert.rejects(
+    () => servicio.confirmarCondiciones({
+      campanaId: 1,
+      cafeteriaId: 2,
+      usuarioId: 5,
+      version: 'v1.0',
+    }),
+    /Solo el dueño/
+  );
 });
 
 test('Dashboard: cambio de cafetería y desmontaje invalidan cargas pendientes y descartan respuestas invertidas (S3-T2)', async () => {
