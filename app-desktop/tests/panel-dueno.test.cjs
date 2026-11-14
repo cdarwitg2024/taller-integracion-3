@@ -12,6 +12,9 @@ function cargar(archivo, nombre, dependencias) {
   }).code;
   const modulo = { exports: {} };
   const importar = specifier => {
+    if (specifier === '../utils/condicionesCampana') {
+      return { campanaAceptada: cargar('../utils/condicionesCampana.js', 'campanaAceptada', {}) };
+    }
     // Verifica que cada import exista. Solo se sustituye el límite externo.
     const destino = path.resolve(path.dirname(ruta), specifier);
     assert.ok(fs.existsSync(destino) || fs.existsSync(destino + '.js'), `Import inexistente: ${specifier}`);
@@ -36,6 +39,13 @@ function transporte(filas) {
   return {
     fallar(error) { fallo = error; },
     rpc(nombre, params) {
+      if (nombre === 'obtener_campana_vigente') return {
+        maybeSingle: async () => ({
+          data: filas.find(f => f.cafeteria_id === params.p_cafeteria_id &&
+            ['activa', 'pendiente_aceptacion'].includes(f.estado) && new Date(f.vigencia_hasta) > new Date()) || null,
+          error: fallo,
+        }),
+      };
       if (fallo) return Promise.resolve({ data: null, error: fallo });
       if (nombre === 'confirmar_condiciones_campana') {
         const campana = filas.find(f => f.id === params.p_campana_id && f.cafeteria_id === params.p_cafeteria_id);
@@ -48,7 +58,7 @@ function transporte(filas) {
         if (!campana.confirmada_por_dueno) {
           campana.confirmada_por_dueno = true;
           campana.fecha_confirmacion = new Date().toISOString();
-          campana.usuario_confirma_id = params.p_usuario_id;
+          campana.usuario_confirma_id = 9; // Identidad del JWT del transporte, no del cliente.
           campana.version_confirmada = params.p_version;
           campana.estado = 'activa';
         }

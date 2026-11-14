@@ -27,6 +27,7 @@ import { campanasService } from '../../services/campanasService';
 import { productos as productosService } from '../../services/productos';
 import { supabase } from '../../services/supabase';
 import CondicionesCampana from './CondicionesCampana';
+import { campanaAceptada } from '../../utils/condicionesCampana';
 
 const nuevo = () => ({
   nombre: '',
@@ -61,10 +62,12 @@ const tonos = {
 };
 
 export default function Promociones({ currentUser }) {
-  const cafeteriaId = currentUser?.cafeteria_id;
+  const cafeteriaId = String(currentUser?.cafeteria_id ?? currentUser?.cafeteriaId ?? '');
 
   const [tabActiva, setTabActiva] = useState(0);
-  const [campanaPendiente, setCampanaPendiente] = useState(false);
+  const [resumenCampana, setResumenCampana] = useState(null);
+  const campanaPendiente = resumenCampana?.cafeteriaId === cafeteriaId && resumenCampana.pendiente;
+  const errorCampana = resumenCampana?.cafeteriaId === cafeteriaId && resumenCampana.error;
   const [promociones, setPromociones] = useState([]);
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -83,15 +86,30 @@ export default function Promociones({ currentUser }) {
   cafeteriaActual.current = cafeteriaId;
   const operando = useRef(false);
 
-  // Comprobar si hay campañas pendientes para mostrar alerta en la pestaña
-  useEffect(() => {
+  const solicitudCampana = useRef(0);
+  const cargarCampana = useCallback(async () => {
+    const id = ++solicitudCampana.current;
     if (!cafeteriaId) return;
-    campanasService.obtenerCampanaVigente(cafeteriaId)
-      .then((c) => {
-        setCampanaPendiente(Boolean(c && !c.confirmada_por_dueno));
-      })
-      .catch(() => {});
-  }, [cafeteriaId, tabActiva]);
+    try {
+      const campana = await campanasService.obtenerCampanaVigente(cafeteriaId);
+      if (id === solicitudCampana.current) {
+        setResumenCampana({ cafeteriaId, pendiente: Boolean(campana && !campanaAceptada(campana)), error: '' });
+      }
+    } catch (err) {
+      if (id === solicitudCampana.current) setResumenCampana({ cafeteriaId, pendiente: false, error: err.message });
+    }
+  }, [cafeteriaId]);
+
+  useEffect(() => {
+    cargarCampana();
+    const canal = cafeteriaId ? supabase.channel(`promociones-campanas-${cafeteriaId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'campanas', filter: `cafeteria_id=eq.${cafeteriaId}` }, cargarCampana)
+      .subscribe() : null;
+    return () => {
+      solicitudCampana.current++;
+      if (canal) supabase.removeChannel(canal);
+    };
+  }, [cafeteriaId, cargarCampana]);
 
   const cargar = useCallback(async (inicial = false) => {
     const id = ++solicitud.current;
@@ -204,6 +222,9 @@ export default function Promociones({ currentUser }) {
 
   return (
     <Box sx={{ pb: 4 }}>
+      {errorCampana && <Alert severity="warning" sx={{ mb: 2 }} action={<Button onClick={cargarCampana}>Reintentar</Button>}>
+        No se pudo comprobar si hay campañas pendientes: {errorCampana}
+      </Alert>}
       {/* Pestañas de Navegación dentro de Promociones */}
       <Box sx={{ borderBottom: '1px solid #E9E1D9', mb: 3 }}>
         <Tabs
@@ -590,7 +611,7 @@ export default function Promociones({ currentUser }) {
 
       {/* Pestaña 2: Condiciones de Campaña */}
       {tabActiva === 1 && (
-        <CondicionesCampana currentUser={currentUser} />
+        <CondicionesCampana currentUser={currentUser} onConfirmada={cargarCampana} />
       )}
     </Box>
   );

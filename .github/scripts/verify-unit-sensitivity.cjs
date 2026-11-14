@@ -18,6 +18,10 @@ const cases = [
     'import { apiPatch, ApiError }', 'import { apiPatch }', 'src/screens/PedidosScreen.test.js'],
   ['desktop', 'app-desktop', 'src/services/productos.js',
     "if (stockAnterior !== undefined) query = query.eq('stock', stockAnterior);", '', 'tests/panel-dueno.test.cjs'],
+  ['desktop', 'app-desktop', 'src/utils/condicionesCampana.js',
+    'campana.version_confirmada?.trim() === campana.version_condiciones.trim()', 'true', 'tests/campanas.test.cjs'],
+  ['desktop', 'app-desktop', 'src/pages/dueno/CondicionesCampana.jsx',
+    'consentimiento === clave', 'true', 'tests/campanas.test.cjs'],
   ['backend', 'backend-node', 'src/modules/pedidos/pedidos.maquina-estados.js',
     "const ESTADO_INICIAL = 'Pagado';", "const ESTADO_INICIAL = 'Creado';", 'tests/maquina-estados.test.js'],
 ];

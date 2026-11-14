@@ -1,5 +1,6 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase } from './supabase';
 import { usuarios } from './usuarios';
+import { campanaAceptada } from '../utils/condicionesCampana';
 
 async function autorizar(cafeteriaId) {
   if (cafeteriaId === null || cafeteriaId === undefined || cafeteriaId === '') {
@@ -10,20 +11,17 @@ async function autorizar(cafeteriaId) {
     throw new Error('Identificador de cafetería inválido.');
   }
 
-  // Si existe usuarios.getPerfilSesion, comprobar que sea dueño
-  if (usuarios && typeof usuarios.getPerfilSesion === 'function') {
-    const perfil = await usuarios.getPerfilSesion();
-    if (perfil && perfil.success) {
-      const rol = String(perfil.rol || '').trim().toLowerCase();
-      if (!['dueño', 'dueno'].includes(rol)) {
-        throw new Error('Solo el dueño de la cafetería puede confirmar las condiciones de campaña.');
-      }
-      const perfCafId = Number(perfil.user?.cafeteria_id ?? perfil.user?.cafeteriaId);
-      if (Number.isSafeInteger(perfCafId) && perfCafId !== idNum) {
-        throw new Error('No estás autorizado para administrar esta cafetería.');
-      }
-    }
+  const perfil = await usuarios.getPerfilSesion();
+  if (!perfil?.success || perfil.user?.activo === false) {
+    throw new Error('No se pudo validar la sesión del dueño.');
   }
+  if (!['dueño', 'dueno'].includes(String(perfil.rol || '').trim().toLowerCase())) {
+    throw new Error('Solo el dueño de la cafetería puede confirmar las condiciones de campaña.');
+  }
+  if (Number(perfil.user?.cafeteria_id ?? perfil.user?.cafeteriaId) !== idNum) {
+    throw new Error('No estás autorizado para administrar esta cafetería.');
+  }
+  return idNum;
 }
 
 function comprobarError(error) {
@@ -39,18 +37,9 @@ export const campanasService = {
    * Obtiene la campaña de carrito completo vigente para la cafetería
    */
   async obtenerCampanaVigente(cafeteriaId) {
-    await autorizar(cafeteriaId);
-
-    const ahora = new Date().toISOString();
+    const id = await autorizar(cafeteriaId);
     const { data, error } = await supabase
-      .from('campanas')
-      .select('id, cafeteria_id, nombre, descripcion, tipo, estado, version_condiciones, tasa_descuento, tasa_comision, vigencia_desde, vigencia_hasta, confirmada_por_dueno, fecha_confirmacion, usuario_confirma_id, version_confirmada, creado_en')
-      .eq('cafeteria_id', cafeteriaId)
-      .in('estado', ['pendiente_aceptacion', 'activa'])
-      .gte('vigencia_hasta', ahora)
-      .order('confirmada_por_dueno', { ascending: true })
-      .order('creado_en', { ascending: false })
-      .limit(1)
+      .rpc('obtener_campana_vigente', { p_cafeteria_id: id })
       .maybeSingle();
 
     comprobarError(error);
@@ -79,8 +68,8 @@ export const campanasService = {
    * - Idempotente: Si ya está confirmada con la misma versión, retorna sin duplicar ni generar error.
    * - Segura: La RPC valida sesión (auth.uid), rol de dueño, cafetería y correspondencia estricta de versión.
    */
-  async confirmarCondiciones({ campanaId, cafeteriaId, usuarioId, version }) {
-    await autorizar(cafeteriaId);
+  async confirmarCondiciones({ campanaId, cafeteriaId, version }) {
+    const idCafeteria = await autorizar(cafeteriaId);
 
     const idCampana = Number(campanaId);
     if (!Number.isSafeInteger(idCampana) || idCampana <= 0) {
@@ -98,15 +87,15 @@ export const campanasService = {
 
     const { data, error } = await supabase.rpc('confirmar_condiciones_campana', {
       p_campana_id: idCampana,
-      p_cafeteria_id: Number(cafeteriaId),
-      p_usuario_id: usuarioId ? Number(usuarioId) : null,
+      p_cafeteria_id: idCafeteria,
       p_version: versionTexto,
     });
 
     comprobarError(error);
 
-    if (!data) {
-      throw new Error('No se pudo confirmar la campaña en el servidor.');
+    if (!campanaAceptada(data) || Number(data.id) !== idCampana ||
+        Number(data.cafeteria_id) !== idCafeteria || data.version_confirmada.trim() !== versionTexto) {
+      throw new Error('El servidor no confirmó la campaña y versión solicitadas.');
     }
 
     return data;

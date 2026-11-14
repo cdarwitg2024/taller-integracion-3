@@ -24,6 +24,7 @@ import MonetizationOnOutlinedIcon from '@mui/icons-material/MonetizationOnOutlin
 
 import { campanasService } from '../../services/campanasService';
 import { supabase } from '../../services/supabase';
+import { campanaAceptada, claveCondiciones, formatearTasa } from '../../utils/condicionesCampana';
 
 function formatearFecha(iso) {
   if (!iso) return 'No especificada';
@@ -42,22 +43,40 @@ function formatearFecha(iso) {
   }
 }
 
-export default function CondicionesCampana({ currentUser }) {
-  const cafeteriaId = currentUser?.cafeteria_id ?? currentUser?.cafeteriaId;
-  const usuarioId = currentUser?.id ?? currentUser?.usuario_id;
+export default function CondicionesCampana({ currentUser, onConfirmada }) {
+  const cafeteriaId = String(currentUser?.cafeteria_id ?? currentUser?.cafeteriaId ?? '');
+  return <CondicionesDeCafeteria key={`${currentUser?.id}:${cafeteriaId}`} cafeteriaId={cafeteriaId} onConfirmada={onConfirmada} />;
+}
+
+function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
 
   const [campana, setCampana] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [aceptoTerminos, setAceptoTerminos] = useState(false);
+  const [consentimiento, setConsentimiento] = useState(null);
+  const clave = claveCondiciones(campana);
+  const aceptoTerminos = clave !== null && consentimiento === clave;
+  const aceptada = campanaAceptada(campana);
 
   // Protección síncrona contra doble clic
   const confirmandoRef = useRef(false);
   const solicitudIdRef = useRef(0);
+  const activoRef = useRef(false);
+  const claveRef = useRef(null);
+  const publicarCampana = useCallback(data => {
+    claveRef.current = claveCondiciones(data);
+    setCampana(data);
+  }, []);
+
+  useEffect(() => {
+    setConsentimiento(null);
+    setNotice('');
+  }, [clave]);
 
   const cargar = useCallback(async (mostrarEsqueleto = false) => {
+    if (!activoRef.current) return;
     const reqId = ++solicitudIdRef.current;
     if (mostrarEsqueleto) setLoading(true);
     setError('');
@@ -68,25 +87,25 @@ export default function CondicionesCampana({ currentUser }) {
       }
       const data = await campanasService.obtenerCampanaVigente(cafeteriaId);
       if (reqId === solicitudIdRef.current) {
-        setCampana(data);
+        publicarCampana(data);
       }
     } catch (err) {
       if (reqId === solicitudIdRef.current) {
         setError(err.message || 'Error al cargar las condiciones de campaña.');
+        publicarCampana(null);
       }
     } finally {
       if (reqId === solicitudIdRef.current) {
         setLoading(false);
       }
     }
-  }, [cafeteriaId]);
+  }, [cafeteriaId, publicarCampana]);
 
   useEffect(() => {
+    activoRef.current = true;
     cargar(true);
 
-    if (!cafeteriaId || !supabase?.channel) return undefined;
-
-    const canal = supabase
+    const canal = cafeteriaId && supabase?.channel ? supabase
       .channel(`dueno-campanas-${cafeteriaId}`)
       .on(
         'postgres_changes',
@@ -100,11 +119,12 @@ export default function CondicionesCampana({ currentUser }) {
           cargar(false);
         }
       )
-      .subscribe();
+      .subscribe() : null;
 
     return () => {
+      activoRef.current = false;
       solicitudIdRef.current++;
-      if (typeof supabase.removeChannel === 'function') {
+      if (canal && typeof supabase.removeChannel === 'function') {
         supabase.removeChannel(canal);
       }
     };
@@ -113,7 +133,9 @@ export default function CondicionesCampana({ currentUser }) {
   const handleConfirmar = async () => {
     // 1. Doble clic no duplica aceptación: bloqueo sincrónico
     if (confirmandoRef.current) return;
-    if (!campana) return;
+    if (!campana || !aceptoTerminos || aceptada) return;
+    const claveEnviada = clave;
+    const sigueVigente = () => activoRef.current && claveRef.current === claveEnviada;
 
     confirmandoRef.current = true;
     setIsSubmitting(true);
@@ -124,23 +146,20 @@ export default function CondicionesCampana({ currentUser }) {
       const res = await campanasService.confirmarCondiciones({
         campanaId: campana.id,
         cafeteriaId,
-        usuarioId,
-        version: campana.version_condiciones || '1.0',
+        version: campana.version_condiciones,
       });
-
-      // 2. Error no aparece como éxito: verificar respuesta válida
-      if (!res || !res.confirmada_por_dueno) {
-        throw new Error('La respuesta del servidor no confirmó la aceptación.');
-      }
-
-      setCampana(res);
+      if (!sigueVigente()) return;
+      solicitudIdRef.current++;
+      setLoading(false);
+      publicarCampana(res);
       setNotice('Condiciones de la campaña aceptadas exitosamente.');
+      onConfirmada?.(res);
     } catch (err) {
       // Garantizar que ante cualquier error se notifique el fallo y no el éxito
-      setError(err.message || 'Ocurrió un error al confirmar las condiciones.');
+      if (sigueVigente()) setError(err.message || 'Ocurrió un error al confirmar las condiciones.');
     } finally {
       confirmandoRef.current = false;
-      setIsSubmitting(false);
+      if (activoRef.current) setIsSubmitting(false);
     }
   };
 
@@ -242,9 +261,9 @@ export default function CondicionesCampana({ currentUser }) {
               </Box>
 
               <Chip
-                label={campana.confirmada_por_dueno ? 'Condiciones Aceptadas' : 'Pendiente de Aceptación'}
-                color={campana.confirmada_por_dueno ? 'success' : 'warning'}
-                icon={campana.confirmada_por_dueno ? <CheckCircleOutlinedIcon /> : undefined}
+                label={aceptada ? 'Condiciones Aceptadas' : 'Pendiente de Aceptación'}
+                color={aceptada ? 'success' : 'warning'}
+                icon={aceptada ? <CheckCircleOutlinedIcon /> : undefined}
                 sx={{ fontWeight: 700, px: 1 }}
               />
             </Stack>
@@ -297,7 +316,7 @@ export default function CondicionesCampana({ currentUser }) {
                   </Typography>
                 </Stack>
                 <Typography variant="h6" fontWeight={800} color="#267248">
-                  {Number(campana.tasa_descuento || 0).toFixed(1)}%
+                  {formatearTasa(campana.tasa_descuento)}%
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   Aplicable al carrito completo
@@ -321,7 +340,7 @@ export default function CondicionesCampana({ currentUser }) {
                   </Typography>
                 </Stack>
                 <Typography variant="h6" fontWeight={800} color="#A0522D">
-                  {Number(campana.tasa_comision || 0).toFixed(1)}%
+                  {formatearTasa(campana.tasa_comision)}%
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   Comisión administrativa
@@ -368,7 +387,7 @@ export default function CondicionesCampana({ currentUser }) {
               Responsabilidad y Confirmación del Dueño
             </Typography>
 
-            {campana.confirmada_por_dueno ? (
+            {aceptada ? (
               <Box
                 sx={{
                   p: 2.5,
@@ -408,7 +427,7 @@ export default function CondicionesCampana({ currentUser }) {
                   control={
                     <Checkbox
                       checked={aceptoTerminos}
-                      onChange={(e) => setAceptoTerminos(e.target.checked)}
+                      onChange={(e) => setConsentimiento(e.target.checked ? clave : null)}
                       disabled={isSubmitting}
                       color="primary"
                     />
