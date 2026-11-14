@@ -17,6 +17,7 @@ import PageHeader from './components/dueno/PageHeader';
 import Promociones from './pages/dueno/Promociones';
 import ConfiguracionCafeteria from './pages/dueno/ConfiguracionCafeteria';
 import Afiliados from './pages/dueno/Afiliados';
+import Campanas from './pages/dueno/Campanas';
 import Login from './pages/auth/Login';
 import AccesoNoAutorizado from './components/AccesoNoAutorizado';
 import Dashboard from './pages/dueno/Dashboard';
@@ -443,6 +444,17 @@ function App() {
             <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
               <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
                 <Afiliados currentUser={currentUser} />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dueno/afiliados/campanas/*"
+          element={
+            <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
+              <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
+                <Campanas currentUser={currentUser} />
               </AuthenticatedLayout>
             </ProtectedRoute>
           }
