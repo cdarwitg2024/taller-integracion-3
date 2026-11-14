@@ -1,6 +1,8 @@
-import { Alert, Chip, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Button, Chip, Paper, Stack, Typography } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 
 export default function Afiliados({ currentUser }) {
+  const navigate = useNavigate();
   const asignacion = currentUser?.cafeteria_id;
   const cafeteriaId = typeof asignacion === 'number' || typeof asignacion === 'string'
     ? Number(asignacion) : NaN;
@@ -19,8 +21,11 @@ export default function Afiliados({ currentUser }) {
         <Typography variant="h6">Afiliados de tu cafetería</Typography>
         <Chip label={`Cafetería #${cafeteriaId}`} variant="outlined" />
         <Typography variant="body2" color="text.secondary">
-          La gestión de campañas y solicitudes de afiliación estará disponible próximamente.
+          Administra las campañas de carrito completo de tu cafetería y sus tasas de descuento y comisión.
         </Typography>
+        <Button variant="contained" onClick={() => navigate('/dueno/afiliados/campanas')}>
+          Administrar campañas
+        </Button>
       </Stack>
     </Paper>
   );

@@ -17,6 +17,7 @@ Revisión documental del 11 de noviembre de 2026. El estado del código y las pr
 |---|---|---|
 | Identidad | Auth UUID → usuarios.auth_user_id → usuarios.id → cafeteria_usuarios | Sin asociación se bloquea la operación; no asumir cafetería 1 |
 | Acceso Afiliados (V01) | Menú y ruta protegida del dueño; contexto desde el perfil y aviso sin asignación. [Pruebas locales](desktop/validacion/V01-CAM-223-Acceso-Afiliados.md) | Listados, formularios y gestión de solicitudes en tareas posteriores |
+| Campañas de afiliados (E03) | Vista de listado, formulario y resumen en `/dueno/afiliados/campanas`, con el contexto de cafetería del perfil y descarte de respuestas atrasadas. [Pruebas locales](desktop/validacion/E03-CAM-290-Vista-Campanas.md) | Conexión real con ms-pedidos (C03), activación y pausa (E07) y ajuste de guardado (E08) |
 | Dashboard | Indicadores y ranking sin filtro diario; solo ventas por hora usa hoy. Realtime y respaldo cada 10 s | Comprobar con usuarios del entorno definitivo |
 | Stock manual | UPDATE real, alcance por cafetería y comprobación de stock anterior en los formularios afectados | No se modificaron existencias Cloud para probarlo |
 | Productos e inventario del dueño | Una sola pantalla en /dueno/productos: catálogo, precio, stock, mínimos, valorización y exportación CSV; Realtime de productos/pedidos y respaldo cada 5 s | /dueno/inventario redirige; eliminadas Inventario.jsx y GestorPrecioStock.jsx |
