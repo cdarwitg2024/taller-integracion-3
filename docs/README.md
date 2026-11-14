@@ -51,6 +51,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 ### Validación
 
 - [S2-T17 - Validar flujo Mobile de disponibilidad y carrito](mobile/validacion/S2-T17-Validacion-Flujo-Mobile-Disponibilidad-y-Carrito.md)
+- [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 
 ## Backend Node
 
