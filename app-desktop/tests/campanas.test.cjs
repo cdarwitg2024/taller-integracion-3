@@ -34,7 +34,7 @@ function cargarApp(servicios) {
       const base = path.resolve(path.dirname(archivo), nombre);
       const destino = [base, base + '.jsx', base + '.js'].find(f => fs.existsSync(f) && fs.statSync(f).isFile());
       assert.ok(destino, `Import inexistente: ${nombre}`);
-      const relativa = path.relative(src, destino);
+      const relativa = path.relative(src, destino).split(path.sep).join('/');
       if (relativa === 'services/supabase.js') return { supabase: servicios.supabase };
       if (relativa === 'services/usuarios.js') return { usuarios: servicios.usuarios };
       if (relativa === 'services/pedidosService.js') return { __esModule: true, default: { getAll: async () => [] } };
@@ -231,6 +231,82 @@ test('cambiar de cafetería descarta la respuesta atrasada', async t => {
   await act(async () => { pendientes[0].resolve([campana(1, 'Campaña de la 7')]); });
   assert.match(h.texto(), /Campaña de la 12/);
   assert.doesNotMatch(h.texto(), /Campaña de la 7/);
+});
+
+test('cambiar de cafetería reinicia el formulario de creación', async t => {
+  let resolverPerfil;
+  const perfil = new Promise(resolve => { resolverPerfil = resolve; });
+  const h = await montar(t, {
+    usuario: dueno(7), ruta: '/dueno/afiliados/campanas/nueva', perfil,
+    campanas: servicio(async () => []),
+  });
+  const nombre = () => h.tree.root.findAllByType('TextField').find(c => c.props.label === 'Nombre de la campaña');
+  await act(async () => nombre().props.onChange({ target: { value: 'Campaña de la 7' } }));
+  assert.equal(nombre().props.value, 'Campaña de la 7');
+  await act(async () => resolverPerfil({ success: true, user: dueno(12), rol: 'dueño' }));
+  assert.equal(nombre().props.value, '');
+});
+
+test('un guardado pendiente de la cafetería anterior no publica su listado en la nueva', async t => {
+  const listar = id => Promise.resolve([campana(id, `Campaña de la ${id}`)]);
+  let resolverCrear;
+  const crear = () => new Promise(resolve => { resolverCrear = resolve; });
+  let resolverPerfil;
+  const perfil = new Promise(resolve => { resolverPerfil = resolve; });
+  const h = await montar(t, {
+    usuario: dueno(7), ruta: '/dueno/afiliados/campanas/nueva', perfil,
+    campanas: servicio(listar, { crear }),
+  });
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  await act(async () => resolverPerfil({ success: true, user: dueno(12), rol: 'dueño' }));
+  await act(async () => { resolverCrear({ id: 31 }); });
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas');
+  assert.match(h.texto(), /Campaña de la 12/);
+  assert.doesNotMatch(h.texto(), /Campaña de la 7/);
+});
+
+test('un error de carga en el resumen se distingue de una campaña inexistente y permite reintentar', async t => {
+  let intentos = 0;
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31',
+    campanas: servicio(async () => {
+      intentos += 1;
+      if (intentos === 1) throw new Error('sin_acceso_cafeteria');
+      return [campana(31, 'Semana del café')];
+    }),
+  });
+  assert.match(h.texto(), /sin_acceso_cafeteria/);
+  assert.doesNotMatch(h.texto(), /No se encontró la campaña/);
+  await act(async () => h.boton('Reintentar').props.onClick());
+  assert.match(h.texto(), /Semana del café/);
+  assert.equal(intentos, 2);
+});
+
+test('un error de carga en la edición se distingue de una campaña inexistente y permite reintentar', async t => {
+  let intentos = 0;
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => {
+      intentos += 1;
+      if (intentos === 1) throw new Error('sin_acceso_cafeteria');
+      return [campana(31, 'Semana del café')];
+    }),
+  });
+  assert.match(h.texto(), /sin_acceso_cafeteria/);
+  assert.doesNotMatch(h.texto(), /No se encontró la campaña/);
+  await act(async () => h.boton('Reintentar').props.onClick());
+  assert.match(h.texto(), /Editar campaña/);
+  assert.equal(intentos, 2);
+});
+
+test('una campaña inexistente tras una carga exitosa avisa sin ofrecer reintento', async t => {
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/99',
+    campanas: servicio(async () => [campana(31, 'Semana del café')]),
+  });
+  assert.match(h.texto(), /No se encontró la campaña/);
+  assert.equal(h.boton('Reintentar'), undefined);
 });
 
 test('el servicio sigue el contrato C02 con el cliente autenticado', async () => {

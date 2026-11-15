@@ -49,26 +49,35 @@ function Campanas({ currentUser }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const solicitud = useRef(0);
+  // Cafetería vigente del render: invalida cargas y guardados que terminan tras
+  // un cambio de perfil, aunque su callback se dispare más tarde.
+  const cafeteriaActual = useRef(cafeteriaId);
+  cafeteriaActual.current = cafeteriaId;
 
   // Carga el listado de la cafetería activa y descarta respuestas atrasadas.
   const cargar = useCallback(async () => {
+    const objetivo = cafeteriaId;
+    if (objetivo !== cafeteriaActual.current) return;
     const id = ++solicitud.current;
     setLoading(true);
     try {
-      const filas = await campanasAfiliados.listar(cafeteriaId);
-      if (id !== solicitud.current) return;
+      const filas = await campanasAfiliados.listar(objetivo);
+      if (id !== solicitud.current || objetivo !== cafeteriaActual.current) return;
       setCampanas(filas);
       setError('');
     } catch (err) {
-      if (id === solicitud.current) setError(err.message || 'No se pudieron cargar las campañas.');
+      if (id === solicitud.current && objetivo === cafeteriaActual.current) {
+        setError(err.message || 'No se pudieron cargar las campañas.');
+      }
     } finally {
-      if (id === solicitud.current) setLoading(false);
+      if (id === solicitud.current && objetivo === cafeteriaActual.current) setLoading(false);
     }
   }, [cafeteriaId]);
 
   useEffect(() => {
     if (!cafeteriaId) { setCampanas([]); setLoading(false); return undefined; }
     setCampanas([]);
+    setError('');
     cargar();
     return () => { solicitud.current++; };
   }, [cafeteriaId, cargar]);
@@ -79,8 +88,24 @@ function Campanas({ currentUser }) {
 
   // Regresa al listado conservando el estado ya cargado.
   const volverAlListado = () => navigate(LISTADO);
-  // En una ruta profunda hay que esperar el listado antes de resolver el id.
-  const cargandoInicial = loading && campanas.length === 0;
+
+  // Resuelve las rutas que dependen del listado: carga, error con reintento o
+  // contenido. Solo tras una carga exitosa se puede hablar de campaña inexistente.
+  const detalle = (contenido) => {
+    if (loading && campanas.length === 0) return <Cargando />;
+    if (error) {
+      return (
+        <Box>
+          <PageHeader title="Campañas" subtitle="No se pudo cargar la campaña solicitada."
+            actions={<Button startIcon={<ArrowBackIcon />} onClick={volverAlListado}>Volver al listado</Button>} />
+          <Alert severity="error" action={<Button color="inherit" onClick={cargar}>Reintentar</Button>}>
+            {error}
+          </Alert>
+        </Box>
+      );
+    }
+    return contenido;
+  };
 
   return (
     <Routes>
@@ -90,14 +115,14 @@ function Campanas({ currentUser }) {
           onResumen={(c) => navigate(`${LISTADO}/${c.id}`)} onEditar={(c) => navigate(`${LISTADO}/${c.id}/editar`)} />
       } />
       <Route path="nueva" element={
-        <Formulario campanas={campanas} cafeteriaId={cafeteriaId} onVolver={volverAlListado}
+        <Formulario key={cafeteriaId} campanas={campanas} cafeteriaId={cafeteriaId} onVolver={volverAlListado}
           onGuardado={async () => { await cargar(); volverAlListado(); }} />
       } />
-      <Route path=":id/editar" element={cargandoInicial ? <Cargando /> : (
-        <Formulario campanas={campanas} cafeteriaId={cafeteriaId} onVolver={volverAlListado}
+      <Route path=":id/editar" element={detalle(
+        <Formulario key={cafeteriaId} campanas={campanas} cafeteriaId={cafeteriaId} onVolver={volverAlListado}
           onGuardado={async () => { await cargar(); volverAlListado(); }} />
       )} />
-      <Route path=":id" element={cargandoInicial ? <Cargando /> : (
+      <Route path=":id" element={detalle(
         <Resumen campanas={campanas} onVolver={volverAlListado}
           onEditar={(c) => navigate(`${LISTADO}/${c.id}/editar`)} />
       )} />
