@@ -1,4 +1,4 @@
-<!-- Prepara cuentas y cafeterías ficticias E02 para probar compra, retiro y aislamiento entre dos cafeterías en un Supabase local aislado. -->
+<!-- Prepara cuentas y cafeterías ficticias E02 en Supabase local y documenta qué flujos de compra, retiro y RLS quedan bloqueados. -->
 # E02 — Cuentas y cafeterías de prueba
 
 Documento operativo para un entorno **local y desechable**. No contiene cuentas,
@@ -7,8 +7,13 @@ Cloud.
 
 ## 1. Alcance y advertencias
 
-- Objetivo: probar compra, retiro y aislamiento entre dos cafeterías con los roles
-  reales del esquema (`estudiante`, `empleado`, `dueño`).
+- Objetivo: preparar cuentas y datos ficticios para probar compra, retiro y
+  aislamiento entre dos cafeterías con los roles reales del esquema
+  (`estudiante`, `empleado`, `dueño`). En el entorno local actual la compra
+  completa, el retiro por endpoint y el aislamiento por RLS siguen **BLOQUEADOS**
+  (§7).
+- El rol/flujo de afiliado del piloto (C01/C02) no es un rol del esquema ni se
+  crea en E02. Ver §2.1.
 - Todo dato creado aquí es ficticio, está marcado con `E02-PRUEBA` o
   `@example.test`, y se elimina al final.
 - La contraseña de prueba es explícita y compartida para simplificar el entorno
@@ -22,8 +27,8 @@ Cloud.
 
 ## 2. Esquema y roles reales verificados
 
-Inspección local del 13 de noviembre de 2026 sobre
-`supabase_db_taller-integracion-3` (PostgreSQL 17):
+Inspección local del 13 de noviembre de 2026, revalidada el 15 de noviembre de
+2026 sobre `supabase_db_taller-integracion-3` (PostgreSQL 17):
 
 ```sql
 SELECT id, nombre FROM public.roles ORDER BY id;
@@ -45,13 +50,24 @@ auth.users.id (UUID)
   → cafetería autoritativa
 ```
 
-### 2.1 Equivalencia de «afiliado»
+### 2.1 Roles del esquema y flujo de afiliado (C02)
 
-En el repositorio **no existe** el rol `afiliado`. La búsqueda en código, SQL y
-documentación no devuelve ese nombre. El equivalente real es **`empleado`
-(`rol_id = 2`)**, afiliado a una cafetería mediante `public.cafeteria_usuarios`.
-Este documento usa «empleado/afiliado» solo como sinónimo operativo; el valor que
-se guarda es `rol_id = 2`.
+`public.roles` tiene tres valores reales: `estudiante` (1), `empleado` (2) y
+`dueño` (3). Son los únicos roles que hoy se pueden asignar en
+`public.usuarios.rol_id`.
+
+El **afiliado no es un rol del esquema** y no se crea en E02. C01/C02 definen al
+afiliado como un usuario (el ejemplo usa una sesión de estudiante) que tiene una
+solicitud aprobada por el dueño y un código único por campaña. Ese flujo vive en
+las rutas `/api/afiliados/...` del contrato C02 (solicitud, decisión, perfil y
+cotización), que no están implementadas en esta rama. En la base local de E02
+tampoco existen sus tablas, así que **no se puede preparar una cuenta afiliada**.
+Limitación: el escenario de afiliado queda fuera de E02 hasta que se implementen
+las tareas C02/V correspondientes.
+
+No se sustituye `afiliado` por `empleado`: `empleado` es el operador del KDS y no
+representa la aprobación de afiliación ni el código de campaña. Tampoco se usa
+`dueño` como afiliado.
 
 ### 2.2 Estado del esquema local (limitación importante)
 
@@ -67,12 +83,15 @@ El Supabase local de este repositorio **no tiene todas las tablas del flujo**:
   (solo está activo en las tablas auxiliares).
 
 Por eso el fixture crea un **shim local** de `cafeteria_usuarios` cuando falta. No
-se presenta como DDL autoritativo: sirve para validar pertenencia y aislamiento en
-local. Si la tabla ya existe, se reutiliza y no se modifica su estructura.
+es DDL autoritativo ni debe copiarse a Cloud, a migraciones o a pruebas de
+seguridad: solo permite validar pertenencia y aislamiento de datos en local. Se
+crea sin RLS ni políticas. Si la tabla ya existe, se reutiliza y no se modifica su
+estructura, sus políticas ni su estado de RLS. Tampoco existen las tablas ni rutas
+del piloto de afiliados (§2.1); no se simulan en E02.
 
 La comprobación de compra/retiro completa por RPC y gateway queda limitada por las
 tablas ausentes; las consultas de este documento validan el aislamiento a nivel de
-datos y de pertenencia, no RLS.
+datos y de pertenencia, no RLS ni endpoints.
 
 ## 3. Datos ficticios
 
@@ -103,7 +122,13 @@ Las cuentas se crean en **Supabase Auth local** (GoTrue). La fila de
 `public.usuarios` solo guarda el vínculo `auth_user_id`; no se almacena
 `password_hash` porque la credencial vive en Auth.
 
+No se crea una cuenta afiliada: el afiliado no es un rol de `public.roles` y el
+flujo C02 no está desplegado en local (§2.1). `empleado` no sustituye a afiliado.
+
 ### 3.3 Matriz de cuentas, roles y pertenencia
+
+Matriz de permisos **previstos**. La compra y el retiro por endpoint no se
+ejecutaron en E02; su resultado real está en §7.
 
 | Cuenta | Rol | Pertenencia | Casos permitidos | Casos rechazados |
 | --- | --- | --- | --- | --- |
@@ -139,10 +164,16 @@ esac
 `SERVICE_ROLE_KEY` es una credencial local. No la imprimas, no la pegues en
 documentos y no ejecutes estos comandos con `set -x`.
 
+Todos los comandos de este documento apuntan a `$API_URL` ya validada como local y
+al contenedor `supabase_db_taller-integracion-3`. No uses `supabase link`,
+`supabase db push`, `--linked` ni el SQL Editor de Cloud.
+
 ### 4.2 Crear las cuentas en Auth local
 
 El siguiente bloque es idempotente: si el correo ya existe en Auth, reutiliza su
-UUID. La contraseña solo se envía a la API local.
+UUID. La contraseña solo se envía a la API local. Si la cuenta ya existía con otra
+contraseña, el bloque no la cambia: en local, bórrala o restablece la contraseña
+desde Studio local; no modifiques cuentas reales.
 
 ```bash
 PASSWORD_LOCAL='E02-solo-local-2026!'
@@ -192,10 +223,31 @@ El bloque crea el shim de `cafeteria_usuarios` solo si falta, registra si exist�
 antes y deja cafeterías, usuarios, pertenencias y un producto por cafetería. Es
 idempotente: puede ejecutarse dos veces sin duplicar filas.
 
+El indicador de `/tmp/opencode` se escribe **antes** de tocar la base. Si no se
+puede crear el directorio o guardar el indicador, la preparación se detiene para
+que la limpieza nunca quede con un estado ambiguo.
+
 ```bash
+mkdir -p /tmp/opencode || { echo "ABORT: no se pudo crear /tmp/opencode"; exit 1; }
+
 TABLA_EXISTIA="$(docker exec supabase_db_taller-integracion-3 psql -U postgres -d postgres \
   -tAc "select case when to_regclass('public.cafeteria_usuarios') is null then 'false' else 'true' end")"
-[ -f /tmp/opencode/e02_cafeteria_usuarios_existia ] || echo "$TABLA_EXISTIA" > /tmp/opencode/e02_cafeteria_usuarios_existia
+case "$TABLA_EXISTIA" in
+  true|false) ;;
+  *) echo "ABORT: no se pudo leer el estado de public.cafeteria_usuarios"; exit 1 ;;
+esac
+
+FLAG=/tmp/opencode/e02_cafeteria_usuarios_existia
+if [ -f "$FLAG" ]; then
+  FLAG_PREVIO="$(cat "$FLAG")"
+  if [ "$FLAG_PREVIO" != "$TABLA_EXISTIA" ]; then
+    echo "ABORT: el indicador guardado ($FLAG_PREVIO) no coincide con el estado actual ($TABLA_EXISTIA); ejecuta §6 o revisa el entorno."
+    exit 1
+  fi
+else
+  echo "$TABLA_EXISTIA" > "$FLAG" \
+    || { echo "ABORT: no se pudo guardar el indicador del shim"; exit 1; }
+fi
 
 docker exec -i supabase_db_taller-integracion-3 psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -v uuid_dueno_norte="$UUID_DUENO_NORTE" \
@@ -261,6 +313,7 @@ FROM (VALUES
 JOIN public.cafeterias c ON c.nombre = v.cafeteria
 WHERE NOT EXISTS (SELECT 1 FROM public.productos p WHERE p.nombre = v.producto);
 SQL
+[ $? -eq 0 ] || { echo "ABORT: falló el fixture SQL; revisa el error antes de continuar"; exit 1; }
 ```
 
 ## 5. Consultas de verificación
@@ -296,7 +349,7 @@ ORDER BY u.email;
 
 Resultado esperado: dos cafeterías activas; seis cuentas con
 `auth_vinculado = t`; cada empleado con `cafeterias = 1`; los compradores sin
-pertenencia.
+pertenencia. Son consultas de datos: no prueban RLS ni endpoints.
 
 ### 5.2 Compra
 
@@ -309,6 +362,10 @@ JOIN public.cafeterias c ON c.id = p.cafeteria_id
 WHERE p.nombre LIKE '[E02-PRUEBA]%'
 ORDER BY c.nombre;
 ```
+
+**No ejecutado en E02.** La compra real está BLOQUEADA (§7). La consulta siguiente
+queda para cuando `procesar_pago` y sus dependencias existan; no se simula con un
+`UPDATE` ni con un `INSERT` directo.
 
 Después de una compra real, el pedido y su detalle deben conservar la cafetería y
 el precio del producto:
@@ -324,10 +381,10 @@ JOIN public.usuarios u ON u.id = pe.usuario_id
 WHERE u.email LIKE '%e02@example.test';
 ```
 
-En la base local este flujo completo queda **BLOQUEADO**: `procesar_pago` requiere
-`wallets`, `pagos`, `metodos_pago`, `movimientos_wallet` y
-`get_current_user_id`, que no están versionados ni presentes. No inventes esas
-tablas para esta prueba.
+En la base local este flujo completo queda **BLOQUEADO**: la RPC `procesar_pago`
+no está aplicada y requiere `wallets`, `pagos`, `metodos_pago`,
+`movimientos_wallet` y `get_current_user_id`, que no están presentes. No inventes
+esas tablas para esta prueba.
 
 ### 5.3 Retiro
 
@@ -353,15 +410,20 @@ WHERE pe.estado = 'listo'
   AND c.nombre LIKE '[E02-PRUEBA]%';
 ```
 
-El retiro por endpoint (`GET /api/pedidos/:id/qr` y validación del empleado) no se
-puede ejecutar en esta base local porque el gateway y los microservicios no están
-levantados. La consulta anterior valida las condiciones de datos: estado `listo`,
-QR presente, empleado de la misma cafetería y comprador propietario.
+El retiro por endpoint (`GET /api/pedidos/:id/qr` y
+`POST /api/pedidos/validar-qr`) no se puede ejecutar en esta base local porque el
+gateway y los microservicios no están levantados. Además, `validar-qr` delega en
+`log_qr_validation`, una RPC no versionada y ausente en local. `PATCH
+/api/pedidos/:id/estado` con `entregado` responde 409: la entrega no se hace por
+esa ruta. La consulta anterior valida solo condiciones de datos sobre un pedido
+insertado directamente: estado `listo`, QR presente, empleado de la misma
+cafetería y comprador propietario.
 
 ### 5.4 Aislamiento propio/ajeno
 
 Las siguientes consultas se ejecutan dentro de una transacción con `ROLLBACK`, de
-modo que los pedidos temporales no quedan guardados:
+modo que los pedidos temporales no quedan guardados. Los pedidos se insertan
+directamente: comprueban filtros de datos, no RLS ni endpoints.
 
 ```sql
 BEGIN;
@@ -405,25 +467,27 @@ SELECT count(*) FROM public.pedidos p
 JOIN public.usuarios u ON u.id = p.usuario_id
 WHERE u.email = 'comprador.norte.e02@example.test';
 
--- Comprador Norte: pedido ajeno (esperado 0).
+-- Comprador Norte: el pedido ajeno de Sur existe en la tabla (esperado 1).
+-- El filtro por usuario_id de la consulta anterior lo excluye: Norte no lo ve.
 SELECT count(*) FROM public.pedidos p
 JOIN public.usuarios otro ON otro.id = p.usuario_id
-WHERE otro.email = 'comprador.sur.e02@example.test'
-  AND p.usuario_id = (
-    SELECT id FROM public.usuarios
-    WHERE email = 'comprador.norte.e02@example.test'
-  );
+WHERE otro.email = 'comprador.sur.e02@example.test';
 
 ROLLBACK;
 ```
 
-Resultados esperados: `1`, `0`, `1`, `0`. El empleado Sur se comporta de forma
-simétrica.
+Resultados esperados: `1`, `0`, `1`, `1`. El último confirma que el pedido ajeno
+existe; la separación la hace el filtro por `usuario_id`, no RLS. El empleado Sur
+se comporta de forma simétrica.
 
 ### 5.5 Casos rechazados por los endpoints
 
-Estas comprobaciones requieren el gateway local. La tabla deja el resultado
-esperado para cuando esté disponible:
+Estas comprobaciones requieren el gateway local. Las rutas reales están en
+`Microservices/ms-pedidos/src/modules/pedidos/pedidos.routes.js` y el gateway
+local las expone bajo `/api/pedidos` (`Microservices/gateway/nginx.conf`). El
+cambio de estado usa `PATCH /api/pedidos/:id/estado`; sin el sufijo `/estado` la
+ruta no existe y la petición no sirve para probar permisos ni reglas de entrega.
+La tabla deja el resultado esperado para cuando el gateway esté disponible:
 
 | Petición | Actor | Esperado |
 | --- | --- | --- |
@@ -434,8 +498,13 @@ esperado para cuando esté disponible:
 | `GET /api/pedidos/:id/qr` | Empleado o dueño | 404 |
 | `GET /api/pedidos/:id/qr` de un pedido entregado/cancelado | Comprador propietario | 409 |
 | `GET /api/pedidos` | Dueño | 403 |
-| `PATCH /api/pedidos/:id` con `estado: entregado` | Empleado autorizado | 409 (requiere QR) |
-| `PATCH /api/pedidos/:id` de Sur | Empleado Norte | 403 |
+| `PATCH /api/pedidos/:id/estado` con `{"estado":"entregado"}` | Empleado autorizado | 409 (requiere QR) |
+| `PATCH /api/pedidos/:id/estado` de Sur | Empleado Norte | 403 |
+
+**Resultado real en E02: BLOQUEADO.** El gateway y `ms-pedidos` no estaban
+levantados durante la verificación; además `POST /api/pedidos/validar-qr` depende
+de `log_qr_validation`, una RPC no versionada y ausente en local. La tabla
+anterior es el resultado esperado, no evidencia ejecutada.
 
 La autorización real la aplica `ms-pedidos` después de resolver la identidad del
 JWT. **No la aplica RLS en esta base local**, porque `pedidos` y `usuarios` tienen
@@ -444,44 +513,102 @@ equivalente a RLS.
 
 ## 6. Limpieza y reset
 
-El bloque elimina pedidos, productos, pertenencias, usuarios y cafeterías E02,
-borra las cuentas Auth y elimina el shim solo si lo creó este procedimiento. Es
-idempotente.
+El bloque elimina pedidos, detalles, logs, productos, pertenencias, usuarios y
+cafeterías E02, borra las cuentas Auth y elimina el shim solo si lo creó este
+procedimiento. Es idempotente y la limpieza SQL es transaccional: si algo falla,
+no deja datos a medias. Todos los comandos apuntan al contenedor local y a
+`$API_URL` ya validada; no los ejecutes contra Cloud.
+
+La limpieza borra pedidos creados por las cuentas E02 **aunque estén en otras
+cafeterías**. Son datos ficticios; no reutilices esos correos para algo que
+quieras conservar. E02 no crea ni modifica políticas RLS: el shim se crea sin
+políticas y, si `cafeteria_usuarios` ya existía, se conservan su estructura,
+políticas y estado de RLS.
 
 ```bash
 docker exec -i supabase_db_taller-integracion-3 psql -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+BEGIN;
+
+DELETE FROM public.logs_validacion_qr l
+WHERE l.usuario_id IN (SELECT id FROM public.usuarios WHERE email LIKE '%e02@example.test')
+   OR l.cafeteria_id IN (SELECT id FROM public.cafeterias WHERE nombre LIKE '[E02-PRUEBA]%')
+   OR l.pedido_id IN (
+     SELECT p.id FROM public.pedidos p
+     WHERE p.cafeteria_id IN (SELECT id FROM public.cafeterias WHERE nombre LIKE '[E02-PRUEBA]%')
+        OR p.usuario_id IN (SELECT id FROM public.usuarios WHERE email LIKE '%e02@example.test')
+   );
+
+DELETE FROM public.detalles_pedido d
+WHERE d.pedido_id IN (
+  SELECT p.id FROM public.pedidos p
+  WHERE p.cafeteria_id IN (SELECT id FROM public.cafeterias WHERE nombre LIKE '[E02-PRUEBA]%')
+     OR p.usuario_id IN (SELECT id FROM public.usuarios WHERE email LIKE '%e02@example.test')
+);
+
+DELETE FROM public.anuncios_pedido a
+WHERE a.pedido_id IN (
+    SELECT p.id FROM public.pedidos p
+    WHERE p.cafeteria_id IN (SELECT id FROM public.cafeterias WHERE nombre LIKE '[E02-PRUEBA]%')
+       OR p.usuario_id IN (SELECT id FROM public.usuarios WHERE email LIKE '%e02@example.test')
+  )
+  OR a.usuario_id IN (SELECT id FROM public.usuarios WHERE email LIKE '%e02@example.test')
+  OR a.cafeteria_id IN (SELECT id FROM public.cafeterias WHERE nombre LIKE '[E02-PRUEBA]%');
+
+DELETE FROM public.solicitudes_stock s
+WHERE s.cafeteria_id IN (SELECT id FROM public.cafeterias WHERE nombre LIKE '[E02-PRUEBA]%')
+   OR s.usuario_id IN (SELECT id FROM public.usuarios WHERE email LIKE '%e02@example.test')
+   OR s.producto_id IN (SELECT id FROM public.productos WHERE nombre LIKE '[E02-PRUEBA]%');
+
 DELETE FROM public.pedidos p
-USING public.cafeterias c
-WHERE p.cafeteria_id = c.id AND c.nombre LIKE '[E02-PRUEBA]%';
+WHERE p.cafeteria_id IN (SELECT id FROM public.cafeterias WHERE nombre LIKE '[E02-PRUEBA]%')
+   OR p.usuario_id IN (SELECT id FROM public.usuarios WHERE email LIKE '%e02@example.test');
 
-DELETE FROM public.cafeteria_usuarios cu
-USING public.usuarios u
-WHERE cu.usuario_id = u.id AND u.email LIKE '%e02@example.test';
-
-DELETE FROM public.cafeteria_usuarios cu
-USING public.cafeterias c
-WHERE cu.cafeteria_id = c.id AND c.nombre LIKE '[E02-PRUEBA]%';
+DO $$
+BEGIN
+  IF to_regclass('public.cafeteria_usuarios') IS NOT NULL THEN
+    DELETE FROM public.cafeteria_usuarios cu
+    WHERE cu.usuario_id IN (SELECT id FROM public.usuarios WHERE email LIKE '%e02@example.test')
+       OR cu.cafeteria_id IN (SELECT id FROM public.cafeterias WHERE nombre LIKE '[E02-PRUEBA]%');
+  END IF;
+END $$;
 
 DELETE FROM public.productos WHERE nombre LIKE '[E02-PRUEBA]%';
+DELETE FROM public.categorias
+WHERE cafeteria_id IN (SELECT id FROM public.cafeterias WHERE nombre LIKE '[E02-PRUEBA]%');
 DELETE FROM public.usuarios WHERE email LIKE '%e02@example.test';
 DELETE FROM public.cafeterias WHERE nombre LIKE '[E02-PRUEBA]%';
+
+COMMIT;
 SQL
+[ $? -eq 0 ] || { echo "ABORT: falló la limpieza SQL; revisa el error antes de continuar"; exit 1; }
 
 FLAG=/tmp/opencode/e02_cafeteria_usuarios_existia
-if [ "$(cat "$FLAG" 2>/dev/null)" = "false" ]; then
-  docker exec -i supabase_db_taller-integracion-3 psql -U postgres -d postgres \
-    -c 'DROP TABLE IF EXISTS public.cafeteria_usuarios;'
-elif [ ! -f "$FLAG" ]; then
+if [ ! -f "$FLAG" ]; then
   echo "Aviso: falta $FLAG; no se elimina cafeteria_usuarios automáticamente."
+elif [ "$(cat "$FLAG")" = "false" ]; then
+  docker exec -i supabase_db_taller-integracion-3 psql -U postgres -d postgres \
+    -c 'DROP TABLE IF EXISTS public.cafeteria_usuarios;' \
+    || { echo "ABORT: no se pudo eliminar el shim"; exit 1; }
 fi
 
-for id in $(curl -s "$API_URL/auth/v1/admin/users?page=1&per_page=1000" \
-  -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+LISTA_AUTH="$(curl -s -w '\n%{http_code}' "$API_URL/auth/v1/admin/users?page=1&per_page=1000" \
+  -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY")"
+CODIGO_LISTA="${LISTA_AUTH##*$'\n'}"
+CUERPO_LISTA="${LISTA_AUTH%$'\n'*}"
+if [ "${CODIGO_LISTA#2}" = "$CODIGO_LISTA" ]; then
+  echo "ABORT: no se pudo listar cuentas Auth (HTTP $CODIGO_LISTA)"; exit 1
+fi
+for id in $(printf '%s' "$CUERPO_LISTA" \
   | jq -r '.users[]? | select(.email | test("e02@example.test$")) | .id'); do
-  curl -s -o /dev/null -X DELETE "$API_URL/auth/v1/admin/users/$id" \
-    -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY"
+  CODIGO_BORRADO="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+    "$API_URL/auth/v1/admin/users/$id" \
+    -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY")"
+  case "$CODIGO_BORRADO" in
+    2*) ;;
+    *) echo "Fallo borrando una cuenta Auth (HTTP $CODIGO_BORRADO); reintenta §6."; exit 1 ;;
+  esac
 done
-rm -f /tmp/opencode/e02_cafeteria_usuarios_existia
+rm -f "$FLAG"
 ```
 
 Comprobación final:
@@ -505,24 +632,30 @@ toda la base local**. Úsalo solo si no necesitas los datos actuales.
 
 ## 7. Verificación ejecutada
 
-Fecha: 13 de noviembre de 2026. Entorno: Supabase local
-(`supabase_db_taller-integracion-3`), sin Cloud.
+Fecha: 15 de noviembre de 2026. Entorno: Supabase local
+(`supabase_db_taller-integracion-3`), sin Cloud. No se ejecutó el fixture en Cloud
+ni se modificaron políticas RLS.
 
-| Comprobación | Resultado |
-| --- | --- |
-| Roles reales `1/2/3` (`estudiante`, `empleado`, `dueño`) | PASS |
-| Creación idempotente de seis cuentas Auth locales | PASS |
-| Dos cafeterías ficticias creadas | PASS |
-| Seis `public.usuarios` con `auth_user_id` vinculado | PASS |
-| Cuatro pertenencias en `cafeteria_usuarios` (dueño/empleado por cafetería) | PASS |
-| Producto ficticio por cafetería | PASS |
-| Empleado Norte ve 1 pedido propio y 0 de Sur | PASS |
-| Comprador Norte ve 1 pedido propio y 0 ajeno | PASS |
-| Pedido listo con QR y empleado autorizado | PASS |
-| Limpieza de datos y cuentas Auth | PASS |
-| Compra completa por `procesar_pago` | BLOQUEADO: faltan tablas de wallet/pago y `get_current_user_id` |
-| Retiro por gateway/endpoint | BLOQUEADO: gateway y microservicios no están levantados |
-| Aislamiento por RLS | BLOQUEADO: RLS deshabilitado en `pedidos`/`usuarios`; el aislamiento observado es de datos y de filtros de aplicación |
+| Comprobación | Cómo se comprobó | Resultado |
+| --- | --- | --- |
+| Roles reales `1/2/3` (`estudiante`, `empleado`, `dueño`) | `SELECT` sobre `public.roles` local | PASS |
+| Creación idempotente de seis cuentas Auth locales | Bloque §4.2 ejecutado dos veces; reutiliza UUID | PASS |
+| Dos cafeterías ficticias creadas | Fixture SQL local | PASS |
+| Seis `public.usuarios` con `auth_user_id` vinculado | Fixture SQL local | PASS |
+| Cuatro pertenencias en `cafeteria_usuarios` (dueño/empleado por cafetería) | Fixture SQL local (shim) | PASS |
+| Producto ficticio por cafetería | Fixture SQL local | PASS |
+| Empleado Norte: 1 pedido de Norte y 0 de Sur por pertenencia | Consulta SQL §5.4 con pedidos insertados directamente | PASS de datos; no prueba endpoint ni RLS |
+| Comprador Norte: 1 pedido propio; el ajeno existe y el filtro por `usuario_id` lo excluye | Consulta SQL §5.4 con pedidos insertados directamente | PASS de datos; no prueba endpoint ni RLS |
+| Pedido listo con QR y empleado autorizado | Consulta SQL §5.3 sobre pedido insertado directamente | BLOQUEADO como flujo; solo se verificó el dato de fixture por SQL |
+| Limpieza de datos y cuentas Auth | Ejecución de §6 y consultas finales | PASS |
+| Compra completa por `procesar_pago` | RPC no aplicada; faltan `wallets`, `pagos`, `metodos_pago`, `movimientos_wallet` y `get_current_user_id` | BLOQUEADO |
+| Retiro por `GET /api/pedidos/:id/qr` / `POST /api/pedidos/validar-qr` | Gateway y `ms-pedidos` no levantados; `log_qr_validation` no versionada/ausente | BLOQUEADO |
+| Aislamiento por RLS | RLS deshabilitado en `pedidos`/`usuarios`; solo se probaron filtros SQL | BLOQUEADO |
+
+**Conclusión.** E02 deja cuentas, cafeterías y pertenencias ficticias listas para
+pruebas locales de datos. No hay PASS de compra completa, retiro por endpoint ni
+RLS: esos tres flujos siguen BLOQUEADOS. Un pedido creado por SQL o una
+actualización directa no sustituyen la compra ni el retiro reales.
 
 ## 8. Referencias
 
@@ -531,3 +664,7 @@ Fecha: 13 de noviembre de 2026. Entorno: Supabase local
 - [Validación QR y entrega](D4_validacion_qr_entrega.md)
 - [Seed básico existente](../../database/fixes/seed_datos_basicos.sql)
 - [RPC de compra versionada](../../app-mobile/tabla_mobile/rpc_qr.sql)
+- [Rutas de ms-pedidos](../../Microservices/ms-pedidos/src/modules/pedidos/pedidos.routes.js)
+- [Gateway local](../../Microservices/gateway/nginx.conf)
+- Contratos de afiliados C02 (`docs/contratos-integracion-afiliados.md`, disponible
+  en `origin/develop`; no forma parte de esta rama)
