@@ -7,7 +7,9 @@ const React = require('react');
 const { create, act } = require('react-test-renderer');
 
 function cargar(file, imports) {
-  const filename = path.resolve(__dirname, '../src', file);
+  const rutaBase = path.resolve(__dirname, '../src', file);
+  const filename = fs.existsSync(rutaBase) ? rutaBase : [rutaBase + '.js', rutaBase + '.jsx'].find(candidate => fs.existsSync(candidate));
+  if (!filename) throw new Error('Módulo sin archivo: ' + file);
   const module = { exports: {} };
   const code = transformSync(fs.readFileSync(filename, 'utf8'), {
     format: 'cjs', loader: 'jsx', jsx: 'automatic', target: 'node22', sourcefile: filename,
@@ -15,7 +17,12 @@ function cargar(file, imports) {
   const importar = name => {
     if (name === 'react' || name === 'react/jsx-runtime') return require(name);
     if (Object.hasOwn(imports, name)) return imports[name];
-    if (name.startsWith('.')) return cargar(path.relative(path.join(__dirname, '../src'), path.resolve(path.dirname(filename), name + '.js')), imports);
+    if (name.startsWith('.')) {
+      const resolved = path.resolve(path.dirname(filename), name);
+      const moduleFile = [resolved + '.js', resolved + '.jsx'].find(candidate => fs.existsSync(candidate));
+      if (!moduleFile) throw new Error('Import sin archivo: ' + name);
+      return cargar(path.relative(path.join(__dirname, '../src'), moduleFile), imports);
+    }
     if (name.startsWith('@mui/icons-material/')) return () => React.createElement('i');
     throw new Error('Import sin definir: ' + name);
   };
@@ -34,13 +41,19 @@ function diferida() {
   const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
   return { promise, resolve, reject };
 }
-const mui = Object.fromEntries(('Box Typography Paper Button Alert Skeleton Stack Chip Divider FormControlLabel Checkbox CircularProgress Badge Dialog DialogActions DialogContent DialogTitle IconButton InputAdornment MenuItem Switch Tab Tabs TextField Tooltip').split(' ').map(name => [
+const mui = Object.fromEntries(('Box Typography Paper Button Alert Skeleton Stack Chip Divider FormControlLabel Checkbox CircularProgress Badge Dialog DialogActions DialogContent DialogTitle IconButton InputAdornment MenuItem Switch Tab Tabs TextField Tooltip Table TableBody TableCell TableContainer TableHead TableRow').split(' ').map(name => [
   name, ({ children, control, label, startIcon, icon, action, ...props }) => React.createElement(name, props, children, control, label, action),
 ]));
 
 async function montar(t, promociones = false) {
   const channels = [];
-  const service = { obtenerCampanaVigente: async id => campana({ cafeteria_id: Number(id) }) };
+  const service = {
+    obtenerCampanaVigente: async id => campana({ cafeteria_id: Number(id) }),
+    async obtenerPanelConvenios(id) {
+      const vigente = await service.obtenerCampanaVigente(id);
+      return { campanaVigente: vigente, campanas: vigente ? [vigente] : [], movimientos: [], errorMovimientos: '' };
+    },
+  };
   const supabase = {
     channel() {
       const channel = { on(_event, _filter, callback) { this.callback = callback; return this; }, subscribe() { return this; } };
@@ -130,6 +143,60 @@ test('fallar al confirmar muestra error y permite un reintento explícito', asyn
   h.marcar(); await act(async () => { await h.boton().props.onClick(); });
   assert.match(h.texto(), /Sin conexión/); assert.doesNotMatch(h.texto(), /aceptadas exitosamente/);
   assert.equal(h.boton().props.disabled, false); assert.equal(h.avisos(), 0);
+});
+
+test('clasifica propuestas, convenios activos y desactivados sin confundir vencimiento', () => {
+  const { estadoConvenio } = cargar('utils/condicionesCampana.js', {});
+  const ahora = Date.parse('2026-06-01T12:00:00Z');
+  const propuesta = campana({ estado: 'pendiente_aceptacion' });
+  const activa = aceptada(campana({ estado: 'activa', vigencia_desde: '2026-01-01', vigencia_hasta: '2027-01-01' }));
+  const pausada = aceptada(campana({ estado: 'pausada' }));
+  const vencida = aceptada(campana({ estado: 'activa', vigencia_desde: '2025-01-01', vigencia_hasta: '2026-01-01' }));
+
+  assert.equal(estadoConvenio(propuesta, ahora).label, 'Propuesto');
+  assert.equal(estadoConvenio(activa, ahora).label, 'Activo');
+  assert.equal(estadoConvenio(pausada, ahora).label, 'Desactivado');
+  assert.equal(estadoConvenio(vencida, ahora).label, 'Vencido');
+});
+
+test('el historial muestra la tasa e importe capturados aunque cambie la campaña actual', () => {
+  const Historial = cargar('pages/dueno/HistorialConvenio.jsx', { '@mui/material': mui }).default;
+  const tree = create(React.createElement(Historial, {
+    campanas: [aceptada(campana({ estado: 'activa', tasa_comision: 20 }))],
+    movimientos: [{
+      id: 7, pedido_id: 81, tipo: 'comision', estado: 'disponible',
+      tasa_comision: 5, monto_clp: 500, creado_en: '2026-05-01T12:00:00Z',
+      afiliacion: { campana_id: 1 },
+    }],
+  }));
+  const texto = JSON.stringify(tree.toJSON());
+  assert.match(texto, /20,00/);
+  assert.match(texto, /5,00/);
+  assert.match(texto, /\$500/);
+});
+
+test('la vista de condiciones muestra propuestas, desactivados y tasas históricas', async t => {
+  const h = await montar(t);
+  const actual = aceptada(campana({ estado: 'activa', tasa_comision: 20 }));
+  h.service.obtenerPanelConvenios = async () => ({
+    campanaVigente: actual,
+    campanas: [
+      { ...actual, id: 1, nombre: 'Convenio actual' },
+      campana({ id: 2, nombre: 'Convenio propuesto', estado: 'pendiente_aceptacion' }),
+      aceptada(campana({ id: 3, nombre: 'Convenio pausado', estado: 'pausada' })),
+    ],
+    movimientos: [{
+      id: 5, pedido_id: 20, tipo: 'comision', estado: 'disponible', tasa_comision: 5,
+      monto_clp: 500, creado_en: '2026-05-01T12:00:00Z', afiliacion: { campana_id: 1 },
+    }],
+    errorMovimientos: '',
+  });
+  await h.emitir();
+  assert.match(h.texto(), /Convenio propuesto/);
+  assert.match(h.texto(), /Convenio pausado/);
+  assert.match(h.texto(), /Desactivado/);
+  assert.match(h.texto(), /5,00/);
+  assert.match(h.texto(), /\$500/);
 });
 
 test('el badge se actualiza al confirmar y con cambios Realtime; los errores son visibles', async t => {
