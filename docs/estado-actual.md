@@ -1,12 +1,12 @@
 # Estado actual de CoffeeFast
 
-Revisión documental del 11 de noviembre de 2026. El estado del código y las pruebas locales se contrastó con el repositorio. Las observaciones de Cloud y Kubernetes conservan la fecha de su verificación.
+Revisión documental del 11 de noviembre de 2026. El estado del código y las pruebas locales se contrastó con el repositorio. El módulo de campañas de afiliados se añadió el 15 de noviembre. Las observaciones de Cloud y Kubernetes conservan la fecha de su verificación.
 
 ## Arquitectura
 
 - Mobile: React Native + Expo. Auth, perfil, wallet, menú con stock, lectura de pedidos/QR y Realtime usan Supabase; cafeterías, creación de pedidos y cambios de estado utilizan el gateway. Cancelación mantiene respaldo a su RPC autenticada. La configuración local apunta al gateway de Compose, no a backend-node.
 - Desktop: React/Vite/Electron. Usa Supabase para lecturas y gestión; estados de pedidos y validación QR se envían al gateway.
-- Gateway Nginx: /api/cafeterias → ms-cafeterias:3002; /api/menus → ms-menus:3003; /api/pedidos → ms-pedidos:3005. POST /api/menus/precios es interno y está bloqueado en el gateway.
+- Gateway Nginx: /api/cafeterias → ms-cafeterias:3002; /api/menus → ms-menus:3003; /api/pedidos y /api/afiliados → ms-pedidos:3005. POST /api/menus/precios es interno y está bloqueado en el gateway.
 - `backend-node` sigue presente como servidor legacy y conserva el cliente de inventario anterior.
 - Se retiraron de backend-node el catálogo duplicado, sus dos mocks exclusivos y el endpoint de pago no implementado. Se conserva lo que aún tiene dependencias legacy; ver [alcance del retiro](backend-node/guias/README.md).
 - `BotTelegramCoffeFaster` es un servicio separado para alertas de stock.
@@ -22,6 +22,7 @@ Revisión documental del 11 de noviembre de 2026. El estado del código y las pr
 | Solicitudes | Empleado crea; dueño resuelve pendiente → aprobado/rechazado con fecha y autor | Política reforzada preparada en SQL, no aplicada remotamente |
 | Configuración de cafetería | Lectura y guardado real por cafetería de la sesión, campos existentes, validaciones y detección de edición concurrente | Comprobar permisos efectivos del entorno; políticas preparadas localmente |
 | Promociones | Tabla/RPC activadas en Cloud el 1 de noviembre; mayor descuento por producto sin acumulación | Crear campañas reales desde el panel; no se insertaron promociones de ejemplo |
+| Campañas de afiliados | Rutas POST/PATCH en ms-pedidos; RPC con alcance por dueño y tabla `campanas_afiliados`; validación local con Jest y PostgreSQL desechable | Listado público, avisos e integración con el esquema definitivo de V05; no aplicado en Cloud |
 | QR | Apertura del detalle con QR y token confirmada en Android. La lista mostró únicamente los pedidos de la cuenta activa en la prueba con dos cuentas | Escaneo, entrega y rechazo del segundo uso en el entorno final |
 | Compra y cancelación | Activadas en Cloud: descuento/reposición transaccional y marca stock_descontado | Verificadas con compra/cancelación reversibles; pedidos históricos conservan marca false |
 | Voz KDS | voz-pedido publicada; validación del empleado rol 4 comprobada sin generar audio | Confirmar reproducción audible con un pedido real |

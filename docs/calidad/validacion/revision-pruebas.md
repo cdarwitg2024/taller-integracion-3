@@ -1,5 +1,18 @@
 # Revisión de pruebas para CI/CD
 
+## S3-T3: administración de campañas de afiliados
+
+Validación local del 15 de noviembre de 2026 en Windows con Node.js 22.23.5
+(la línea de CI) y repetida con Node.js 24.13.0:
+
+- `npm test --prefix Microservices/ms-pedidos -- --ci`: 3 suites y 141 pruebas aprobadas, incluidas 10 nuevas de rutas de afiliados.
+- Las pruebas de Supertest comprueban alta (201), edición (200), pausa (200), reanudación (200), dueño ajeno (403), porcentajes fijados (409), campaña finalizada (409), falta de sesión (401) y cuerpo inválido (422) sin invocar la RPC.
+- PostgreSQL 15 desechable: `database/fixes/prueba_administrar_campanas_afiliados.sql` salió con código 0. Verificó alta y edición, pausa y reanudación, rechazo del dueño ajeno y del empleado, fijación de porcentajes desde el inicio y rechazo tras el término.
+- `node --check` de los archivos nuevos y `git diff --check`: aprobados.
+- La migración `administrar_campanas_afiliados.sql` no se aplicó en Cloud y no se desplegó en Kubernetes. La prueba SQL simula `auth.uid()` y no sustituye una prueba con Supabase Auth, RLS y gateway reales. La tabla `campanas_afiliados` es provisional hasta el esquema definitivo de V05.
+
+La evidencia de solicitudes, respuestas y datos SQL está en [S3-T3 · Administración de campañas de afiliados](../../microservicios/validacion/S3-T3-administracion-campanas-afiliados.md).
+
 ## S3-T4: condiciones y aceptación de campañas
 
 Integración del 14 de noviembre de 2026 con el develop que contiene S3-T2:

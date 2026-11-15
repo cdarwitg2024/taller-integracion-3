@@ -102,6 +102,8 @@ Públicas, por el gateway:
 | GET | `/api/pedidos/:id` | ms-pedidos |
 | PATCH | `/api/pedidos/:id/estado` | ms-pedidos |
 | POST | `/api/pedidos/validar-qr` | ms-pedidos |
+| POST | `/api/afiliados/cafeterias/:cafeteriaId/campanas` | ms-pedidos |
+| PATCH | `/api/afiliados/cafeterias/:cafeteriaId/campanas/:campanaId` | ms-pedidos |
 | GET | `/gateway/health` | nginx (estático) |
 
 Internas, **fuera** del gateway a propósito:
@@ -125,7 +127,7 @@ otro contenedor de la red.
 ## Reglas que sigue cada servicio
 
 - **Un solo recurso.** `ms-cafeterias` expone cafeterias; `ms-menus`, productos;
-  `ms-pedidos`, pedidos. Cualquier otra ruta responde 404.
+  `ms-pedidos`, pedidos y afiliados. Cualquier otra ruta responde 404.
 - **Sin mocks.** Si Supabase falla, la respuesta es `503` y no hay `data`. Un
   mock en el path esconde la base caída y le devuelve al cliente datos que no
   existen.
@@ -171,3 +173,9 @@ upstream como `/1`. Sin barra, el URI viaja intacto.
 gana el más corto, así que `location /api/menus` se comería
 `/api/menus/precios`. Por eso la regla de bloqueo usa un ancla de fin de palabra
 (`~ ^/api/menus/precios/?$`) y está declarada antes.
+
+## Administración de campañas de afiliados
+
+`ms-pedidos` expone el alta, la edición y los cambios de estado del [contrato C02](../../contratos-integracion-afiliados.md) en `/api/afiliados`. El dueño se identifica con su JWT: la RPC `administrar_campana_afiliados` valida `auth.uid()` y `es_dueno_cafeteria`, y limita la fila por campaña y cafetería. Los porcentajes y la vigencia quedan fijos desde el inicio; pausar y reanudar conserva las condiciones originales.
+
+La migración [administrar_campanas_afiliados.sql](../../../database/fixes/administrar_campanas_afiliados.sql) depende de la función creada por [gestion_promociones_cafeteria.sql](../../../database/fixes/gestion_promociones_cafeteria.sql). Usa una tabla `campanas_afiliados` separada de `campanas` porque C02 define dos descuentos y otro ciclo de estado; la integración con el esquema definitivo de V05 queda pendiente. La evidencia de solicitudes, códigos HTTP y cálculo SQL está en [S3-T3 · Administración de campañas de afiliados](../validacion/S3-T3-administracion-campanas-afiliados.md).
