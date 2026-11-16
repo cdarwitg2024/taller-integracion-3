@@ -69,10 +69,13 @@ test('A01: perfil de estudiante → Mis afiliaciones → perfil conserva la sesi
   expect(supabase.from.mock.calls.length).toBe(consultasAntesDeVolver);
 });
 
-test('la flecha del encabezado regresa al perfil', async () => {
+test('la flecha se identifica como botón Volver al perfil y regresa al perfil', async () => {
   await montar();
   await abrir();
-  await act(async () => tree.root.findByType(Header).findByType(TouchableOpacity).props.onPress());
+  const volver = tree.root.findByType(Header).findByType(TouchableOpacity);
+  expect(volver.props.accessibilityRole).toBe('button');
+  expect(volver.props.accessibilityLabel).toBe('Volver al perfil');
+  await act(async () => volver.props.onPress());
   expect(titulo()).toBe('Mi Perfil');
 });
 
