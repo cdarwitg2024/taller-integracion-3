@@ -9,6 +9,7 @@ import {
 import AppIcon from '../components/AppIcon';
 
 import CartItem from '../components/CartItem';
+import CodigoAfiliadoCarrito from '../components/CodigoAfiliadoCarrito';
 import { useCartTotals } from '../hooks/useCartTotals';
 import Button from '../components/Button';
 import Card from '../components/Card';
@@ -39,6 +40,7 @@ const CartScreen = ({
   // Retiro inmediato elegido localmente. No depende de tablas de horarios.
   // Se conserva franja_retiro como HH:mm-HH:mm para backend y KDS.
   const [franjaSeleccionada, setFranjaSeleccionada] = useState(false);
+  const [codigo, setCodigo] = useState('');
   const [ahora, setAhora] = useState(() => getReferenciaHoraria());
   const { totalProducts, subtotal, total } = useCartTotals(cart);
 
@@ -59,7 +61,10 @@ const CartScreen = ({
       return;
     }
     // Se calcula al confirmar: no enviar un horario viejo si cambió el minuto.
-    onCheckout({ franja: franjaRetiroActual(getReferenciaHoraria()).id });
+    onCheckout({
+      franja: franjaRetiroActual(getReferenciaHoraria()).id,
+      ...(codigo ? { codigo } : {}),
+    });
   };
 
   return (
@@ -91,6 +96,7 @@ const CartScreen = ({
           data={cart}
           keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.list}
           ListHeaderComponent={
             <>
@@ -162,6 +168,8 @@ const CartScreen = ({
                   </Text>
                 </View>
               </Card>
+
+              <CodigoAfiliadoCarrito codigo={codigo} onChange={setCodigo} disabled={paying} />
 
               <Card padding="lg" style={styles.summaryCard}>
                 <View style={styles.summaryRow}>
