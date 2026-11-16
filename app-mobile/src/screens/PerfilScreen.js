@@ -23,6 +23,7 @@ import Card from '../components/Card';
 import Header from '../components/Header';
 import Input from '../components/Input';
 import PoliticasAyudaScreen from './PoliticasAyudaScreen';
+import MisAfiliacionesScreen from './MisAfiliacionesScreen';
 
 /**
  * Formatea un rol interno a un nombre legible en la interfaz
@@ -94,6 +95,15 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [errorCarga, setErrorCarga] = useState(null);
   const [imgError, setImgError] = useState(false);
+  const [afiliacionesUsuario, setAfiliacionesUsuario] = useState(null);
+  const puedeVerAfiliaciones = Boolean(
+    !isGuest && authUserId && usuarioData?.auth_user_id === authUserId &&
+    usuarioData?.esEstudiante
+  );
+
+  useEffect(() => {
+    setAfiliacionesUsuario(null);
+  }, [authUserId, isGuest]);
 
   // Estados de Wallet
   const [wallet, setWallet] = useState(null);
@@ -313,6 +323,8 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
           foto: data.foto || data.foto_url || user?.user_metadata?.avatar_url || null,
           creado_en: data.creado_en || data.created_at || user?.created_at,
           rol: rolExtraido,
+          esEstudiante: data.auth_user_id === authUserId &&
+            (data.roles?.nombre === 'estudiante' || Number(data.rol_id) === 1),
         };
       } else {
         const parts = (user?.user_metadata?.full_name || '').trim().split(' ');
@@ -638,7 +650,11 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
     abrirPantallaPoliticas(tipo === 'contacto' ? 'contacto' : 'faq');
   };
 
-  // ─── Render: Pantalla Completa Políticas y Ayuda (S2-T16) ──────────
+  // Secciones internas: al volver se conserva el estado del perfil.
+  if (puedeVerAfiliaciones && afiliacionesUsuario === authUserId) {
+    return <MisAfiliacionesScreen onBack={() => setAfiliacionesUsuario(null)} />;
+  }
+
   if (pantallaPoliticasVisible) {
     return (
       <PoliticasAyudaScreen
@@ -991,6 +1007,24 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
             </View>
           </TouchableOpacity>
         </Card>
+
+        {puedeVerAfiliaciones && (
+          <Card variant="outlined" style={styles.sectionCard}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Mis afiliaciones"
+              accessibilityHint="Abre tu sección de afiliaciones"
+              style={styles.menuRow}
+              onPress={() => setAfiliacionesUsuario(authUserId)}
+            >
+              <View style={styles.menuRowLeft}>
+                <AppIcon name="student" style={styles.menuRowIcon} />
+                <Text style={styles.menuRowText}>Mis afiliaciones</Text>
+              </View>
+              <Text style={styles.menuRowChevron}>›</Text>
+            </TouchableOpacity>
+          </Card>
+        )}
 
         {/* ─── 2. SECCIÓN WALLET: SALDO Y ACCESO RÁPIDO ─────────────── */}
         <Card variant="elevated" style={styles.walletCard}>

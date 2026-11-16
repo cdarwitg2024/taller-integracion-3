@@ -12,11 +12,13 @@ import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurnedInOutlined';
+import GroupOutlinedIcon from '@mui/icons-material/GroupOutlined';
 
 import PageHeader from './components/dueno/PageHeader';
 import Promociones from './pages/dueno/Promociones';
 import ConfiguracionCafeteria from './pages/dueno/ConfiguracionCafeteria';
 import CondicionesCampana from './pages/dueno/CondicionesCampana';
+import Afiliados from './pages/dueno/Afiliados';
 import Login from './pages/auth/Login';
 import AccesoNoAutorizado from './components/AccesoNoAutorizado';
 import Dashboard from './pages/dueno/Dashboard';
@@ -74,6 +76,12 @@ function AuthenticatedLayout({ currentUser, onLogout, role, children }) {
       path: '/dueno/promociones',
       label: 'Promociones',
       icon: <LocalOfferOutlinedIcon fontSize="small" />,
+    },
+    {
+      id: 'afiliados',
+      path: '/dueno/afiliados',
+      label: 'Afiliados',
+      icon: <GroupOutlinedIcon fontSize="small" />,
     },
     {
       id: 'configuracion',
@@ -153,6 +161,10 @@ function buildDuenoHeader(pathname) {
     '/dueno/configuracion': {
       title: 'Configuración de Cafetería',
       subtitle: 'Administra los datos generales de tu cafetería.',
+    },
+    '/dueno/afiliados': {
+      title: 'Afiliados',
+      subtitle: 'Campañas y solicitudes de afiliación de tu cafetería.',
     },
   };
 
@@ -437,6 +449,11 @@ function App() {
             <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
               <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
                 <CondicionesCampana currentUser={currentUser} />
+          path="/dueno/afiliados"
+          element={
+            <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated} requiredRole="dueño">
+              <AuthenticatedLayout currentUser={currentUser} onLogout={handleLogout} role="dueño">
+                <Afiliados currentUser={currentUser} />
               </AuthenticatedLayout>
             </ProtectedRoute>
           }
