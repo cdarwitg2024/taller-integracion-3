@@ -92,3 +92,45 @@ y no se considera corregida ni validada por esta prueba. No se ejecutaron
 compras, retiros ni operaciones de afiliación, no se crearon cuentas y no se
 aplicaron cambios de esquema ni configuración en Supabase Cloud. La pantalla de
 afiliaciones sigue siendo el punto de entrada para tareas posteriores.
+
+## Corrección de accesibilidad tras revisión del PR
+
+Revisión del 16 de noviembre de 2026. Se confirmó que la flecha del encabezado
+solo exponía el carácter «‹». El componente compartido `Header` ahora declara
+`accessibilityRole="button"` y acepta `backAccessibilityLabel`, con «Volver»
+como valor general. `MisAfiliacionesScreen` especifica «Volver al perfil».
+Así, las demás pantallas no reciben un destino de regreso que no les corresponde.
+
+La prueba de la flecha en `PerfilAfiliaciones.test.js` verifica el rol, el nombre
+accesible y el regreso al perfil al activar el mismo control. Las dos pruebas de
+`Header.test.js` comprueban el nombre general y que no aparezca un botón cuando
+no existe una acción de regreso.
+
+Resultados locales de esta corrección, en Windows con Node.js 22.19.0:
+
+- Suite móvil completa: **79/79 PASS en 13 suites**, con
+  `npm.cmd test --prefix app-mobile -- --ci --runInBand --testTimeout=20000`.
+  Incluye las 9 pruebas de A01 y las 2 nuevas del encabezado compartido.
+- TypeScript: **PASS**, con el comando `tsc --noEmit` registrado arriba.
+- `git diff --check` y enlaces relativos de este documento: **PASS**.
+
+La ejecución con el límite predeterminado de 5 segundos aprobó 78 pruebas y
+agotó el tiempo en la prueba existente de apertura del QR en Pedidos. La
+repetición completa con 20 segundos por prueba aprobó los 79 casos. No se
+modificaron esa prueba ni la configuración de Jest.
+
+### Alcance de la segunda observación del revisor
+
+Según el informe recibido, el entorno de revisión sí dispone de ADB, Maestro
+2.12.0 y un AVD API 36, pero la construcción del APK del commit `18fac6f` quedó
+bloqueada por incompatibilidad de metadatos Gradle 9.4.1/Kotlin con el plugin
+React Native. El APK instalado en ese entorno no correspondía al commit y no
+se contó como evidencia del PR. Ese diagnóstico no se reprodujo en esta corrección.
+
+La prueba del 15 de noviembre registrada arriba se ejecutó en **Expo Go**,
+cargando el código local de A01 desde Metro; no fue una compilación de APK con
+Gradle ni una ejecución de Maestro. Se conserva como evidencia de navegación
+de aquella versión. No acredita la construcción del APK en el entorno del
+revisor ni la lectura audible con TalkBack de esta corrección. Estas dos
+comprobaciones siguen pendientes. No se cambió el toolchain Android para resolver
+el hallazgo de accesibilidad.

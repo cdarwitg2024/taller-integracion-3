@@ -10,19 +10,26 @@ import { typography } from '../theme/typography';
  * Props:
  * - title: Título del encabezado
  * - onBack: Función para retroceder (opcional)
+ * - backAccessibilityLabel: Nombre accesible del botón de regreso (por defecto, 'Volver')
  * - rightElement: Elemento a la derecha (opcional)
  * - variant: 'default' | 'transparent'
  */
 const Header = ({
   title,
   onBack,
+  backAccessibilityLabel = 'Volver',
   rightElement,
   variant = 'default',
 }) => {
   return (
     <View style={[styles.container, variant === 'transparent' && styles.transparent]}>
       {onBack ? (
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel={backAccessibilityLabel}
+        >
           <Text style={styles.backText}>‹</Text>
         </TouchableOpacity>
       ) : (

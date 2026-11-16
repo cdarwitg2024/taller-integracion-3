@@ -17,7 +17,11 @@ export default function MisAfiliacionesScreen({ onBack }) {
 
   return (
     <View style={styles.container}>
-      <Header title="Mis afiliaciones" onBack={onBack} />
+      <Header
+        title="Mis afiliaciones"
+        onBack={onBack}
+        backAccessibilityLabel="Volver al perfil"
+      />
       <View style={styles.content}>
         <Text style={styles.title}>Tu espacio de afiliaciones</Text>
         <Text style={styles.description}>
