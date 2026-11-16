@@ -247,7 +247,7 @@ test('cambiar de cafetería reinicia el formulario de creación', async t => {
   assert.equal(nombre().props.value, '');
 });
 
-test('un guardado pendiente de la cafetería anterior no publica su listado en la nueva', async t => {
+test('un guardado pendiente de la cafetería anterior no navega ni publica datos en la nueva', async t => {
   const listar = id => Promise.resolve([campana(id, `Campaña de la ${id}`)]);
   let resolverCrear;
   const crear = () => new Promise(resolve => { resolverCrear = resolve; });
@@ -258,12 +258,36 @@ test('un guardado pendiente de la cafetería anterior no publica su listado en l
     campanas: servicio(listar, { crear }),
   });
   const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+  const nombre = () => h.tree.root.findAllByType('TextField').find(c => c.props.label === 'Nombre de la campaña');
   await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
   await act(async () => resolverPerfil({ success: true, user: dueno(12), rol: 'dueño' }));
+  await act(async () => nombre().props.onChange({ target: { value: 'Borrador de la 12' } }));
   await act(async () => { resolverCrear({ id: 31 }); });
-  assert.equal(h.ruta(), '/dueno/afiliados/campanas');
-  assert.match(h.texto(), /Campaña de la 12/);
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas/nueva');
+  assert.equal(nombre().props.value, 'Borrador de la 12');
   assert.doesNotMatch(h.texto(), /Campaña de la 7/);
+});
+
+test('un guardado rechazado de la cafetería anterior no muestra su error en la nueva', async t => {
+  const listar = id => Promise.resolve([campana(id, `Campaña de la ${id}`)]);
+  let rechazarCrear;
+  const crear = () => new Promise((_, reject) => { rechazarCrear = reject; });
+  let resolverPerfil;
+  const perfil = new Promise(resolve => { resolverPerfil = resolve; });
+  const h = await montar(t, {
+    usuario: dueno(7), ruta: '/dueno/afiliados/campanas/nueva', perfil,
+    campanas: servicio(listar, { crear }),
+  });
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+  const nombre = () => h.tree.root.findAllByType('TextField').find(c => c.props.label === 'Nombre de la campaña');
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  await act(async () => resolverPerfil({ success: true, user: dueno(12), rol: 'dueño' }));
+  await act(async () => nombre().props.onChange({ target: { value: 'Borrador de la 12' } }));
+  await act(async () => rechazarCrear(new Error('guardado_atrasado_de_la_7')));
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas/nueva');
+  assert.equal(nombre().props.value, 'Borrador de la 12');
+  assert.doesNotMatch(h.texto(), /guardado_atrasado_de_la_7/);
+  assert.equal(h.tree.root.findAllByType('Alert').some(a => a.props.severity === 'error'), false);
 });
 
 test('un error de carga en el resumen se distingue de una campaña inexistente y permite reintentar', async t => {

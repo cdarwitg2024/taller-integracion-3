@@ -89,6 +89,14 @@ function Campanas({ currentUser }) {
   // Regresa al listado conservando el estado ya cargado.
   const volverAlListado = () => navigate(LISTADO);
 
+  // Recarga y vuelve al listado solo si el guardado sigue perteneciendo a la cafetería activa.
+  const guardarYVolver = async (origen) => {
+    if (origen !== cafeteriaActual.current) return;
+    await cargar();
+    if (origen !== cafeteriaActual.current) return;
+    volverAlListado();
+  };
+
   // Resuelve las rutas que dependen del listado: carga, error con reintento o
   // contenido. Solo tras una carga exitosa se puede hablar de campaña inexistente.
   const detalle = (contenido) => {
@@ -116,11 +124,11 @@ function Campanas({ currentUser }) {
       } />
       <Route path="nueva" element={
         <Formulario key={cafeteriaId} campanas={campanas} cafeteriaId={cafeteriaId} onVolver={volverAlListado}
-          onGuardado={async () => { await cargar(); volverAlListado(); }} />
+          onGuardado={guardarYVolver} />
       } />
       <Route path=":id/editar" element={detalle(
         <Formulario key={cafeteriaId} campanas={campanas} cafeteriaId={cafeteriaId} onVolver={volverAlListado}
-          onGuardado={async () => { await cargar(); volverAlListado(); }} />
+          onGuardado={guardarYVolver} />
       )} />
       <Route path=":id" element={detalle(
         <Resumen campanas={campanas} onVolver={volverAlListado}
@@ -200,6 +208,13 @@ function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
     : nuevaCampana()));
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
+  // El formulario se desmonta al cambiar de cafetería; su guardado pendiente no
+  // debe escribir estado en el componente retirado.
+  const montado = useRef(true);
+  useEffect(() => {
+    montado.current = true;
+    return () => { montado.current = false; };
+  }, []);
   // Actualiza un campo del formulario sin perder el resto.
   const cambiar = key => e => setForm(prev => ({ ...prev, [key]: e.target.value }));
 
@@ -207,16 +222,17 @@ function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
   const guardar = async (e) => {
     e.preventDefault();
     if (busy) return;
+    const origen = cafeteriaId;
     setBusy(true);
     setFormError('');
     try {
-      if (existente) await campanasAfiliados.actualizar(cafeteriaId, existente.id, form);
-      else await campanasAfiliados.crear(cafeteriaId, form);
-      await onGuardado();
+      if (existente) await campanasAfiliados.actualizar(origen, existente.id, form);
+      else await campanasAfiliados.crear(origen, form);
+      await onGuardado(origen);
     } catch (err) {
-      setFormError(err.message || 'No se pudo guardar la campaña.');
+      if (montado.current) setFormError(err.message || 'No se pudo guardar la campaña.');
     } finally {
-      setBusy(false);
+      if (montado.current) setBusy(false);
     }
   };
 
