@@ -93,3 +93,17 @@ La comisión se registra al confirmar la transición a `entregado`. La respuesta
 | Cotizar con el precio vigente y pedir confirmación ante un cambio | La campaña se pausa y el total sube de $8.500 a $10.000. | Cotización y confirmación en móvil, consulta de pedidos en escritorio |
 | Reutilizar la clave para el mismo intento y aplicar el beneficio al cobrar | Se pierde la respuesta del servidor después de confirmar el pedido. | Compra y reintentos en móvil |
 | Habilitar una sola comisión al entregar, con excepción para código propio | Se repite el escaneo o Diego compró con su propio código. | Retiro en escritorio y registro de comisiones |
+
+## Nota de implementación C03 sobre el esquema V05
+
+La administración de campañas usa `public.campanas`, la tabla que consume escritorio. El mapeo aplicado es `descuento_normal_pct → tasa_descuento`, `descuento_oferta_pct → tasa_descuento_oferta` (columna nueva, nullable), `comision_pct → tasa_comision`, `inicio → vigencia_desde` y `fin → vigencia_hasta`.
+
+`public.campanas` no tiene el estado `programada`. La API deriva `programada` para una campaña creada pero no activa y publica el estado real en `estado_db`: `pendiente_aceptacion` al crearla, `aceptada` si ya fue aceptada y todavía no inicia, `activa`, `pausada` o `finalizada`. Las campañas existentes conservan `tasa_descuento_oferta = NULL`; no se reinterpreta su descuento normal como descuento de oferta.
+
+La aceptación de V05 se conserva: activar sin `confirmada_por_dueno` y `version_confirmada = version_condiciones` devuelve `409 {"error":"aceptacion_requerida"}`. Pausar y reanudar no cambian las condiciones, la versión ni la aceptación.
+
+Cada cambio de nombre, descripción, tasas, oferta o vigencia en una campaña no confirmada genera una nueva `version_condiciones` desde el servidor (`1.0 → 1.1`, etc.). Enviar valores idénticos no cambia la versión. El trigger V05 extendido exige esa versión y bloquea cualquier cambio de condiciones después de la aceptación. La oferta se incluye en ambas reglas.
+
+`confirmar_condiciones_campana` conserva su restricción de vigencia: no acepta una campaña antes de `vigencia_desde`. C02 describe la aceptación antes del inicio; esa diferencia queda pendiente y no se modificó V05 para facilitar la prueba.
+
+**Conflicto pendiente de negocio:** este contrato permite editar porcentajes antes del inicio, pero el trigger de V05 impide cambiar las condiciones de una campaña ya aceptada. La implementación conserva la inmutabilidad y devuelve `409 {"error":"condiciones_aceptadas"}`. El trigger no se relajó; solo se extendió para incluir `tasa_descuento_oferta`. Si se decide permitir la edición previa al inicio, debe definirse si se invalida la aceptación, si se emite una nueva `version_condiciones` y cómo se avisa a los afiliados.

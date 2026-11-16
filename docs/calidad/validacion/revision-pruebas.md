@@ -2,16 +2,17 @@
 
 ## S3-T3: administración de campañas de afiliados
 
-Validación local del 15 de noviembre de 2026 en Windows con Node.js 22.23.5
-(la línea de CI) y repetida con Node.js 24.13.0:
+Corrección local del 16 de noviembre de 2026 en Windows con Node.js 22.23.5
+(la línea de CI):
 
-- `npm test --prefix Microservices/ms-pedidos -- --ci`: 3 suites y 141 pruebas aprobadas, incluidas 10 nuevas de rutas de afiliados.
-- Las pruebas de Supertest comprueban alta (201), edición (200), pausa (200), reanudación (200), dueño ajeno (403), porcentajes fijados (409), campaña finalizada (409), falta de sesión (401) y cuerpo inválido (422) sin invocar la RPC.
-- PostgreSQL 15 desechable: `database/fixes/prueba_administrar_campanas_afiliados.sql` salió con código 0. Verificó alta y edición, pausa y reanudación, rechazo del dueño ajeno y del empleado, fijación de porcentajes desde el inicio y rechazo tras el término.
-- `node --check` de los archivos nuevos y `git diff --check`: aprobados.
-- La migración `administrar_campanas_afiliados.sql` no se aplicó en Cloud y no se desplegó en Kubernetes. La prueba SQL simula `auth.uid()` y no sustituye una prueba con Supabase Auth, RLS y gateway reales. La tabla `campanas_afiliados` es provisional hasta el esquema definitivo de V05.
+- `npm test --prefix Microservices/ms-pedidos -- --ci`: 3 suites y 156 pruebas aprobadas, incluidas 25 de rutas de afiliados.
+- Las pruebas de Supertest comprueban alta y lectura de la misma campaña, edición con nueva versión, valores idénticos sin nueva versión, cambio solo de oferta con nueva versión, condiciones aceptadas (409), pausa y reanudación, activación sin aceptación (409), campaña finalizada (409), dueño ajeno, empleado y campaña ajena con cafetería propia en la URL (403), sesión ausente o inválida (401), cuerpo inválido (422), mensajes 22023 del trigger traducidos a 409/422 y fallo de infraestructura (503).
+- `npm test --prefix app-desktop`: 40 pruebas aprobadas. Una prueba nueva verifica que el servicio de escritorio sigue seleccionando las 17 columnas de `public.campanas`, incluida `tasa_descuento_oferta`; otra comprueba que la pantalla muestra por separado descuento normal, oferta y comisión, y que `NULL` se presenta como «No especificado».
+- PostgreSQL 15 desechable: `database/fixes/prueba_administrar_campanas_afiliados.sql` salió con código 0. Reproduce las definiciones V05 0018/0019 y la identidad exacta de 0021 (`u.activo AND r.activo`, `search_path = ''`): tabla `campanas`, función `dueno_campana_id`, RLS/grants, `proteger_confirmacion_campanas` y `confirmar_condiciones_campana`. Verificó que `dueno_campana_id` es una función y no una columna, el rechazo de un dueño activo con rol inactivo en alta/edición/activación/listado, la conservación de campañas previas con `tasa_descuento_oferta = NULL`, alta y lectura, versiones `1.0 → 1.1 → 1.2 → 1.3 → 1.4 → 1.5`, valores idénticos sin nueva versión, cambio de oferta con nueva versión, aceptación real con versión anterior rechazada y versión actual aceptada, rechazo de aceptación futura por la vigencia V05, inmutabilidad de nombre/descripción/tasas/oferta/fechas, extensión del trigger para oferta, pausa/reanudación, campaña finalizada y un ciclo completo de la misma campaña con inicio `+8 s`, espera acotada con límite de 30 s, aceptación real, pausa/reanudación y edición posterior rechazada.
+- `.github/workflows/ci-functional.yml` incorpora el trabajo `afiliados` con PostgreSQL 15 desechable. No se ejecutó en GitHub Actions desde este entorno.
+- La migración `administrar_campanas_afiliados.sql` no se aplicó en Cloud y no se desplegó en Kubernetes. La prueba SQL simula `auth.uid()` con `request.jwt.claim.sub`, pero usa los privilegios, RLS, trigger y RPC de aceptación reales. No sustituye una prueba con Supabase Auth, JWT y gateway reales. Las definiciones V05 necesarias se reproducen en el script; el esquema Cloud completo no está versionado en este repositorio.
 
-La evidencia de solicitudes, respuestas y datos SQL está en [S3-T3 · Administración de campañas de afiliados](../../microservicios/validacion/S3-T3-administracion-campanas-afiliados.md).
+La evidencia de solicitudes, respuestas, datos SQL y límites está en [S3-T3 · Administración de campañas de afiliados](../../microservicios/validacion/S3-T3-administracion-campanas-afiliados.md).
 
 ## S3-T4: condiciones y aceptación de campañas
 
@@ -58,9 +59,9 @@ de eventos Realtime. La validación no modifica datos remotos ni acredita un des
 ## Resultado local
 
 - Móvil: 68 pruebas, 11 suites aprobadas. La prueba de App comprueba login y navegación a registro; antes podía quedarse en carga sin detectar problemas.
-- Microservicios: cafeterías 22, menús 36, pedidos/auth 131 aprobadas.
+- Microservicios: cafeterías 22, menús 36, pedidos/auth 156 aprobadas.
 - Backend legacy: 51 pruebas en 4 suites en la auditoría original. La suite retirada tenía 15 casos. La ejecución posterior del backend aprobó las 36 pruebas restantes en 3 suites.
-- Escritorio: 7 aprobadas; shared: 5 aprobadas.
+- Escritorio: 40 aprobadas; shared: 5 aprobadas.
 - Telegram: 11 pruebas aprobadas, incluida la integración con PostgreSQL 15 real, ejecutadas dentro de un contenedor Python temporal.
 - Total de la auditoría antes del retiro de esa suite: 331 pruebas Node/Jest/Python aprobadas.
 - SQL: 8 escenarios de compra, 8 de cancelación y 2 concurrentes aprobados en PostgreSQL 15, la versión usada por CI. También se ejecutaron en PostgreSQL 17 local.

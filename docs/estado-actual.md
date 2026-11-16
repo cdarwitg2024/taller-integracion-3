@@ -1,6 +1,6 @@
 # Estado actual de CoffeeFast
 
-Revisión documental del 11 de noviembre de 2026. El estado del código y las pruebas locales se contrastó con el repositorio. El módulo de campañas de afiliados se añadió el 15 de noviembre. Las observaciones de Cloud y Kubernetes conservan la fecha de su verificación.
+Revisión documental del 11 de noviembre de 2026. El estado del código y las pruebas locales se contrastó con el repositorio. El módulo de campañas de afiliados se añadió el 15 de noviembre y se corrigió el 16 de noviembre. Las observaciones de Cloud y Kubernetes conservan la fecha de su verificación.
 
 ## Arquitectura
 
@@ -22,7 +22,7 @@ Revisión documental del 11 de noviembre de 2026. El estado del código y las pr
 | Solicitudes | Empleado crea; dueño resuelve pendiente → aprobado/rechazado con fecha y autor | Política reforzada preparada en SQL, no aplicada remotamente |
 | Configuración de cafetería | Lectura y guardado real por cafetería de la sesión, campos existentes, validaciones y detección de edición concurrente | Comprobar permisos efectivos del entorno; políticas preparadas localmente |
 | Promociones | Tabla/RPC activadas en Cloud el 1 de noviembre; mayor descuento por producto sin acumulación | Crear campañas reales desde el panel; no se insertaron promociones de ejemplo |
-| Campañas de afiliados | Rutas POST/PATCH en ms-pedidos; RPC con alcance por dueño y tabla `campanas_afiliados`; validación local con Jest y PostgreSQL desechable | Listado público, avisos e integración con el esquema definitivo de V05; no aplicado en Cloud |
+| Campañas de afiliados | Rutas GET/POST/PATCH en ms-pedidos sobre `public.campanas`; mapeo C02, `dueno_campana_id` como función, versionado del servidor, extensión del trigger V05 para oferta y aceptación real. Escritorio muestra descuento normal, oferta y comisión; `NULL` se muestra como «No especificado». Validación local con Jest, PostgreSQL 15 y CI preparado | Aceptación anticipada según C02, listado estudiantil C04, avisos y decisión sobre campañas existentes sin oferta; SQL no aplicado en Cloud |
 | QR | Apertura del detalle con QR y token confirmada en Android. La lista mostró únicamente los pedidos de la cuenta activa en la prueba con dos cuentas | Escaneo, entrega y rechazo del segundo uso en el entorno final |
 | Compra y cancelación | Activadas en Cloud: descuento/reposición transaccional y marca stock_descontado | Verificadas con compra/cancelación reversibles; pedidos históricos conservan marca false |
 | Voz KDS | voz-pedido publicada; validación del empleado rol 4 comprobada sin generar audio | Confirmar reproducción audible con un pedido real |
@@ -36,6 +36,7 @@ El aviso de voz se dispara por un pedido nuevo recibido por Realtime con voz act
 - Ambas definiciones añaden la columna de forma idempotente, sin marcar pedidos históricos. Aplicarlas coordinadamente antes de habilitar el ciclo nuevo.
 - La primera inspección del 1 de noviembre encontró ausente `stock_descontado`. Tras la autorización del usuario se aplicó `database/fixes/activar_stock_promociones_cloud.sql` y se verificó su existencia en la API. La pantalla del dueño relee `productos.stock`; no vuelve a descontarlo en JavaScript.
 - database/fixes/resolver_solicitudes_stock_seguro.sql limita la resolución al dueño asociado. Aprobar no significa incrementar stock.
+- database/fixes/administrar_campanas_afiliados.sql integra la administración con `public.campanas`: agrega `tasa_descuento_oferta` nullable, crea el versionado de condiciones, extiende el trigger V05 para incluir la oferta en inmutabilidad y nueva versión, y crea las RPC de alta, edición y listado administrativo. Conserva `confirmar_condiciones_campana` y su restricción de vigencia. No se aplicó en Cloud.
 - get_current_user_id y otras dependencias base no están totalmente versionadas: el repositorio no permite asumir una reconstrucción completa de Cloud desde cero.
 - No ejecutar todos los fixes ni seeds como una migración global. Solo se aplicó la migración reconciliada indicada; la política de solicitudes sigue pendiente.
 - **Autorización posterior del usuario: activar en Cloud stock y dependencias del panel.** Ejecutado con respaldo, ensayo reversible y publicación transaccional. La definición Cloud conserva `generar_token_retiro`, `codigo_pedido`, validación de franja y el contrato anterior de credenciales; agrega el alias `codigo_retiro` para Mobile. Ver [promociones y configuración](base-datos/promociones-configuracion-dueno.md).
@@ -43,7 +44,7 @@ El aviso de voz se dispara por un pedido nuevo recibido por Realtime con voz act
 ## Últimas validaciones registradas
 
 - Mobile: 68 pruebas en 11 suites, con regresiones de sesión vencida y recuperación de pedidos. Las lecturas reintentan una vez tras renovar el JWT. El flujo de compra y cancelación conserva sus llamadas de escritura sin reintento automático por vencimiento.
-- Desktop: 7 pruebas de servicios. Backend legacy: 36 pruebas vigentes aprobadas. Microservicios: 189, además de 5 de shared. Telegram: 11, incluida una integración con PostgreSQL.
+- Desktop: 40 pruebas locales, incluidas 13 de campañas. Backend legacy: 36 pruebas vigentes aprobadas. Microservicios: 214, además de 5 de shared. Telegram: 11, incluida una integración con PostgreSQL.
 - PostgreSQL aislado: 18 escenarios de compra, cancelación y concurrencia. Catálogo: 7 escenarios HTTP con PostgREST y PostgreSQL. Las pruebas detectaron 11 defectos introducidos en copias temporales.
 - La ejecución en GitHub Actions, la prueba manual de retiro y la cobertura completa de Supabase Auth/RLS se verifican por separado. Ver [evidencia y alcance](calidad/validacion/revision-pruebas.md).
 

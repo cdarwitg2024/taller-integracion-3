@@ -35,7 +35,7 @@ function comprobarError(error, recurso = 'El esquema de campañas') {
 async function listarCampanasAutorizadas(cafeteriaId) {
   const { data, error } = await supabase
     .from('campanas')
-    .select('id, cafeteria_id, nombre, descripcion, estado, version_condiciones, tasa_descuento, tasa_comision, vigencia_desde, vigencia_hasta, confirmada_por_dueno, fecha_confirmacion, usuario_confirma_id, version_confirmada, creado_en, actualizado_en')
+    .select('id, cafeteria_id, nombre, descripcion, estado, version_condiciones, tasa_descuento, tasa_descuento_oferta, tasa_comision, vigencia_desde, vigencia_hasta, confirmada_por_dueno, fecha_confirmacion, usuario_confirma_id, version_confirmada, creado_en, actualizado_en')
     .eq('cafeteria_id', cafeteriaId)
     .order('creado_en', { ascending: false });
 

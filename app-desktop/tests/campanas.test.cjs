@@ -32,7 +32,8 @@ function cargar(file, imports) {
 
 const campana = (extra = {}) => ({
   id: 1, cafeteria_id: 1, nombre: 'Campaña A', version_condiciones: '1.0',
-  tasa_descuento: 10.25, tasa_comision: 2.75, confirmada_por_dueno: false,
+  tasa_descuento: 10.25, tasa_descuento_oferta: 4.5, tasa_comision: 2.75,
+  confirmada_por_dueno: false,
   vigencia_desde: '2026-01-01', vigencia_hasta: '2027-01-01', ...extra,
 });
 const aceptada = row => ({ ...row, confirmada_por_dueno: true, version_confirmada: row.version_condiciones });
@@ -97,6 +98,23 @@ test('muestra tasas exactas y un doble clic solo envía una confirmación', asyn
   assert.equal(llamadas, 1);
   await act(async () => { pending.resolve(aceptada(campana())); });
   assert.match(h.texto(), /aceptadas exitosamente/); assert.equal(h.avisos(), 1);
+});
+
+test('muestra descuento normal, oferta y comisión; NULL no se convierte en cero', async t => {
+  const h = await montar(t);
+  assert.match(h.texto(), /Descuento Normal/);
+  assert.match(h.texto(), /Descuento para Ofertas/);
+  assert.match(h.texto(), /Tasa de Comisión/);
+  assert.match(h.texto(), /10,25/);
+  assert.match(h.texto(), /4,50/);
+  assert.match(h.texto(), /2,75/);
+
+  h.service.obtenerCampanaVigente = async () => campana({ tasa_descuento_oferta: null });
+  await h.emitir();
+  assert.match(h.texto(), /No especificado/);
+  assert.match(h.texto(), /10,25/);
+  assert.doesNotMatch(h.texto(), /0,00%/);
+  assert.doesNotMatch(h.texto(), /4,50/);
 });
 
 test('cambiar versión desmarca el consentimiento y descarta la confirmación anterior', async t => {
@@ -226,6 +244,41 @@ test('servicio rechaza perfiles inválidos antes de invocar RPC', async () => {
     });
     await assert.rejects(campanasService.confirmarCondiciones({ campanaId: 1, cafeteriaId: 1, version: '1.0' }));
     assert.equal(llamadas, 0);
+  }
+});
+
+test('el servicio de escritorio conserva las columnas de public.campanas', async () => {
+  let seleccion = '';
+  const { campanasService } = cargar('services/campanasService.js', {
+    './supabase': {
+      supabase: {
+        from(tabla) {
+          assert.equal(tabla, 'campanas');
+          return {
+            select(columnas) {
+              seleccion = columnas;
+              return { eq: () => ({ order: async () => ({ data: [], error: null }) }) };
+            },
+          };
+        },
+      },
+    },
+    './usuarios': {
+      usuarios: {
+        getPerfilSesion: async () => ({ success: true, rol: 'dueño', user: { cafeteria_id: 1 } }),
+      },
+    },
+  });
+
+  await campanasService.listar(1);
+
+  for (const campo of [
+    'id', 'cafeteria_id', 'nombre', 'descripcion', 'estado', 'version_condiciones',
+    'tasa_descuento', 'tasa_descuento_oferta', 'tasa_comision', 'vigencia_desde', 'vigencia_hasta',
+    'confirmada_por_dueno', 'fecha_confirmacion', 'usuario_confirma_id',
+    'version_confirmada', 'creado_en', 'actualizado_en',
+  ]) {
+    assert.match(seleccion, new RegExp(`\\b${campo}\\b`), `falta ${campo}`);
   }
 });
 

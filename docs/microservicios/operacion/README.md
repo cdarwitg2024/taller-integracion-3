@@ -102,6 +102,7 @@ Públicas, por el gateway:
 | GET | `/api/pedidos/:id` | ms-pedidos |
 | PATCH | `/api/pedidos/:id/estado` | ms-pedidos |
 | POST | `/api/pedidos/validar-qr` | ms-pedidos |
+| GET | `/api/afiliados/cafeterias/:cafeteriaId/campanas` | ms-pedidos |
 | POST | `/api/afiliados/cafeterias/:cafeteriaId/campanas` | ms-pedidos |
 | PATCH | `/api/afiliados/cafeterias/:cafeteriaId/campanas/:campanaId` | ms-pedidos |
 | GET | `/gateway/health` | nginx (estático) |
@@ -176,6 +177,6 @@ gana el más corto, así que `location /api/menus` se comería
 
 ## Administración de campañas de afiliados
 
-`ms-pedidos` expone el alta, la edición y los cambios de estado del [contrato C02](../../contratos-integracion-afiliados.md) en `/api/afiliados`. El dueño se identifica con su JWT: la RPC `administrar_campana_afiliados` valida `auth.uid()` y `es_dueno_cafeteria`, y limita la fila por campaña y cafetería. Los porcentajes y la vigencia quedan fijos desde el inicio; pausar y reanudar conserva las condiciones originales.
+`ms-pedidos` expone el alta, la edición, el listado administrativo y los cambios de estado del [contrato C02](../../contratos-integracion-afiliados.md) en `/api/afiliados`. El dueño se identifica con su JWT: las RPC `administrar_campana_afiliados` y `listar_campanas_afiliados` usan `public.dueno_campana_id(p_cafeteria_id)`, la función de identidad de V05 que exige usuario y rol activos, y limitan la fila o el listado por cafetería. Los porcentajes y la vigencia quedan fijos desde el inicio; pausar y reanudar conserva condiciones, versión y aceptación.
 
-La migración [administrar_campanas_afiliados.sql](../../../database/fixes/administrar_campanas_afiliados.sql) depende de la función creada por [gestion_promociones_cafeteria.sql](../../../database/fixes/gestion_promociones_cafeteria.sql). Usa una tabla `campanas_afiliados` separada de `campanas` porque C02 define dos descuentos y otro ciclo de estado; la integración con el esquema definitivo de V05 queda pendiente. La evidencia de solicitudes, códigos HTTP y cálculo SQL está en [S3-T3 · Administración de campañas de afiliados](../validacion/S3-T3-administracion-campanas-afiliados.md).
+La migración [administrar_campanas_afiliados.sql](../../../database/fixes/administrar_campanas_afiliados.sql) usa `public.campanas`, la tabla que consume escritorio. Agrega `tasa_descuento_oferta` como columna nullable, crea `siguiente_version_condiciones` y extiende el trigger V05 `proteger_confirmacion_campanas` para que la oferta participe en la inmutabilidad y en la exigencia de nueva versión. No modifica `confirmar_condiciones_campana` ni su restricción de vigencia. Las campañas existentes conservan `NULL` y no se modifica su aceptación. Los estados reales son `borrador`, `pendiente_aceptacion`, `aceptada`, `activa`, `pausada` y `finalizada`; la API deriva `programada` y publica el estado real en `estado_db`. La evidencia de solicitudes, códigos HTTP, SQL y RLS está en [S3-T3 · Administración de campañas de afiliados](../validacion/S3-T3-administracion-campanas-afiliados.md).
