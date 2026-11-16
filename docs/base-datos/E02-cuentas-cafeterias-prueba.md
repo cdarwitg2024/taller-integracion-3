@@ -240,8 +240,13 @@ esac
 FLAG=/tmp/opencode/e02_cafeteria_usuarios_existia
 if [ -f "$FLAG" ]; then
   FLAG_PREVIO="$(cat "$FLAG")"
-  if [ "$FLAG_PREVIO" != "$TABLA_EXISTIA" ]; then
-    echo "ABORT: el indicador guardado ($FLAG_PREVIO) no coincide con el estado actual ($TABLA_EXISTIA); ejecuta §6 o revisa el entorno."
+  case "$FLAG_PREVIO" in
+    true|false) ;;
+    *) echo "ABORT: indicador inválido"; exit 1 ;;
+  esac
+
+  if [ "$FLAG_PREVIO" = "true" ] && [ "$TABLA_EXISTIA" = "false" ]; then
+    echo "ABORT: desapareció una tabla que existía originalmente"
     exit 1
   fi
 else
