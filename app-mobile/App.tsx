@@ -28,7 +28,8 @@ import PerfilScreen from './src/screens/PerfilScreen';
 import { Cafeteria } from './src/types/cafeteria';
 import { CartProvider, useCart } from './src/context/CartContext';
 import { useCartTotals } from './src/hooks/useCartTotals';
-import { apiPost, ApiError } from './src/services/backendClient';
+import { ApiError } from './src/services/backendClient';
+import { crearPedidoDesdeCarrito, RetiroCheckout } from './src/services/crearPedidoDesdeCarrito';
 import {
   evaluarDisponibilidad,
   mensajeProblemas,
@@ -462,7 +463,7 @@ function AppContent() {
     );
   };
 
-  const handleCheckout = async (franjaRetiro?: { franja: string }) => {
+  const handleCheckout = async (franjaRetiro?: RetiroCheckout) => {
     // La cafetería del pedido sale de los propios ítems del carrito, no de
     // `selectedCafeteria`. Antes se leía de ahí, y como perder la cafetería
     // seleccionada era fácil (basta con cambiar de pestaña), el pago se
@@ -543,20 +544,8 @@ function AppContent() {
       // El total NO se manda. ms-pedidos lo cotiza contra ms-menus y la RPC
       // `procesar_pago` lo recalcula desde productos.precio: si se enviara,
       // un cliente podria pagar $100 un sándwich de $2.000.
-      const cuerpo = {
-        cafeteria_id: cafeteriaId,
-        items: cart.map((item) => ({
-          producto_id: item.id,
-          cantidad: item.quantity,
-          precio_esperado: item.price,
-        })),
-        franja_retiro: franjaRetiro.franja,
-      };
-
-      const respuesta = await apiPost<RespuestaCrearPedido | null>(
-        '/api/pedidos',
-        cuerpo,
-        { timeoutMs: TIMEOUT_CREAR_PEDIDO_MS }
+      const respuesta = await crearPedidoDesdeCarrito<RespuestaCrearPedido | null>(
+        cafeteriaId, cart, franjaRetiro, TIMEOUT_CREAR_PEDIDO_MS
       );
 
       // El backend responde HTTP 201 con `{ ok: true, pedido: <retorno de

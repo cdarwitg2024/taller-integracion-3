@@ -17,6 +17,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 
 ### Validación
 
+- [V01 / CAM-223 — Acceso Afiliados del dueño](desktop/validacion/V01-CAM-223-Acceso-Afiliados.md)
 - [S2-T15 - Validación flujo integrado y recuperación del KDS](desktop/validacion/S2-T15-Validacion-Flujo-Integrado-KDS.md)
 - [S2-T17 - Validación flujo completo del KDS](desktop/validacion/S2-T17-Validacion-Flujo-Completo-KDS.md)
 - [S2-T18 — Validación integrada del panel administrativo](desktop/validacion/S2-T18_validacion_panel_administrativo.md)
@@ -50,6 +51,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 ### Validación
 
 - [S2-T17 - Validar flujo Mobile de disponibilidad y carrito](mobile/validacion/S2-T17-Validacion-Flujo-Mobile-Disponibilidad-y-Carrito.md)
+- [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 
 ## Backend Node
 
@@ -92,6 +94,11 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 ### Validación
 
 - [Revisión de pruebas para CI/CD](calidad/validacion/revision-pruebas.md)
+
+## Afiliados
+
+- [C01 · Reglas del piloto de afiliados](reglas-piloto-afiliados.md)
+- [C02 · Contratos de integración de afiliados](contratos-integracion-afiliados.md)
 
 ## Base de datos
 
