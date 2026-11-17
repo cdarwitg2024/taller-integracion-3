@@ -105,6 +105,8 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 
 ## Base de datos
 
+- [S3-T6 / CAM-228 — Grupos equivalentes](base-datos/grupos-equivalentes.md)
+
 - [C02 — Contratos de integración de afiliados](contratos-integracion-afiliados.md)
 - [C01 — Reglas del piloto de afiliados](reglas-piloto-afiliados.md)
 - [D.2.1 — Cancelación de pedido con reembolso a Wallet (traspaso a Base de Datos)](base-datos/D2.1_cancelacion_reembolso.md)
