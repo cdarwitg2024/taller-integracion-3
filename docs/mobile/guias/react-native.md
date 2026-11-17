@@ -30,6 +30,10 @@ Para iniciar el gateway y comprobar su conexión, sigue la [guía del flujo de p
 
 ## Pedidos y sesión
 
+El recorrido entre selección de cafetería, catálogo, carrito y el acceso desde
+Perfil está descrito en el [contrato de navegación Mobile](contrato-navegacion.md),
+con diagrama y pruebas reproducibles para conservar el flujo existente.
+
 La app crea pedidos por el gateway y lee los pedidos del usuario en Supabase. La pantalla muestra el QR y el token de contingencia persistidos para pedidos activos. Si Supabase informa `PGRST303: JWT expired`, la app intenta renovar la sesión y repite la lectura una vez. Si la renovación falla porque la sesión dejó de ser válida, vuelve a iniciar sesión.
 
 ## Pruebas

@@ -36,6 +36,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 ### Guías
 
 - [Guía de la app móvil](mobile/guias/react-native.md)
+- [S3-T1 — Contrato de navegación: cafeterías, catálogo, carrito y Mis afiliaciones](mobile/guias/contrato-navegacion.md)
 
 ### Incidencias
 
