@@ -1,10 +1,18 @@
 'use strict';
 
+/**
+ * Lógica de pedidos de ms-pedidos.
+ *
+ * Lee precios de ms-menus, crea y consulta pedidos, aplica transiciones de
+ * estado y gestiona cancelaciones con el JWT del usuario. El cliente
+ * autenticado se reutiliza desde `cliente-autenticado.js`.
+ */
+
 // Interfaz publica de `shared` (namespaces). Ya no hace falta el fallback
 // historico a la interfaz plana: `shared` exporta `supabase`, `httpClient` y
 // `HttpError` de forma estable (ver shared/src/index.js).
 const { supabase, httpClient, HttpError } = require('@coffeefaster/shared');
-const { createClient } = require('@supabase/supabase-js');
+const crearClienteAutenticado = require('../../cliente-autenticado');
 const {
   normalizarEstado,
   puedeTransicionar,
@@ -21,23 +29,6 @@ function obtenerMsMenusUrl() {
   }
 
   return url.replace(/\/+$/, '');
-}
-
-function crearClienteAutenticado(accessToken) {
-  if (!accessToken) throw new HttpError(401, 'Usuario no autenticado');
-
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new HttpError(503, 'Configuracion de Supabase incompleta', {
-      causa: 'Se requieren SUPABASE_URL y SUPABASE_PUBLISHABLE_KEY o SUPABASE_ANON_KEY'
-    });
-  }
-
-  return createClient(url, key, {
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
-    auth: { autoRefreshToken: false, persistSession: false }
-  });
 }
 
 /**
@@ -155,27 +146,10 @@ const MAPA_ERRORES_CANCELACION = {
 async function cancelarPedido({ accessToken, id }) {
   const pedidoId = validarPedidoId(id);
 
-  if (!accessToken) {
-    throw new HttpError(401, 'Usuario no autenticado');
-  }
-
-  const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!publishableKey) {
-    throw new HttpError(503, 'No se pudo cancelar el pedido', {
-      causa: 'SUPABASE_PUBLISHABLE_KEY/ANON_KEY no configuradas'
-    });
-  }
+  const clienteConToken = crearClienteAutenticado(accessToken);
 
   let rpcData;
   try {
-    const clienteConToken = require('@supabase/supabase-js').createClient(
-      process.env.SUPABASE_URL,
-      publishableKey,
-      {
-        global: { headers: { Authorization: 'Bearer ' + accessToken } },
-        auth: { autoRefreshToken: false, persistSession: false }
-      }
-    );
     const { data, error } = await clienteConToken.rpc('cancelar_pedido', {
       p_pedido_id: pedidoId
     });

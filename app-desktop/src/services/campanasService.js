@@ -50,12 +50,12 @@ export const campanasService = {
    * Lista todas las campañas asociadas a la cafetería
    */
   async listar(cafeteriaId) {
-    await autorizar(cafeteriaId);
+    const id = await autorizar(cafeteriaId);
 
     const { data, error } = await supabase
       .from('campanas')
-      .select('*')
-      .eq('cafeteria_id', cafeteriaId)
+      .select('id, cafeteria_id, nombre, descripcion, estado, version_condiciones, tasa_descuento, tasa_descuento_oferta, tasa_comision, vigencia_desde, vigencia_hasta, confirmada_por_dueno, fecha_confirmacion, usuario_confirma_id, version_confirmada, creado_en, actualizado_en')
+      .eq('cafeteria_id', id)
       .order('creado_en', { ascending: false });
 
     comprobarError(error);

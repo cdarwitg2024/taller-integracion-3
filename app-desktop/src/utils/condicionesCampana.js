@@ -5,7 +5,7 @@ export const campanaAceptada = campana => Boolean(
 
 export const claveCondiciones = campana => campana ? JSON.stringify([
   campana.cafeteria_id, campana.id, campana.version_condiciones,
-  campana.tasa_descuento, campana.tasa_comision, campana.vigencia_desde, campana.vigencia_hasta,
+  campana.tasa_descuento, campana.tasa_descuento_oferta, campana.tasa_comision, campana.vigencia_desde, campana.vigencia_hasta,
 ]) : null;
 
 export const formatearTasa = tasa => Number(tasa || 0).toLocaleString('es-CL', {

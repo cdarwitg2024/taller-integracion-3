@@ -75,6 +75,23 @@ jobs:
       - name: Remove isolated database container
         if: always()
         run: docker rm -f cf-test-postgres
+  afiliados:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Start disposable PostgreSQL
+        run: |
+          docker run -d --name cf-afiliados-pg -e POSTGRES_PASSWORD=test -v "$PWD:/repo" postgres:15
+          for attempt in $(seq 1 30); do
+            if docker exec cf-afiliados-pg pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+      - name: Campaign administration SQL, V05 trigger, versioning and acceptance
+        run: docker exec -w /repo cf-afiliados-pg psql -U postgres -v ON_ERROR_STOP=1 -f database/fixes/prueba_administrar_campanas_afiliados.sql
+      - name: Remove disposable PostgreSQL
+        if: always()
+        run: docker rm -f cf-afiliados-pg
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -92,3 +109,15 @@ jobs:
       - run: npm test -- --ci --runInBand
       - name: Verify tests detect an incorrect initial order state
         run: node ../.github/scripts/verify-unit-sensitivity.cjs backend
+  afiliados-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --prefix Microservices/ms-pedidos
+      - run: ln -s ../ms-pedidos/node_modules Microservices/shared/node_modules
+      - name: C03 through gateway, real Auth JWTs, PostgREST, RPC and RLS
+        run: node .github/scripts/test-afiliados-auth-integration.cjs

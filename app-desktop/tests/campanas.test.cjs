@@ -344,7 +344,7 @@ test('el servicio sigue el contrato C02 con el cliente autenticado', async () =>
   await campanasAfiliados.crear(7, form);
   await campanasAfiliados.actualizar(7, 31, { ...form, descuento_normal_pct: '12' });
 
-  assert.equal(llamadas[0].url, 'http://gateway/api/afiliados/cafeterias/7/campanas');
+  assert.equal(llamadas[0].url, 'http://gateway/api/afiliados/cafeterias/7/campanas/administracion');
   assert.equal(llamadas[0].opciones.method, undefined);
   assert.equal(llamadas[1].url, 'http://gateway/api/afiliados/cafeterias/7/campanas');
   assert.equal(llamadas[1].opciones.method, 'POST');
@@ -382,7 +382,7 @@ function cargarCond(file, imports) {
 
 const campanaCond = (extra = {}) => ({
   id: 1, cafeteria_id: 1, nombre: 'Campaña A', version_condiciones: '1.0',
-  tasa_descuento: 10.25, tasa_comision: 2.75, confirmada_por_dueno: false,
+  tasa_descuento: 10.25, tasa_descuento_oferta: 4.5, tasa_comision: 2.75, confirmada_por_dueno: false,
   vigencia_desde: '2026-01-01', vigencia_hasta: '2027-01-01', ...extra,
 });
 const aceptadaCond = row => ({ ...row, confirmada_por_dueno: true, version_confirmada: row.version_condiciones });
@@ -534,4 +534,58 @@ test('servicio no envía identidad del cliente ni acepta una versión, campaña 
     aceptadaCond(campanaCond({ version_condiciones: '2.0' })), { ...aceptadaCond(campanaCond()), version_confirmada: '0.9' }]) {
     respuesta = row; await assert.rejects(confirmar(), /no confirmó/);
   }
+});
+
+
+
+test('el servicio de escritorio conserva las columnas de public.campanas', async () => {
+  let seleccion = '';
+  const { campanasService } = cargarCond('services/campanasService.js', {
+    './supabase': {
+      supabase: {
+        from(tabla) {
+          assert.equal(tabla, 'campanas');
+          return {
+            select(columnas) {
+              seleccion = columnas;
+              return { eq: () => ({ order: async () => ({ data: [], error: null }) }) };
+            },
+          };
+        },
+      },
+    },
+    './usuarios': {
+      usuarios: {
+        getPerfilSesion: async () => ({ success: true, rol: 'dueño', user: { cafeteria_id: 1 } }),
+      },
+    },
+  });
+
+  await campanasService.listar(1);
+
+  for (const campo of [
+    'id', 'cafeteria_id', 'nombre', 'descripcion', 'estado', 'version_condiciones',
+    'tasa_descuento', 'tasa_descuento_oferta', 'tasa_comision', 'vigencia_desde', 'vigencia_hasta',
+    'confirmada_por_dueno', 'fecha_confirmacion', 'usuario_confirma_id',
+    'version_confirmada', 'creado_en', 'actualizado_en',
+  ]) {
+    assert.match(seleccion, new RegExp(`\\b${campo}\\b`), `falta ${campo}`);
+  }
+});
+
+test('muestra descuento normal, oferta y comisión; NULL no se convierte en cero', async t => {
+  const h = await montarCond(t);
+  assert.match(h.texto(), /Descuento Normal/);
+  assert.match(h.texto(), /Descuento para Ofertas/);
+  assert.match(h.texto(), /Tasa de Comisión/);
+  assert.match(h.texto(), /10,25/);
+  assert.match(h.texto(), /4,50/);
+  assert.match(h.texto(), /2,75/);
+
+  h.service.obtenerCampanaVigente = async () => campanaCond({ tasa_descuento_oferta: null });
+  await h.emitir();
+  assert.match(h.texto(), /No especificado/);
+  assert.match(h.texto(), /10,25/);
+  assert.doesNotMatch(h.texto(), /0,00%/);
+  assert.doesNotMatch(h.texto(), /4,50/);
 });

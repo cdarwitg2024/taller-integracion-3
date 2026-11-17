@@ -41,7 +41,7 @@ for (const [name, folder, file, before, after, test] of cases.filter(c => !selec
       if (fs.existsSync(path.join(source, entry))) fs.cpSync(path.join(source, entry), path.join(dir, entry), { recursive: true });
     }
     fs.symlinkSync(path.join(source, 'node_modules'), path.join(dir, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
-    const target = path.join(dir, file), original = fs.readFileSync(target, 'utf8');
+    const target = path.join(dir, file), original = fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n');
     assert.equal(original.split(before).length, 2, `Mutación ambigua: ${name}`);
     fs.writeFileSync(target, original.replace(before, after));
     const output = path.join(dir, 'results.json');

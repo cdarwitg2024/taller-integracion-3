@@ -41,9 +41,9 @@ export function prepararCampana(form) {
 }
 
 export const campanasAfiliados = {
-  // GET /api/afiliados/cafeterias/:id/campanas
+  // GET /api/afiliados/cafeterias/:id/campanas/administracion (solo dueño)
   async listar(cafeteriaId) {
-    const body = await request(ruta(cafeteriaId));
+    const body = await request(ruta(cafeteriaId, '/administracion'));
     return Array.isArray(body?.campanas) ? body.campanas : [];
   },
   // POST /api/afiliados/cafeterias/:id/campanas

@@ -80,6 +80,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 ### Validación
 
 - [Prueba del flujo de catálogo — T11](microservicios/validacion/pruebas_flujo_catalogo.md)
+- [S3-T3 — Administración de campañas de afiliados](microservicios/validacion/S3-T3-administracion-campanas-afiliados.md)
 
 ## Bot de Telegram
 
@@ -104,6 +105,8 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 
 ## Base de datos
 
+- [C02 — Contratos de integración de afiliados](contratos-integracion-afiliados.md)
+- [C01 — Reglas del piloto de afiliados](reglas-piloto-afiliados.md)
 - [D.2.1 — Cancelación de pedido con reembolso a Wallet (traspaso a Base de Datos)](base-datos/D2.1_cancelacion_reembolso.md)
 - [D.4 — Validación QR y entrega de pedido (traspaso a Base de Datos)](base-datos/D4_validacion_qr_entrega.md)
 - [S2-T16 — Dependencias SQL del flujo de pedidos](base-datos/dependencias-sql-ms-pedidos.md)

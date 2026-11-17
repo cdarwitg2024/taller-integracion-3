@@ -18,6 +18,7 @@ import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurned
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PercentOutlinedIcon from '@mui/icons-material/PercentOutlined';
+import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import MonetizationOnOutlinedIcon from '@mui/icons-material/MonetizationOnOutlined';
@@ -274,7 +275,7 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' },
                 gap: 2,
               }}
             >
@@ -299,7 +300,7 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
                 </Typography>
               </Paper>
 
-              {/* 2. Tasa de Descuento */}
+              {/* 2. Descuento normal */}
               <Paper
                 elevation={0}
                 sx={{
@@ -312,18 +313,46 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                   <PercentOutlinedIcon sx={{ color: '#267248', fontSize: 20 }} />
                   <Typography variant="body2" color="text.secondary" fontWeight={600}>
-                    Tasa de Descuento
+                    Descuento Normal
                   </Typography>
                 </Stack>
                 <Typography variant="h6" fontWeight={800} color="#267248">
                   {formatearTasa(campana.tasa_descuento)}%
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Aplicable al carrito completo
+                  Aplicable a productos a precio normal
                 </Typography>
               </Paper>
 
-              {/* 3. Tasa de Comisión */}
+              {/* 3. Descuento para ofertas */}
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  borderRadius: 3,
+                  bgcolor: '#F0F4FF',
+                  border: '1px solid #DCE4F7',
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                  <LocalOfferOutlinedIcon sx={{ color: '#3F51B5', fontSize: 20 }} />
+                  <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                    Descuento para Ofertas
+                  </Typography>
+                </Stack>
+                <Typography variant="h6" fontWeight={800} color="#3F51B5">
+                  {campana.tasa_descuento_oferta === null || campana.tasa_descuento_oferta === undefined
+                    ? 'No especificado'
+                    : `${formatearTasa(campana.tasa_descuento_oferta)}%`}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {campana.tasa_descuento_oferta === null || campana.tasa_descuento_oferta === undefined
+                    ? 'Campaña anterior sin descuento de oferta definido'
+                    : 'Aplicable a productos en oferta'}
+                </Typography>
+              </Paper>
+
+              {/* 4. Tasa de Comisión */}
               <Paper
                 elevation={0}
                 sx={{
@@ -347,7 +376,7 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
                 </Typography>
               </Paper>
 
-              {/* 4. Vigencia */}
+              {/* 5. Vigencia */}
               <Paper
                 elevation={0}
                 sx={{
