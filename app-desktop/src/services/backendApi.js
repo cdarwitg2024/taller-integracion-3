@@ -15,7 +15,7 @@ async function getAccessToken() {
   }
 }
 
-async function request(url, options = {}) {
+export async function request(url, options = {}) {
   const token = await getAccessToken();
   if (!token) {
     throw new Error('No hay sesión activa. Inicie sesión nuevamente.');

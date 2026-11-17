@@ -33,7 +33,7 @@ function cargarApp(servicios) {
       const base = path.resolve(path.dirname(archivo), nombre);
       const destino = [base, base + '.jsx', base + '.js'].find(f => fs.existsSync(f) && fs.statSync(f).isFile());
       assert.ok(destino, `Import inexistente: ${nombre}`);
-      const relativa = path.relative(src, destino);
+      const relativa = path.relative(src, destino).split(path.sep).join('/');
       if (relativa === 'services/supabase.js') return { supabase: servicios.supabase };
       if (relativa === 'services/usuarios.js') return { usuarios: servicios.usuarios };
       if (relativa === 'services/pedidosService.js') return { __esModule: true, default: { getAll: async () => [] } };
