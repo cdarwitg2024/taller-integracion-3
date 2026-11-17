@@ -3,7 +3,7 @@
 /**
  * Rutas del módulo de afiliados de ms-pedidos.
  *
- * Expone el alta, la edición y los cambios de estado de campañas. Valida el
+ * Expone la consulta estudiantil, el alta, la edición y los cambios de estado. Valida el
  * cuerpo de la solicitud, delega la autorización por cafetería a la RPC
  * `administrar_campana_afiliados` y traduce sus rechazos a códigos HTTP.
  */
@@ -90,6 +90,33 @@ function administrar(alta) {
     }
   };
 }
+
+// La RPC oficial (BD 0023 + 0024) resuelve identidad, rol y vigencia.
+router.get('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, async (req, res, next) => {
+  try {
+    const cafeteriaId = validarId(req.params.cafeteriaId);
+    if (Object.keys(req.query).length) {
+      throw new HttpError(400, 'parametros_no_admitidos');
+    }
+    const cliente = crearClienteAutenticado(req.accessToken);
+    const { data, error } = await cliente.rpc('listar_oportunidades_campana', {
+      p_cafeteria_id: cafeteriaId,
+    });
+    if (error) {
+      if (error.code === '42501') throw new HttpError(403, 'estudiante_requerido');
+      if (error.code === '22023') throw new HttpError(400, 'identificador_invalido');
+      if (error.code === 'PGRST301' || error.code === 'PGRST303' || error.code === '28000') {
+        throw new HttpError(401, 'sesion_invalida');
+      }
+      throw new HttpError(503, 'No se pudieron consultar las campañas');
+    }
+    // Un resultado inválido no debe ocultarse como una lista vacía exitosa.
+    if (!Array.isArray(data)) throw new HttpError(503, 'Respuesta de campañas inválida');
+    return res.status(200).json({ campanas: data });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.post('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, administrar(true));
 router.patch('/cafeterias/:cafeteriaId/campanas/:campanaId', auth.exigirAuth, administrar(false));
