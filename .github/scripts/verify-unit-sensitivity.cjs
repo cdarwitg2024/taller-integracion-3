@@ -19,9 +19,9 @@ const cases = [
   ['desktop', 'app-desktop', 'src/services/productos.js',
     "if (stockAnterior !== undefined) query = query.eq('stock', stockAnterior);", '', 'tests/panel-dueno.test.cjs'],
   ['desktop', 'app-desktop', 'src/utils/condicionesCampana.js',
-    'campana.version_confirmada?.trim() === campana.version_condiciones.trim()', 'true', 'tests/campanas.test.cjs'],
+    'campana.version_confirmada?.trim() === campana.version_condiciones.trim()', 'true', 'tests/convenios.test.cjs'],
   ['desktop', 'app-desktop', 'src/pages/dueno/CondicionesCampana.jsx',
-    'consentimiento === clave', 'true', 'tests/campanas.test.cjs'],
+    'consentimiento === clave', 'true', 'tests/convenios.test.cjs'],
 
   ['desktop', 'app-desktop', 'src/services/cargadorDashboard.js',
     '        estado.loading = false;\n        notificar();\n      }\n    }\n  };',
@@ -41,7 +41,7 @@ for (const [name, folder, file, before, after, test] of cases.filter(c => !selec
       if (fs.existsSync(path.join(source, entry))) fs.cpSync(path.join(source, entry), path.join(dir, entry), { recursive: true });
     }
     fs.symlinkSync(path.join(source, 'node_modules'), path.join(dir, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
-    const target = path.join(dir, file), original = fs.readFileSync(target, 'utf8');
+    const target = path.join(dir, file), original = fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n');
     assert.equal(original.split(before).length, 2, `Mutación ambigua: ${name}`);
     fs.writeFileSync(target, original.replace(before, after));
     const output = path.join(dir, 'results.json');

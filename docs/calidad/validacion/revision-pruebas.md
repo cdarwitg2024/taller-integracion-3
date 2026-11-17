@@ -128,3 +128,13 @@ Validación local en Windows: 75/75 pruebas aprobadas tanto con Node.js 24.13.0
 como con Node.js 22.23.5, usando `node --test app-desktop/tests/*.test.cjs`.
 Build aprobado con Node.js 24.13.0 y la advertencia de chunks mayores a 500 kB.
 `git diff --check` limpio. No se aplicó SQL ni se desplegó.
+
+Corrección posterior del paso de sensibilidad de CI Desktop: las mutaciones de
+versión confirmada y consentimiento ahora ejecutan `tests/convenios.test.cjs`,
+donde quedaron sus regresiones tras la separación de suites. Se normalizan CRLF
+a LF en las copias temporales para reproducir también en Windows las mutaciones
+de varias líneas. Con Node.js 22.23.5 en Windows,
+`node .github/scripts/verify-unit-sensitivity.cjs desktop` finalizó con código 0:
+detectó los cinco defectos deliberados (stock concurrente, versión confirmada,
+consentimiento, cierre de carga y contexto del Dashboard). No se retiraron ni
+debilitaron las comprobaciones. `git diff --check` limpio.
