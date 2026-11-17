@@ -116,3 +116,15 @@ Todavía no existe una prueba end-to-end que recorra móvil/escritorio, gateway,
 - Telegram: instalar `requirements.txt`, `pytest` y `pytest-asyncio`; ejecutar `python -m pytest` desde `BotTelegramCoffeFaster`. Para integración, definir `TEST_DATABASE_URL` apuntando a localhost y una BD cuyo nombre empiece por `cf_bot_test_`. El workflow prepara esa base automáticamente.
 
 `CD Docker` requiere también `CI Functional` antes de publicar. Este cambio no publica imágenes ni despliega en Kubernetes. El archivo `.github/scripts/validate-release.cjs` ya tenía cambios antes de esta revisión y no fue modificado por ella.
+
+## Integración de develop con S3-T3 — 16 de noviembre de 2026
+
+Se integró `origin/develop` (`26b3484`) en la rama de administración de campañas.
+El conflicto de `app-desktop/tests/campanas.test.cjs` se resolvió conservando las
+18 pruebas de E03 en ese archivo y las 13 pruebas de condiciones, convenios e
+historial de S3-T3 en `app-desktop/tests/convenios.test.cjs`, sin duplicarlas.
+
+Validación local en Windows: 75/75 pruebas aprobadas tanto con Node.js 24.13.0
+como con Node.js 22.23.5, usando `node --test app-desktop/tests/*.test.cjs`.
+Build aprobado con Node.js 24.13.0 y la advertencia de chunks mayores a 500 kB.
+`git diff --check` limpio. No se aplicó SQL ni se desplegó.
