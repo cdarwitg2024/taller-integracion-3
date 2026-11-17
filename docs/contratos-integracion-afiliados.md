@@ -10,9 +10,11 @@ Todas las solicitudes usan `Authorization: Bearer <sesion>` y, cuando llevan JSO
 |---|---|---|---|
 | Dueño, escritorio | `GET /api/afiliados/cafeterias/7/campanas/administracion` | `200 {"campanas":[...]}` con todas las campañas de su cafetería | `403 {"error":"sin_acceso_cafeteria"}` |
 | Dueño, escritorio | `POST /api/afiliados/cafeterias/7/campanas` | `201 {"id":31,"cafeteria_id":7,"estado":"programada"}` | `403 {"error":"sin_acceso_cafeteria"}` |
-| Cliente, móvil | `GET /api/afiliados/cafeterias/7/campanas?postulables=true` | `200 {"campanas":[{"id":31,"nombre":"Semana del café","estado":"programada","descuento_normal_pct":15,"descuento_oferta_pct":5,"comision_pct":10,"inicio":"2026-12-01T08:00:00-03:00","fin":"2026-12-15T20:00:00-03:00"}]}` | `401 {"error":"sesion_invalida"}` |
+| Estudiante, móvil | `GET /api/afiliados/cafeterias/7/campanas` | `200 {"campanas":[...]}`; contrato oficial en [C04](microservicios/validacion/S3-T4-consulta-campanas-vigentes.md) | `401` sin sesión válida; `403` sin estudiante activo |
 | Dueño, escritorio | `PATCH /api/afiliados/cafeterias/7/campanas/31` con `{"descuento_normal_pct":12}` | Antes del inicio, `200 {"id":31,"descuento_normal_pct":12}` | Desde el inicio, `409 {"error":"porcentajes_fijados"}` |
 | Dueño, escritorio | Misma ruta con `{"pausada":true}` o `{"pausada":false}` | `200 {"id":31,"estado":"pausada"}` o `200 {"id":31,"estado":"activa"}` | Al reanudar después del término, `409 {"error":"campana_finalizada"}` |
+
+La consulta C04 usa la RPC oficial `listar_oportunidades_campana` (BD `0023` + `0024`). Conserva los campos oficiales de cafetería, tipo, estados, vigencias y tasas. Solo lista campañas activas ya iniciadas y no terminadas de cafeterías activas. No admite parámetros de consulta: `?postulables=true` devuelve `400`. POST/PATCH conservan el modelo provisional de administración, cuya reconciliación con la BD oficial queda pendiente.
 
 Cuerpo de creación:
 
