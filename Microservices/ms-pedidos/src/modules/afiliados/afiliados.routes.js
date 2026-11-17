@@ -209,6 +209,25 @@ function administrar(alta) {
   };
 }
 
+router.get('/cafeterias/:cafeteriaId/campanas/administracion', auth.exigirAuth, async (req, res, next) => {
+  try {
+    const cafeteriaId = validarId(req.params.cafeteriaId);
+    const { data, error } = await clienteAutenticado(req).rpc('listar_campanas_afiliados', {
+      p_cafeteria_id: cafeteriaId,
+    });
+
+    if (error) {
+      if (error.code === '42501') throw new HttpError(403, 'sin_acceso_cafeteria');
+      throw new HttpError(503, 'No se pudieron consultar las campañas');
+    }
+    if (!Array.isArray(data)) throw new HttpError(503, 'Respuesta de campañas inválida');
+
+    return res.status(200).json({ campanas: data.map(fila => mapearCampana(fila)) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // La RPC oficial (BD 0023 + 0024) resuelve identidad, rol y vigencia.
 router.get('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, async (req, res, next) => {
   try {
