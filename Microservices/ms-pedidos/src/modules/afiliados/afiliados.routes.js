@@ -217,12 +217,15 @@ router.get('/cafeterias/:cafeteriaId/campanas/administracion', auth.exigirAuth, 
     });
 
     if (error) {
-      if (error.code === '42501') throw new HttpError(403, 'sin_acceso_cafeteria');
-      throw new HttpError(503, 'No se pudieron consultar las campañas');
+      const respuesta = traducirErrorRpc(error);
+      if (respuesta) return res.status(respuesta.status).json(respuesta.body);
+      throw new HttpError(503, 'No se pudieron listar las campañas', { causa: error.code });
     }
-    if (!Array.isArray(data)) throw new HttpError(503, 'Respuesta de campañas inválida');
+    if (data !== null && !Array.isArray(data)) {
+      throw new HttpError(503, 'La lista de campañas no tiene el formato esperado');
+    }
 
-    return res.status(200).json({ campanas: data.map(fila => mapearCampana(fila)) });
+    return res.status(200).json({ campanas: (data || []).map(fila => mapearCampana(fila)) });
   } catch (error) {
     return next(error);
   }
