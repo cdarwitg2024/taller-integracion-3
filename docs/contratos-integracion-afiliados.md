@@ -8,6 +8,7 @@ Todas las solicitudes usan `Authorization: Bearer <sesion>` y, cuando llevan JSO
 
 | Sesión | Solicitud | Éxito | Error |
 |---|---|---|---|
+| Dueño, escritorio | `GET /api/afiliados/cafeterias/7/campanas/administracion` | `200 {"campanas":[...]}` con todas las campañas de su cafetería | `403 {"error":"sin_acceso_cafeteria"}` |
 | Dueño, escritorio | `POST /api/afiliados/cafeterias/7/campanas` | `201 {"id":31,"cafeteria_id":7,"estado":"programada"}` | `403 {"error":"sin_acceso_cafeteria"}` |
 | Cliente, móvil | `GET /api/afiliados/cafeterias/7/campanas?postulables=true` | `200 {"campanas":[{"id":31,"nombre":"Semana del café","estado":"programada","descuento_normal_pct":15,"descuento_oferta_pct":5,"comision_pct":10,"inicio":"2026-12-01T08:00:00-03:00","fin":"2026-12-15T20:00:00-03:00"}]}` | `401 {"error":"sesion_invalida"}` |
 | Dueño, escritorio | `PATCH /api/afiliados/cafeterias/7/campanas/31` con `{"descuento_normal_pct":12}` | Antes del inicio, `200 {"id":31,"descuento_normal_pct":12}` | Desde el inicio, `409 {"error":"porcentajes_fijados"}` |
@@ -95,6 +96,37 @@ La comisión se registra al confirmar la transición a `entregado`. La respuesta
 | Habilitar una sola comisión al entregar, con excepción para código propio | Se repite el escaneo o Diego compró con su propio código. | Retiro en escritorio y registro de comisiones |
 
 ## Nota de implementación C03 sobre el esquema V05
+
+### Separación de los listados C03 y C04 / E04
+
+El listado administrativo de C03 usa exclusivamente
+`GET /api/afiliados/cafeterias/:cafeteriaId/campanas/administracion`. Exige JWT
+válido y dueño con usuario y rol activos asociado a esa cafetería. Devuelve
+`{campanas: []}` cuando no hay resultados. Cada elemento conserva las columnas
+de `public.campanas` (incluidas versión y aceptación) y agrega los alias
+`descuento_normal_pct`, `descuento_oferta_pct`, `comision_pct`, `inicio`, `fin`,
+`estado` y `estado_db`. Sus estados externos son `programada`, `activa`,
+`pausada` y `finalizada`; un estado administrativo no acredita que sea postulable.
+
+E04 conserva la URL de C02:
+`GET /api/afiliados/cafeterias/:cafeteriaId/campanas?postulables=true`, con JWT
+del cliente/estudiante. C04 debe implementar la autorización estudiantil y
+devolver solo campañas postulables en `{campanas: [...]}`, con `id`, `nombre`,
+`estado`, los tres porcentajes y `inicio`/`fin`, sin datos internos de aceptación.
+El contrato de consumo contempla `programada` (postulación anticipada) y
+`activa`; las pausadas, finalizadas y propuestas sin habilitar se excluyen.
+E04 muestra el vacío cuando recibe un arreglo vacío y no sustituye esta URL por
+la administrativa.
+
+C03 **no implementa C04**: actualmente ese GET con `postulables=true` devuelve
+`501 {"error":"listado_postulable_pendiente"}` después de validar la sesión,
+sin invocar la autorización exclusiva del dueño ni devolver sus datos. E04 debe
+tratar ese 501 como funcionalidad pendiente, sin mostrar campañas ficticias.
+Sin sesión se devuelve 401. Omitir el parámetro, usar un valor distinto de
+`true` o añadir parámetros desconocidos devuelve
+`400 {"error":"consulta_postulables_requerida"}`. El éxito 200 estudiantil
+sigue pendiente de C04; las respuestas 403 propias de su autorización deberán
+validarse al implementar esa tarea. POST y PATCH de C03 conservan sus URL de C02.
 
 La administración de campañas usa `public.campanas`, la tabla que consume escritorio. El mapeo aplicado es `descuento_normal_pct → tasa_descuento`, `descuento_oferta_pct → tasa_descuento_oferta` (columna nueva, nullable), `comision_pct → tasa_comision`, `inicio → vigencia_desde` y `fin → vigencia_hasta`.
 

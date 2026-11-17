@@ -5,6 +5,14 @@ Rama: `ecaranza2024/cam-290-e03-construir-vista-principal-de`.
 Base: `origin/develop`, commit `6f5c9d8` (incluye V01 / #63 y C02 / #62).
 Validación local: 14 de noviembre de 2026, Node.js 22.16.0.
 
+Actualización de integración C03, 17 de noviembre de 2026: el servicio de esta
+vista consulta `GET /api/afiliados/cafeterias/:id/campanas/administracion` para
+el listado del dueño. POST y PATCH conservan las URL de C02. La URL con
+`postulables=true` queda reservada al flujo estudiantil C04 y no se consume
+desde esta vista. La [matriz real de C03](../../microservicios/validacion/S3-T3-administracion-campanas-afiliados.md#revisión-c03-del-17-de-noviembre-de-2026)
+acredita el recorrido de Auth/RLS en contenedores desechables; no un despliegue
+en Cloud. Los registros y límites iniciales de E03 se conservan abajo con su fecha.
+
 ## Alcance
 
 Se construye la vista principal de campañas de afiliados del dueño dentro de

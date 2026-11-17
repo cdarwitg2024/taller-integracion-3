@@ -2,17 +2,23 @@
 
 Implementación corregida el 16 de noviembre de 2026 para administrar campañas del [contrato C02](../../contratos-integracion-afiliados.md) y las [reglas C01](../../reglas-piloto-afiliados.md) sobre `public.campanas`, la tabla que consume escritorio. Reemplaza el diseño provisional de `campanas_afiliados`; no crea otra tabla, no duplica datos y no elimina registros existentes.
 
+Revisión del 17 de noviembre de 2026: se separó el GET administrativo del
+recurso estudiantil, se retiró del diff la funcionalidad de S3-T5 y se ejecutó
+la matriz HTTP con Auth y RLS reales descrita abajo. Los registros del 16 de
+noviembre conservan sus resultados históricos; los comandos y rutas vigentes
+son los de esta revisión.
+
 La referencia de esquema es la definición V05 de `db_CoffeeFaster`: migraciones `0018_crear_esquema_campanas.sql`, `0019_asegurar_aceptacion_campanas.sql` y la identidad de `0021_autorizar_solicitudes_afiliacion.sql` (`u.activo AND r.activo`). La prueba SQL reproduce esas definiciones; no usa un trigger simplificado.
 
 ## Alcance
 
 | Método | Ruta | Operación |
 |---|---|---|
-| GET | `/api/afiliados/cafeterias/:cafeteriaId/campanas` | Listado administrativo del dueño, limitado a su cafetería |
+| GET | `/api/afiliados/cafeterias/:cafeteriaId/campanas/administracion` | Listado administrativo del dueño, limitado a su cafetería |
 | POST | `/api/afiliados/cafeterias/:cafeteriaId/campanas` | Crea una campaña con los dos descuentos, la comisión y la vigencia |
 | PATCH | `/api/afiliados/cafeterias/:cafeteriaId/campanas/:campanaId` | Edita condiciones o cambia el estado con `{"pausada":true}` / `{"pausada":false}` |
 
-Las tres rutas exigen `Authorization: Bearer <sesion>`. `ms-pedidos` no acepta un `cafeteria_id` del cuerpo: toma el identificador de la ruta, crea un cliente de Supabase con el JWT del usuario y llama a una RPC `SECURITY DEFINER`. La RPC usa `public.dueno_campana_id(p_cafeteria_id)`, la misma función de identidad de V05, y limita la fila o el listado por cafetería. No se usa `service_role` como sustituto de autorización. El GET es administrativo: no implementa el listado estudiantil de C04 ni `postulables=true`.
+Las tres rutas exigen `Authorization: Bearer <sesion>`. `ms-pedidos` no acepta un `cafeteria_id` del cuerpo: toma el identificador de la ruta, crea un cliente de Supabase con el JWT del usuario y llama a una RPC `SECURITY DEFINER`. La RPC usa `public.dueno_campana_id(p_cafeteria_id)`, la misma función de identidad de V05, y limita la fila o el listado por cafetería. No se usa `service_role` como sustituto de autorización. El GET administrativo está separado de la URL estudiantil de C02: `GET .../campanas?postulables=true` devuelve explícitamente `501 listado_postulable_pendiente` hasta C04, sin llamar a la RPC del dueño. El contrato de consumo de E04 está en [C02](../../contratos-integracion-afiliados.md#separación-de-los-listados-c03-y-c04--e04).
 
 ## Integración exacta con V05
 
@@ -184,12 +190,88 @@ Resultado real: **código 0**. Salidas observadas:
 
 `npm test --prefix app-desktop`: **40 pruebas aprobadas**. Se agregó una prueba que verifica que `campanasService.listar` selecciona las 17 columnas del contrato de `public.campanas`, incluida `tasa_descuento_oferta`; otra prueba monta la vista y comprueba que muestra por separado descuento normal, descuento para ofertas y comisión, y que una campaña anterior con `tasa_descuento_oferta = NULL` muestra «No especificado» sin convertirlo en `0,00%` ni copiar la tasa normal. Las 11 pruebas restantes de `campanas.test.cjs` cubren aceptación, versiones, tasas y estados. `claveCondiciones` incluye `tasa_descuento_oferta`, de modo que un cambio de esa tasa invalide el consentimiento anterior. `npm run build --prefix app-desktop` compiló con Vite 4.5.14 y la advertencia existente de un paquete principal de 2,7 MB. La aceptación por versión y las validaciones de sesión/cafetería no se modificaron.
 
+## Revisión C03 del 17 de noviembre de 2026
+
+### Alcance separado de S3-T5
+
+Se retiran de C03 `HistorialConvenio.jsx`, el panel de convenios y sus estados,
+la consulta a `movimientos_comision` y sus pruebas. El commit `7a20c9d` queda en
+el historial como referencia para recuperarlo en el PR propio de S3-T5; no se
+reescribió la rama ni se requiere publicar ese alcance para usar C03.
+`convenios.test.cjs` desaparece del diff final contra `develop`.
+
+Se conservan en `campanas.test.cjs` las 26 pruebas de develop y se agregan las
+dos regresiones de C03 (columnas del servicio y oferta nula). Las mutaciones de
+consentimiento y versión vuelven a apuntar a ese archivo. La normalización CRLF
+del script de sensibilidad se conserva para reproducir las pruebas en Windows.
+
+### Matriz real de autorización
+
+Comando desde la raíz con Node.js 22.23.5 y Docker Desktop:
+
+```powershell
+node .github/scripts/test-afiliados-auth-integration.cjs
+```
+
+Resultado observado: **12 escenarios aprobados, código 0**. El runner crea una
+red y contenedores desechables de PostgreSQL 15, Supabase Auth/GoTrue
+`v2.196.0`, PostgREST `v16.2` y nginx `1.27-alpine`, y los elimina con sus
+volúmenes al terminar. Usa el Express real de ms-pedidos y las reglas reales
+del gateway, sustituyendo únicamente los destinos para apuntar a este entorno.
+No modifica el Supabase local existente ni lee `.env`.
+
+Las seis cuentas se registran y autentican por HTTP en GoTrue. **Los JWT de
+usuarios no se fabrican ni se sustituye Auth**. Solo se genera una API key
+anónima efímera para el entorno. ms-pedidos usa esa key y el Bearer del usuario;
+no recibe una key service_role. PostgREST se conecta como `authenticator`
+NOINHERIT y cambia al rol `authenticated` tras verificar la firma. `auth.uid()`
+lee los claims verificados por PostgREST; no se fija manualmente una identidad.
+
+| Identidad / paso | Listar | Crear | Editar | Pausar | Reanudar |
+|---|---|---|---|---|---|
+| Dueño activo de cafetería 7 | 200, solo sus filas | 201 | 200, versión 1.1 | 200 | 200 |
+| Otro dueño activo (cafetería 8) sobre 7 | 403 | 403 | 403 | 403 | 403 |
+| Empleado asociado a 7 | 403 | 403 | 403 | 403 | 403 |
+| Dueño con usuario inactivo | 403 | 403 | 403 | 403 | 403 |
+| Dueño activo con rol inactivo | 403 | 403 | 403 | 403 | 403 |
+| Estudiante | 403 | 403 | 403 | 403 | 403 |
+| Sin sesión, JWT inválido o firma adulterada | 401 | 401 | 401 | 401 | 401 |
+
+Además se verificó:
+
+- El otro dueño crea y lista en 8, pero no edita una campaña de 7 bajo URL 8.
+- Aceptación real por `confirmar_condiciones_campana` durante la vigencia,
+  seguida de pausa y reanudación por el gateway. No se deshabilitan triggers.
+- GET directo de PostgREST: cada dueño ve solo su cafetería; empleado,
+  estudiante, usuario inactivo y rol inactivo ven cero filas.
+- POST/PATCH/DELETE directos de PostgREST: 403 para las seis identidades.
+- GET estudiantil con JWT de estudiante: 501 explícito sin datos administrativos.
+- Las solicitudes rechazadas no modifican las campañas persistidas.
+
+El esquema de identidad y las dependencias V05 se preparan con las definiciones
+versionadas del fixture SQL; GoTrue aplica sus propias migraciones reales.
+Esto acredita el recorrido HTTP/Auth/RLS de C03 sobre esas definiciones, **no**
+la equivalencia del esquema completo de Cloud ni un despliegue. No es una
+prueba de correo, UI Electron o C04. El trabajo `afiliados-auth` de CI Functional
+ejecuta el mismo runner; la ejecución remota del nuevo SHA se verifica aparte.
+
+### Comprobaciones de esta revisión
+
+- ms-pedidos: **157/157**, tres suites, con su configuración Jest y Node 22.23.5.
+- Escritorio: **72/72** (28 de campañas), Node 22.23.5. La reducción desde 75
+  corresponde a retirar las tres pruebas propias de historial/convenios S3-T5.
+- Build de escritorio: PASS con Node 22.23.5; advertencia existente de chunks.
+- Sensibilidad: cinco defectos de escritorio y uno de ms-pedidos detectados.
+- Dockerfile real de ms-pedidos: build local PASS, imagen
+  `coffeefast-local/ms-pedidos:c03-review`, sin publicar.
+- `git diff --check`: limpio.
+
 ## Límites y decisiones pendientes
 
 - La definición completa de `public.campanas` en Cloud no está versionada en este repositorio. La migración verifica las columnas, funciones y triggers que necesita y falla con un mensaje explícito si el esquema no coincide; no crea una tabla equivalente.
 - La tabla provisional `campanas_afiliados` no se usa ni se migra. No se aplicó en Cloud, por lo que no hay datos de producción que trasladar.
-- No se aplicó SQL en Supabase Cloud, no se desplegó en Kubernetes, no se publicaron imágenes y no se hizo push ni merge.
-- La prueba real con Supabase Auth, RLS y gateway no se ejecutó: el stack Supabase local disponible no contiene `public.campanas` y el esquema V05 se define en otro repositorio. No se modificó ese entorno ni se usaron credenciales Cloud.
+- No se aplicó SQL en Supabase Cloud, no se desplegó en Kubernetes, no se publicaron imágenes y no se hizo merge.
+- La matriz Auth/RLS/gateway se ejecutó en el entorno desechable documentado; no acredita el esquema completo ni los permisos efectivos de Cloud. No se modificó el Supabase local existente.
 - **Decisión 1:** C02 permite aceptar una campaña futura; V05 exige `vigencia_desde <= now()`. Se conserva V05. Si se necesita aceptación anticipada, debe cambiarse la regla de forma coordinada.
 - **Decisión 2:** las campañas existentes conservan `tasa_descuento_oferta = NULL`. Debe decidirse si no aplican descuento a productos en oferta o si el dueño debe crear una campaña nueva con las dos tasas.
 - **Decisión 3:** C02 pide avisar a afiliados si cambian porcentajes antes del inicio. C03 no implementa correo ni notificaciones; es una tarea separada.

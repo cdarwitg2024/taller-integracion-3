@@ -102,7 +102,8 @@ Públicas, por el gateway:
 | GET | `/api/pedidos/:id` | ms-pedidos |
 | PATCH | `/api/pedidos/:id/estado` | ms-pedidos |
 | POST | `/api/pedidos/validar-qr` | ms-pedidos |
-| GET | `/api/afiliados/cafeterias/:cafeteriaId/campanas` | ms-pedidos |
+| GET | `/api/afiliados/cafeterias/:cafeteriaId/campanas/administracion` | ms-pedidos, listado del dueño |
+| GET | `/api/afiliados/cafeterias/:cafeteriaId/campanas?postulables=true` | Reservado para C04; 501 explícito mientras no esté implementado |
 | POST | `/api/afiliados/cafeterias/:cafeteriaId/campanas` | ms-pedidos |
 | PATCH | `/api/afiliados/cafeterias/:cafeteriaId/campanas/:campanaId` | ms-pedidos |
 | GET | `/gateway/health` | nginx (estático) |

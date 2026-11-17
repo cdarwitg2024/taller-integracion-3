@@ -240,8 +240,20 @@ async function listar(req, res, next) {
   }
 }
 
-// Listado administrativo del dueño. No es el listado estudiantil de C04.
-router.get('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, listar);
+// Recurso administrativo separado del GET estudiantil reservado por C02/C04.
+router.get('/cafeterias/:cafeteriaId/campanas/administracion', auth.exigirAuth, listar);
+router.get('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, (req, res, next) => {
+  try {
+    validarId(req.params.cafeteriaId);
+    if (req.query.postulables !== 'true' || Object.keys(req.query).length !== 1) {
+      return res.status(400).json({ error: 'consulta_postulables_requerida' });
+    }
+    // C03 no implementa C04 ni ejecuta la RPC exclusiva del dueño para clientes.
+    return res.status(501).json({ error: 'listado_postulable_pendiente' });
+  } catch (error) {
+    return next(error);
+  }
+});
 router.post('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, administrar(true));
 router.patch('/cafeterias/:cafeteriaId/campanas/:campanaId', auth.exigirAuth, administrar(false));
 

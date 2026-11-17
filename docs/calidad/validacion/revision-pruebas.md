@@ -1,5 +1,30 @@
 # Revisión de pruebas para CI/CD
 
+## C03: revisión de contrato, alcance y Auth/RLS — 17 de noviembre de 2026
+
+En Windows con Node.js 22.23.5: ms-pedidos 157/157, escritorio 72/72, build PASS
+y `git diff --check` limpio. Sensibilidad: cinco defectos de escritorio y uno
+de ms-pedidos detectados. Las pruebas de S3-T5 se retiraron de C03; las de
+aceptación y las dos regresiones de oferta permanecen en `campanas.test.cjs`.
+
+`node .github/scripts/test-afiliados-auth-integration.cjs`: 12 escenarios PASS
+con cuentas y JWT emitidos por GoTrue, nginx, Express, PostgREST, RPC y RLS reales
+en contenedores desechables. Incluye dueño, otro dueño, empleado, estudiante,
+usuario inactivo y rol inactivo, ausencia/firma inválida de JWT, escrituras
+directas prohibidas y persistencia después de rechazos. No usa service_role en
+ms-pedidos ni modifica el Supabase existente. El esquema de aplicación reutiliza
+las definiciones V05 del fixture; no acredita el esquema completo de Cloud.
+
+Listado del dueño: `GET .../campanas/administracion`. El GET estudiantil de C02
+con `postulables=true` queda reservado a C04 y responde 501 explícito mientras
+no esté implementado. El trabajo `afiliados-auth` reproduce la matriz en CI;
+su ejecución remota del nuevo SHA se verifica por separado.
+
+Ver [matriz, pasos y límites](../../microservicios/validacion/S3-T3-administracion-campanas-afiliados.md#revisión-c03-del-17-de-noviembre-de-2026).
+
+Los registros siguientes conservan los conteos y nombres de archivo de sus
+fechas; no describen el alcance final de esta revisión de C03.
+
 ## S3-T3: administración de campañas de afiliados
 
 Corrección local del 16 de noviembre de 2026 en Windows con Node.js 22.23.5

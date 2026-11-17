@@ -275,7 +275,7 @@ describe('administración de campañas sobre public.campanas', () => {
     expect(creada.body).not.toHaveProperty('dueno_campana_id');
 
     const listado = await request(app)
-      .get(ruta)
+      .get(`${ruta}/administracion`)
       .set('Authorization', 'Bearer sesion-dueno-7');
 
     expect(listado.status).toBe(200);
@@ -296,9 +296,9 @@ describe('administración de campañas sobre public.campanas', () => {
     guardar(filaBase({ cafeteria_id: 7, nombre: 'Cafetería 7' }));
     guardar(filaBase({ cafeteria_id: 8, nombre: 'Cafetería 8' }));
 
-    const siete = await request(app).get(ruta).set('Authorization', 'Bearer sesion-dueno-7');
+    const siete = await request(app).get(`${ruta}/administracion`).set('Authorization', 'Bearer sesion-dueno-7');
     const ocho = await request(app)
-      .get('/api/afiliados/cafeterias/8/campanas')
+      .get('/api/afiliados/cafeterias/8/campanas/administracion')
       .set('Authorization', 'Bearer sesion-dueno-8');
 
     expect(siete.status).toBe(200);
@@ -309,7 +309,7 @@ describe('administración de campañas sobre public.campanas', () => {
 
   test('GET con una respuesta que no es arreglo devuelve 503 y no inventa campañas', async () => {
     rpc.mockResolvedValueOnce({ data: { campanas: [] } });
-    const respuesta = await request(app).get(ruta).set('Authorization', 'Bearer sesion-dueno-7');
+    const respuesta = await request(app).get(`${ruta}/administracion`).set('Authorization', 'Bearer sesion-dueno-7');
     expect(respuesta.status).toBe(503);
     expect(respuesta.body).not.toHaveProperty('campanas');
   });
@@ -473,14 +473,14 @@ describe('administración de campañas sobre public.campanas', () => {
       .set('Authorization', 'Bearer sesion-dueno-8')
       .send({ nombre: 'Campaña de 7 con URL 8' });
     const listadoAjeno = await request(app)
-      .get(ruta)
+      .get(`${ruta}/administracion`)
       .set('Authorization', 'Bearer sesion-dueno-8');
     const listadoPostulables = await request(app)
       .get(`${ruta}?postulables=true`)
       .set('Authorization', 'Bearer sesion-empleado-7');
 
     expect([ajeno.status, empleado.status, cruzada.status, listadoAjeno.status, listadoPostulables.status])
-      .toEqual([403, 403, 403, 403, 403]);
+      .toEqual([403, 403, 403, 403, 501]);
     expect(ajeno.body).toEqual({ error: 'sin_acceso_cafeteria' });
     expect(empleado.body).toEqual({ error: 'sin_acceso_cafeteria' });
     expect(cruzada.body).toEqual({ error: 'sin_acceso_cafeteria' });
@@ -490,13 +490,28 @@ describe('administración de campañas sobre public.campanas', () => {
 
   test('sin sesión o con sesión inválida devuelve 401', async () => {
     await request(app).post(ruta).send(alta).expect(401);
-    await request(app).get(ruta).set('Authorization', 'Bearer sesion-invalida').expect(401);
+    await request(app).get(`${ruta}/administracion`).set('Authorization', 'Bearer sesion-invalida').expect(401);
     await request(app).patch(`${ruta}/31`).set('Authorization', 'Bearer sesion-invalida').send({ pausada: true }).expect(401);
+  });
+
+  test('el contrato estudiantil queda reservado sin consultar la RPC administrativa', async () => {
+    rpc.mockClear();
+    for (const token of ['sesion-dueno-7', 'sesion-empleado-7']) {
+      const respuesta = await request(app).get(`${ruta}?postulables=true`)
+        .set('Authorization', `Bearer ${token}`).expect(501);
+      expect(respuesta.body).toEqual({ error: 'listado_postulable_pendiente' });
+    }
+    for (const consulta of ['', '?postulables=false', '?postulables=true&extra=1']) {
+      await request(app).get(`${ruta}${consulta}`)
+        .set('Authorization', 'Bearer sesion-dueno-7').expect(400);
+    }
+    await request(app).get(`${ruta}?postulables=true`).expect(401);
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   test('rechaza identificadores inválidos antes de invocar la RPC', async () => {
     await request(app)
-      .get('/api/afiliados/cafeterias/0/campanas')
+      .get('/api/afiliados/cafeterias/0/campanas/administracion')
       .set('Authorization', 'Bearer sesion-dueno-7')
       .expect(400);
     await request(app)

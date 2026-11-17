@@ -15,12 +15,12 @@ Los dos CD rechazan ejecutar el SHA congelado. Kubernetes exige también autoriz
 | Componente | Comandos utilizados | Pruebas y comprobaciones |
 | --- | --- | --- |
 | Mobile | `npm ci`, `npm test -- --ci --runInBand` | 68 pruebas en 11 suites en la última ejecución local. CI verifica también defectos en disponibilidad y cancelación, configuración Expo, dependencias y exportación Android. |
-| Desktop | `npm ci --legacy-peer-deps`, `npm test`, `npm run build` | 40 pruebas de escritorio, incluidas las del panel del dueño, comprobación de stock concurrente con un defecto deliberado y compilación Vite. |
+| Desktop | `npm ci --legacy-peer-deps`, `npm test`, `npm run build` | 72 pruebas en la revisión C03 del 17 de noviembre, sensibilidad a cinco defectos deliberados y compilación Vite. |
 | ms-cafeterias | `npm ci`; `npm test -- --ci` | Jest/Supertest: 22 pruebas de cafeterías, validaciones, errores y salud. |
 | ms-menus | `npm ci`; `npm test -- --ci` | Jest/Supertest: 36 pruebas de menús, precios, filtros, contratos y errores. |
-| ms-pedidos | `npm ci`; `npm test -- --ci` | Jest/Supertest: 156 pruebas de pedidos, autenticación, autorización, estados, contingencia y administración de campañas. |
+| ms-pedidos | `npm ci`; `npm test -- --ci` | Jest/Supertest: 157 pruebas de pedidos, autenticación, autorización, estados, contingencia y administración de campañas. |
 | shared | Dependencias del servicio consumidor; `npm test --prefix Microservices/shared` | Cinco pruebas de la interfaz pública, ejecutadas por cada trabajo de microservicio. |
-| CI Functional | Node 22, Python 3.12 y PostgreSQL 15 aislado | Catálogo HTTP con PostgREST, pago y cancelación SQL, administración de campañas con RLS, trigger y aceptación V05, bot Telegram y backend legacy. Comprueba defectos deliberados en las transacciones SQL y el estado inicial de un pedido legacy. |
+| CI Functional | Node 22, Python 3.12 y PostgreSQL 15 aislado | Catálogo HTTP con PostgREST, pago y cancelación SQL, campañas con RLS/trigger/aceptación V05, y trabajo `afiliados-auth` con JWT emitidos por GoTrue y gateway real; bot Telegram y backend legacy. Comprueba defectos deliberados en transacciones SQL y pedido legacy. |
 
 Todos los CI usan Node 22, coincidente con `node:22-alpine` en los Dockerfiles. Mobile declara Node >=18; desktop no declara motor propio. Los microservicios son JavaScript interpretado sin scripts `build` ni `lint`: se comprueba sintaxis con `node --check`, pruebas y construcción de sus Dockerfiles reales.
 

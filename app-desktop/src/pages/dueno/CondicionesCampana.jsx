@@ -25,8 +25,24 @@ import MonetizationOnOutlinedIcon from '@mui/icons-material/MonetizationOnOutlin
 
 import { campanasService } from '../../services/campanasService';
 import { supabase } from '../../services/supabase';
-import { campanaAceptada, claveCondiciones, estadoConvenio, formatearFecha, formatearTasa } from '../../utils/condicionesCampana';
-import HistorialConvenio from './HistorialConvenio';
+import { campanaAceptada, claveCondiciones, formatearTasa } from '../../utils/condicionesCampana';
+
+function formatearFecha(iso) {
+  if (!iso) return 'No especificada';
+  try {
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) return iso;
+    return d.toLocaleDateString('es-CL', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+}
 
 export default function CondicionesCampana({ currentUser, onConfirmada }) {
   const cafeteriaId = String(currentUser?.cafeteria_id ?? currentUser?.cafeteriaId ?? '');
@@ -41,7 +57,6 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [consentimiento, setConsentimiento] = useState(null);
-  const [historial, setHistorial] = useState({ campanas: [], movimientos: [], errorMovimientos: '' });
   const clave = claveCondiciones(campana);
   const aceptoTerminos = clave !== null && consentimiento === clave;
   const aceptada = campanaAceptada(campana);
@@ -71,20 +86,14 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
       if (!cafeteriaId) {
         throw new Error('No tienes una cafetería asociada a tu cuenta.');
       }
-      const data = await campanasService.obtenerPanelConvenios(cafeteriaId);
+      const data = await campanasService.obtenerCampanaVigente(cafeteriaId);
       if (reqId === solicitudIdRef.current) {
-        publicarCampana(data.campanaVigente);
-        setHistorial({
-          campanas: data.campanas || [],
-          movimientos: data.movimientos || [],
-          errorMovimientos: data.errorMovimientos || '',
-        });
+        publicarCampana(data);
       }
     } catch (err) {
       if (reqId === solicitudIdRef.current) {
         setError(err.message || 'Error al cargar las condiciones de campaña.');
         publicarCampana(null);
-        setHistorial({ campanas: [], movimientos: [], errorMovimientos: '' });
       }
     } finally {
       if (reqId === solicitudIdRef.current) {
@@ -252,19 +261,12 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
                 )}
               </Box>
 
-              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                <Chip
-                  label={estadoConvenio(campana).label}
-                  color={estadoConvenio(campana).color}
-                  sx={{ fontWeight: 700, px: 1 }}
-                />
-                <Chip
-                  label={aceptada ? 'Condiciones Aceptadas' : 'Pendiente de Aceptación'}
-                  color={aceptada ? 'success' : 'warning'}
-                  icon={aceptada ? <CheckCircleOutlinedIcon /> : undefined}
-                  sx={{ fontWeight: 700, px: 1 }}
-                />
-              </Stack>
+              <Chip
+                label={aceptada ? 'Condiciones Aceptadas' : 'Pendiente de Aceptación'}
+                color={aceptada ? 'success' : 'warning'}
+                icon={aceptada ? <CheckCircleOutlinedIcon /> : undefined}
+                sx={{ fontWeight: 700, px: 1 }}
+              />
             </Stack>
 
             <Divider sx={{ my: 2 }} />
@@ -504,11 +506,6 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
           </Paper>
         </Stack>
       )}
-      <HistorialConvenio
-        campanas={historial.campanas}
-        movimientos={historial.movimientos}
-        errorMovimientos={historial.errorMovimientos}
-      />
     </Box>
   );
 }

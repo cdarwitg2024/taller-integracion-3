@@ -19,9 +19,9 @@ const cases = [
   ['desktop', 'app-desktop', 'src/services/productos.js',
     "if (stockAnterior !== undefined) query = query.eq('stock', stockAnterior);", '', 'tests/panel-dueno.test.cjs'],
   ['desktop', 'app-desktop', 'src/utils/condicionesCampana.js',
-    'campana.version_confirmada?.trim() === campana.version_condiciones.trim()', 'true', 'tests/convenios.test.cjs'],
+    'campana.version_confirmada?.trim() === campana.version_condiciones.trim()', 'true', 'tests/campanas.test.cjs'],
   ['desktop', 'app-desktop', 'src/pages/dueno/CondicionesCampana.jsx',
-    'consentimiento === clave', 'true', 'tests/convenios.test.cjs'],
+    'consentimiento === clave', 'true', 'tests/campanas.test.cjs'],
 
   ['desktop', 'app-desktop', 'src/services/cargadorDashboard.js',
     '        estado.loading = false;\n        notificar();\n      }\n    }\n  };',
