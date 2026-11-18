@@ -79,6 +79,9 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
     }
   }, [pedido, generacion]);
 
+  // Invalidar las operaciones pendientes cuando el diálogo se desmonta.
+  useEffect(() => () => { vigenteRef.current += 1; }, []);
+
   // Manejador para imprimir comanda de cocina (80mm sin precios) vía iframe aislado
   const handleImprimirComanda = async () => {
     if (!pedidoActual) return;
@@ -178,6 +181,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
     try {
       setDescargandoBoleta(true);
       const blob = await generarBoletaBlob(pedidoActual);
+      if (vigenteRef.current !== activacion) return;
       const codigoLimpio = String(pedidoActual.codigo_pedido || pedidoActual.id).replace(/[^a-zA-Z0-9_-]/g, '');
       const nombreSugerido = `boleta-pedido-${codigoLimpio}.pdf`;
 

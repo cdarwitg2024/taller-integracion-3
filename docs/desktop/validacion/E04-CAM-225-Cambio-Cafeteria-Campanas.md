@@ -77,8 +77,8 @@ el alta con el App completo.
 | Guardar una campaña en la 12 y recargar el listado | Se consulta la 12 y no se reutilizan filas de la 7 | Aprobado |
 | Recargar la cafetería 7 con filas visibles y respuesta pendiente | Las tarjetas siguen visibles y aparece «Actualizando campañas» hasta recibir el resultado | Aprobado |
 
-Resultado final: `campanas.test.cjs` 33/33, `kds-cambio-cafeteria.test.cjs` 21/21,
-`kds-reintentos.test.cjs` 2/2 y suite `app-desktop` 100/100 aprobadas. Las
+Resultado final: `campanas.test.cjs` 33/33, `kds-cambio-cafeteria.test.cjs` 24/24,
+`kds-reintentos.test.cjs` 2/2 y suite `app-desktop` 103/103 aprobadas. Las
 pruebas del render inmediato y del resumen fallan con la implementación
 anterior, por lo que acreditan la corrección. `npm run build` finaliza
 correctamente con la advertencia habitual por chunks superiores a 500 kB, sin
@@ -100,6 +100,8 @@ el perfil pasa a la B; después se resuelve A y se comprueba qué se muestra.
 | Fallar la precarga de impresión de A y abrir B | B no imprime la comanda de A ni hereda su chip de estado | Aprobado |
 | Terminar el envío a impresión de A después de abrir B | El aviso de A no aparece en B; un UPDATE del mismo pedido sí conserva su impresión | Aprobado |
 | Cambiar a B con el escáner abierto y responder tarde el fallback Supabase de A | `validarQrEntrega` recibe la cafetería vigente B; la respuesta de A no se muestra | Aprobado |
+| Escanear en A, cambiar a B o cerrar antes de responder el gateway | La respuesta tardía no muestra resultado ni suena | Aprobado |
+| Cambiar de pedido o de cafetería mientras se genera el PDF de A | `guardarArchivoConUbicacion` no se llama; un UPDATE del mismo pedido sí conserva la impresión | Aprobado |
 | Cerrar el canal Realtime y recibir un callback pendiente | El callback se descarta; no se publica estado tras `cerrar()` | Aprobado |
 | Una inserción llega sin productos y el reintento de detalles responde | Se normaliza el pedido con los datos recuperados; si el reintento falla, se conserva la normalización previa | Aprobado |
 
@@ -131,10 +133,29 @@ Verificación histórica de esa corrección puntual, anterior a las pruebas KDS:
 `npm run build --prefix app-desktop` ya había finalizado correctamente en la
 validación original y no se repitió en esta corrección puntual.
 
-Verificación final de la rama: `npm test --prefix app-desktop` 100/100 aprobadas
+Verificación final de la rama: `npm test --prefix app-desktop` 103/103 aprobadas
 en Node 22.16.0 y en Node 24.18.0, `npm run build --prefix app-desktop` con
-salida cero en ambos y `git diff --check` sin salida. Las cifras 76/76 y 98/98
-de la tabla registran ejecuciones históricas y no representan la suite final.
+salida cero en ambos y `git diff --check` sin salida. La cifra 76/76 de la tabla
+registra una ejecución histórica y no representa la suite final.
+
+## Corrección tras la revisión del PR #75
+
+Camilo Darwitg y Ariel Díaz señalaron dos fugas de contexto que las pruebas
+originales no cubrían. `EscanearQrDialog` ahora lleva un contador de generación:
+se incrementa al cerrar, al cambiar `cafeteriaId` o `usuarioId` y al reiniciar la
+lectura; el cambio de contexto también limpia el resultado y permite reintentar
+de inmediato. Cada continuación posterior al `await` comprueba que siga vigente
+antes de publicar resultado, sonar o usar la cafetería del fallback. La prueba
+nueva cubre el guard final cuando el gateway responde tarde tras cerrar o cambiar
+de cafetería; los guardas de las ramas de Supabase y del `catch` quedan sin una
+prueba de respuesta tardía dedicada.
+
+`DetallePedidoDialog` comprueba la vigencia justo después de generar el blob y
+antes de llamar a `guardarArchivoConUbicacion`, e invalida las operaciones
+pendientes al desmontar. La clave de vigencia sigue basada solo en el ID del
+pedido, de modo que un UPDATE del mismo pedido no cancela su impresión. Dos
+pruebas nuevas cubren el cambio de pedido y el cambio de cafetería con la
+generación del PDF en curso.
 
 ## Límites de la evidencia
 

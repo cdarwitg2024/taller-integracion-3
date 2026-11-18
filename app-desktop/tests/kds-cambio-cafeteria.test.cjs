@@ -127,7 +127,7 @@ function dependencias(servicios) {
   };
 }
 
-function cargarDetallePedidoDialog(servicios, impresion = {}) {
+function cargarDetallePedidoDialog(servicios, impresion = {}, generarBoletaBlob = async () => null) {
   const nodo = etiqueta => props => React.createElement(etiqueta, props, props.children);
   const icono = () => React.createElement('icono');
   const componentesMui = (
@@ -147,7 +147,7 @@ function cargarDetallePedidoDialog(servicios, impresion = {}) {
   Object.assign(dependenciasDetalle, {
     './EstadoChip': nodo('estadochip'),
     '../utils/dateUtils': { origenRetiroPedido: () => ({ tipo: 'sin' }) },
-    '../services/boletaPdfService': { generarBoletaBlob: async () => null },
+    '../services/boletaPdfService': { generarBoletaBlob },
     '../services/impresionService': {
       __esModule: true,
       default: {
@@ -609,6 +609,53 @@ test('Detalle real: ningún aviso tardío de A se filtra al abrir B en la misma 
   }
 });
 
+test('Detalle real: abrir otro pedido durante la generación del PDF no abre el guardado de A', async t => {
+  const s = crearServicios();
+  const blob = diferida();
+  let guardados = 0;
+  const h = crearMontaje(t, s, {
+    '../../components/DetallePedidoDialog': cargarDetallePedidoDialog(s, {
+      guardarArchivoConUbicacion: () => {
+        guardados += 1;
+        return Promise.resolve({ ok: true });
+      },
+    }, () => blob.promise),
+  });
+  await h.montar(7);
+  await h.completar(() => s.solicitudes[0].resolve([pedido(101, 7), pedido(201, 7)]));
+  await h.completar(() => h.boton('abrir-101').props.onClick());
+  await h.completar(() => h.boton('Descargar Boleta').props.onClick());
+  await h.completar(() => h.boton('abrir-201').props.onClick());
+  await h.completar(() => blob.resolve({}));
+
+  assert.equal(guardados, 0);
+  assert.doesNotMatch(h.texto(), /Boleta descargada con éxito/);
+});
+
+test('Detalle real: cambiar de cafetería durante la generación del PDF no abre el guardado de A', async t => {
+  const s = crearServicios();
+  const blob = diferida();
+  let guardados = 0;
+  const h = crearMontaje(t, s, {
+    '../../components/DetallePedidoDialog': cargarDetallePedidoDialog(s, {
+      guardarArchivoConUbicacion: () => {
+        guardados += 1;
+        return Promise.resolve({ ok: true });
+      },
+    }, () => blob.promise),
+  });
+  await h.montar(7);
+  await h.completar(() => s.solicitudes[0].resolve([pedido(101, 7)]));
+  await h.completar(() => h.boton('abrir-101').props.onClick());
+  await h.completar(() => h.boton('Descargar Boleta').props.onClick());
+  h.cambiar(12);
+  await h.completar();
+  await h.completar(() => blob.resolve({}));
+
+  assert.equal(guardados, 0);
+  assert.doesNotMatch(h.texto(), /Boleta descargada con éxito/);
+});
+
 test('A→B: un snapshot A que llega tarde se descarta; si B falla, el reintento carga B', async t => {
   const s = crearServicios();
   const h = crearMontaje(t, s);
@@ -802,6 +849,95 @@ test('Escáner: el fallback Supabase valida contra la cafetería vigente tras un
 
   assert.equal(llamadas.length, 1);
   assert.deepEqual(llamadas[0], ['QR-TST-1', '5', 12]);
+});
+
+test('Escáner: una validación pendiente no publica resultado ni suena al cerrar o cambiar de cafetería', async t => {
+  const ventanaAnterior = global.window;
+  let sonidos = [];
+  global.window = {
+    AudioContext: class {
+      constructor() { sonidos.push('contexto'); }
+      get currentTime() { return 0; }
+      get destination() { return {}; }
+      createOscillator() {
+        return {
+          frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} },
+          connect() {}, start() { sonidos.push('sonido'); }, stop() {},
+        };
+      }
+      createGain() {
+        return {
+          gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} },
+          connect() {},
+        };
+      }
+    },
+  };
+  t.after(() => { global.window = ventanaAnterior; });
+
+  const nodo = etiqueta => props => React.createElement(etiqueta, props, props.children);
+  const icono = () => React.createElement('icono');
+  const muiEscanner = {
+    Dialog: nodo('dialogo'), DialogTitle: nodo('titulo'), DialogContent: nodo('contenido'),
+    DialogActions: nodo('acciones'), Box: nodo('caja'), Typography: nodo('texto'),
+    Button: ({ children, ...props }) => React.createElement('button', props, children),
+    IconButton: nodo('botonicono'), Stack: nodo('pila'), Tabs: nodo('tabs'), Tab: nodo('tab'),
+    TextField: nodo('textfield'), CircularProgress: nodo('spinner'), Alert: nodo('alerta'),
+  };
+
+  for (const cerrar of [false, true]) {
+    sonidos = [];
+    const validacion = diferida();
+    const llamadas = [];
+    const dependenciasEscanner = {
+      '@mui/material': muiEscanner,
+      '@mui/icons-material/Close': icono,
+      '@mui/icons-material/Key': icono,
+      '@mui/icons-material/QrCodeScanner': icono,
+      '@mui/icons-material/VideocamOff': icono,
+      '@mui/icons-material/CheckCircle': icono,
+      '@mui/icons-material/WarningAmber': icono,
+      '@mui/icons-material/ErrorOutlineOutlined': icono,
+      '@mui/icons-material/UploadFile': icono,
+      '@mui/icons-material/Refresh': icono,
+      jsqr: () => null,
+      '../services/backendApi': {
+        __esModule: true,
+        default: { validarQr: () => validacion.promise },
+      },
+      '../services/pedidosService': {
+        __esModule: true,
+        default: {
+          validarQrEntrega: (...args) => {
+            llamadas.push(args);
+            return { valido: false, razon: 'rechazado' };
+          },
+        },
+        normalizarTokenQR: texto => texto,
+      },
+    };
+    const EscanearQrDialog = cargar('components/EscanearQrDialog.jsx', dependenciasEscanner).default;
+    let tree;
+    t.after(() => { if (tree) act(() => tree.unmount()); });
+    await act(async () => {
+      tree = create(React.createElement(EscanearQrDialog, {
+        open: true, cafeteriaId: 7, usuarioId: '5', onClose() {},
+      }));
+    });
+    await completar(() => tree.root.findByType('tabs').props.onChange(null, 'token'));
+    await completar(() => tree.root.findByType('textfield').props.onChange({ target: { value: 'QR-TARDE' } }));
+    const validar = tree.root.findAllByType('button').find(b =>
+      b.children.some(c => typeof c === 'string' && c.includes('Validar Token')));
+    await completar(() => validar.props.onClick());
+    await completar(() => tree.update(React.createElement(EscanearQrDialog, {
+      open: !cerrar, cafeteriaId: cerrar ? 7 : 12, usuarioId: '5', onClose() {},
+    })));
+    await completar(() => validacion.resolve({ valido: true }));
+
+    assert.equal(llamadas.length, 0);
+    assert.equal(sonidos.length, 0, 'una respuesta atrasada no debe reproducir sonido');
+    assert.doesNotMatch(textoRenderizado(tree.toJSON()), /Entrega Validada Exitosamente/);
+  }
 });
 
 test('StrictMode: setup→cleanup→setup conserva el montaje, carga la cafetería y procesa eventos', async t => {
