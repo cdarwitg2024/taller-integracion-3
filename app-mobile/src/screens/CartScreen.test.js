@@ -15,11 +15,16 @@ const cart = [
   { id: 2, name: 'Sándwich', price: 3500, quantity: 1, cafeteriaId: 7 },
 ];
 
+const CarritoConCodigo = (props) => {
+  const [codigo, setCodigo] = React.useState('');
+  return <CartScreen codigo={codigo} onCodigoChange={setCodigo} {...props} />;
+};
+
 const montar = (props = {}) => {
   let tree;
   act(() => {
     tree = TestRenderer.create(
-      <CartScreen
+      <CarritoConCodigo
         cart={cart}
         cafeteriaName="Cafetería Test"
         onIncrease={() => {}}
