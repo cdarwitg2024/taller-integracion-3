@@ -30,6 +30,9 @@ const CartScreen = ({
   onRemove,
   onCheckout,
   onBack,
+  codigo = '',
+  onCodigoChange,
+  idCarrito,
   paying = false,
 }) => {
   // Antes caía a 'Cafetería Central', un nombre inventado: si el usuario
@@ -40,7 +43,6 @@ const CartScreen = ({
   // Retiro inmediato elegido localmente. No depende de tablas de horarios.
   // Se conserva franja_retiro como HH:mm-HH:mm para backend y KDS.
   const [franjaSeleccionada, setFranjaSeleccionada] = useState(false);
-  const [codigo, setCodigo] = useState('');
   const [ahora, setAhora] = useState(() => getReferenciaHoraria());
   const { totalProducts, subtotal, total } = useCartTotals(cart);
 
@@ -169,7 +171,8 @@ const CartScreen = ({
                 </View>
               </Card>
 
-              <CodigoAfiliadoCarrito codigo={codigo} onChange={setCodigo} disabled={paying} />
+              <CodigoAfiliadoCarrito key={idCarrito} codigo={codigo}
+                onChange={onCodigoChange} disabled={paying} />
 
               <Card padding="lg" style={styles.summaryCard}>
                 <View style={styles.summaryRow}>

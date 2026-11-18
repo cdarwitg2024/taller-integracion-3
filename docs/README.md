@@ -53,7 +53,9 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 
 - [S2-T17 - Validar flujo Mobile de disponibilidad y carrito](mobile/validacion/S2-T17-Validacion-Flujo-Mobile-Disponibilidad-y-Carrito.md)
 - [A01 / CAM-266 — Acceso a Mis afiliaciones desde el perfil](mobile/validacion/A01-CAM-266-Acceso-Mis-Afiliaciones.md)
+- [A02 — Pantalla Mis afiliaciones: oportunidades, códigos y ganancias](mobile/validacion/A02-Mis-Afiliaciones.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
+- [D02 - Estado del código asociado al carrito](mobile/validacion/D02-Estado-codigo-carrito.md)
 
 ## Backend Node
 
@@ -81,6 +83,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 
 - [Prueba del flujo de catálogo — T11](microservicios/validacion/pruebas_flujo_catalogo.md)
 - [S3-T3 — Administración de campañas de afiliados](microservicios/validacion/S3-T3-administracion-campanas-afiliados.md)
+- [S3-T4 / C04 — Consulta de campañas vigentes](microservicios/validacion/S3-T4-consulta-campanas-vigentes.md)
 
 ## Bot de Telegram
 
@@ -105,6 +108,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 
 ## Base de datos
 
+- [V06 / CAM-288 — Cotización del carrito completo](base-datos/validacion/V06-CAM-288-Cotizacion-carrito.md)
 - [S3-T6 / CAM-228 — Grupos equivalentes](base-datos/grupos-equivalentes.md)
 
 - [C02 — Contratos de integración de afiliados](contratos-integracion-afiliados.md)
