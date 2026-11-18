@@ -236,10 +236,10 @@ async function main() {
         }
       }
     });
-    await check('recurso estudiantil reservado: 501 explícito, sin autorización de dueño ni datos administrativos', async () => {
+    await check('C04 rechaza postulables sin exponer datos administrativos', async () => {
       const r = await call(`${resource}?postulables=true`,tokens.estudiante);
-      assert.equal(r.status,501); assert.deepEqual(r.body,{error:'listado_postulable_pendiente'});
-      assert.equal((await call(resource,tokens.dueno)).status,400);
+      assert.equal(r.status,400); assert.equal(r.body.error,'parametros_no_admitidos');
+      assert.equal((await call(`${resource}?postulables=true`,tokens.dueno)).status,400);
     });
     await check('los rechazos no alteraron las campañas persistidas', async () => {
       const r = await call(`${resource}/administracion`,tokens.dueno);

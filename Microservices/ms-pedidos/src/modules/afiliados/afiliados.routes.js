@@ -3,17 +3,9 @@
 /**
  * Rutas del módulo de afiliados de ms-pedidos.
  *
- * Expone la administración de campañas sobre public.campanas, la tabla que
- * consume escritorio. El contrato externo conserva los nombres de C02
- * (descuento_normal_pct, descuento_oferta_pct, comision_pct, inicio y fin) y
- * los traduce a las columnas reales (tasa_descuento, tasa_descuento_oferta,
- * tasa_comision, vigencia_desde y vigencia_hasta).
- *
- * La autorización no se resuelve en Express: la RPC
- * `administrar_campana_afiliados` recibe el JWT del usuario, comprueba
- * `auth.uid()` y `dueno_campana_id(p_cafeteria_id)`, y limita la fila por
- * campaña y cafetería. `listar_campanas_afiliados` aplica el mismo alcance al
- * listado administrativo. No se usa service_role.
+ * Expone la consulta estudiantil, el alta, la edición y los cambios de estado. Valida el
+ * cuerpo de la solicitud, delega la autorización por cafetería a la RPC
+ * `administrar_campana_afiliados` y traduce sus rechazos a códigos HTTP.
  */
 
 const router = require('express').Router();
@@ -217,7 +209,7 @@ function administrar(alta) {
   };
 }
 
-async function listar(req, res, next) {
+router.get('/cafeterias/:cafeteriaId/campanas/administracion', auth.exigirAuth, async (req, res, next) => {
   try {
     const cafeteriaId = validarId(req.params.cafeteriaId);
     const { data, error } = await clienteAutenticado(req).rpc('listar_campanas_afiliados', {
@@ -229,31 +221,43 @@ async function listar(req, res, next) {
       if (respuesta) return res.status(respuesta.status).json(respuesta.body);
       throw new HttpError(503, 'No se pudieron listar las campañas', { causa: error.code });
     }
-
     if (data !== null && !Array.isArray(data)) {
       throw new HttpError(503, 'La lista de campañas no tiene el formato esperado');
     }
-    const campanas = (data || []).map(fila => mapearCampana(fila));
-    return res.status(200).json({ campanas });
-  } catch (error) {
-    return next(error);
-  }
-}
 
-// Recurso administrativo separado del GET estudiantil reservado por C02/C04.
-router.get('/cafeterias/:cafeteriaId/campanas/administracion', auth.exigirAuth, listar);
-router.get('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, (req, res, next) => {
-  try {
-    validarId(req.params.cafeteriaId);
-    if (req.query.postulables !== 'true' || Object.keys(req.query).length !== 1) {
-      return res.status(400).json({ error: 'consulta_postulables_requerida' });
-    }
-    // C03 no implementa C04 ni ejecuta la RPC exclusiva del dueño para clientes.
-    return res.status(501).json({ error: 'listado_postulable_pendiente' });
+    return res.status(200).json({ campanas: (data || []).map(fila => mapearCampana(fila)) });
   } catch (error) {
     return next(error);
   }
 });
+
+// La RPC oficial (BD 0023 + 0024) resuelve identidad, rol y vigencia.
+router.get('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, async (req, res, next) => {
+  try {
+    const cafeteriaId = validarId(req.params.cafeteriaId);
+    if (Object.keys(req.query).length) {
+      throw new HttpError(400, 'parametros_no_admitidos');
+    }
+    const cliente = crearClienteAutenticado(req.accessToken);
+    const { data, error } = await cliente.rpc('listar_oportunidades_campana', {
+      p_cafeteria_id: cafeteriaId,
+    });
+    if (error) {
+      if (error.code === '42501') throw new HttpError(403, 'estudiante_requerido');
+      if (error.code === '22023') throw new HttpError(400, 'identificador_invalido');
+      if (error.code === 'PGRST301' || error.code === 'PGRST303' || error.code === '28000') {
+        throw new HttpError(401, 'sesion_invalida');
+      }
+      throw new HttpError(503, 'No se pudieron consultar las campañas');
+    }
+    // Un resultado inválido no debe ocultarse como una lista vacía exitosa.
+    if (!Array.isArray(data)) throw new HttpError(503, 'Respuesta de campañas inválida');
+    return res.status(200).json({ campanas: data });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, administrar(true));
 router.patch('/cafeterias/:cafeteriaId/campanas/:campanaId', auth.exigirAuth, administrar(false));
 

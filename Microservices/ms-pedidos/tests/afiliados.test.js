@@ -480,7 +480,7 @@ describe('administración de campañas sobre public.campanas', () => {
       .set('Authorization', 'Bearer sesion-empleado-7');
 
     expect([ajeno.status, empleado.status, cruzada.status, listadoAjeno.status, listadoPostulables.status])
-      .toEqual([403, 403, 403, 403, 501]);
+      .toEqual([403, 403, 403, 403, 400]);
     expect(ajeno.body).toEqual({ error: 'sin_acceso_cafeteria' });
     expect(empleado.body).toEqual({ error: 'sin_acceso_cafeteria' });
     expect(cruzada.body).toEqual({ error: 'sin_acceso_cafeteria' });
@@ -494,14 +494,14 @@ describe('administración de campañas sobre public.campanas', () => {
     await request(app).patch(`${ruta}/31`).set('Authorization', 'Bearer sesion-invalida').send({ pausada: true }).expect(401);
   });
 
-  test('el contrato estudiantil queda reservado sin consultar la RPC administrativa', async () => {
+  test('la consulta de vigentes rechaza postulables sin consultar la RPC administrativa', async () => {
     rpc.mockClear();
     for (const token of ['sesion-dueno-7', 'sesion-empleado-7']) {
       const respuesta = await request(app).get(`${ruta}?postulables=true`)
-        .set('Authorization', `Bearer ${token}`).expect(501);
-      expect(respuesta.body).toEqual({ error: 'listado_postulable_pendiente' });
+        .set('Authorization', `Bearer ${token}`).expect(400);
+      expect(respuesta.body.error).toBe('parametros_no_admitidos');
     }
-    for (const consulta of ['', '?postulables=false', '?postulables=true&extra=1']) {
+    for (const consulta of ['?postulables=false', '?postulables=true&extra=1']) {
       await request(app).get(`${ruta}${consulta}`)
         .set('Authorization', 'Bearer sesion-dueno-7').expect(400);
     }
