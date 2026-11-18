@@ -65,6 +65,8 @@ async function llenarFormularioValido(h) {
     'Descuento a precio normal': '15',
     'Descuento en oferta': '5',
     'Comisión': '10',
+    'Inicio': '2026-12-01T08:00',
+    'Término': '2026-12-15T20:00',
   };
   for (const [etiqueta, valor] of Object.entries(valores)) {
     await act(async () => {
@@ -376,6 +378,10 @@ test('el servicio sigue el contrato C02 con el cliente autenticado', async () =>
   assert.equal(llamadas[2].url, 'http://gateway/api/afiliados/cafeterias/7/campanas/31');
   assert.equal(llamadas[2].opciones.method, 'PATCH');
   assert.equal(JSON.parse(llamadas[2].opciones.body).descuento_normal_pct, 12);
+  await campanasAfiliados.actualizar(7, 31, { ...form, inicio: '', fin: '' });
+  const parcheSinFechas = JSON.parse(llamadas[3].opciones.body);
+  assert.equal(Object.hasOwn(parcheSinFechas, 'inicio'), false);
+  assert.equal(Object.hasOwn(parcheSinFechas, 'fin'), false);
 
   assert.throws(() => prepararCampana({ ...form, nombre: 'ab' }), /entre 3 y 120/);
   assert.throws(() => prepararCampana({ ...form, descuento_normal_pct: '' }), /obligatorio/);
@@ -387,9 +393,17 @@ test('el servicio sigue el contrato C02 con el cliente autenticado', async () =>
   assert.deepEqual(validarFormularioCampana({
     ...form, descuento_normal_pct: '15.25', descuento_oferta_pct: '5.5', comision_pct: '10.01',
   }).errores, {});
+  const sinFechas = { ...form, inicio: '', fin: '' };
+  assert.match(validarFormularioCampana(sinFechas, true).errores.inicio, /obligatorio en el alta/);
+  assert.match(validarFormularioCampana(sinFechas, true).errores.fin, /obligatorio en el alta/);
+  assert.throws(() => prepararCampana(sinFechas, true), /obligatorio en el alta/);
+  assert.deepEqual(validarFormularioCampana(sinFechas).errores, {}, 'la edición admite fechas vacías');
+  const ofertaMayor = { ...form, descuento_normal_pct: '10', descuento_oferta_pct: '15' };
+  assert.match(validarFormularioCampana(ofertaMayor).errores.descuento_oferta_pct, /no puede superar/);
+  assert.throws(() => prepararCampana(ofertaMayor), /no puede superar/);
   assert.throws(() => prepararCampana({ ...form, fin: form.inicio }), /posterior al inicio/);
-  assert.equal(validarFormularioCampana({ ...form, comision_pct: '   ' }).errores.comision_pct, 'La comisión es obligatorio.');
-  assert.equal(validarFormularioCampana({ ...form, comision_pct: true }).errores.comision_pct, 'La comisión es obligatorio.');
+  assert.equal(validarFormularioCampana({ ...form, comision_pct: '   ' }).errores.comision_pct, 'La comisión es obligatoria.');
+  assert.equal(validarFormularioCampana({ ...form, comision_pct: true }).errores.comision_pct, 'La comisión es obligatoria.');
   assert.equal(validarFormularioCampana({ ...form, inicio: '2026-02-30T10:00' }).errores.inicio, 'Revisa la fecha de vigencia.');
   assert.throws(() => prepararCampana({ ...form, inicio: '2026-02-30T10:00' }), /fecha de vigencia/);
   assert.deepEqual(validarFormularioCampana({
@@ -716,6 +730,22 @@ test('el formulario marca el campo obligatorio omitido y conserva los datos vál
   assert.equal(creados.length, 0);
 
   await cambiar('Comisión', '10');
+  await cambiar('Descuento en oferta', '20');
+  await act(async () => enviar());
+  assert.equal(campos()['Descuento en oferta'].props.error, true);
+  assert.match(campos()['Descuento en oferta'].props.helperText, /no puede superar/);
+  assert.equal(creados.length, 0, 'un descuento en oferta mayor no debe llegar al gateway');
+
+  await cambiar('Descuento en oferta', '5');
+  await cambiar('Inicio', '');
+  await cambiar('Término', '');
+  await act(async () => enviar());
+  assert.equal(campos()['Inicio'].props.error, true);
+  assert.equal(campos()['Término'].props.error, true);
+  assert.equal(creados.length, 0, 'el alta sin vigencia no debe llegar al gateway');
+
+  await cambiar('Inicio', '2026-12-01T08:00');
+  await cambiar('Término', '2026-12-15T20:00');
   await act(async () => enviar());
 
   assert.equal(creados.length, 1);

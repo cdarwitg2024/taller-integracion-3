@@ -234,7 +234,7 @@ function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
   const guardar = async (e) => {
     e.preventDefault();
     if (busy) return;
-    const detectados = validarFormularioCampana(form).errores;
+    const detectados = validarFormularioCampana(form, !existente).errores;
     setErrores(detectados);
     if (Object.keys(detectados).length > 0) {
       setFormError('Revisa los campos marcados: hay datos obligatorios o inválidos.');
@@ -281,8 +281,8 @@ function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
             <TextField label="Comisión" type="number" value={form.comision_pct} onChange={cambiar('comision_pct')} required disabled={busy} inputProps={{ min: 0, max: 100, step: 0.01 }} InputProps={{ endAdornment: '%' }} error={Boolean(errores.comision_pct)} helperText={errores.comision_pct} fullWidth />
           </Stack>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField label="Inicio" type="datetime-local" value={form.inicio || ''} onChange={cambiar('inicio')} disabled={busy} InputLabelProps={{ shrink: true }} error={Boolean(errores.inicio)} helperText={errores.inicio} fullWidth />
-            <TextField label="Término" type="datetime-local" value={form.fin || ''} onChange={cambiar('fin')} disabled={busy} InputLabelProps={{ shrink: true }} error={Boolean(errores.fin)} helperText={errores.fin} fullWidth />
+            <TextField label="Inicio" type="datetime-local" value={form.inicio || ''} onChange={cambiar('inicio')} required={!existente} disabled={busy} InputLabelProps={{ shrink: true }} error={Boolean(errores.inicio)} helperText={errores.inicio} fullWidth />
+            <TextField label="Término" type="datetime-local" value={form.fin || ''} onChange={cambiar('fin')} required={!existente} disabled={busy} InputLabelProps={{ shrink: true }} error={Boolean(errores.fin)} helperText={errores.fin} fullWidth />
           </Stack>
           <Stack direction="row" spacing={1.5} justifyContent="flex-end">
             <Button onClick={onVolver} disabled={busy}>Cancelar</Button>

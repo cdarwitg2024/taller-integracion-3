@@ -7,7 +7,7 @@ const ruta = (cafeteriaId, sufijo = '') =>
   `${BASE_BACKEND}/api/afiliados/cafeterias/${Number(cafeteriaId)}/campanas${sufijo}`;
 
 // Devuelve los errores por campo del formulario, sin alterar los valores válidos.
-export function validarFormularioCampana(form = {}) {
+export function validarFormularioCampana(form = {}, esAlta = false) {
   const errores = {};
   const nombre = String(form.nombre || '').trim();
   if (nombre.length < 3 || nombre.length > 120) {
@@ -16,17 +16,19 @@ export function validarFormularioCampana(form = {}) {
   const inicio = parsearFecha(form.inicio);
   const fin = parsearFecha(form.fin);
   if (inicio.error) errores.inicio = inicio.error;
+  else if (esAlta && !inicio.valor) errores.inicio = 'El inicio es obligatorio en el alta.';
   if (fin.error) errores.fin = fin.error;
+  else if (esAlta && !fin.valor) errores.fin = 'El término es obligatorio en el alta.';
   if (!inicio.error && !fin.error && inicio.valor && fin.valor && fin.valor <= inicio.valor) {
     errores.fin = 'El término debe ser posterior al inicio.';
   }
-  const porcentaje = (valor, etiqueta, campo) => {
+  const porcentaje = (valor, etiqueta, campo, obligatorio = 'obligatorio') => {
     if (typeof valor === 'boolean' || (typeof valor === 'string' && valor.trim() === '')) {
-      errores[campo] = `${etiqueta} es obligatorio.`;
+      errores[campo] = `${etiqueta} es ${obligatorio}.`;
       return;
     }
     if (valor === '' || valor === null || valor === undefined) {
-      errores[campo] = `${etiqueta} es obligatorio.`;
+      errores[campo] = `${etiqueta} es ${obligatorio}.`;
       return;
     }
     const n = Number(valor);
@@ -37,9 +39,12 @@ export function validarFormularioCampana(form = {}) {
     }
     return n;
   };
-  porcentaje(form.descuento_normal_pct, 'El descuento a precio normal', 'descuento_normal_pct');
-  porcentaje(form.descuento_oferta_pct, 'El descuento en oferta', 'descuento_oferta_pct');
-  porcentaje(form.comision_pct, 'La comisión', 'comision_pct');
+  const descuentoNormal = porcentaje(form.descuento_normal_pct, 'El descuento a precio normal', 'descuento_normal_pct');
+  const descuentoOferta = porcentaje(form.descuento_oferta_pct, 'El descuento en oferta', 'descuento_oferta_pct');
+  porcentaje(form.comision_pct, 'La comisión', 'comision_pct', 'obligatoria');
+  if (Number.isFinite(descuentoNormal) && Number.isFinite(descuentoOferta) && descuentoOferta > descuentoNormal) {
+    errores.descuento_oferta_pct = 'El descuento en oferta no puede superar el descuento a precio normal.';
+  }
   return { errores, nombre, inicio: inicio.valor, fin: fin.valor };
 }
 
@@ -60,18 +65,19 @@ function parsearFecha(valor) {
 }
 
 // Valida el formulario del panel y lo convierte al cuerpo del contrato.
-export function prepararCampana(form) {
-  const { errores, nombre, inicio, fin } = validarFormularioCampana(form);
+export function prepararCampana(form, esAlta = false) {
+  const { errores, nombre, inicio, fin } = validarFormularioCampana(form, esAlta);
   const primerCampo = Object.keys(errores)[0];
   if (primerCampo) throw new Error(errores[primerCampo]);
-  return {
+  const cuerpo = {
     nombre,
     descuento_normal_pct: Number(form.descuento_normal_pct),
     descuento_oferta_pct: Number(form.descuento_oferta_pct),
     comision_pct: Number(form.comision_pct),
-    inicio: inicio?.toISOString() || null,
-    fin: fin?.toISOString() || null,
   };
+  if (inicio) cuerpo.inicio = inicio.toISOString();
+  if (fin) cuerpo.fin = fin.toISOString();
+  return cuerpo;
 }
 
 export const campanasAfiliados = {
@@ -82,7 +88,7 @@ export const campanasAfiliados = {
   },
   // POST /api/afiliados/cafeterias/:id/campanas
   async crear(cafeteriaId, form) {
-    return request(ruta(cafeteriaId), { method: 'POST', body: JSON.stringify(prepararCampana(form)) });
+    return request(ruta(cafeteriaId), { method: 'POST', body: JSON.stringify(prepararCampana(form, true)) });
   },
   // PATCH /api/afiliados/cafeterias/:id/campanas/:campanaId
   async actualizar(cafeteriaId, campanaId, form) {
