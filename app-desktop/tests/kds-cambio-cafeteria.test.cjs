@@ -851,7 +851,7 @@ test('Escáner: el fallback Supabase valida contra la cafetería vigente tras un
   assert.deepEqual(llamadas[0], ['QR-TST-1', '5', 12]);
 });
 
-test('Escáner: una validación pendiente no publica resultado ni suena al cerrar o cambiar de cafetería', async t => {
+test('Escáner: una validación atrasada no publica resultado, no suena ni usa fallback al cerrar o cambiar de cafetería', async t => {
   const ventanaAnterior = global.window;
   let sonidos = [];
   global.window = {
@@ -885,7 +885,13 @@ test('Escáner: una validación pendiente no publica resultado ni suena al cerra
     TextField: nodo('textfield'), CircularProgress: nodo('spinner'), Alert: nodo('alerta'),
   };
 
-  for (const cerrar of [false, true]) {
+  const casos = [false, true].flatMap(cerrar => [
+    { cerrar, nombre: 'gateway exitoso', responder: v => v.resolve({ valido: true }) },
+    { cerrar, nombre: 'gateway caído', responder: v => v.reject(new Error('sin gateway')) },
+    { cerrar, nombre: 'gateway rechaza', responder: v => v.resolve({ valido: false, razon: 'QR no reconocido' }) },
+  ]);
+  for (const caso of casos) {
+    const { cerrar, responder } = caso;
     sonidos = [];
     const validacion = diferida();
     const llamadas = [];
@@ -932,10 +938,10 @@ test('Escáner: una validación pendiente no publica resultado ni suena al cerra
     await completar(() => tree.update(React.createElement(EscanearQrDialog, {
       open: !cerrar, cafeteriaId: cerrar ? 7 : 12, usuarioId: '5', onClose() {},
     })));
-    await completar(() => validacion.resolve({ valido: true }));
+    await completar(() => responder(validacion));
 
-    assert.equal(llamadas.length, 0);
-    assert.equal(sonidos.length, 0, 'una respuesta atrasada no debe reproducir sonido');
+    assert.equal(llamadas.length, 0, `${caso.nombre}: el fallback no debe ejecutarse tras el cambio`);
+    assert.equal(sonidos.length, 0, `${caso.nombre}: una respuesta atrasada no debe reproducir sonido`);
     assert.doesNotMatch(textoRenderizado(tree.toJSON()), /Entrega Validada Exitosamente/);
   }
 });

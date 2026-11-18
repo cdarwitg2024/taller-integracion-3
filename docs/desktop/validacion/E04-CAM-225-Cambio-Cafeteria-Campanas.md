@@ -99,8 +99,9 @@ el perfil pasa a la B; después se resuelve A y se comprueba qué se muestra.
 | Llega tarde el detalle completo de A estando ya en B | No se reabre el modal ni se publican productos de A | Aprobado |
 | Fallar la precarga de impresión de A y abrir B | B no imprime la comanda de A ni hereda su chip de estado | Aprobado |
 | Terminar el envío a impresión de A después de abrir B | El aviso de A no aparece en B; un UPDATE del mismo pedido sí conserva su impresión | Aprobado |
-| Cambiar a B con el escáner abierto y responder tarde el fallback Supabase de A | `validarQrEntrega` recibe la cafetería vigente B; la respuesta de A no se muestra | Aprobado |
-| Escanear en A, cambiar a B o cerrar antes de responder el gateway | La respuesta tardía no muestra resultado ni suena | Aprobado |
+| Cambiar a B con el escáner abierto y escanear después con el gateway caído | `validarQrEntrega` recibe la cafetería vigente B, no la A | Aprobado |
+| Escanear en A, cambiar a B o cerrar antes de responder el gateway con éxito | La respuesta tardía no muestra resultado ni suena | Aprobado |
+| Escanear en A, cambiar a B o cerrar y que el gateway falle o rechace el QR | No se llama a `validarQrEntrega`; el pedido de A no se marca entregado ni genera su log | Aprobado |
 | Cambiar de pedido o de cafetería mientras se genera el PDF de A | `guardarArchivoConUbicacion` no se llama; un UPDATE del mismo pedido sí conserva la impresión | Aprobado |
 | Cerrar el canal Realtime y recibir un callback pendiente | El callback se descarta; no se publica estado tras `cerrar()` | Aprobado |
 | Una inserción llega sin productos y el reintento de detalles responde | Se normaliza el pedido con los datos recuperados; si el reintento falla, se conserva la normalización previa | Aprobado |
@@ -145,10 +146,13 @@ originales no cubrían. `EscanearQrDialog` ahora lleva un contador de generació
 se incrementa al cerrar, al cambiar `cafeteriaId` o `usuarioId` y al reiniciar la
 lectura; el cambio de contexto también limpia el resultado y permite reintentar
 de inmediato. Cada continuación posterior al `await` comprueba que siga vigente
-antes de publicar resultado, sonar o usar la cafetería del fallback. La prueba
-nueva cubre el guard final cuando el gateway responde tarde tras cerrar o cambiar
-de cafetería; los guardas de las ramas de Supabase y del `catch` quedan sin una
-prueba de respuesta tardía dedicada.
+antes de publicar resultado, sonar o usar la cafetería del fallback. Tras el
+segundo comentario de Camilo Darwitg se adelantó la comprobación antes de las dos
+llamadas a `validarQrEntrega`: un gateway caído o un rechazo tardío ya no ejecuta
+el fallback con la cafetería anterior, que podía marcar entregado el pedido y
+escribir su log aunque la pantalla descartara el resultado. La prueba cubre las
+tres respuestas del gateway —éxito, fallo y rechazo— al cerrar o cambiar de
+cafetería, y verifica cero llamadas al fallback en los dos casos tardíos.
 
 `DetallePedidoDialog` comprueba la vigencia justo después de generar el blob y
 antes de llamar a `guardarArchivoConUbicacion`, e invalida las operaciones

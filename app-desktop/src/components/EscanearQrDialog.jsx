@@ -248,7 +248,9 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
       try {
         res = await backendApi.validarQr(token);
         fuePorBackend = true;
+        if (generacionRef.current !== activacion) return;
       } catch (backendErr) {
+        if (generacionRef.current !== activacion) return;
         console.warn('[KDS Escáner] MS Comercio no disponible para validar QR, fallback a Supabase:', backendErr.message);
         res = await pedidosService.validarQrEntrega(token, usuario, cafeteria);
         if (generacionRef.current !== activacion) return;
@@ -262,6 +264,7 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
         !res.razon?.includes('ya fue entregado') &&
         !res.razon?.includes('no está listo')
       ) {
+        if (generacionRef.current !== activacion) return;
         try {
           const porSupabase = await pedidosService.validarQrEntrega(token, usuario, cafeteria);
           if (generacionRef.current !== activacion) return;
