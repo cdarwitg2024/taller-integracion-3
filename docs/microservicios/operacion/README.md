@@ -102,8 +102,8 @@ Públicas, por el gateway:
 | GET | `/api/pedidos/:id` | ms-pedidos |
 | PATCH | `/api/pedidos/:id/estado` | ms-pedidos |
 | POST | `/api/pedidos/validar-qr` | ms-pedidos |
-| GET | `/api/afiliados/cafeterias/:cafeteriaId/campanas/administracion` | ms-pedidos, listado del dueño |
-| GET | `/api/afiliados/cafeterias/:cafeteriaId/campanas?postulables=true` | Reservado para C04; 501 explícito mientras no esté implementado |
+| GET | `/api/afiliados/cafeterias/:cafeteriaId/campanas` | ms-pedidos (sesión estudiante) |
+| GET | `/api/afiliados/cafeterias/:cafeteriaId/campanas/administracion` | ms-pedidos (sesión dueño) |
 | POST | `/api/afiliados/cafeterias/:cafeteriaId/campanas` | ms-pedidos |
 | PATCH | `/api/afiliados/cafeterias/:cafeteriaId/campanas/:campanaId` | ms-pedidos |
 | GET | `/gateway/health` | nginx (estático) |
@@ -180,4 +180,8 @@ gana el más corto, así que `location /api/menus` se comería
 
 `ms-pedidos` expone el alta, la edición, el listado administrativo y los cambios de estado del [contrato C02](../../contratos-integracion-afiliados.md) en `/api/afiliados`. El dueño se identifica con su JWT: las RPC `administrar_campana_afiliados` y `listar_campanas_afiliados` usan `public.dueno_campana_id(p_cafeteria_id)`, la función de identidad de V05 que exige usuario y rol activos, y limitan la fila o el listado por cafetería. Los porcentajes y la vigencia quedan fijos desde el inicio; pausar y reanudar conserva condiciones, versión y aceptación.
 
-La migración [administrar_campanas_afiliados.sql](../../../database/fixes/administrar_campanas_afiliados.sql) usa `public.campanas`, la tabla que consume escritorio. Agrega `tasa_descuento_oferta` como columna nullable, crea `siguiente_version_condiciones` y extiende el trigger V05 `proteger_confirmacion_campanas` para que la oferta participe en la inmutabilidad y en la exigencia de nueva versión. No modifica `confirmar_condiciones_campana` ni su restricción de vigencia. Las campañas existentes conservan `NULL` y no se modifica su aceptación. Los estados reales son `borrador`, `pendiente_aceptacion`, `aceptada`, `activa`, `pausada` y `finalizada`; la API deriva `programada` y publica el estado real en `estado_db`. La evidencia de solicitudes, códigos HTTP, SQL y RLS está en [S3-T3 · Administración de campañas de afiliados](../validacion/S3-T3-administracion-campanas-afiliados.md).
+La migración [administrar_campanas_afiliados.sql](../../../database/fixes/administrar_campanas_afiliados.sql) requiere el esquema V05, incluida la tabla `public.campanas` y la función `public.dueno_campana_id(bigint)`. Agrega la columna nullable `tasa_descuento_oferta` y extiende el control de versiones de condiciones para incluirla. La evidencia de solicitudes, códigos HTTP y cálculo SQL está en [S3-T3 · Administración de campañas de afiliados](../validacion/S3-T3-administracion-campanas-afiliados.md).
+
+## Consulta de campañas vigentes para estudiantes
+
+`GET /api/afiliados/cafeterias/:cafeteriaId/campanas` valida la sesión y llama con su JWT a `listar_oportunidades_campana(p_cafeteria_id)`. Requiere las migraciones `0023` y `0024` del repositorio de BD. La RPC comprueba estudiante activo y filtra cafetería activa, estado `activa` e inicio <= hora de consulta < fin. Devuelve `{"campanas":[]}` cuando no encuentra oportunidades; una RPC ausente o fallida devuelve `503`. No admite parámetros de consulta. El contrato y la evidencia están en [C04](../validacion/S3-T4-consulta-campanas-vigentes.md).
