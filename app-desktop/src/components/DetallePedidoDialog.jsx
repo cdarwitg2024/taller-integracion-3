@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Alert,
   Box,
@@ -41,9 +41,18 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
   const [imprimiendo, setImprimiendo] = useState(false);
   const [estadoImpresion, setEstadoImpresion] = useState({ veces: 0, esReimpresion: false });
   const [snackbar, setSnackbar] = useState({ open: false, mensaje: '', severity: 'info' });
+  const vigenteRef = useRef(0);
+  const claveRef = useRef(null);
 
   const pedidoActual = pedidoDetallado || pedido;
   const pedidoId = pedidoActual?.rawId ?? pedidoActual?.id;
+  // Cambiar de pedido invalida las respuestas pendientes; un UPDATE del mismo pedido no.
+  const clavePedido = pedido ? String(pedido.rawId ?? pedido.id) : null;
+  if (claveRef.current !== clavePedido) {
+    claveRef.current = clavePedido;
+    vigenteRef.current += 1;
+  }
+  const generacion = vigenteRef.current;
 
   useEffect(() => {
     setPedidoDetallado(pedido);
@@ -59,6 +68,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
     if (!pedido.productos || pedido.productos.length === 0) {
       pedidosService.getById(id)
         .then((completo) => {
+          if (vigenteRef.current !== generacion) return;
           if (completo && completo.productos && completo.productos.length > 0) {
             setPedidoDetallado(completo);
           }
@@ -67,11 +77,12 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
           console.warn('No se pudieron recargar detalles del pedido:', err);
         });
     }
-  }, [pedido]);
+  }, [pedido, generacion]);
 
   // Manejador para imprimir comanda de cocina (80mm sin precios) vía iframe aislado
   const handleImprimirComanda = async () => {
     if (!pedidoActual) return;
+    const activacion = vigenteRef.current;
     setImprimiendo(true);
 
     try {
@@ -80,11 +91,13 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
       if (!pedidoParaImprimir.productos || pedidoParaImprimir.productos.length === 0) {
         try {
           const completo = await pedidosService.getById(pedidoId);
+          if (vigenteRef.current !== activacion) return;
           if (completo && completo.productos && completo.productos.length > 0) {
             pedidoParaImprimir = completo;
             setPedidoDetallado(completo);
           }
         } catch (e) {
+          if (vigenteRef.current !== activacion) return;
           console.warn('No se pudo precargar detalle completo antes de imprimir:', e);
         }
       }
@@ -93,6 +106,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
       setEstadoImpresion(nuevoEstado);
 
       await impresionService.imprimirComanda(pedidoParaImprimir, nuevoEstado);
+      if (vigenteRef.current !== activacion) return;
 
       setSnackbar({
         open: true,
@@ -102,6 +116,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
         severity: nuevoEstado.veces > 1 ? 'warning' : 'success',
       });
     } catch (err) {
+      if (vigenteRef.current !== activacion) return;
       console.error('Error al enviar comanda a impresión:', err);
       setSnackbar({
         open: true,
@@ -116,6 +131,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
   // Manejador para imprimir boleta en ticket térmico de 80mm vía iframe aislado
   const handleImprimirBoleta = async () => {
     if (!pedidoActual) return;
+    const activacion = vigenteRef.current;
     setImprimiendo(true);
 
     try {
@@ -123,16 +139,19 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
       if (!pedidoParaImprimir.productos || pedidoParaImprimir.productos.length === 0) {
         try {
           const completo = await pedidosService.getById(pedidoId);
+          if (vigenteRef.current !== activacion) return;
           if (completo && completo.productos && completo.productos.length > 0) {
             pedidoParaImprimir = completo;
             setPedidoDetallado(completo);
           }
         } catch (e) {
+          if (vigenteRef.current !== activacion) return;
           console.warn('No se pudo precargar detalle completo antes de imprimir:', e);
         }
       }
 
       await impresionService.imprimirBoleta(pedidoParaImprimir);
+      if (vigenteRef.current !== activacion) return;
 
       setSnackbar({
         open: true,
@@ -140,6 +159,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
         severity: 'success',
       });
     } catch (err) {
+      if (vigenteRef.current !== activacion) return;
       console.error('Error al imprimir boleta térmica:', err);
       setSnackbar({
         open: true,
@@ -154,6 +174,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
   // Manejador para descargar la boleta en PDF permitiendo seleccionar ubicación
   const handleDescargarBoleta = async () => {
     if (!pedidoActual) return;
+    const activacion = vigenteRef.current;
     try {
       setDescargandoBoleta(true);
       const blob = await generarBoletaBlob(pedidoActual);
@@ -161,6 +182,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
       const nombreSugerido = `boleta-pedido-${codigoLimpio}.pdf`;
 
       const resultado = await impresionService.guardarArchivoConUbicacion(blob, nombreSugerido);
+      if (vigenteRef.current !== activacion) return;
 
       if (resultado.ok) {
         setSnackbar({
@@ -178,6 +200,7 @@ function DetallePedidoDialog({ pedido, onClose, onChangeEstado }) {
         });
       }
     } catch (err) {
+      if (vigenteRef.current !== activacion) return;
       console.error('Error al generar o guardar la boleta:', err);
       setSnackbar({
         open: true,

@@ -41,13 +41,16 @@ export const kdsRealtime = {
     onEstadoCanal,
     cafeteriaId,
   } = {}) {
+    let activo = true;
     if (!isSupabaseConfigured) {
       onEstadoCanal?.(ESTADO_INDISPONIBLE);
       return { cerrar() {} };
     }
 
-    const cid = cafeteriaId !== null && cafeteriaId !== undefined && cafeteriaId !== '' ? Number(cafeteriaId) : null;
-    if (!Number.isFinite(cid)) {
+    const cid = typeof cafeteriaId === 'number' || typeof cafeteriaId === 'string'
+      ? Number(cafeteriaId)
+      : null;
+    if (!Number.isSafeInteger(cid) || cid <= 0) {
       onEstadoCanal?.(ESTADO_INDISPONIBLE);
       return { cerrar() {} };
     }
@@ -63,6 +66,7 @@ export const kdsRealtime = {
         table: 'pedidos',
       },
       async (payload) => {
+        if (!activo) return;
         const nuevo = payload?.new;
         if (!nuevo || nuevo.estado !== 'pendiente') return;
         if (Number(nuevo.cafeteria_id) !== cid) return;
@@ -74,9 +78,10 @@ export const kdsRealtime = {
           .select('*')
           .eq('id', nuevo.cafeteria_id)
           .maybeSingle();
+        if (!activo) return;
 
         const comanda = await construirComanda({ ...nuevo, cafeterias: cafe || null });
-        if (comanda) onComanda?.(comanda);
+        if (activo && comanda) onComanda?.(comanda);
       }
     );
 
@@ -88,6 +93,7 @@ export const kdsRealtime = {
         table: 'pedidos',
       },
       async (payload) => {
+        if (!activo) return;
         const fila = payload?.new;
         if (!fila) return;
         if (Number(fila.cafeteria_id) !== cid) return;
@@ -96,15 +102,18 @@ export const kdsRealtime = {
           .select('*')
           .eq('id', fila.cafeteria_id)
           .maybeSingle();
+        if (!activo) return;
 
         // Refleja en tiempo real los cambios de estado (pendiente -> en_preparacion -> listo),
         // enriqueciendo con sus detalles para que la comanda nunca pierda los productos ni los precios.
         const comanda = await construirComanda({ ...fila, cafeterias: cafe || null });
+        if (!activo) return;
         onActualizar?.(comanda || normalizarPedido({ ...fila, cafeterias: cafe || null }));
       }
     );
 
     canal.subscribe((status) => {
+      if (!activo) return;
       if (status === 'SUBSCRIBED') {
         onEstadoCanal?.(ESTADO_CONECTADO);
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
@@ -115,6 +124,7 @@ export const kdsRealtime = {
     return {
       canal,
       cerrar() {
+        activo = false;
         canal.unsubscribe();
         supabase.removeChannel(canal);
       },

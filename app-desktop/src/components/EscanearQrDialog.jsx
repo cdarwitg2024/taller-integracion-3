@@ -125,6 +125,7 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
   const animFrameRef = useRef(null);
   const fileInputRef = useRef(null);
   const usuarioIdRef = useRef(usuarioId);
+  const cafeteriaIdRef = useRef(cafeteriaId);
   const resultadoRef = useRef(null);
 
   const [modo, setModo] = useState('qr'); // 'qr' | 'token'
@@ -137,7 +138,8 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
 
   useEffect(() => {
     usuarioIdRef.current = usuarioId;
-  }, [usuarioId]);
+    cafeteriaIdRef.current = cafeteriaId;
+  }, [usuarioId, cafeteriaId]);
 
   useEffect(() => {
     resultadoRef.current = resultado;
@@ -235,7 +237,7 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
         fuePorBackend = true;
       } catch (backendErr) {
         console.warn('[KDS Escáner] MS Comercio no disponible para validar QR, fallback a Supabase:', backendErr.message);
-        res = await pedidosService.validarQrEntrega(token, usuarioIdRef.current);
+        res = await pedidosService.validarQrEntrega(token, usuarioIdRef.current, cafeteriaIdRef.current);
       }
 
       // Si el MS Comercio rechazó (ej. no tenía el token en memoria), verificar en Supabase
@@ -247,7 +249,7 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
         !res.razon?.includes('no está listo')
       ) {
         try {
-          const porSupabase = await pedidosService.validarQrEntrega(token, usuarioIdRef.current);
+          const porSupabase = await pedidosService.validarQrEntrega(token, usuarioIdRef.current, cafeteriaIdRef.current);
           if (porSupabase && porSupabase.valido) {
             console.warn('[KDS Escáner] MS Comercio rechazó la credencial, Supabase sí la aceptó:', res.razon);
             res = porSupabase;
