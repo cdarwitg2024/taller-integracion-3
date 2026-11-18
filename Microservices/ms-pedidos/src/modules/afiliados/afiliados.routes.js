@@ -261,4 +261,6 @@ router.get('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, async (req, res
 router.post('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, administrar(true));
 router.patch('/cafeterias/:cafeteriaId/campanas/:campanaId', auth.exigirAuth, administrar(false));
 
+router.use(require('./solicitudes.routes')({ validarId, esObjeto }));
+
 module.exports = router;
