@@ -453,14 +453,13 @@ export async function simularCompra(
         total, 
         qr_token, 
         qr_usado, 
-        tiempo_estimado_min, 
         tiempo_real_min, 
         creado_en, 
         inicio_preparacion_en, 
         listo_en, 
         entregado_en
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         NOW(), 
         ${esEntregadoDirecto ? 'NOW()' : 'NULL'}, 
         ${esEntregadoDirecto ? 'NOW()' : 'NULL'}, 
@@ -476,7 +475,6 @@ export async function simularCompra(
       totalPedido,
       qrToken,
       esEntregadoDirecto,
-      5,
       tiempoReal
     ]);
 

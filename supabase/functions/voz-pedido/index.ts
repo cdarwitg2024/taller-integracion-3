@@ -3,7 +3,7 @@
 // ============================================================
 // Genera el audio del aviso de "nueva comanda" para el KDS.
 //
-// Reglas de diseño (ver docs/notificaciones_voz_elevenlabs.md):
+// Reglas de diseño (ver docs/desktop/notificaciones/notificaciones_voz_elevenlabs.md):
 //   1. La ELEVENLABS_API_KEY NUNCA sale de este servidor: el
 //      navegador solo habla con esta función.
 //   2. Exige un JWT de empleado o dueño (verify_jwt de Supabase

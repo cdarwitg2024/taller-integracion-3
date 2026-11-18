@@ -5,7 +5,7 @@ const cp = require('node:child_process');
 const db = 'cf_panel_test_' + Date.now();
 const container = process.env.TEST_POSTGRES_CONTAINER || 'supabase_db_db_CoffeeFaster';
 const run = (args, input) => cp.execFileSync('docker', ['exec', '-i', container, ...args],
-  { input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+  { input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 60000 });
 let created = false;
 (async () => {
   try {
@@ -20,10 +20,13 @@ let created = false;
       p.stdout.on('data', d => out += d);
       p.stderr.on('data', d => out += d);
       p.on('error', reject);
-      p.on('exit', c => c ? reject(new Error(out)) : resolve(out));
+      p.on('close', c => c ? reject(new Error(out)) : resolve(out));
       p.stdin.end(`BEGIN; SELECT procesar_pago(1,'[{"producto_id":1,"cantidad":3}]'); SELECT pg_sleep(0.5); COMMIT;`);
     });
-    const results = await Promise.all([buy(), buy()]);
+    const purchases = await Promise.allSettled([buy(), buy()]);
+    const failure = purchases.find(r => r.status === 'rejected');
+    if (failure) throw failure.reason;
+    const results = purchases.map(r => r.value);
     if (results.filter(x => x.includes('"ok": true')).length !== 1 ||
         results.filter(x => x.includes('stock_insuficiente')).length !== 1) throw new Error('Concurrencia incorrecta');
     const stock = run(['psql', '-U', 'postgres', '-d', db, '-At'], 'SELECT stock FROM productos WHERE id=1;').trim();
@@ -38,10 +41,13 @@ let created = false;
       p.stdout.on('data', d => out += d);
       p.stderr.on('data', d => out += d);
       p.on('error', reject);
-      p.on('exit', c => c ? reject(new Error(out)) : resolve(out));
+      p.on('close', c => c ? reject(new Error(out)) : resolve(out));
       p.stdin.end('BEGIN; SELECT cancelar_pedido(1); SELECT pg_sleep(0.5); COMMIT;');
     });
-    const cancellations = await Promise.all([cancel(), cancel()]);
+    const attempts = await Promise.allSettled([cancel(), cancel()]);
+    const cancelFailure = attempts.find(r => r.status === 'rejected');
+    if (cancelFailure) throw cancelFailure.reason;
+    const cancellations = attempts.map(r => r.value);
     if (cancellations.filter(x => x.includes('"ok": true')).length !== 1 ||
         cancellations.filter(x => x.includes('ya_cancelado')).length !== 1) throw new Error('Doble cancelacion concurrente');
     const final = run(['psql', '-U', 'postgres', '-d', db, '-At'],

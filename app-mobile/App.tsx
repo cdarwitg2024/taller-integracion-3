@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   BackHandler,
   Image,
   Linking,
@@ -13,6 +14,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from './src/lib/supabase';
+import { vincularRenovacion } from './src/lib/sesion';
 import { LoginScreen } from './src/screens/LoginScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
@@ -125,6 +127,7 @@ const TABS: { key: AppTab; label: string }[] = [
 const TIMEOUT_CREAR_PEDIDO_MS = 15000;
 
 function AppContent() {
+  useEffect(() => vincularRenovacion(supabase.auth, AppState), []);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   // FR-04: 'forgot' pide el código de recuperación,

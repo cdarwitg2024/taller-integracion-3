@@ -1,6 +1,6 @@
 # Verificación de múltiples réplicas de ms-menus
 
-> **Informe histórico de una ejecución o tarea anterior.** Sus Pods, métricas, réplicas y comandos reflejan ese momento; no certifican el estado actual. Para operación vigente consultar [estado Kubernetes](estado-actual.md) y [guía de despliegue](../../k8s-next/DESPLIEGUE.md). Revisión documental: 1 de noviembre de 2026.
+> **Informe histórico de una ejecución o tarea anterior.** Sus Pods, métricas, réplicas y comandos reflejan ese momento; no certifican el estado actual. Para operación vigente consultar [estado Kubernetes](estado-actual.md) y [guía de despliegue](operacion/DESPLIEGUE.md). Revisión documental: 1 de noviembre de 2026.
 
 > Tarea: S2-T3 — Camilo Darwitg — Verificar múltiples réplicas de ms-menus
 > Fecha: 2026-10-16

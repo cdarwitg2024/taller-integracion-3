@@ -1,0 +1,47 @@
+name: CI Mobile
+on:
+  push:
+    branches: [develop]
+    paths: ['app-mobile/**', 'package*.json', '.npmrc', '.github/**']
+  pull_request:
+    branches: [develop, main]
+    paths: ['app-mobile/**', 'package*.json', '.npmrc', '.github/**']
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app-mobile
+    env:
+      CI: '1'
+      EXPO_NO_DOTENV: '1'
+      EXPO_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-public-placeholder
+      EXPO_PUBLIC_API_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app-mobile/package-lock.json
+      - run: npm ci
+      - name: Validate Expo configuration
+        run: npx --no-install expo config --type public
+      - name: Check Expo dependency compatibility
+        run: npx --no-install expo install --check
+      - run: npm test -- --ci --runInBand
+      - name: Verify tests detect broken product availability
+        run: node ../.github/scripts/verify-unit-sensitivity.cjs mobile
+      - name: Bundle Android JavaScript and assets
+        run: npx --no-install expo export --platform android --output-dir dist-ci
+      # The existing lint script lacks eslint and @react-native/eslint-config.
+      - name: Report unavailable lint
+        if: always()
+        run: echo '::warning::Mobile lint requires eslint and @react-native/eslint-config; see docs/calidad/ci-cd/CI-CD.md.'

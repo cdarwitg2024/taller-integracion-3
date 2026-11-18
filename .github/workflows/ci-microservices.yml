@@ -1,0 +1,49 @@
+name: CI Microservices
+on:
+  push:
+    branches: [develop]
+    paths: ['Microservices/**', 'k8s-next/**', 'package*.json', '.npmrc', '.github/**']
+  pull_request:
+    branches: [develop, main]
+    paths: ['Microservices/**', 'k8s-next/**', 'package*.json', '.npmrc', '.github/**']
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  services:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ms-cafeterias, ms-menus, ms-pedidos]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: Microservices/${{ matrix.service }}/package-lock.json
+      - name: Check microservice source language
+        run: |
+          sources=(Microservices/${{ matrix.service }}/src Microservices/shared/src)
+          incompatible=$(find "${sources[@]}" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.cts' -o -name '*.jsx' -o -name '*.mjs' -o -name '*.cjs' \) -print)
+          if [[ -n "$incompatible" ]]; then
+            printf 'Microservice source uses JavaScript CommonJS in .js files. Review:\n%s\n' "$incompatible" >&2
+            exit 1
+          fi
+      - name: Install shared dependencies from the service lockfile
+        run: npm ci --prefix Microservices/${{ matrix.service }}
+      - name: Resolve the shared package dependencies
+        # file:../shared is a symlink; Node resolves from shared/, not the service.
+        run: ln -s ../${{ matrix.service }}/node_modules Microservices/shared/node_modules
+      - run: npm test --prefix Microservices/shared
+      - run: npm test --prefix Microservices/${{ matrix.service }} -- --ci
+      - name: Verify tests detect a functional defect in this service
+        run: node .github/scripts/verify-unit-sensitivity.cjs ${{ matrix.service }}
+      - name: Check JavaScript syntax
+        run: find Microservices/${{ matrix.service }}/src Microservices/shared/src -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Build the real Dockerfile without publishing
+        run: docker build --tag coffeefast/${{ matrix.service }}:ci --file Microservices/${{ matrix.service }}/Dockerfile Microservices

@@ -9,7 +9,7 @@ import { codigoEnPalabras } from './vozNumeros.js';
 //   * NUEVA_COMANDA: entró un pedido pendiente.
 //   * PEDIDO_LISTO:   un pedido pasó de en_preparacion a listo.
 //
-// DISEÑO (docs/notificaciones_voz_elevenlabs.md):
+// DISEÑO (docs/desktop/notificaciones/notificaciones_voz_elevenlabs.md):
 //   * Cascada: ElevenLabs (vía Edge Function "voz-pedido") -> voz
 //     del sistema (Web Speech) -> nada. El pedido JAMÁS se pierde
 //     por un problema de audio: la tarjeta ya está en pantalla.

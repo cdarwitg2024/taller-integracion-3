@@ -29,8 +29,6 @@ interface Cafeteria {
   hora_apertura?: string;
   hora_cierre?: string;
   imagen_url?: string;
-  /** Minutos de preparación base. Es el dato real de demora en la base. */
-  tiempo_base_min?: number;
 }
 
 /** Imagen de relleno cuando la cafetería no tiene foto o la URL está caída. */
@@ -116,15 +114,6 @@ export const CafeteriaListScreen = ({
         <Text style={styles.cardTitle}>{item.nombre}</Text>
         <Text style={styles.cardSubtitle} numberOfLines={2}>
           {item.descripcion || 'Sin descripción'}
-        </Text>
-        {/*
-          Antes la tarjeta imprimía "Demora de 1 - 3m" y "4.5/5.0" fijos.
-          Ninguna de las dos columnas existe en la tabla `cafeterias`, así que
-          eran datos inventados. Ahora sale de `tiempo_base_min` y
-          `hora_cierre`, que sí están.
-        */}
-        <Text style={[styles.cardDelay, getDelayStyle(item.tiempo_base_min)]}>
-          {formatearDemora(item.tiempo_base_min)}
         </Text>
         <Text style={styles.cardRating}>
           {item.hora_cierre ? `Cierra ${recortarHora(item.hora_cierre)}` : 'Sin horario'}
@@ -224,26 +213,8 @@ export const CafeteriaListScreen = ({
   );
 };
 
-/**
- * `tiempo_base_min` viene de la base. Si no está, no inventamos un rango:
- * mostramos que no hay dato.
- */
-const formatearDemora = (minutos?: number) => {
-  if (typeof minutos !== 'number' || Number.isNaN(minutos)) {
-    return 'Sin tiempo estimado';
-  }
-  return `Listo en ~${minutos} min`;
-};
-
 /** Postgres devuelve la hora como 'HH:MM:SS'. Nos interesa HH:MM. */
 const recortarHora = (hora: string) => hora.slice(0, 5);
-
-const getDelayStyle = (minutos?: number) => {
-  if (typeof minutos !== 'number' || Number.isNaN(minutos)) return { color: colors.textoSecundario };
-  if (minutos <= 5) return { color: colors.verde };
-  if (minutos <= 15) return { color: colors.naranja };
-  return { color: colors.rojo };
-};
 
 const styles = StyleSheet.create({
   container: {
@@ -324,11 +295,6 @@ const styles = StyleSheet.create({
     fontSize: typography.cuerpoPequeno,
     color: colors.textoSecundario,
     marginVertical: 2,
-  },
-  cardDelay: {
-    fontSize: typography.cuerpoPequeno,
-    fontWeight: typography.pesoBold,
-    marginTop: spacing.xs,
   },
   cardRating: {
     fontSize: typography.cuerpoPequeno,

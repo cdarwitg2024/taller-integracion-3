@@ -14,7 +14,8 @@ import {
 import AppIcon from '../components/AppIcon';
 
 import { supabase } from '../lib/supabase';
-import { apiPatch } from '../services/backendClient';
+import { leerConRenovacion, esJwtVencido } from '../lib/sesion';
+import { apiPatch, ApiError } from '../services/backendClient';
 import QrCode from '../lib/QrCode';
 import Button from '../components/Button';
 import Card from '../components/Card';
@@ -267,11 +268,11 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
     // `userId` es el UUID de Supabase Auth, pero `pedidos.usuario_id` es el
     // id interno de `usuarios` (BIGINT). Hay que pasar por `usuarios` para
     // traducir: la columna `pedidos.auth_user_id` no existe en el esquema.
-    const { data, error } = await supabase
+    const { data, error } = await leerConRenovacion(() => supabase
       .from('usuarios')
       .select('id')
       .eq('auth_user_id', userId)
-      .maybeSingle();
+      .maybeSingle());
     if (error) throw error;
     return data?.id ?? null;
   }, [userId]);
@@ -293,11 +294,11 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
         throw new Error('La sesión no tiene usuario interno asociado.');
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await leerConRenovacion(() => supabase
         .from('pedidos')
         .select('*, cafeterias(nombre, telefono, campus_sedes(direccion)), detalles_pedido(cantidad, precio_unitario, subtotal, productos(nombre, precio))')
         .eq('usuario_id', usuarioId)
-        .order('creado_en', { ascending: false });
+        .order('creado_en', { ascending: false }));
 
       if (error) throw error;
 
@@ -307,7 +308,9 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
       setLoadError(null);
     } catch (err) {
       console.warn('No se pudieron cargar los pedidos:', err);
-      setLoadError('No pudimos cargar tus pedidos. Comprueba tu conexión e inténtalo nuevamente.');
+      setLoadError(esJwtVencido(err) || /refresh.token|inicia sesi[oó]n/i.test(err?.message || '')
+        ? 'Tu sesión venció y no pudimos renovarla. Inicia sesión nuevamente.'
+        : 'No pudimos cargar tus pedidos. Comprueba tu conexión e inténtalo nuevamente.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -547,13 +550,14 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
         </>
       )}
 
-      {/* Modal de confirmación de pedido pagado (FR-21) */}
+      {/* Un solo modal nativo para confirmación y detalle del pedido. */}
       <Modal
-        visible={Boolean(pedidoConfirmado)}
+        visible={Boolean(pedidoConfirmado || selected)}
         animationType="slide"
         transparent
-        onRequestClose={onConfirmacionVista}
+        onRequestClose={pedidoConfirmado ? onConfirmacionVista : cerrarPedido}
       >
+        {pedidoConfirmado ? (
         <View style={styles.modalBackdrop}>
           <Card variant="elevated" padding="lg" style={styles.modalCard}>
             <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
@@ -638,14 +642,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
             </ScrollView>
           </Card>
         </View>
-      </Modal>
-
-      <Modal
-        visible={Boolean(selected)}
-        animationType="slide"
-        transparent
-        onRequestClose={cerrarPedido}
-      >
+        ) : (
         <View style={styles.modalBackdrop}>
           <Card variant="elevated" padding="lg" style={styles.modalCard}>
             <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
@@ -824,6 +821,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
             </ScrollView>
           </Card>
         </View>
+        )}
       </Modal>
     </View>
   );

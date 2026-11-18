@@ -53,7 +53,7 @@ Los tags actuales y imagePullPolicy=IfNotPresent no prueban correspondencia con 
 
 Recomendación pendiente de implementación: construir desde un commit limpio de main, etiquetar con SHA y label OCI org.opencontainers.image.revision, registrar digest y usar la imagen por digest en Deployment. Versionar además el ConfigMap de gateway; el digest de nginx no representa su configuración montada. SQL, Edge Functions y configuración externa requieren evidencia separada.
 
-Ver [despliegue](../../k8s-next/DESPLIEGUE.md) y [freeze/HPA](freeze-48h.md). No se ejecutaron despliegues ni cargas al actualizar esta documentación.
+Ver [despliegue](operacion/DESPLIEGUE.md) y [freeze/HPA](freeze-48h.md). No se ejecutaron despliegues ni cargas al actualizar esta documentación.
 
 ## Revisión local tras recuperar los comentarios
 

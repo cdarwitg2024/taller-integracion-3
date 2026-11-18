@@ -58,6 +58,7 @@ out/
 .cache/
 **/.cache/
 coverage/
+.jest-cache/
 **/coverage/
 .eslintcache
 .parcel-cache

@@ -1,75 +1,134 @@
 # Índice de documentación de CoffeeFast
 
-Revisado el 1 de noviembre de 2026. **Código local, versión desplegada y evidencia histórica son estados diferentes.** La ausencia de un cambio en Cloud no se resuelve cambiando este índice.
+[Estado funcional del proyecto](estado-actual.md) · [Estado de Kubernetes](kubernetes/estado-actual.md)
 
-- **VIGENTE:** guía contrastada con el código/configuración en esta revisión; sus pendientes se indican expresamente.
-- **INTEGRACIÓN:** describe implementación actual y límites; conservar separadas sus propuestas y pruebas antiguas.
-- **REFERENCIA / HISTÓRICO:** resultados de una tarea o entorno; no certifican el despliegue actual.
-- **INVESTIGACIÓN:** material conceptual; no es un procedimiento operativo ni una garantía de versiones actuales.
-- **OBSOLETO:** arquitectura retirada; no usar como receta.
+Las guías de operación, investigaciones y evidencias de validación se agrupan por componente. Los informes de tareas anteriores registran el resultado de su entorno y fecha. Las propuestas de arquitectura retirada se conservan como referencia histórica.
 
-## Guías vigentes
+## Escritorio
 
-- [estado-actual.md](estado-actual.md)
-- [puesta_en_marcha_flujo_pedidos.md](puesta_en_marcha_flujo_pedidos.md)
-- [kubernetes/estado-actual.md](kubernetes/estado-actual.md)
-- [kubernetes/freeze-48h.md](kubernetes/freeze-48h.md)
+### Investigación
 
-## Integraciones
+- [Investigación de tecnologías para React y Electron](desktop/investigacion/investigacion_escaner_dashboard.md)
+- [Investigación: Vite + React + MUI + Electron](desktop/investigacion/investigacion_react_electron.md)
 
-- [notificaciones_voz_elevenlabs.md](notificaciones_voz_elevenlabs.md)
-- [notificaciones_push_fcm.md](notificaciones_push_fcm.md)
+### Notificaciones
 
-## Referencia técnica y evidencias
+- [Notificaciones de voz en el KDS con ElevenLabs (TTS)](desktop/notificaciones/notificaciones_voz_elevenlabs.md)
 
-- [base-datos/D2.1_cancelacion_reembolso.md](base-datos/D2.1_cancelacion_reembolso.md)
-- [base-datos/D4_validacion_qr_entrega.md](base-datos/D4_validacion_qr_entrega.md)
-- [base-datos/dependencias-sql-ms-pedidos.md](base-datos/dependencias-sql-ms-pedidos.md)
-- [seguridad/consulta_qr_ms_pedidos_s2_t14.md](seguridad/consulta_qr_ms_pedidos_s2_t14.md)
-- [seguridad/consulta_segura_movimientos_s2_t12.md](seguridad/consulta_segura_movimientos_s2_t12.md)
-- [seguridad/ms-pedidos-entornos-s2-t14.md](seguridad/ms-pedidos-entornos-s2-t14.md)
-- [autenticacion/auditoria_confirmacion_correo.md](autenticacion/auditoria_confirmacion_correo.md)
-- [autenticacion/flujo_confirmacion_cuenta_s2_t2.md](autenticacion/flujo_confirmacion_cuenta_s2_t2.md)
-- [autenticacion/persistencia_edicion_perfil_s2_t15.md](autenticacion/persistencia_edicion_perfil_s2_t15.md)
-- [autenticacion/resolucion_incidencias_cuenta_s2_t18.md](autenticacion/resolucion_incidencias_cuenta_s2_t18.md)
-- [autenticacion/validacion_integrada_perfil_wallet_cancelacion_s2_t17.md](autenticacion/validacion_integrada_perfil_wallet_cancelacion_s2_t17.md)
-- [local/S2-T19-Incidencias-Mobile.md](local/S2-T19-Incidencias-Mobile.md)
+### Validación
 
-## Informes de Kubernetes
+- [S2-T15 - Validación flujo integrado y recuperación del KDS](desktop/validacion/S2-T15-Validacion-Flujo-Integrado-KDS.md)
+- [S2-T17 - Validación flujo completo del KDS](desktop/validacion/S2-T17-Validacion-Flujo-Completo-KDS.md)
+- [S2-T18 — Validación integrada del panel administrativo](desktop/validacion/S2-T18_validacion_panel_administrativo.md)
 
-- [kubernetes/configuracion-fortio-carga.md](kubernetes/configuracion-fortio-carga.md)
-- [kubernetes/configuracion-hpa-microservicios.md](kubernetes/configuracion-hpa-microservicios.md)
-- [kubernetes/diagnostico-pods-pending-ms-menus.md](kubernetes/diagnostico-pods-pending-ms-menus.md)
-- [kubernetes/preparacion-autoscaling-ms-menus.md](kubernetes/preparacion-autoscaling-ms-menus.md)
-- [kubernetes/retiro-ms-inventario-legado.md](kubernetes/retiro-ms-inventario-legado.md)
-- [kubernetes/verificacion-autoscaling-bajo-carga.md](kubernetes/verificacion-autoscaling-bajo-carga.md)
-- [kubernetes/verificacion-metrics-api-autoscaling.md](kubernetes/verificacion-metrics-api-autoscaling.md)
-- [kubernetes/verificacion-multiples-replicas-ms-menus.md](kubernetes/verificacion-multiples-replicas-ms-menus.md)
+## Móvil
 
-## Investigaciones
+### Autenticación y perfil
 
-- [investigacion_escaner_dashboard.md](investigacion_escaner_dashboard.md)
-- [investigacion_Kotlin.md](investigacion_Kotlin.md)
-- [investigacion_Nodejs.md](investigacion_Nodejs.md)
-- [investigacion_supabase.md](investigacion_supabase.md)
-- [investigación_ react_electron.md](investigación_%20react_electron.md)
+- [Auditoría y Corrección de Confirmación de Correo y Redirección en Supabase Auth](mobile/autenticacion/auditoria_confirmacion_correo.md)
+- [Implementación y Verificación del Flujo de Confirmación de Cuenta (S2-T2)](mobile/autenticacion/flujo_confirmacion_cuenta_s2_t2.md)
+- [Documentación Técnica: Persistencia Real al Editar Perfil (S2-T15)](mobile/autenticacion/persistencia_edicion_perfil_s2_t15.md)
+- [Validación y Resolución de Incidencias de Cuenta (S2-T18)](mobile/autenticacion/resolucion_incidencias_cuenta_s2_t18.md)
+- [Documentación Técnica: Validación Integrada de Perfil, Wallet y Cancelación (S2-T17)](mobile/autenticacion/validacion_integrada_perfil_wallet_cancelacion_s2_t17.md)
 
-## Informes de validación
+### Guías
 
-- [S2-T18_validacion_panel_administrativo.md](S2-T18_validacion_panel_administrativo.md)
-- [pruebas_flujo_catalogo.md](pruebas_flujo_catalogo.md)
+- [Guía de la app móvil](mobile/guias/react-native.md)
 
-## Arquitectura retirada
+### Incidencias
 
-- [obsoleto/arquitectura-microservicios.md](obsoleto/arquitectura-microservicios.md)
-- [obsoleto/despliegue_kubernetes_backend.md](obsoleto/despliegue_kubernetes_backend.md)
-- [obsoleto/flujo_integracion_conexion_apps.md](obsoleto/flujo_integracion_conexion_apps.md)
+- [S2-T19 - Incidencias Mobile encontradas en pruebas integradas](mobile/incidencias/S2-T19-Incidencias-Mobile.md)
 
-## Manifiestos y validaciones de Desktop
+### Investigación
 
-- [Despliegue Kubernetes](../k8s-next/DESPLIEGUE.md).
-- [Configuración del gateway](../k8s-next/gateway/README.md).
-- [Validación KDS T15](../app-desktop/docs/S2-T15-Validacion-Flujo-Integrado-KDS.md) y [T17](../app-desktop/docs/S2-T17-Validacion-Flujo-Completo-KDS.md): evidencias históricas.
-- [Plantilla de Secret](secrets/supabase-secret.example.yaml): referencia con placeholders; nunca aplicar como Secret real.
+- [Investigación de Kotlin para Android Studio](mobile/investigacion/investigacion_Kotlin.md)
 
-No hay un orquestador NestJS /api/v1 implementado. La arquitectura actual usa gateway Nginx y tres microservicios. Las propuestas archivadas no son requisitos automáticamente pendientes. backend-node sigue presente como legacy parcialmente consumido; su retiro no está completado.
+### Seguridad
+
+- [Integración de Consulta Segura de Movimientos y Aislamiento por Wallet (S2-T12)](mobile/seguridad/consulta_segura_movimientos_s2_t12.md)
+
+### Validación
+
+- [S2-T17 - Validar flujo Mobile de disponibilidad y carrito](mobile/validacion/S2-T17-Validacion-Flujo-Mobile-Disponibilidad-y-Carrito.md)
+
+## Backend Node
+
+### Guías
+
+- [Backend legacy de CoffeeFast](backend-node/guias/README.md)
+
+### Investigación
+
+- [Investigación: Node.js con Express](backend-node/investigacion/investigacion_Nodejs.md)
+
+## Microservicios
+
+### Operación
+
+- [Microservicios de CoffeeFast — entorno local](microservicios/operacion/README.md)
+- [S2-T14: identidad y version de ms-pedidos](microservicios/operacion/ms-pedidos-entornos-s2-t14.md)
+- [Puesta en marcha — apps, gateway y Supabase](microservicios/operacion/puesta_en_marcha_flujo_pedidos.md)
+
+### Seguridad
+
+- [Alineación de Consulta QR Mobile con ms-pedidos (S2-T14)](microservicios/seguridad/consulta_qr_ms_pedidos_s2_t14.md)
+
+### Validación
+
+- [Prueba del flujo de catálogo — T11](microservicios/validacion/pruebas_flujo_catalogo.md)
+
+## Bot de Telegram
+
+### Integración
+
+- [🤖 Integración del Bot de Alertas de Stock Bajo (Supabase + Python)](bot-telegram/integracion/README.md)
+
+## Pruebas y CI/CD
+
+### CI/CD
+
+- [CI/CD de CoffeeFast](calidad/ci-cd/CI-CD.md)
+
+### Validación
+
+- [Revisión de pruebas para CI/CD](calidad/validacion/revision-pruebas.md)
+
+## Base de datos
+
+- [D.2.1 — Cancelación de pedido con reembolso a Wallet (traspaso a Base de Datos)](base-datos/D2.1_cancelacion_reembolso.md)
+- [D.4 — Validación QR y entrega de pedido (traspaso a Base de Datos)](base-datos/D4_validacion_qr_entrega.md)
+- [S2-T16 — Dependencias SQL del flujo de pedidos](base-datos/dependencias-sql-ms-pedidos.md)
+- [Promociones y configuración del dueño](base-datos/promociones-configuracion-dueno.md)
+
+### Investigación
+
+- [Investigación: Supabase](base-datos/investigacion/investigacion_supabase.md)
+
+## Kubernetes
+
+- [Configuración de Fortio para pruebas de carga](kubernetes/configuracion-fortio-carga.md)
+- [Configuración de Horizontal Pod Autoscaler en CoffeeFast](kubernetes/configuracion-hpa-microservicios.md)
+- [Diagnóstico de Pods Pending en ms-menus](kubernetes/diagnostico-pods-pending-ms-menus.md)
+- [Kubernetes — referencia vigente](kubernetes/estado-actual.md)
+- [Freeze de main, evidencia y ensayo HPA](kubernetes/freeze-48h.md)
+- [Preparación de ms-menus para Horizontal Pod Autoscaler](kubernetes/preparacion-autoscaling-ms-menus.md)
+- [Retiro de ms-inventario legado](kubernetes/retiro-ms-inventario-legado.md)
+- [Verificación de Autoscaling bajo carga](kubernetes/verificacion-autoscaling-bajo-carga.md)
+- [Verificación de Metrics API para Autoscaling](kubernetes/verificacion-metrics-api-autoscaling.md)
+- [Verificación de múltiples réplicas de ms-menus](kubernetes/verificacion-multiples-replicas-ms-menus.md)
+
+### Operación
+
+- [Despliegue Kubernetes de CoffeeFast](kubernetes/operacion/DESPLIEGUE.md)
+- [Gateway Nginx](kubernetes/operacion/gateway.md)
+
+## Documentación histórica de arquitectura retirada
+
+- [Arquitectura de Microservicios — CoffeeFast](obsoleto/arquitectura-microservicios.md)
+- [Guía y Registro de Despliegue en Kubernetes (K8s)](obsoleto/despliegue_kubernetes_backend.md)
+- [Flujo de Integración y Conexión de Apps](obsoleto/flujo_integracion_conexion_apps.md)
+
+## Recursos compartidos
+
+- [Logo CoffeeFast](figma/LogoCoffeeFast.png)
+- [Plantilla de Secret de Supabase](secrets/supabase-secret.example.yaml)

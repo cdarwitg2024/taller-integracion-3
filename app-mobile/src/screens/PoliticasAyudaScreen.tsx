@@ -297,9 +297,8 @@ export const PoliticasAyudaScreen: React.FC<PoliticasAyudaScreenProps> = ({
               <View style={styles.infoBullet}>
                 <Text style={styles.bulletDot}>•</Text>
                 <Text style={styles.bulletText}>
-                  <Text style={styles.bold}>Asignación de Franja Horaria:</Text> Al realizar el
-                  pago, la app te asigna un tiempo estimado de entrega (ej. 15 a 20 minutos)
-                  calculado según la demanda de la cafetería.
+                  <Text style={styles.bold}>Franja de retiro:</Text> Elige un horario disponible
+                  antes de pagar. Puedes consultarlo en el detalle de tu pedido.
                 </Text>
               </View>
 

@@ -45,7 +45,7 @@ Convención de evidencia: `S` = `Microservices/ms-pedidos/src/modules/pedidos/pe
 | `logs_validacion_qr` (candidata QR) | INSERT esperado, SELECT de auditoría; no demostrados dentro de RPC | Registro de validación | Q:17; S:738 solo llama RPC | VERSIONADA como objeto; no prueba que `log_qr_validation` la escriba |
 | `logs_auditoria` (auxiliar) | SELECT por policy | Historial de perfil, no escritura probada por pago | H:92,111 | PARCIAL: RLS/policy, sin CREATE TABLE |
 | `anuncios_pedido` (auxiliar) | Sin operación desde ms-pedidos; soporte voz KDS | Avisos posteriores al pedido | `database/fixes/crear_anuncios_pedido.sql`:24 | VERSIONADA como objeto, FK externas |
-| `auth.users` (plataforma) | Auth API; trigger de alta citado | Cuenta Supabase y UUID enlazado por `usuarios.auth_user_id` | `Microservices/shared/src/auth.js`:88,140; `docs/pruebas_flujo_catalogo.md`:99 | EXTERNA administrada por plataforma; no DDL local |
+| `auth.users` (plataforma) | Auth API; trigger de alta citado | Cuenta Supabase y UUID enlazado por `usuarios.auth_user_id` | `Microservices/shared/src/auth.js`:88,140; `docs/microservicios/validacion/pruebas_flujo_catalogo.md`:99 | EXTERNA administrada por plataforma; no DDL local |
 
 No hay DELETE/UPSERT productivo en estos cinco flujos. No se descuenta ni repone stock: S:249 deja explícito que inventario salió del stack. `categorias` aparece en fixes/seed, pero no es consultada por este camino; sus posibles FK base no están disponibles y no se inventan.
 
@@ -79,7 +79,7 @@ Clasificar las dos primeras como VERSIONADAS describe sus definiciones, **no** s
 | `supabase_realtime` | Publicación existente, ADD TABLE pedidos | `database/fixes/habilitar_realtime.sql`:12 | PARCIAL: membership versionada, publicación/plataforma externa; soporte de UI, no requisito de transacción HTTP |
 | `trg_pedidos_codigo` | Trigger de códigos descrito en D4 | `docs/base-datos/D4_validacion_qr_entrega.md`:127 | INDETERMINADO: referencia documental, sin CREATE ni función destino |
 | `handle_wallet_updated_at` | Trigger/helper de timestamp descrito en D2.1 | `docs/base-datos/D2.1_cancelacion_reembolso.md`:143 | INDETERMINADO; falta definición, nombre del trigger/función inequívoco |
-| `on_auth_user_created` → `handle_new_auth_user()` | Trigger de aprovisionamiento de usuario/wallet | `docs/pruebas_flujo_catalogo.md`:99 contiene CREATE TRIGGER, pero no cuerpo de función | PARCIAL; no reproducible integralmente |
+| `on_auth_user_created` → `handle_new_auth_user()` | Trigger de aprovisionamiento de usuario/wallet | `docs/microservicios/validacion/pruebas_flujo_catalogo.md`:99 contiene CREATE TRIGGER, pero no cuerpo de función | PARCIAL; no reproducible integralmente |
 | `on_auth_user_deleted` → `borrar_usuario_al_eliminar()` | Propuesta de limpieza, fuera del flujo | Mismo documento:115,125, bajo “Corrección propuesta (no aplicada)” | Fragmento SQL versionado documentalmente; NO evidencia de objeto usado/desplegado |
 
 ### Policies y permisos
@@ -329,7 +329,7 @@ Node necesita acceso directo JWT a usuarios antes del pago y a pedidos al leer; 
 
 Conteos: **0 CREATE TRIGGER en los diez archivos SQL**; 3 nombres históricos vinculados a alta/códigos/timestamp (uno ambiguo) y 1 trigger propuesto de baja. Las 2 funciones de trigger de alta/baja se separan de los 5 helpers inventariados; el destino de trg_pedidos_codigo sigue sin nombre. Hay 4 CREATE POLICY, 2 tablas con DDL y 5 CREATE FUNCTION en archivos SQL (2 RPC + 3 helpers). Otros objetos: 2 identidades implícitas, 1 índice explícito, 9 constraints PK/UNIQUE/FK (4 logs y 5 anuncios; conteo excluye NOT NULL/defaults, también versionados en esas tablas), 1 ALTER PUBLICATION y 0 CREATE PUBLICATION. No se inventa cantidad de constraints base.
 
-D2.1:473 documenta que pago cambió de mi_usuario_id a get_current_user_id; es evidencia histórica de reconciliación, no igualdad semántica. D2.1:355,358,376 transcribe mis_cafeterias_ids en USING/WITH CHECK de pedidos_update_staff, sin cuerpo del helper. `notificar_stock_bajo()` tiene SQL embebido en BotTelegramCoffeFaster/README.md:228, pero no lo llaman P/X ni hay control de stock Node actual; no se añade al núcleo ni demuestra un trigger instalado. `database/fixes/crear_rpc_pagos.sql`, referenciado en puesta en marcha, no existe; los cuerpos actuales están en app-mobile/tabla_mobile.
+D2.1:473 documenta que pago cambió de mi_usuario_id a get_current_user_id; es evidencia histórica de reconciliación, no igualdad semántica. D2.1:355,358,376 transcribe mis_cafeterias_ids en USING/WITH CHECK de pedidos_update_staff, sin cuerpo del helper. `notificar_stock_bajo()` tiene SQL embebido en docs/bot-telegram/integracion/README.md:228, pero no lo llaman P/X ni hay control de stock Node actual; no se añade al núcleo ni demuestra un trigger instalado. `database/fixes/crear_rpc_pagos.sql`, referenciado en puesta en marcha, no existe; los cuerpos actuales están en app-mobile/tabla_mobile.
 
 ### Prueba estricta de reproducibilidad
 
