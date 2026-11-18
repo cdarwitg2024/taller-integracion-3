@@ -14,7 +14,7 @@ Todas las solicitudes usan `Authorization: Bearer <sesion>` y, cuando llevan JSO
 | Dueño, escritorio | `PATCH /api/afiliados/cafeterias/7/campanas/31` con `{"descuento_normal_pct":12}` | Antes del inicio, `200 {"id":31,"descuento_normal_pct":12}` | Desde el inicio, `409 {"error":"porcentajes_fijados"}` |
 | Dueño, escritorio | Misma ruta con `{"pausada":true}` o `{"pausada":false}` | `200 {"id":31,"estado":"pausada"}` o `200 {"id":31,"estado":"activa"}` | Al reanudar después del término, `409 {"error":"campana_finalizada"}` |
 
-La consulta C04 usa la RPC oficial `listar_oportunidades_campana` (BD `0023` + `0024`). Conserva los campos oficiales de cafetería, tipo, estados, vigencias y tasas. Solo lista campañas activas ya iniciadas y no terminadas de cafeterías activas. No admite parámetros de consulta: `?postulables=true` devuelve `400`. POST/PATCH conservan el modelo provisional de administración, cuya reconciliación con la BD oficial queda pendiente.
+La consulta C04 usa la RPC `listar_oportunidades_campana` (BD `0023` + `0024`). Solo lista campañas vigentes de cafeterías activas. Enviar `?postulables=true` devuelve `400`. El alta y la edición de C03 conservan sus URL y operan sobre `public.campanas`.
 
 Cuerpo de creación:
 
@@ -110,25 +110,19 @@ de `public.campanas` (incluidas versión y aceptación) y agrega los alias
 `estado` y `estado_db`. Sus estados externos son `programada`, `activa`,
 `pausada` y `finalizada`; un estado administrativo no acredita que sea postulable.
 
-E04 conserva la URL de C02:
-`GET /api/afiliados/cafeterias/:cafeteriaId/campanas?postulables=true`, con JWT
-del cliente/estudiante. C04 debe implementar la autorización estudiantil y
-devolver solo campañas postulables en `{campanas: [...]}`, con `id`, `nombre`,
-`estado`, los tres porcentajes y `inicio`/`fin`, sin datos internos de aceptación.
-El contrato de consumo contempla `programada` (postulación anticipada) y
-`activa`; las pausadas, finalizadas y propuestas sin habilitar se excluyen.
-E04 muestra el vacío cuando recibe un arreglo vacío y no sustituye esta URL por
-la administrativa.
+C04 usa `GET /api/afiliados/cafeterias/:cafeteriaId/campanas` con el JWT del
+estudiante y sin parámetros de consulta. Devuelve `200 {"campanas":[...]}` o
+`200 {"campanas":[]}` cuando no hay resultados. Cada campaña incluye `id`,
+`nombre`, `cafeteria_id`, `cafeteria_nombre`, `tipo`, `estado`, `vigencia_desde`,
+`vigencia_hasta`, `tasa_descuento`, `tasa_comision` y `estado_vigencia`.
 
-C03 **no implementa C04**: actualmente ese GET con `postulables=true` devuelve
-`501 {"error":"listado_postulable_pendiente"}` después de validar la sesión,
-sin invocar la autorización exclusiva del dueño ni devolver sus datos. E04 debe
-tratar ese 501 como funcionalidad pendiente, sin mostrar campañas ficticias.
-Sin sesión se devuelve 401. Omitir el parámetro, usar un valor distinto de
-`true` o añadir parámetros desconocidos devuelve
-`400 {"error":"consulta_postulables_requerida"}`. El éxito 200 estudiantil
-sigue pendiente de C04; las respuestas 403 propias de su autorización deberán
-validarse al implementar esa tarea. POST y PATCH de C03 conservan sus URL de C02.
+La RPC exige un estudiante activo. Solo devuelve campañas en estado `activa`
+de cafeterías activas, con inicio inclusivo y fin exclusivo. Una sesión inválida
+devuelve `401`; una cuenta sin acceso estudiantil devuelve `403`. Los parámetros
+de consulta, incluido `postulables=true`, devuelven
+`400 {"error":"parametros_no_admitidos"}`. Si la consulta no está disponible,
+devuelve `503`. El [registro C04](microservicios/validacion/S3-T4-consulta-campanas-vigentes.md)
+incluye el ejemplo completo y la evidencia de validación.
 
 La administración de campañas usa `public.campanas`, la tabla que consume escritorio. El mapeo aplicado es `descuento_normal_pct → tasa_descuento`, `descuento_oferta_pct → tasa_descuento_oferta` (columna nueva, nullable), `comision_pct → tasa_comision`, `inicio → vigencia_desde` y `fin → vigencia_hasta`.
 
