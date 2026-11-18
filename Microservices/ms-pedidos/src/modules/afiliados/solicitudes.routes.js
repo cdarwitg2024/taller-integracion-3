@@ -14,15 +14,20 @@ const ERRORES_SQL = {
   PGRST303: [401, 'sesion_invalida'],
 };
 
-async function ejecutar(req, rpc, args, conflicto = 'resolucion_en_conflicto') {
-  const { data, error } = await crearClienteAutenticado(req.accessToken).rpc(rpc, args);
-  if (!error) return data;
+function comprobarError(error, conflicto) {
+  if (!error) return;
   if (error.code === '55000') throw new HttpError(409, conflicto);
   if (error.code === '42501' && error.message === 'estudiante_requerido') {
     throw new HttpError(403, 'estudiante_requerido');
   }
   if (Object.hasOwn(ERRORES_SQL, error.code)) throw new HttpError(...ERRORES_SQL[error.code]);
   throw new HttpError(503, 'No se pudo gestionar la afiliación', { causa: error.code });
+}
+
+async function ejecutar(req, rpc, args, conflicto = 'resolucion_en_conflicto') {
+  const { data, error } = await crearClienteAutenticado(req.accessToken).rpc(rpc, args);
+  comprobarError(error, conflicto);
+  return data;
 }
 
 function presentar(fila) {
@@ -38,15 +43,33 @@ function presentar(fila) {
   return { id, estado, codigo, codigo_activo };
 }
 
-function presentarLista(filas, transformar) {
-  if (!Array.isArray(filas)) throw new HttpError(503, 'Respuesta de afiliación inválida');
-  return { solicitudes: filas.map(transformar) };
+async function listarPagina(req, rpc, args, transformar) {
+  const { antes_de: antesDe } = req.query;
+  const cursor = typeof antesDe === 'string' ? Number(antesDe) : null;
+  if (Object.keys(req.query).some(clave => clave !== 'antes_de') ||
+      (antesDe !== undefined && (typeof antesDe !== 'string' || !/^\d+$/.test(antesDe) ||
+        !Number.isSafeInteger(cursor) || cursor <= 0))) {
+    throw new HttpError(400, 'parametros_no_admitidos');
+  }
+
+  const consulta = crearClienteAutenticado(req.accessToken).rpc(rpc, args, { count: 'exact' });
+  if (cursor !== null) consulta.lt('id', cursor);
+  const { data, count, error } = await consulta.order('id', { ascending: false }).limit(100);
+  comprobarError(error, 'resolucion_en_conflicto');
+  if (!Array.isArray(data) || !Number.isSafeInteger(count) || count < data.length ||
+      (count > 0 && !data.length)) {
+    throw new HttpError(503, 'Respuesta de afiliación inválida');
+  }
+  const solicitudes = data.map(transformar);
+  return count > solicitudes.length
+    ? { solicitudes, siguiente_antes_de: solicitudes.at(-1).id }
+    : { solicitudes };
 }
 
-function conSesion(manejar) {
+function conSesion(manejar, admitePaginacion = false) {
   return [auth.exigirAuth, async (req, res, next) => {
     try {
-      if (Object.keys(req.query).length) throw new HttpError(400, 'parametros_no_admitidos');
+      if (!admitePaginacion && Object.keys(req.query).length) throw new HttpError(400, 'parametros_no_admitidos');
       res.set('Cache-Control', 'no-store');
       await manejar(req, res);
     } catch (error) {
@@ -80,12 +103,11 @@ module.exports = function solicitudesRoutes({ validarId, esObjeto }) {
   }));
 
   router.get(SOLICITUDES, conSesion(async (req, res) => {
-    const data = await ejecutar(req, 'listar_solicitudes_afiliacion', ambito(req));
-    res.json(presentarLista(data, fila => ({
+    res.json(await listarPagina(req, 'listar_solicitudes_afiliacion', ambito(req), fila => ({
       ...presentar(fila), solicitante: fila.solicitante,
       plan_promocion: fila.plan_promocion, enlace_publico: fila.enlace_publico,
     })));
-  }));
+  }, true));
 
   router.patch(`${SOLICITUDES}/:solicitudId`, conSesion(async (req, res) => {
     const ids = ambito(req);
@@ -105,11 +127,10 @@ module.exports = function solicitudesRoutes({ validarId, esObjeto }) {
   }));
 
   router.get('/mi-perfil', conSesion(async (req, res) => {
-    const data = await ejecutar(req, 'consultar_mis_solicitudes_afiliacion');
-    res.json(presentarLista(data, fila => ({
+    res.json(await listarPagina(req, 'consultar_mis_solicitudes_afiliacion', {}, fila => ({
       ...presentar(fila), cafeteria_id: fila.cafeteria_id, campana_id: fila.campana_id,
     })));
-  }));
+  }, true));
 
   return router;
 };

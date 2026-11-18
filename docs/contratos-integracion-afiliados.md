@@ -44,6 +44,8 @@ El dueño define los tres porcentajes. Si cambia alguno antes del inicio, se avi
 
 C05 devuelve `201` en la primera solicitud y `200` con el mismo ID y el estado persistido al repetirla. La aprobación admite una propuesta opcional de `codigo`. Si se omite, SQL lo genera. Las respuestas aprobadas incluyen `codigo_activo`. Al desactivar, el código queda reservado y un reintento de aprobación conserva la desactivación. El correo y el reenvío corresponden a una tarea posterior. [Validación de C05](microservicios/validacion/C05-solicitudes-afiliacion.md).
 
+Los dos listados devuelven hasta 100 solicitudes por página, en orden descendente de ID. Si hay más filas, la respuesta incluye `siguiente_antes_de`. Para continuar, repite el mismo GET con la misma sesión y añade `?antes_de=<siguiente_antes_de>`. Cuando el campo está ausente, llegaste al final. Una página puede traer menos de 100 filas por el límite de PostgREST. La autorización se verifica en cada página.
+
 El formulario de «Promocionar» exige una explicación y admite un enlace público opcional. Si el dueño invita a alguien, esa persona usa el mismo formulario. Una campaña admite varios afiliados con sus propios códigos. El dueño asigna el código al aprobar y el servidor comprueba su unicidad en todo CoffeeFast. Una aprobación guarda el código en el perfil y dispara el aviso por correo. Si falla el correo, el código sigue visible y el dueño puede reenviar el aviso. Una aprobación anticipada permite compartir el código, con canje desde el inicio y mientras la campaña esté activa.
 
 ## 3. Cotización y compra

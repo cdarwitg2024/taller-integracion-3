@@ -87,4 +87,30 @@ module.exports = async ({ check, call, sql, tokens }) => {
       }
     }
   });
+
+  await check('ambos listados siguen el cursor cuando PostgREST limita a dos filas', async () => {
+    sql(`
+      INSERT INTO public.usuarios (id, rol_id, activo) VALUES (7, 4, true), (8, 4, true);
+      INSERT INTO public.solicitudes_afiliacion (estudiante_id, campana_id, plan_promocion)
+      VALUES (7, ${campana}, 'Plan 7'), (8, ${campana}, 'Plan 8'), (6, ${pausada}, 'Plan histórico');
+    `);
+    for (const [url, sesion, filtro, idAntiguo] of [
+      [ruta(campana), 'dueno', `campana_id = ${campana}`, pendiente.id],
+      [perfil, 'estudiante', 'estudiante_id = 6', pendiente.id],
+    ]) {
+      const idsEsperados = sql(`SELECT id FROM public.solicitudes_afiliacion WHERE ${filtro} ORDER BY id DESC;`)
+        .split(/\r?\n/).map(Number);
+      const primera = await esperar(200, url, sesion);
+      assert.deepEqual(primera.solicitudes.map(s => s.id), idsEsperados.slice(0, 2));
+      assert.equal(primera.siguiente_antes_de, idsEsperados[1]);
+      const segunda = await esperar(200, `${url}?antes_de=${primera.siguiente_antes_de}`, sesion);
+      assert.deepEqual(segunda.solicitudes.map(s => s.id), [idAntiguo]);
+      assert.equal(segunda.siguiente_antes_de, undefined);
+      assert.deepEqual(await esperar(200, `${url}?antes_de=${idAntiguo}`, sesion), { solicitudes: [] });
+      for (const query of ['antes_de=0', 'antes_de=2&antes_de=3', 'otro=1']) {
+        await esperar(400, `${url}?${query}`, sesion);
+      }
+    }
+    await esperar(403, `${ruta(campana)}?antes_de=2`, 'otro');
+  });
 };

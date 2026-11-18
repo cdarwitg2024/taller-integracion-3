@@ -124,6 +124,7 @@ async function main() {
     docker(['run', '-d', '--name', names.rest, '--network', id, '-p', '127.0.0.1::3000',
       '-e', `PGRST_DB_URI=postgres://authenticator:${password}@${names.pg}:5432/postgres`,
       '-e', 'PGRST_DB_SCHEMAS=public', '-e', 'PGRST_DB_ANON_ROLE=anon', '-e', `PGRST_JWT_SECRET=${secret}`,
+      ...(probarC05 ? ['-e', 'PGRST_DB_MAX_ROWS=2'] : []),
       process.env.TEST_REST_IMAGE || 'public.ecr.aws/supabase/postgrest:v16.2']);
     const restUrl = `http://127.0.0.1:${portOf(names.rest, 3000)}`;
     await waitFor('PostgREST', async () => (await fetch(`${restUrl}/`, { signal: AbortSignal.timeout(2000) })).ok);
