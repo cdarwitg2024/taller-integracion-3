@@ -9,6 +9,7 @@ const assert = require('node:assert/strict');
 const { execFileSync, spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '../..');
+const probarC05 = process.argv.includes('--c05');
 const id = `cf-c03-auth-${process.pid}-${Date.now()}`;
 const names = { pg: `${id}-db`, auth: `${id}-auth`, rest: `${id}-rest`, gateway: `${id}-gateway` };
 const secret = crypto.randomBytes(40).toString('hex');
@@ -85,6 +86,20 @@ async function main() {
     sql(fixture.slice(start, end));
     sql(fs.readFileSync(path.join(root, 'database/fixes/administrar_campanas_afiliados.sql'), 'utf8'));
     console.log('PREPARADO: dependencias V05 y migración C03');
+    if (probarC05) {
+      const migrations = process.env.COFFEEFAST_DB_MIGRATIONS ||
+        path.resolve(root, '../db_CoffeeFaster/supabase/migrations');
+      sql(`ALTER TABLE public.cafeterias ADD COLUMN nombre text NOT NULL DEFAULT 'Cafetería de prueba',
+          ADD COLUMN activa boolean NOT NULL DEFAULT true;
+        ALTER TABLE public.usuarios ADD COLUMN nombre text NOT NULL DEFAULT 'Cuenta', ADD COLUMN apellido text;
+        CREATE TABLE public.pedidos(id bigint PRIMARY KEY, cafeteria_id bigint NOT NULL);`);
+      for (const version of ['0020', '0021', '0023', '0024']) {
+        const files = fs.readdirSync(migrations).filter(file => file.startsWith(`${version}_`) && file.endsWith('.sql'));
+        assert.equal(files.length, 1, `Migración oficial ${version}`);
+        sql(fs.readFileSync(path.join(migrations, files[0]), 'utf8'));
+      }
+      sql(fs.readFileSync(path.join(root, 'database/fixes/exponer_solicitudes_afiliacion.sql'), 'utf8'));
+    }
 
     docker(['run', '-d', '--name', names.auth, '--network', id, '-p', '127.0.0.1::9999',
       '-e', 'GOTRUE_API_HOST=0.0.0.0', '-e', 'GOTRUE_API_PORT=9999',
@@ -109,6 +124,7 @@ async function main() {
     docker(['run', '-d', '--name', names.rest, '--network', id, '-p', '127.0.0.1::3000',
       '-e', `PGRST_DB_URI=postgres://authenticator:${password}@${names.pg}:5432/postgres`,
       '-e', 'PGRST_DB_SCHEMAS=public', '-e', 'PGRST_DB_ANON_ROLE=anon', '-e', `PGRST_JWT_SECRET=${secret}`,
+      ...(probarC05 ? ['-e', 'PGRST_DB_MAX_ROWS=2'] : []),
       process.env.TEST_REST_IMAGE || 'public.ecr.aws/supabase/postgrest:v16.2']);
     const restUrl = `http://127.0.0.1:${portOf(names.rest, 3000)}`;
     await waitFor('PostgREST', async () => (await fetch(`${restUrl}/`, { signal: AbortSignal.timeout(2000) })).ok);
@@ -165,6 +181,11 @@ async function main() {
       tokens[name] = login.body.access_token;
       sql(`INSERT INTO public.usuarios VALUES (${userId},${rolId},${active},${quote(login.body.user.id)});
         INSERT INTO public.cafeteria_usuarios VALUES (${userId},${cafe});`);
+    }
+    if (probarC05) {
+      await require('./test-solicitudes-afiliacion-c05.cjs')({ check, call, sql, tokens });
+      console.log(`${checks} escenarios C05 con Auth, JWT, gateway y PostgreSQL reales aprobados.`);
+      return;
     }
     const resource = '/api/afiliados/cafeterias/7/campanas';
     const form = { nombre: 'Campaña C03 JWT real', descuento_normal_pct: 15, descuento_oferta_pct: 5, comision_pct: 10,
