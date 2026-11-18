@@ -52,9 +52,16 @@ integracion('A03: lista persistida con activa + pausada + vencida, y cafetería 
     expect(texto()).not.toContain('Pausada A03');
     expect(texto()).not.toContain('Vencida A03');
     console.log('PASS: seleccionar Norte A03 muestra Activa A03, descuento 15%, comisión 10%; excluye pausada/vencida');
+    await pulsar('Ver condiciones de Activa A03');
+    expect(texto()).toContain('Beneficio de tu referido');
+    expect(texto()).toContain('Tu referido ahorra $1.500 y paga $8.500.');
+    expect(texto()).toContain('Tú ganas $850 cuando se entrega ese pedido.');
+    expect(texto()).toContain('aprobar tu afiliación y asignarte un código');
+    console.log('PASS: A04 distingue ahorro $1.500, pago $8.500 y comisión $850 al entregar, con tasas de C04');
     await pulsar('Ver campañas de Sur A03');
     await esperar('No hay oportunidades disponibles');
     expect(texto()).not.toContain('Activa A03');
+    expect(texto()).not.toContain('Ejemplo de compra referida');
     console.log('PASS: seleccionar Sur A03 muestra No hay oportunidades disponibles, sin campañas de Norte');
   } finally {
     if (tree) act(() => tree.unmount());

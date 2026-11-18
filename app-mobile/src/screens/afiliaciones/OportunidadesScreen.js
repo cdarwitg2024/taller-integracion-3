@@ -4,6 +4,7 @@ import { listarCafeteriasAfiliados, listarCampanasActivas, filtrarCampanasActiva
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
+import CondicionesCampana from './CondicionesCampana';
 
 function mensajeError(error) {
   if (error?.status === 501) return 'La consulta de oportunidades aún no está disponible. Intenta nuevamente más tarde.';
@@ -12,10 +13,10 @@ function mensajeError(error) {
   return 'No pudimos cargar la información. Revisa tu conexión e intenta nuevamente.';
 }
 
-function Accion({ titulo, onPress, seleccionada = false }) {
+function Accion({ titulo, onPress, seleccionada = false, expandida }) {
   return (
     <TouchableOpacity accessibilityRole="button" accessibilityLabel={titulo}
-      accessibilityState={{ selected: seleccionada }} onPress={onPress}
+      accessibilityState={{ selected: seleccionada, ...(expandida === undefined ? {} : { expanded: expandida }) }} onPress={onPress}
       style={[styles.boton, seleccionada && styles.botonSeleccionado]}>
       <Text style={[styles.botonTexto, seleccionada && styles.botonTextoSeleccionado]}>{titulo}</Text>
     </TouchableOpacity>
@@ -36,6 +37,7 @@ export default function OportunidadesScreen() {
   const [intentoCatalogo, setIntentoCatalogo] = useState(0);
   const [intentoCampanas, setIntentoCampanas] = useState(0);
   const [reloj, setReloj] = useState(0);
+  const [condicionesId, setCondicionesId] = useState(null);
   const solicitud = useRef(0);
 
   useEffect(() => {
@@ -85,6 +87,7 @@ export default function OportunidadesScreen() {
   const seleccionar = id => {
     if (id === cafeteriaId) return;
     solicitud.current++;
+    setCondicionesId(null);
     setListado({ cafeteriaId: null, estado: 'inicial', filas: [], error: '' });
     setCafeteriaId(id);
   };
@@ -126,6 +129,12 @@ export default function OportunidadesScreen() {
           <Text style={styles.texto}>Comisión: {tasa(c.tasa_comision)}</Text>
           <Text style={styles.texto}>Desde: {fecha(c.vigencia_desde)}</Text>
           <Text style={styles.texto}>Hasta: {fecha(c.vigencia_hasta)}</Text>
+          {c.tipo === 'carrito_completo' && <>
+            <Accion titulo={`${condicionesId === c.id ? 'Ocultar' : 'Ver'} condiciones de ${c.nombre}`}
+              expandida={condicionesId === c.id}
+              onPress={() => setCondicionesId(actual => actual === c.id ? null : c.id)} />
+            {condicionesId === c.id && <CondicionesCampana campana={c} />}
+          </>}
         </View>)}
         <Accion titulo="Actualizar campañas" onPress={() => setIntentoCampanas(valor => valor + 1)} />
       </>}

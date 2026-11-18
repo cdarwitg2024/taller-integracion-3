@@ -55,6 +55,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [A01 / CAM-266 — Acceso a Mis afiliaciones desde el perfil](mobile/validacion/A01-CAM-266-Acceso-Mis-Afiliaciones.md)
 - [A02 — Pantalla Mis afiliaciones: oportunidades, códigos y ganancias](mobile/validacion/A02-Mis-Afiliaciones.md)
 - [A03 — Campañas activas conectadas a C04: filtro, vacío y prueba desechable](mobile/validacion/A03-Campanas-activas.md)
+- [A04 — Condiciones de campaña: beneficio del referido, comisión y elegibilidad](mobile/validacion/A04-Condiciones-campana-carrito.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 - [D02 - Estado del código asociado al carrito](mobile/validacion/D02-Estado-codigo-carrito.md)
 
