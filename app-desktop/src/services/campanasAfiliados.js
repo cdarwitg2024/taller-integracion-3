@@ -32,6 +32,8 @@ export function validarFormularioCampana(form = {}) {
     const n = Number(valor);
     if (!Number.isFinite(n) || n < 0 || n > 100) {
       errores[campo] = `${etiqueta} debe estar entre 0 y 100.`;
+    } else if (Math.abs(n * 100 - Math.round(n * 100)) > 1e-9) {
+      errores[campo] = `${etiqueta} debe tener hasta dos decimales.`;
     }
     return n;
   };

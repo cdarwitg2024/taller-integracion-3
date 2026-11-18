@@ -380,6 +380,13 @@ test('el servicio sigue el contrato C02 con el cliente autenticado', async () =>
   assert.throws(() => prepararCampana({ ...form, nombre: 'ab' }), /entre 3 y 120/);
   assert.throws(() => prepararCampana({ ...form, descuento_normal_pct: '' }), /obligatorio/);
   assert.throws(() => prepararCampana({ ...form, comision_pct: '101' }), /entre 0 y 100/);
+  for (const campo of ['descuento_normal_pct', 'descuento_oferta_pct', 'comision_pct']) {
+    assert.match(validarFormularioCampana({ ...form, [campo]: '12.345' }).errores[campo], /dos decimales/);
+    assert.throws(() => prepararCampana({ ...form, [campo]: '12.345' }), /dos decimales/);
+  }
+  assert.deepEqual(validarFormularioCampana({
+    ...form, descuento_normal_pct: '15.25', descuento_oferta_pct: '5.5', comision_pct: '10.01',
+  }).errores, {});
   assert.throws(() => prepararCampana({ ...form, fin: form.inicio }), /posterior al inicio/);
   assert.equal(validarFormularioCampana({ ...form, comision_pct: '   ' }).errores.comision_pct, 'La comisión es obligatorio.');
   assert.equal(validarFormularioCampana({ ...form, comision_pct: true }).errores.comision_pct, 'La comisión es obligatorio.');
@@ -677,6 +684,7 @@ test('el formulario marca el campo obligatorio omitido y conserva los datos vál
   const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
   // Sin noValidate, el navegador bloquearía el submit antes de mostrar estos errores.
   assert.equal(formulario().props.noValidate, true);
+  assert.equal(campos()['Comisión'].props.inputProps.step, 0.01);
   const enviar = () => formulario().props.onSubmit({ preventDefault() {} });
   const cambiar = async (etiqueta, valor) => {
     await act(async () => { campos()[etiqueta].props.onChange({ target: { value: valor } }); });
@@ -701,6 +709,13 @@ test('el formulario marca el campo obligatorio omitido y conserva los datos vál
   await cambiar('Inicio', '2026-12-01T08:00');
   await cambiar('Término', '2026-12-15T20:00');
   assert.equal(campos()['Descuento en oferta'].props.error, false);
+  await cambiar('Comisión', '12.345');
+  await act(async () => enviar());
+  assert.equal(campos()['Comisión'].props.error, true);
+  assert.match(campos()['Comisión'].props.helperText, /dos decimales/);
+  assert.equal(creados.length, 0);
+
+  await cambiar('Comisión', '10');
   await act(async () => enviar());
 
   assert.equal(creados.length, 1);

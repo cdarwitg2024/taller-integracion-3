@@ -39,7 +39,10 @@ trata los porcentajes vacíos, con solo espacios o booleanos como omitidos. Al
 editar una campaña con tasas nulas, el formulario las muestra vacías en vez de
 `null`. El form lleva `noValidate` para que el navegador no bloquee el `submit`
 con su globo nativo antes de que corra la validación de la vista: el asterisco de
-`required` sigue visible.
+`required` sigue visible. El mismo validador comprueba ahora que las tres tasas
+tengan hasta dos decimales, como exige el contrato C02, y los campos numéricos
+usan `step: 0.01`: sin la restricción nativa, un valor como `12.345` llegaba al
+gateway y devolvía `422 campana_invalida` sin marcar el campo.
 
 ## Registro de prueba reproducible
 
@@ -59,7 +62,8 @@ solo algunos campos, envía, verifica los errores y los valores conservados, y
 luego completa el resto para comprobar el envío. La tercera abre una campaña
 existente con tasas nulas y comprueba que se editan como texto vacío sin mostrar
 errores. La prueba del contrato C02 amplía las aserciones con espacios, booleanos,
-fechas imposibles, fechas con zona horaria y orden invertido.
+fechas imposibles, fechas con zona horaria, orden invertido y precisión de hasta
+dos decimales en las tres tasas.
 
 | Paso de prueba | Resultado esperado | Resultado observado |
 |---|---|---|
@@ -74,11 +78,23 @@ fechas imposibles, fechas con zona horaria y orden invertido.
 | Inicio `2026-02-30T10:00` | Error de fecha en `inicio` y `prepararCampana` lo rechaza | Aprobado |
 | Inicio y término ISO con zona horaria | Sin errores; `prepararCampana` conserva el inicio en UTC | Aprobado |
 | Editar campaña con descuento en oferta nulo | El campo se muestra vacío, sin error, y acepta un valor nuevo | Aprobado |
+| Comisión, descuento normal u oferta con `12.345` | Error «hasta dos decimales.» en el campo y `prepararCampana` rechaza el valor antes de enviarlo | Aprobado |
+| Tasas con dos decimales (`15.25`, `5.5`, `10.01`) | Sin errores; el formulario expone `step: 0.01` en los tres campos | Aprobado |
 
 Resultado final: `campanas.test.cjs` 31/31 y suite `app-desktop` 75/75 aprobadas
 en Node 22.16.0 y en Node 24.18.0. `npm run build --prefix app-desktop` finaliza
 con salida cero en ambos y la advertencia habitual por chunks superiores a 500
 kB. `git diff --check` no informa problemas.
+
+## Corrección tras la revisión del PR #76
+
+Diego Vásquez observó que `noValidate` desactivaba la restricción nativa de
+precisión: `12.345` pasaba la validación de rango y el backend lo rechazaba con
+`422 campana_invalida`. Se añadió la comprobación de dos decimales dentro del
+mismo `validarFormularioCampana`, con el mismo mensaje por campo, y se ajustó el
+`step` de los tres `TextField` a `0.01`. La prueba del contrato C02 verifica las
+tres tasas y la prueba del formulario confirma que el envío se bloquea antes de
+llamar a `crear`.
 
 ## Límites de la evidencia
 
