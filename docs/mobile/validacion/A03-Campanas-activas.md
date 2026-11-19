@@ -134,6 +134,29 @@ antes de consultar. La ejecución completa posterior pasó y eliminó sus recurs
 
 ## Resultados y límites
 
+### Corrección de la revisión: vencimiento entre render y efecto
+
+La prueba `si la última campaña vence entre el render y el efecto se oculta
+inmediatamente` selecciona una campaña vigente y adelanta el reloj al instante
+de vencimiento después del filtro usado por el render y antes del efecto.
+Con el código anterior falla porque la tarjeta sigue visible. El efecto ahora
+comprueba las campañas elegidas para ese render y solicita otra actualización
+inmediata si alguna ya venció. El render siguiente la excluye y, si era la
+última, muestra el estado vacío sin programar otro temporizador.
+
+La regresión comprueba el vacío inmediato, avanza otros cinco segundos y
+verifica que no quedan temporizadores. Comando reproducible desde la raíz:
+
+```powershell
+npm.cmd test --prefix app-mobile -- --ci --runInBand --testTimeout=20000
+```
+
+Validación de la corrección con Node.js 22.19.0: **140 pruebas aprobadas**,
+una integración omitida en la ejecución normal, TypeScript y
+`git diff --check` aprobados. La integración local y exportación Android
+descritas a continuación corresponden a la validación original de A03;
+no se repitieron para este ajuste del temporizador.
+
 Suite móvil: **139/139 PASS en 16 suites**, con `--testTimeout=20000`.
 El caso de integración es adicional y pasó **1/1** con el runner desechable.
 TypeScript, 86 enlaces relativos y `git diff --check`: **PASS**. El límite ampliado conserva la

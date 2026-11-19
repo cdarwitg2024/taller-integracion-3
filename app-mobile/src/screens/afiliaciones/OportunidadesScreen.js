@@ -71,12 +71,20 @@ export default function OportunidadesScreen() {
     return () => listener.remove();
   }, []);
 
-  // Oculta una campaña al vencer incluso si la pantalla permanece abierta.
+  const cafeteria = catalogo.filas.find(c => c.id === cafeteriaId);
+  const delAlcance = listado.cafeteriaId === cafeteriaId;
+  const filas = delAlcance ? filtrarCampanasActivas(listado.filas) : [];
+
+  // Controla las tarjetas de este render, incluso si vencen antes del efecto.
   useEffect(() => {
     if (listado.estado !== 'listo' || listado.cafeteriaId !== cafeteriaId) return undefined;
     const ahora = Date.now();
-    const vencimientos = listado.filas.map(c => Date.parse(c.vigencia_hasta)).filter(fin => fin > ahora);
+    const vencimientos = filas.map(c => Date.parse(c.vigencia_hasta));
     if (!vencimientos.length) return undefined;
+    if (vencimientos.some(fin => fin <= ahora)) {
+      setReloj(valor => valor + 1);
+      return undefined;
+    }
     const demora = Math.min(Math.min(...vencimientos) - ahora, 2147483647);
     const timer = setTimeout(() => setReloj(valor => valor + 1), Math.max(1, demora));
     return () => clearTimeout(timer);
@@ -88,9 +96,6 @@ export default function OportunidadesScreen() {
     setListado({ cafeteriaId: null, estado: 'inicial', filas: [], error: '' });
     setCafeteriaId(id);
   };
-  const cafeteria = catalogo.filas.find(c => c.id === cafeteriaId);
-  const delAlcance = listado.cafeteriaId === cafeteriaId;
-  const filas = delAlcance ? filtrarCampanasActivas(listado.filas) : [];
 
   return (
     <View style={styles.container}>
