@@ -3,6 +3,7 @@ import { AppState, Text, TouchableOpacity } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import OportunidadesScreen from './OportunidadesScreen';
 import { apiGet } from '../../services/backendClient';
+import * as campanasService from '../../services/campanasAfiliados';
 
 jest.mock('../../services/backendClient', () => ({ apiGet: jest.fn() }));
 const ahora = Date.parse('2026-11-17T12:00:00Z');
@@ -135,6 +136,32 @@ test('al vencer una campaña con la pantalla abierta se oculta y aparece el vac�
   act(() => jest.advanceTimersByTime(1000));
   expect(texto()).not.toContain('Campaña Norte activa');
   expect(texto()).toContain('No hay oportunidades disponibles');
+});
+
+test('si la última campaña vence entre el render y el efecto se oculta inmediatamente', async () => {
+  jest.useFakeTimers({ now: ahora });
+  const fin = ahora + 1000;
+  const filtrar = campanasService.filtrarCampanasActivas;
+  let cruzoVencimiento = false;
+  jest.spyOn(campanasService, 'filtrarCampanasActivas').mockImplementation((...args) => {
+    const visibles = filtrar(...args);
+    if (visibles.length && !cruzoVencimiento) {
+      // La tarjeta ya fue elegida para este render; el efecto aún no se ejecutó.
+      cruzoVencimiento = true;
+      jest.setSystemTime(fin);
+    }
+    return visibles;
+  });
+  apiGet.mockImplementation(async ruta => ruta === '/api/cafeterias'
+    ? { data: cafeterias } : { campanas: [campana({ vigencia_hasta: new Date(fin).toISOString() })] });
+  await montar();
+  await pulsar('Ver campañas de Norte');
+  expect(cruzoVencimiento).toBe(true);
+  expect(texto()).not.toContain('Campaña Norte activa');
+  expect(texto()).toContain('No hay oportunidades disponibles');
+  act(() => jest.advanceTimersByTime(5000));
+  expect(texto()).not.toContain('Campaña Norte activa');
+  expect(jest.getTimerCount()).toBe(0);
 });
 
 test('volver al primer plano vuelve a consultar para detectar pausas nuevas', async () => {
