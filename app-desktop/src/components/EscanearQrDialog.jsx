@@ -439,6 +439,9 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
     };
   }, [open, modo, resultado, intento, detenerCamara, validar]);
 
+  // Invalida los callbacks en vuelo cuando el KDS abandona el escáner.
+  useEffect(() => () => { generacionRef.current += 1; }, []);
+
   const reencenderCamara = () => {
     setErrorCamara('');
     setEstadoCamara('iniciando');

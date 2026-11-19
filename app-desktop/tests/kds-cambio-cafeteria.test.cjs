@@ -851,9 +851,15 @@ test('Escáner: el fallback Supabase valida contra la cafetería vigente tras un
   assert.deepEqual(llamadas[0], ['QR-TST-1', '5', 12]);
 });
 
-test('Escáner: una validación atrasada no publica resultado, no suena ni usa fallback al cerrar o cambiar de cafetería', async t => {
+test('Escáner: una validación atrasada no publica resultado, no suena ni usa fallback al cerrar, cambiar de cafetería o desmontar', async t => {
   const ventanaAnterior = global.window;
+  const consolaAnterior = console.error;
+  const erroresValidacion = [];
   let sonidos = [];
+  console.error = (...args) => {
+    if (String(args[0]).includes('Error validando QR')) erroresValidacion.push(args);
+    consolaAnterior(...args);
+  };
   global.window = {
     AudioContext: class {
       constructor() { sonidos.push('contexto'); }
@@ -873,7 +879,7 @@ test('Escáner: una validación atrasada no publica resultado, no suena ni usa f
       }
     },
   };
-  t.after(() => { global.window = ventanaAnterior; });
+  t.after(() => { global.window = ventanaAnterior; console.error = consolaAnterior; });
 
   const nodo = etiqueta => props => React.createElement(etiqueta, props, props.children);
   const icono = () => React.createElement('icono');
@@ -885,14 +891,20 @@ test('Escáner: una validación atrasada no publica resultado, no suena ni usa f
     TextField: nodo('textfield'), CircularProgress: nodo('spinner'), Alert: nodo('alerta'),
   };
 
-  const casos = [false, true].flatMap(cerrar => [
-    { cerrar, nombre: 'gateway exitoso', responder: v => v.resolve({ valido: true }) },
-    { cerrar, nombre: 'gateway caído', responder: v => v.reject(new Error('sin gateway')) },
-    { cerrar, nombre: 'gateway rechaza', responder: v => v.resolve({ valido: false, razon: 'QR no reconocido' }) },
-  ]);
+  const respondidos = [
+    ['gateway exitoso', v => v.resolve({ valido: true })],
+    ['gateway caído', v => v.reject(new Error('sin gateway'))],
+    ['gateway rechaza', v => v.resolve({ valido: false, razon: 'QR no reconocido' })],
+  ];
+  const casos = [false, true].flatMap(cerrar => [false, true].flatMap(desmontar =>
+    respondidos.map(([nombre, responder]) => ({
+      cerrar, desmontar, responder,
+      nombre: `${desmontar ? 'desmontar' : cerrar ? 'cerrar' : 'cambiar cafetería'} · ${nombre}`,
+    }))));
   for (const caso of casos) {
-    const { cerrar, responder } = caso;
+    const { cerrar, desmontar, responder } = caso;
     sonidos = [];
+    erroresValidacion.length = 0;
     const validacion = diferida();
     const llamadas = [];
     const dependenciasEscanner = {
@@ -935,14 +947,21 @@ test('Escáner: una validación atrasada no publica resultado, no suena ni usa f
     const validar = tree.root.findAllByType('button').find(b =>
       b.children.some(c => typeof c === 'string' && c.includes('Validar Token')));
     await completar(() => validar.props.onClick());
-    await completar(() => tree.update(React.createElement(EscanearQrDialog, {
-      open: !cerrar, cafeteriaId: cerrar ? 7 : 12, usuarioId: '5', onClose() {},
-    })));
+    assert.doesNotMatch(textoRenderizado(tree.toJSON()), /Entrega Validada Exitosamente|Error de Conexión/);
+    if (desmontar) {
+      await completar(() => tree.unmount());
+      tree = null;
+    } else {
+      await completar(() => tree.update(React.createElement(EscanearQrDialog, {
+        open: !cerrar, cafeteriaId: cerrar ? 7 : 12, usuarioId: '5', onClose() {},
+      })));
+    }
     await completar(() => responder(validacion));
 
     assert.equal(llamadas.length, 0, `${caso.nombre}: el fallback no debe ejecutarse tras el cambio`);
     assert.equal(sonidos.length, 0, `${caso.nombre}: una respuesta atrasada no debe reproducir sonido`);
-    assert.doesNotMatch(textoRenderizado(tree.toJSON()), /Entrega Validada Exitosamente/);
+    assert.deepEqual(erroresValidacion, [], `${caso.nombre}: la respuesta atrasada no debe publicar error`);
+    if (tree) assert.doesNotMatch(textoRenderizado(tree.toJSON()), /Entrega Validada Exitosamente/);
   }
 });
 
