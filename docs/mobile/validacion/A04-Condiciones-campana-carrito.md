@@ -4,6 +4,20 @@ Implementación y validación local del **18 de noviembre de 2026**, Windows,
 Node.js 22.19.0. Rama: `S3-T4-Ariel-Diaz-Mostrar-condiciones-campana-carrito`.
 Base: A03, commit `df4fa67`, PR #78; A04 depende de su integración.
 
+Orden de integración: primero aprobar y fusionar A03 (#78) en `develop`;
+después actualizar esta rama con `develop` y fusionar A04 (#79). A04 no absorbe
+ni sustituye el PR de A03. Mientras #78 siga abierto, es esperable que #79
+muestre sus cambios compartidos; revisar A04 respecto de la rama de A03 permite
+aislar el incremento. No se duplican los archivos ni se fusiona #79 primero.
+
+Corrección tras la revisión de `4aa51e6`: el encabezado del beneficio especifica
+«en productos a precio normal» junto a la tasa de C04. Se mantiene la nota
+que remite al carrito para los productos en oferta; C04 no proporciona su tasa
+y la vista no la inventa. El ejemplo y los cálculos no cambian.
+Validación puntual del ajuste: `CondicionesCampana.test.js` **9/9 PASS** con
+Node.js 22.19.0 y `git diff --check` aprobado. No se repitieron el runner
+desechable ni la prueba visual para este cambio de texto.
+
 ## Recorrido y comportamiento
 
 Perfil → Mis afiliaciones → Oportunidades → seleccionar cafetería →
