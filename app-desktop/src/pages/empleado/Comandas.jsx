@@ -357,7 +357,6 @@ function Comandas({ currentUser }) {
       <EscanearQrDialog
         open={escaneando}
         cafeteriaId={cafeteriaIdEmpleado}
-        usuarioId={currentUser?.id != null ? String(currentUser.id) : 'empleado'}
         onClose={() => setEscaneando(false)}
       />
     </Box>
