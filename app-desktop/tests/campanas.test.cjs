@@ -368,6 +368,7 @@ test('la recarga posterior a guardar en la cafetería nueva no reutiliza datos d
   assert.match(h.texto(), /Campaña de la 12/);
   await act(async () => h.boton('Nueva campaña').props.onClick());
   const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+  await llenarFormularioValido(h);
   await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
   assert.equal(h.ruta(), '/dueno/afiliados/campanas');
   assert.deepEqual(llamadas, [7, 12, 'crear-12', 12]);
