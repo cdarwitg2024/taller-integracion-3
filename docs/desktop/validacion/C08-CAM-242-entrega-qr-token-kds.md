@@ -2,9 +2,13 @@
 
 **Resultado.** El QR por imagen y el token manual se probaron en dos corridas desde el KDS. Los cuatro pedidos quedaron entregados, el diálogo mostró éxito y `qr_usado` quedó en `false`. En la segunda corrida, la traza completa confirmó que Desktop persistió la entrega por escritura directa tras dos errores del servicio.
 
+**Veredicto funcional.** La validación por el servicio y el consumo de la credencial fallaron. C08 deja la evidencia diagnóstica de ambos recorridos. La corrección y su verificación funcional se registran en C06.
+
 ## Entorno y referencia
 
 Validación del 18 de noviembre de 2026 (hora de Santiago) sobre `446127f`, en la rama `S3-T8-Camilodg_Verificar_entrega_por_QR_y_token_desde_KDS`. Se automatizó la interacción con la pantalla real del KDS en Edge en modo headless. Vite sirvió Desktop en `127.0.0.1:5198`, con `ms-pedidos` de la misma revisión en `127.0.0.1:3905`, Supabase local `db_CoffeeFaster` y Node.js 22.23.5. Se usó un PNG para el QR y el ingreso manual para el token. Cámara física, Electron, gateway y Cloud quedaron fuera de esta prueba.
+
+`446127f` identifica el código que se ejecutó. `0989696` agregó el informe y `5aee463` aclaró la reproducción y las referencias. Ambos commits cambiaron únicamente documentación.
 
 [E01](E01-trazabilidad-entrega-qr-token.md) describe la convergencia de ambos recorridos en el mismo endpoint, la ruta alternativa de Desktop y una prueba HTTP anterior con una RPC temporal. C08 confirmó en pantalla el recorrido de ambos métodos sobre la implementación vigente y registró la ruta que persistió la entrega en este entorno.
 
@@ -55,6 +59,15 @@ En ambos casos, la traza del navegador registró el mismo recorrido:
 
 Una primera corrida con los pedidos 93 y 94 obtuvo los mismos estados, sin consumo de las credenciales. Tras ambas corridas se comprobó que esos cuatro pedidos y las cafeterías y cuentas Auth temporales fueron eliminados.
 
+| Comprobación funcional | Resultado | Evidencia |
+| --- | --- | --- |
+| QR por imagen y token manual desde el KDS | PASS | Ambos recorridos llegaron al endpoint de validación. |
+| Confirmación visible y estado persistido | PASS | El KDS mostró éxito y los pedidos pasaron de `listo` a `entregado` con fecha registrada. |
+| Entrega confirmada por `ms-pedidos` | FAIL | La validación devolvió `503` y el cambio de estado genérico devolvió `409`. |
+| Consumo de la credencial | FAIL | `qr_usado` quedó en `false` en los cuatro pedidos. |
+| Escritura directa desde Desktop | HALLAZGO PARA C06 | El respaldo persistió el estado y la fecha sin consumir la credencial en la misma operación. |
+| Credencial inválida o segundo uso | NO EJECUTADO | La corrida de C08 cubrió primeros retiros con credenciales válidas. |
+
 ## Comprobación de los criterios de C08
 
 | Criterio | Evidencia |
@@ -69,7 +82,7 @@ Los dos recorridos conservan el resultado visible de entrega en este entorno, pe
 
 La firma `public.log_qr_validation(bigint,bigint,bigint,character varying,text)` se observó únicamente en el catálogo de la instancia local usada en C08. Su definición carece de DDL versionado en este repositorio y la prueba no la instaló. La [validación de ms-pedidos](../../../Microservices/ms-pedidos/src/modules/pedidos/pedidos.service.js#L719) invoca `log_qr_validation(p_qr_token)`. E01 §12 registró la ausencia de la función y E01 §13 probó por separado una RPC temporal de un parámetro. La respuesta HTTP pública de C08 fue el `503` genérico. [Evidencia de E01](E01-trazabilidad-entrega-qr-token.md)
 
-Para C06, repetir ambos recorridos y comprobar que la primera validación persiste `entregado`, `qr_usado=true` y `entregado_en` por la operación de entrega del servicio. La traza de red permite comprobar si Desktop sigue escribiendo directamente. [C06](https://linear.app/camilodarwitg/issue/CAM-261/c06-corregir-fallos-de-entrega-por-qr-y-token)
+Para verificar la corrección en C06, repetir ambos recorridos sobre su revisión de código. La primera validación debe confirmar `entregado`, `qr_usado=true` y `entregado_en` por la operación de entrega del servicio. En la traza debe verse el éxito del servicio sin escritura directa de Desktop. Al repetir la credencial, el servicio debe rechazar el intento y conservar la fecha original. Registrar esa corrida como evidencia de C06. [C06](https://linear.app/camilodarwitg/issue/CAM-261/c06-corregir-fallos-de-entrega-por-qr-y-token)
 
 Para C09, usar los mismos puntos de observación y agregar una lectura del saldo tras la primera y la segunda validación de un pedido afiliado elegible. C08 comprende los primeros retiros con pedidos de prueba. El segundo uso y la comisión quedan por verificar en C09. [C09](https://linear.app/camilodarwitg/issue/CAM-255/c09-probar-segunda-validacion-de-retiro)
 
