@@ -261,6 +261,36 @@ router.get('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, async (req, res
 router.post('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, administrar(true));
 router.patch('/cafeterias/:cafeteriaId/campanas/:campanaId', auth.exigirAuth, administrar(false));
 
+router.get('/saldo', auth.exigirAuth, async (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    if (Object.keys(req.query).length) {
+      throw new HttpError(400, 'parametros_no_admitidos');
+    }
+
+    const { data, error } = await clienteAutenticado(req).rpc('consultar_saldo_afiliado');
+    if (error) {
+      if (error.code === '42501') throw new HttpError(403, 'estudiante_requerido');
+      if (['PGRST301', 'PGRST303', '28000'].includes(error.code)) {
+        throw new HttpError(401, 'sesion_invalida');
+      }
+      throw new HttpError(503, 'No se pudo consultar el saldo');
+    }
+
+    const saldo = Array.isArray(data) && data.length === 1 ? data[0] : null;
+    if (!esObjeto(saldo)) throw new HttpError(503, 'Respuesta de saldo inválida');
+
+    const { pendiente_clp, disponible_clp, retirado_clp } = saldo;
+    if (![pendiente_clp, disponible_clp, retirado_clp].every(Number.isFinite)) {
+      throw new HttpError(503, 'Respuesta de saldo inválida');
+    }
+
+    return res.status(200).json({ pendiente_clp, disponible_clp, retirado_clp });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.use(require('./solicitudes.routes')({ validarId, esObjeto }));
 
 module.exports = router;

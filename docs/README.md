@@ -88,6 +88,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [S3-T3 — Administración de campañas de afiliados](microservicios/validacion/S3-T3-administracion-campanas-afiliados.md)
 - [S3-T4 / C04 — Consulta de campañas vigentes](microservicios/validacion/S3-T4-consulta-campanas-vigentes.md)
 - [C05 — Solicitud y resolución de afiliación](microservicios/validacion/C05-solicitudes-afiliacion.md)
+- [C15 / CAM-265 — Consulta de saldo del afiliado por gateway](microservicios/validacion/C15-CAM-265-saldo-afiliado-gateway.md)
 
 ## Bot de Telegram
 
