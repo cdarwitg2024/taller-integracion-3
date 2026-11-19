@@ -3,6 +3,7 @@ import { BackHandler, ScrollView, TouchableOpacity, View, Text, StyleSheet } fro
 import Header from '../components/Header';
 import Button from '../components/Button';
 import AppIcon from '../components/AppIcon';
+import OportunidadesScreen from './afiliaciones/OportunidadesScreen';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -12,10 +13,6 @@ const secciones = [
   { id: 'codigos', titulo: 'Mis códigos', icono: 'number', descripcion: 'Encuentra los códigos de tus afiliaciones aprobadas.' },
   { id: 'ganancias', titulo: 'Ganancias', icono: 'card', descripcion: 'Consulta las comisiones de tus pedidos entregados.' },
 ];
-
-function Oportunidades() {
-  return <Vista titulo="Campañas de cafeterías" descripcion="Aquí podrás explorar las campañas disponibles para postular y conocer sus descuentos, comisión y vigencia." detalle="La consulta de oportunidades estará disponible próximamente." />;
-}
 
 function Codigos() {
   return <Vista titulo="Tus códigos de afiliado" descripcion="Cuando una cafetería apruebe tu solicitud, podrás consultar aquí el código asignado para compartirlo." detalle="La consulta de solicitudes y códigos estará disponible próximamente." />;
@@ -74,7 +71,7 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
                 </TouchableOpacity>
               ))}
             </View>
-            {seccion === 'oportunidades' && <Oportunidades />}
+            {seccion === 'oportunidades' && <OportunidadesScreen />}
             {seccion === 'codigos' && <Codigos />}
             {seccion === 'ganancias' && <Ganancias />}
           </>

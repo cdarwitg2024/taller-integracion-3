@@ -11,6 +11,12 @@ jest.mock('../lib/supabase', () => ({
   supabase: { from: jest.fn(), channel: jest.fn(), removeChannel: jest.fn() },
 }));
 
+jest.mock('../services/campanasAfiliados', () => ({
+  listarCafeteriasAfiliados: jest.fn(async () => []),
+  listarCampanasActivas: jest.fn(async () => []),
+  filtrarCampanasActivas: filas => filas,
+}));
+
 const session = { user: { id: 'auth-estudiante-a01', email: 'estudiante.a01@example.test' } };
 let tree;
 let perfil;
@@ -145,7 +151,8 @@ test.each([
     expect(titulo()).toBe(nombre);
     expect(textoVisible()).toContain('Cuenta activa: Estudiante');
     expect(textoVisible()).toContain(contenido);
-    expect(textoVisible()).toContain('estará disponible próximamente');
+    expect(textoVisible()).toContain(nombre === 'Oportunidades'
+      ? 'Elige una cafetería' : 'estará disponible próximamente');
     const header = tree.root.findByType(Header);
     expect(header.findByType(TouchableOpacity).props.accessibilityLabel).toBe('Volver a Mis afiliaciones');
     await act(async () => header.findByType(TouchableOpacity).props.onPress());
