@@ -1,17 +1,25 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useReducer, useContext, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { crearEstadoCarrito, actualizarEstadoCarrito } from './estadoCodigoCarrito';
 
 const CART_STORAGE_KEY = '@coffeefast/cart';
 
 const CartContext = createContext({
-  cart: [],
+  ...crearEstadoCarrito(),
   setCart: () => {},
+  setCodigo: () => {},
+  guardarCotizacion: () => {},
   clearCart: () => {},
   hydrated: false,
 });
 
 export const CartProvider = ({ children }) => {
-  const [cart, setCart] = useState([]);
+  const [estado, dispatch] = useReducer(actualizarEstadoCarrito, undefined, crearEstadoCarrito);
+  const { cart } = estado;
+  const setCart = useCallback((valor) => dispatch({ tipo: 'carrito', valor }), []);
+  const setCodigo = useCallback((valor) => dispatch({ tipo: 'codigo', valor }), []);
+  const guardarCotizacion = useCallback((valor, revision) =>
+    dispatch({ tipo: 'cotizacion', valor, revision }), []);
   // `hydrated` evita pintar un carrito vacío antes de terminar de leer
   // AsyncStorage: sin él, el primer render siempre mostraba el carrito vacío
   // y pisaba lo guardado en disco.
@@ -52,7 +60,7 @@ export const CartProvider = ({ children }) => {
   const clearCart = useCallback(() => setCart([]), []);
 
   return (
-    <CartContext.Provider value={{ cart, setCart, clearCart, hydrated }}>
+    <CartContext.Provider value={{ ...estado, setCart, setCodigo, guardarCotizacion, clearCart, hydrated }}>
       {children}
     </CartContext.Provider>
   );

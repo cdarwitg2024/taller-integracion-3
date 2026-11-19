@@ -45,9 +45,13 @@ const paraInput = (iso) => {
 function Campanas({ currentUser }) {
   const navigate = useNavigate();
   const cafeteriaId = cafeteriaAutorizada(currentUser);
-  const [campanas, setCampanas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // El listado guarda a qué cafetería pertenece. Así el primer render tras un
+  // cambio de cafetería no puede mostrar filas, error ni carga de la anterior.
+  const [listado, setListado] = useState({ cafeteriaId: null, campanas: [], loading: true, error: '' });
+  const vigente = listado.cafeteriaId === cafeteriaId;
+  const campanas = vigente ? listado.campanas : [];
+  const loading = vigente ? listado.loading : true;
+  const error = vigente ? listado.error : '';
   const solicitud = useRef(0);
   // Cafetería vigente del render: invalida cargas y guardados que terminan tras
   // un cambio de perfil, aunque su callback se dispare más tarde.
@@ -59,25 +63,24 @@ function Campanas({ currentUser }) {
     const objetivo = cafeteriaId;
     if (objetivo !== cafeteriaActual.current) return;
     const id = ++solicitud.current;
-    setLoading(true);
+    // Al recargar la misma cafetería se conservan sus filas; al cambiar de
+    // cafetería nunca se reutilizan las de la anterior.
+    setListado(prev => (prev.cafeteriaId === objetivo
+      ? { ...prev, loading: true, error: '' }
+      : { cafeteriaId: objetivo, campanas: [], loading: true, error: '' }));
     try {
       const filas = await campanasAfiliados.listar(objetivo);
       if (id !== solicitud.current || objetivo !== cafeteriaActual.current) return;
-      setCampanas(filas);
-      setError('');
+      setListado({ cafeteriaId: objetivo, campanas: filas, loading: false, error: '' });
     } catch (err) {
       if (id === solicitud.current && objetivo === cafeteriaActual.current) {
-        setError(err.message || 'No se pudieron cargar las campañas.');
+        setListado({ cafeteriaId: objetivo, campanas: [], loading: false, error: err.message || 'No se pudieron cargar las campañas.' });
       }
-    } finally {
-      if (id === solicitud.current && objetivo === cafeteriaActual.current) setLoading(false);
     }
   }, [cafeteriaId]);
 
   useEffect(() => {
-    if (!cafeteriaId) { setCampanas([]); setLoading(false); return undefined; }
-    setCampanas([]);
-    setError('');
+    if (!cafeteriaId) { setListado({ cafeteriaId: null, campanas: [], loading: false, error: '' }); return undefined; }
     cargar();
     return () => { solicitud.current++; };
   }, [cafeteriaId, cargar]);
@@ -152,6 +155,7 @@ function Listado({ campanas, loading, error, cafeteriaId, onReintentar, onNueva,
         subtitle="Campañas de carrito completo y comisiones de tu cafetería."
         actions={<>
           <Chip label={`Cafetería #${cafeteriaId}`} variant="outlined" />
+          {loading && campanas.length > 0 && <CircularProgress size={20} aria-label="Actualizando campañas" />}
           <Button variant="contained" startIcon={<AddIcon />} onClick={onNueva} disabled={loading || Boolean(error)}>
             Nueva campaña
           </Button>
@@ -162,7 +166,7 @@ function Listado({ campanas, loading, error, cafeteriaId, onReintentar, onNueva,
           {error}
         </Alert>
       )}
-      {loading ? (
+      {loading && campanas.length === 0 ? (
         <Cargando />
       ) : error ? null : campanas.length === 0 ? (
         <Paper elevation={0} sx={{ border: '1px dashed #DCCBBA', borderRadius: 4, p: 6, textAlign: 'center' }}>

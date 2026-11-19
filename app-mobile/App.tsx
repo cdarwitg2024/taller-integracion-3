@@ -140,11 +140,14 @@ function AppContent() {
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
-  const { cart, setCart, clearCart, hydrated } = useCart() as {
+  const { cart, setCart, clearCart, hydrated, codigo, setCodigo, idCarrito } = useCart() as {
     cart: CartItem[];
     setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
     clearCart: () => void;
     hydrated: boolean;
+    codigo: string;
+    setCodigo: (codigo: string) => void;
+    idCarrito: number;
   };
   const [paying, setPaying] = useState(false);
   const [pedidoConfirmado, setPedidoConfirmado] = useState<PedidoConfirmado | null>(null);
@@ -742,6 +745,9 @@ function AppContent() {
           {activeTab === 'carrito' && (
             <CartScreen
               cart={cart}
+              codigo={codigo}
+              onCodigoChange={setCodigo}
+              idCarrito={idCarrito}
               cafeteriaName={cartCafeteria?.nombre}
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}

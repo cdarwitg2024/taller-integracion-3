@@ -125,6 +125,8 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
   const animFrameRef = useRef(null);
   const fileInputRef = useRef(null);
   const usuarioIdRef = useRef(usuarioId);
+  const cafeteriaIdRef = useRef(cafeteriaId);
+  const generacionRef = useRef(0);
   const resultadoRef = useRef(null);
 
   const [modo, setModo] = useState('qr'); // 'qr' | 'token'
@@ -136,8 +138,16 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
   const [intento, setIntento] = useState(0);
 
   useEffect(() => {
+    if (usuarioIdRef.current !== usuarioId || cafeteriaIdRef.current !== cafeteriaId) {
+      generacionRef.current += 1;
+      procesando.current = false;
+      ultimoToken.current = null;
+      setResultado(null);
+      setErrorConexion('');
+    }
     usuarioIdRef.current = usuarioId;
-  }, [usuarioId]);
+    cafeteriaIdRef.current = cafeteriaId;
+  }, [usuarioId, cafeteriaId]);
 
   useEffect(() => {
     resultadoRef.current = resultado;
@@ -165,6 +175,7 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
   }, []);
 
   const resetear = useCallback(() => {
+    generacionRef.current += 1;
     setResultado(null);
     setErrorConexion('');
     procesando.current = false;
@@ -190,6 +201,7 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
       procesando.current = false;
       ultimoToken.current = null;
     } else {
+      generacionRef.current += 1;
       detenerCamara();
     }
   }, [open, detenerCamara]);
@@ -204,6 +216,9 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
     // Si ya mostró resultado para este mismo texto, evitar repetición continua
     if (ultimoToken.current === textoLimpio && resultadoRef.current) return;
 
+    const activacion = generacionRef.current;
+    const usuario = usuarioIdRef.current;
+    const cafeteria = cafeteriaIdRef.current;
     procesando.current = true;
     ultimoToken.current = textoLimpio;
     setErrorConexion('');
@@ -233,9 +248,12 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
       try {
         res = await backendApi.validarQr(token);
         fuePorBackend = true;
+        if (generacionRef.current !== activacion) return;
       } catch (backendErr) {
+        if (generacionRef.current !== activacion) return;
         console.warn('[KDS Escáner] MS Comercio no disponible para validar QR, fallback a Supabase:', backendErr.message);
-        res = await pedidosService.validarQrEntrega(token, usuarioIdRef.current);
+        res = await pedidosService.validarQrEntrega(token, usuario, cafeteria);
+        if (generacionRef.current !== activacion) return;
       }
 
       // Si el MS Comercio rechazó (ej. no tenía el token en memoria), verificar en Supabase
@@ -246,8 +264,10 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
         !res.razon?.includes('ya fue entregado') &&
         !res.razon?.includes('no está listo')
       ) {
+        if (generacionRef.current !== activacion) return;
         try {
-          const porSupabase = await pedidosService.validarQrEntrega(token, usuarioIdRef.current);
+          const porSupabase = await pedidosService.validarQrEntrega(token, usuario, cafeteria);
+          if (generacionRef.current !== activacion) return;
           if (porSupabase && porSupabase.valido) {
             console.warn('[KDS Escáner] MS Comercio rechazó la credencial, Supabase sí la aceptó:', res.razon);
             res = porSupabase;
@@ -256,6 +276,8 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
           // Mantener el rechazo del backend
         }
       }
+
+      if (generacionRef.current !== activacion) return;
 
       // Garantizar que siempre haya una razón explicativa si es rechazo
       if (res && res.valido === false && !res.razon) {
@@ -271,12 +293,13 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
         reproducirSonidoRechazo();
       }
     } catch (err) {
+      if (generacionRef.current !== activacion) return;
       console.error('[KDS Escáner] Error validando QR:', err);
       setResultado(null);
       setErrorConexion(err.message || 'Error de conexión: No se pudo contactar al servidor para validar el código.');
       reproducirSonidoRechazo();
     } finally {
-      procesando.current = false;
+      if (generacionRef.current === activacion) procesando.current = false;
     }
   }, []);
 
@@ -415,6 +438,9 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
       detenerCamara();
     };
   }, [open, modo, resultado, intento, detenerCamara, validar]);
+
+  // Invalida los callbacks en vuelo cuando el KDS abandona el escáner.
+  useEffect(() => () => { generacionRef.current += 1; }, []);
 
   const reencenderCamara = () => {
     setErrorCamara('');

@@ -652,7 +652,8 @@ const PerfilScreen = ({ session, isGuest, onLogout, onNavigateTab }) => {
 
   // Secciones internas: al volver se conserva el estado del perfil.
   if (puedeVerAfiliaciones && afiliacionesUsuario === authUserId) {
-    return <MisAfiliacionesScreen onBack={() => setAfiliacionesUsuario(null)} />;
+    return <MisAfiliacionesScreen key={authUserId} nombreUsuario={usuarioData.nombre}
+      onBack={() => setAfiliacionesUsuario(null)} />;
   }
 
   if (pantallaPoliticasVisible) {

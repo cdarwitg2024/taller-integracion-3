@@ -11,6 +11,12 @@ jest.mock('../lib/supabase', () => ({
   supabase: { from: jest.fn(), channel: jest.fn(), removeChannel: jest.fn() },
 }));
 
+jest.mock('../services/campanasAfiliados', () => ({
+  listarCafeteriasAfiliados: jest.fn(async () => []),
+  listarCampanasActivas: jest.fn(async () => []),
+  filtrarCampanasActivas: filas => filas,
+}));
+
 const session = { user: { id: 'auth-estudiante-a01', email: 'estudiante.a01@example.test' } };
 let tree;
 let perfil;
@@ -126,4 +132,95 @@ test('al cambiar de cuenta no se conserva la sección abierta del estudiante ant
   await act(async () => tree.update(<PerfilScreen session={otraSesion} isGuest={false} />));
   expect(titulo()).toBe('Mi Perfil');
   expect(tree.root.findAllByType(MisAfiliacionesScreen)).toHaveLength(0);
+});
+
+const abrirVista = async nombre => act(async () => tree.root.findAllByType(TouchableOpacity)
+  .find(nodo => nodo.props.accessibilityLabel === nombre).props.onPress());
+const textoVisible = () => tree.root.findAllByType(Text)
+  .flatMap(nodo => nodo.props.children).filter(texto => typeof texto === 'string').join(' ');
+
+test.each([
+  ['Oportunidades', 'Campañas de cafeterías'],
+  ['Mis códigos', 'Tus códigos de afiliado'],
+  ['Ganancias', 'Comisiones por entregas'],
+])(
+  'A02: abre %s desde una sola entrada y vuelve a Mis afiliaciones y al perfil', async (nombre, contenido) => {
+    await montar();
+    await abrir();
+    await abrirVista(nombre);
+    expect(titulo()).toBe(nombre);
+    expect(textoVisible()).toContain('Cuenta activa: Estudiante');
+    expect(textoVisible()).toContain(contenido);
+    expect(textoVisible()).toContain(nombre === 'Oportunidades'
+      ? 'Elige una cafetería' : 'estará disponible próximamente');
+    const header = tree.root.findByType(Header);
+    expect(header.findByType(TouchableOpacity).props.accessibilityLabel).toBe('Volver a Mis afiliaciones');
+    await act(async () => header.findByType(TouchableOpacity).props.onPress());
+    expect(titulo()).toBe('Mis afiliaciones');
+    await act(async () => tree.root.findAllByType(Button)
+      .find(nodo => nodo.props.title === 'Volver al perfil').props.onPress());
+    expect(titulo()).toBe('Mi Perfil');
+    expect(tree.root.findByType(PerfilScreen).props.session).toBe(session);
+  }
+);
+
+test('A02: cambia entre las tres vistas con pestañas sin perder la cuenta ni recargar el perfil', async () => {
+  await montar();
+  const consultasIniciales = supabase.from.mock.calls.length;
+  await abrir();
+  await abrirVista('Oportunidades');
+  for (const nombre of ['Mis códigos', 'Ganancias', 'Oportunidades']) {
+    await abrirVista(nombre);
+    expect(titulo()).toBe(nombre);
+    const tabs = tree.root.findAllByType(TouchableOpacity).filter(nodo => nodo.props.accessibilityRole === 'tab');
+    expect(tabs).toHaveLength(3);
+    expect(tabs.filter(nodo => nodo.props.accessibilityState.selected)
+      .map(nodo => nodo.props.accessibilityLabel)).toEqual([nombre]);
+    expect(tree.root.findByType(PerfilScreen).props.session).toBe(session);
+    expect(textoVisible()).toContain('Cuenta activa: Estudiante');
+  }
+  expect(supabase.from.mock.calls.length).toBe(consultasIniciales);
+});
+
+test('A02: Atrás de Android retrocede de Ganancias a Mis afiliaciones y luego al perfil', async () => {
+  const add = jest.spyOn(BackHandler, 'addEventListener').mockReturnValue({ remove: jest.fn() });
+  await montar();
+  await abrir();
+  await abrirVista('Ganancias');
+  act(() => { expect(add.mock.calls.at(-1)[1]()).toBe(true); });
+  expect(titulo()).toBe('Mis afiliaciones');
+  act(() => { expect(add.mock.calls.at(-1)[1]()).toBe(true); });
+  expect(titulo()).toBe('Mi Perfil');
+});
+
+test('A02: el botón inferior de una vista devuelve al menú de afiliaciones', async () => {
+  await montar();
+  await abrir();
+  await abrirVista('Mis códigos');
+  await act(async () => tree.root.findAllByType(Button)
+    .find(nodo => nodo.props.title === 'Volver a Mis afiliaciones').props.onPress());
+  expect(titulo()).toBe('Mis afiliaciones');
+});
+
+test('A02: cerrar sesión desde una vista impide conservar contenido de la cuenta anterior', async () => {
+  await montar();
+  await abrir();
+  await abrirVista('Ganancias');
+  await act(async () => tree.update(<PerfilScreen session={null} isGuest />));
+  expect(tree.root.findAllByType(MisAfiliacionesScreen)).toHaveLength(0);
+  expect(textoVisible()).not.toContain('Cuenta activa: Estudiante');
+});
+
+test('A02: una cuenta nueva empieza en el perfil y abre el menú inicial, sin la vista anterior', async () => {
+  await montar();
+  await abrir();
+  await abrirVista('Mis códigos');
+  const otraSesion = { user: { id: 'auth-estudiante-a02', email: 'otro.a02@example.test' } };
+  perfil = { ...perfil, id: 903, nombre: 'Otra cuenta', auth_user_id: otraSesion.user.id, email: otraSesion.user.email };
+  await act(async () => tree.update(<PerfilScreen session={otraSesion} isGuest={false} />));
+  expect(titulo()).toBe('Mi Perfil');
+  await abrir();
+  expect(titulo()).toBe('Mis afiliaciones');
+  expect(textoVisible()).toContain('Cuenta activa: Otra cuenta');
+  expect(textoVisible()).not.toContain('Cuenta activa: Estudiante');
 });

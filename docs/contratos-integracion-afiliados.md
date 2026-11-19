@@ -10,9 +10,11 @@ Todas las solicitudes usan `Authorization: Bearer <sesion>` y, cuando llevan JSO
 |---|---|---|---|
 | Dueño, escritorio | `GET /api/afiliados/cafeterias/7/campanas/administracion` | `200 {"campanas":[...]}` con todas las campañas de su cafetería | `403 {"error":"sin_acceso_cafeteria"}` |
 | Dueño, escritorio | `POST /api/afiliados/cafeterias/7/campanas` | `201 {"id":31,"cafeteria_id":7,"estado":"programada"}` | `403 {"error":"sin_acceso_cafeteria"}` |
-| Cliente, móvil | `GET /api/afiliados/cafeterias/7/campanas?postulables=true` | `200 {"campanas":[{"id":31,"nombre":"Semana del café","estado":"programada","descuento_normal_pct":15,"descuento_oferta_pct":5,"comision_pct":10,"inicio":"2026-12-01T08:00:00-03:00","fin":"2026-12-15T20:00:00-03:00"}]}` | `401 {"error":"sesion_invalida"}` |
+| Estudiante, móvil | `GET /api/afiliados/cafeterias/7/campanas` | `200 {"campanas":[...]}`; contrato oficial en [C04](microservicios/validacion/S3-T4-consulta-campanas-vigentes.md) | `401` sin sesión válida; `403` sin estudiante activo |
 | Dueño, escritorio | `PATCH /api/afiliados/cafeterias/7/campanas/31` con `{"descuento_normal_pct":12}` | Antes del inicio, `200 {"id":31,"descuento_normal_pct":12}` | Desde el inicio, `409 {"error":"porcentajes_fijados"}` |
 | Dueño, escritorio | Misma ruta con `{"pausada":true}` o `{"pausada":false}` | `200 {"id":31,"estado":"pausada"}` o `200 {"id":31,"estado":"activa"}` | Al reanudar después del término, `409 {"error":"campana_finalizada"}` |
+
+La consulta C04 usa la RPC `listar_oportunidades_campana` (BD `0023` + `0024`). Solo lista campañas vigentes de cafeterías activas. Enviar `?postulables=true` devuelve `400`. El alta y la edición de C03 conservan sus URL y operan sobre `public.campanas`.
 
 Cuerpo de creación:
 
@@ -37,7 +39,12 @@ El dueño define los tres porcentajes. Si cambia alguno antes del inicio, se avi
 | Dueño, escritorio | `GET /api/afiliados/cafeterias/7/campanas/31/solicitudes` | `200 {"solicitudes":[{"id":82,"solicitante":"Diego","estado":"pendiente","plan_promocion":"Compartiré un video en la comunidad universitaria.","enlace_publico":"https://example.com/diego"}]}` | `403 {"error":"sin_acceso_cafeteria"}` |
 | Dueño, escritorio | `PATCH /api/afiliados/cafeterias/7/campanas/31/solicitudes/82` con `{"decision":"aprobar","codigo":"DIEGO-PROMO1"}` o `{"decision":"rechazar"}` | `200 {"id":82,"estado":"aprobada","codigo":"DIEGO-PROMO1"}` o `200 {"id":82,"estado":"rechazada"}` | `409 {"error":"codigo_en_uso"}`. La solicitud sigue pendiente. |
 | Diego, móvil | `GET /api/afiliados/mi-perfil` | `200 {"solicitudes":[{"id":82,"cafeteria_id":7,"campana_id":31,"estado":"aprobada","codigo":"DIEGO-PROMO1"}]}` | `401 {"error":"sesion_invalida"}` |
+| Dueño, escritorio | `PATCH /api/afiliados/cafeterias/7/campanas/31/solicitudes/82` con `{"decision":"desactivar"}` | `200 {"id":82,"estado":"aprobada","codigo":"DIEGO-PROMO1","codigo_activo":false}` | `409 {"error":"resolucion_en_conflicto"}` si la solicitud no está aprobada |
 | Dueño, escritorio | `POST /api/afiliados/cafeterias/7/campanas/31/solicitudes/82/reenviar-aviso` | `202 {"estado":"aviso_pendiente"}` | `409 {"error":"solicitud_no_aprobada"}` |
+
+C05 devuelve `201` en la primera solicitud y `200` con el mismo ID y el estado persistido al repetirla. La aprobación admite una propuesta opcional de `codigo`. Si se omite, SQL lo genera. Las respuestas aprobadas incluyen `codigo_activo`. Al desactivar, el código queda reservado y un reintento de aprobación conserva la desactivación. El correo y el reenvío corresponden a una tarea posterior. [Validación de C05](microservicios/validacion/C05-solicitudes-afiliacion.md).
+
+Los dos listados devuelven hasta 100 solicitudes por página, en orden descendente de ID. Si hay más filas, la respuesta incluye `siguiente_antes_de`. Para continuar, repite el mismo GET con la misma sesión y añade `?antes_de=<siguiente_antes_de>`. Cuando el campo está ausente, llegaste al final. Una página puede traer menos de 100 filas por el límite de PostgREST. La autorización se verifica en cada página.
 
 El formulario de «Promocionar» exige una explicación y admite un enlace público opcional. Si el dueño invita a alguien, esa persona usa el mismo formulario. Una campaña admite varios afiliados con sus propios códigos. El dueño asigna el código al aprobar y el servidor comprueba su unicidad en todo CoffeeFast. Una aprobación guarda el código en el perfil y dispara el aviso por correo. Si falla el correo, el código sigue visible y el dueño puede reenviar el aviso. Una aprobación anticipada permite compartir el código, con canje desde el inicio y mientras la campaña esté activa.
 
@@ -108,25 +115,19 @@ de `public.campanas` (incluidas versión y aceptación) y agrega los alias
 `estado` y `estado_db`. Sus estados externos son `programada`, `activa`,
 `pausada` y `finalizada`; un estado administrativo no acredita que sea postulable.
 
-E04 conserva la URL de C02:
-`GET /api/afiliados/cafeterias/:cafeteriaId/campanas?postulables=true`, con JWT
-del cliente/estudiante. C04 debe implementar la autorización estudiantil y
-devolver solo campañas postulables en `{campanas: [...]}`, con `id`, `nombre`,
-`estado`, los tres porcentajes y `inicio`/`fin`, sin datos internos de aceptación.
-El contrato de consumo contempla `programada` (postulación anticipada) y
-`activa`; las pausadas, finalizadas y propuestas sin habilitar se excluyen.
-E04 muestra el vacío cuando recibe un arreglo vacío y no sustituye esta URL por
-la administrativa.
+C04 usa `GET /api/afiliados/cafeterias/:cafeteriaId/campanas` con el JWT del
+estudiante y sin parámetros de consulta. Devuelve `200 {"campanas":[...]}` o
+`200 {"campanas":[]}` cuando no hay resultados. Cada campaña incluye `id`,
+`nombre`, `cafeteria_id`, `cafeteria_nombre`, `tipo`, `estado`, `vigencia_desde`,
+`vigencia_hasta`, `tasa_descuento`, `tasa_comision` y `estado_vigencia`.
 
-C03 **no implementa C04**: actualmente ese GET con `postulables=true` devuelve
-`501 {"error":"listado_postulable_pendiente"}` después de validar la sesión,
-sin invocar la autorización exclusiva del dueño ni devolver sus datos. E04 debe
-tratar ese 501 como funcionalidad pendiente, sin mostrar campañas ficticias.
-Sin sesión se devuelve 401. Omitir el parámetro, usar un valor distinto de
-`true` o añadir parámetros desconocidos devuelve
-`400 {"error":"consulta_postulables_requerida"}`. El éxito 200 estudiantil
-sigue pendiente de C04; las respuestas 403 propias de su autorización deberán
-validarse al implementar esa tarea. POST y PATCH de C03 conservan sus URL de C02.
+La RPC exige un estudiante activo. Solo devuelve campañas en estado `activa`
+de cafeterías activas, con inicio inclusivo y fin exclusivo. Una sesión inválida
+devuelve `401`; una cuenta sin acceso estudiantil devuelve `403`. Los parámetros
+de consulta, incluido `postulables=true`, devuelven
+`400 {"error":"parametros_no_admitidos"}`. Si la consulta no está disponible,
+devuelve `503`. El [registro C04](microservicios/validacion/S3-T4-consulta-campanas-vigentes.md)
+incluye el ejemplo completo y la evidencia de validación.
 
 La administración de campañas usa `public.campanas`, la tabla que consume escritorio. El mapeo aplicado es `descuento_normal_pct → tasa_descuento`, `descuento_oferta_pct → tasa_descuento_oferta` (columna nueva, nullable), `comision_pct → tasa_comision`, `inicio → vigencia_desde` y `fin → vigencia_hasta`.
 
