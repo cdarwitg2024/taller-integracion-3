@@ -48,6 +48,20 @@ Los dos listados devuelven hasta 100 solicitudes por página, en orden descenden
 
 El formulario de «Promocionar» exige una explicación y admite un enlace público opcional. Si el dueño invita a alguien, esa persona usa el mismo formulario. Una campaña admite varios afiliados con sus propios códigos. El dueño asigna el código al aprobar y el servidor comprueba su unicidad en todo CoffeeFast. Una aprobación guarda el código en el perfil y dispara el aviso por correo. Si falla el correo, el código sigue visible y el dueño puede reenviar el aviso. Una aprobación anticipada permite compartir el código, con canje desde el inicio y mientras la campaña esté activa.
 
+### Lectura del panel móvil A06
+
+C05 devuelve solicitudes y códigos, no saldo ni historial financiero. El panel
+móvil consulta `public.movimientos_comision` con la sesión Supabase del usuario,
+de acuerdo con el permiso SELECT y RLS de V04 (`0020`). Filtra la afiliación
+aprobada devuelta por C05, incluso si `codigo_activo` pasa a `false`.
+El saldo disponible suma comisiones con estado `disponible`; las pendientes se
+presentan aparte. Las revertidas y sus compensaciones quedan en el historial,
+sin sumar un crédito o descontarlo dos veces. No existe una operación de retiro
+en este contrato y A06 no modifica importes ni la Wallet.
+
+Ver [A06](mobile/validacion/A06-Solicitudes-aprobacion.md) para paginación,
+comprobaciones y alcance de la prueba con RLS real.
+
 ## 3. Cotización y compra
 
 Ana envía su sesión desde móvil. La cotización calcula el precio vigente sin cobrar ni consumir el beneficio.

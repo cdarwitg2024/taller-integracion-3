@@ -17,6 +17,13 @@ jest.mock('../services/campanasAfiliados', () => ({
   filtrarCampanasActivas: filas => filas,
 }));
 
+jest.mock('../services/afiliaciones', () => ({
+  consultarAfiliaciones: jest.fn(async () => [{ id: 1, cafeteria_id: 7, campana_id: 31,
+    estado: 'aprobada', codigo: 'CF-PRUEBA-PERFIL', codigo_activo: true }]),
+  consultarMovimientosComision: jest.fn(async () => []),
+  resumirComisiones: () => ({ disponible: 0, pendiente: 0 }),
+}));
+
 const session = { user: { id: 'auth-estudiante-a01', email: 'estudiante.a01@example.test' } };
 let tree;
 let perfil;
@@ -141,7 +148,7 @@ const textoVisible = () => tree.root.findAllByType(Text)
 
 test.each([
   ['Oportunidades', 'Campañas de cafeterías'],
-  ['Mis códigos', 'Tus códigos de afiliado'],
+  ['Mis códigos', 'Tus solicitudes y códigos de afiliado'],
   ['Ganancias', 'Comisiones por entregas'],
 ])(
   'A02: abre %s desde una sola entrada y vuelve a Mis afiliaciones y al perfil', async (nombre, contenido) => {
@@ -152,7 +159,7 @@ test.each([
     expect(textoVisible()).toContain('Cuenta activa: Estudiante');
     expect(textoVisible()).toContain(contenido);
     expect(textoVisible()).toContain(nombre === 'Oportunidades'
-      ? 'Elige una cafetería' : 'estará disponible próximamente');
+      ? 'Elige una cafetería' : nombre === 'Mis códigos' ? 'CF-PRUEBA-PERFIL' : 'Saldo de comisiones disponibles');
     const header = tree.root.findByType(Header);
     expect(header.findByType(TouchableOpacity).props.accessibilityLabel).toBe('Volver a Mis afiliaciones');
     await act(async () => header.findByType(TouchableOpacity).props.onPress());
@@ -173,7 +180,7 @@ test('A02: cambia entre las tres vistas con pestañas sin perder la cuenta ni re
     await abrirVista(nombre);
     expect(titulo()).toBe(nombre);
     const tabs = tree.root.findAllByType(TouchableOpacity).filter(nodo => nodo.props.accessibilityRole === 'tab');
-    expect(tabs).toHaveLength(3);
+    expect(tabs).toHaveLength(4);
     expect(tabs.filter(nodo => nodo.props.accessibilityState.selected)
       .map(nodo => nodo.props.accessibilityLabel)).toEqual([nombre]);
     expect(tree.root.findByType(PerfilScreen).props.session).toBe(session);
