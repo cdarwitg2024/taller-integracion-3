@@ -10,7 +10,7 @@ import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import PageHeader from '../../components/dueno/PageHeader';
-import { campanasAfiliados } from '../../services/campanasAfiliados';
+import { campanasAfiliados, validarFormularioCampana } from '../../services/campanasAfiliados';
 
 const LISTADO = '/dueno/afiliados/campanas';
 
@@ -208,10 +208,18 @@ function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
   const { id } = useParams();
   const existente = id ? campanas.find(c => String(c.id) === String(id)) : null;
   const [form, setForm] = useState(() => (existente
-    ? { ...existente, inicio: paraInput(existente.inicio), fin: paraInput(existente.fin) }
+    ? {
+      ...existente,
+      descuento_normal_pct: existente.descuento_normal_pct ?? '',
+      descuento_oferta_pct: existente.descuento_oferta_pct ?? '',
+      comision_pct: existente.comision_pct ?? '',
+      inicio: paraInput(existente.inicio),
+      fin: paraInput(existente.fin),
+    }
     : nuevaCampana()));
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
+  const [errores, setErrores] = useState({});
   // El formulario se desmonta al cambiar de cafetería; su guardado pendiente no
   // debe escribir estado en el componente retirado.
   const montado = useRef(true);
@@ -219,13 +227,23 @@ function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
     montado.current = true;
     return () => { montado.current = false; };
   }, []);
-  // Actualiza un campo del formulario sin perder el resto.
-  const cambiar = key => e => setForm(prev => ({ ...prev, [key]: e.target.value }));
+  // Actualiza un campo y retira solo su error, conservando los demás valores.
+  const cambiar = key => e => {
+    setForm(prev => ({ ...prev, [key]: e.target.value }));
+    setErrores(prev => ({ ...prev, [key]: undefined }));
+    setFormError('');
+  };
 
   // Valida, envía el formulario y refresca el listado al guardar.
   const guardar = async (e) => {
     e.preventDefault();
     if (busy) return;
+    const detectados = validarFormularioCampana(form, !existente).errores;
+    setErrores(detectados);
+    if (Object.keys(detectados).length > 0) {
+      setFormError('Revisa los campos marcados: hay datos obligatorios o inválidos.');
+      return;
+    }
     const origen = cafeteriaId;
     setBusy(true);
     setFormError('');
@@ -257,18 +275,18 @@ function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
         subtitle="Define las tasas y la vigencia de la campaña."
         actions={<Button startIcon={<ArrowBackIcon />} onClick={onVolver}>Volver al listado</Button>}
       />
-      <Paper component="form" onSubmit={guardar} elevation={0} sx={{ border: '1px solid #E9E1D9', borderRadius: 4, p: 3, maxWidth: 640 }}>
+      <Paper component="form" onSubmit={guardar} noValidate elevation={0} sx={{ border: '1px solid #E9E1D9', borderRadius: 4, p: 3, maxWidth: 640 }}>
         <Stack spacing={2.5}>
           {formError && <Alert severity="error">{formError}</Alert>}
-          <TextField label="Nombre de la campaña" value={form.nombre} onChange={cambiar('nombre')} required disabled={busy} inputProps={{ maxLength: 120 }} />
+          <TextField label="Nombre de la campaña" value={form.nombre} onChange={cambiar('nombre')} required disabled={busy} inputProps={{ maxLength: 120 }} error={Boolean(errores.nombre)} helperText={errores.nombre} />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField label="Descuento a precio normal" type="number" value={form.descuento_normal_pct} onChange={cambiar('descuento_normal_pct')} disabled={busy} inputProps={{ min: 0, max: 100, step: 1 }} InputProps={{ endAdornment: '%' }} fullWidth />
-            <TextField label="Descuento en oferta" type="number" value={form.descuento_oferta_pct} onChange={cambiar('descuento_oferta_pct')} disabled={busy} inputProps={{ min: 0, max: 100, step: 1 }} InputProps={{ endAdornment: '%' }} fullWidth />
-            <TextField label="Comisión" type="number" value={form.comision_pct} onChange={cambiar('comision_pct')} disabled={busy} inputProps={{ min: 0, max: 100, step: 1 }} InputProps={{ endAdornment: '%' }} fullWidth />
+            <TextField label="Descuento a precio normal" type="number" value={form.descuento_normal_pct} onChange={cambiar('descuento_normal_pct')} required disabled={busy} inputProps={{ min: 0, max: 100, step: 0.01 }} InputProps={{ endAdornment: '%' }} error={Boolean(errores.descuento_normal_pct)} helperText={errores.descuento_normal_pct} fullWidth />
+            <TextField label="Descuento en oferta" type="number" value={form.descuento_oferta_pct} onChange={cambiar('descuento_oferta_pct')} required disabled={busy} inputProps={{ min: 0, max: 100, step: 0.01 }} InputProps={{ endAdornment: '%' }} error={Boolean(errores.descuento_oferta_pct)} helperText={errores.descuento_oferta_pct} fullWidth />
+            <TextField label="Comisión" type="number" value={form.comision_pct} onChange={cambiar('comision_pct')} required disabled={busy} inputProps={{ min: 0, max: 100, step: 0.01 }} InputProps={{ endAdornment: '%' }} error={Boolean(errores.comision_pct)} helperText={errores.comision_pct} fullWidth />
           </Stack>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField label="Inicio" type="datetime-local" value={form.inicio || ''} onChange={cambiar('inicio')} disabled={busy} InputLabelProps={{ shrink: true }} fullWidth />
-            <TextField label="Término" type="datetime-local" value={form.fin || ''} onChange={cambiar('fin')} disabled={busy} InputLabelProps={{ shrink: true }} fullWidth />
+            <TextField label="Inicio" type="datetime-local" value={form.inicio || ''} onChange={cambiar('inicio')} required={!existente} disabled={busy} InputLabelProps={{ shrink: true }} error={Boolean(errores.inicio)} helperText={errores.inicio} fullWidth />
+            <TextField label="Término" type="datetime-local" value={form.fin || ''} onChange={cambiar('fin')} required={!existente} disabled={busy} InputLabelProps={{ shrink: true }} error={Boolean(errores.fin)} helperText={errores.fin} fullWidth />
           </Stack>
           <Stack direction="row" spacing={1.5} justifyContent="flex-end">
             <Button onClick={onVolver} disabled={busy}>Cancelar</Button>

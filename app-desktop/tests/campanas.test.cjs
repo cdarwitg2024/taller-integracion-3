@@ -53,7 +53,28 @@ function cargarApp(servicios) {
   return cargar(path.join(src, 'app.jsx')).default;
 }
 
-const servicio = (listar, extra = {}) => ({ campanasAfiliados: { listar, crear: async () => ({}), actualizar: async () => ({}), ...extra } });
+const servicio = (listar, extra = {}) => ({
+  campanasAfiliados: { listar, crear: async () => ({}), actualizar: async () => ({}), ...extra },
+  validarFormularioCampana: cargarServicioCampanas().modulo.validarFormularioCampana,
+});
+
+// Completa los campos obligatorios para que el envío pase la validación de E05.
+async function llenarFormularioValido(h) {
+  const valores = {
+    'Nombre de la campaña': 'Campaña válida',
+    'Descuento a precio normal': '15',
+    'Descuento en oferta': '5',
+    'Comisión': '10',
+    'Inicio': '2026-12-01T08:00',
+    'Término': '2026-12-15T20:00',
+  };
+  for (const [etiqueta, valor] of Object.entries(valores)) {
+    await act(async () => {
+      h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta)
+        .props.onChange({ target: { value: valor } });
+    });
+  }
+}
 
 // Carga el servicio real sustituyendo solo el cliente autenticado del gateway.
 function cargarServicioCampanas() {
@@ -347,6 +368,7 @@ test('la recarga posterior a guardar en la cafetería nueva no reutiliza datos d
   assert.match(h.texto(), /Campaña de la 12/);
   await act(async () => h.boton('Nueva campaña').props.onClick());
   const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+  await llenarFormularioValido(h);
   await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
   assert.equal(h.ruta(), '/dueno/afiliados/campanas');
   assert.deepEqual(llamadas, [7, 12, 'crear-12', 12]);
@@ -405,6 +427,7 @@ test('un guardado pendiente de la cafetería anterior no navega ni publica datos
   });
   const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
   const nombre = () => h.tree.root.findAllByType('TextField').find(c => c.props.label === 'Nombre de la campaña');
+  await llenarFormularioValido(h);
   await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
   await act(async () => resolverPerfil({ success: true, user: dueno(12), rol: 'dueño' }));
   await act(async () => nombre().props.onChange({ target: { value: 'Borrador de la 12' } }));
@@ -426,6 +449,7 @@ test('un guardado rechazado de la cafetería anterior no muestra su error en la 
   });
   const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
   const nombre = () => h.tree.root.findAllByType('TextField').find(c => c.props.label === 'Nombre de la campaña');
+  await llenarFormularioValido(h);
   await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
   await act(async () => resolverPerfil({ success: true, user: dueno(12), rol: 'dueño' }));
   await act(async () => nombre().props.onChange({ target: { value: 'Borrador de la 12' } }));
@@ -481,7 +505,7 @@ test('una campaña inexistente tras una carga exitosa avisa sin ofrecer reintent
 
 test('el servicio sigue el contrato C02 con el cliente autenticado', async () => {
   const { modulo, llamadas } = cargarServicioCampanas();
-  const { campanasAfiliados, prepararCampana } = modulo;
+  const { campanasAfiliados, prepararCampana, validarFormularioCampana } = modulo;
   const form = {
     nombre: 'Semana del café', descuento_normal_pct: '15', descuento_oferta_pct: '5',
     comision_pct: '10', inicio: '2026-12-01T08:00', fin: '2026-12-15T20:00',
@@ -501,11 +525,63 @@ test('el servicio sigue el contrato C02 con el cliente autenticado', async () =>
   assert.equal(llamadas[2].url, 'http://gateway/api/afiliados/cafeterias/7/campanas/31');
   assert.equal(llamadas[2].opciones.method, 'PATCH');
   assert.equal(JSON.parse(llamadas[2].opciones.body).descuento_normal_pct, 12);
+  await campanasAfiliados.actualizar(7, 31, { ...form, inicio: '', fin: '' });
+  const parcheSinFechas = JSON.parse(llamadas[3].opciones.body);
+  assert.equal(Object.hasOwn(parcheSinFechas, 'inicio'), false);
+  assert.equal(Object.hasOwn(parcheSinFechas, 'fin'), false);
 
   assert.throws(() => prepararCampana({ ...form, nombre: 'ab' }), /entre 3 y 120/);
   assert.throws(() => prepararCampana({ ...form, descuento_normal_pct: '' }), /obligatorio/);
   assert.throws(() => prepararCampana({ ...form, comision_pct: '101' }), /entre 0 y 100/);
+  for (const campo of ['descuento_normal_pct', 'descuento_oferta_pct', 'comision_pct']) {
+    assert.match(validarFormularioCampana({ ...form, [campo]: '12.345' }).errores[campo], /dos decimales/);
+    assert.throws(() => prepararCampana({ ...form, [campo]: '12.345' }), /dos decimales/);
+  }
+  assert.deepEqual(validarFormularioCampana({
+    ...form, descuento_normal_pct: '15.25', descuento_oferta_pct: '5.5', comision_pct: '10.01',
+  }).errores, {});
+  const sinFechas = { ...form, inicio: '', fin: '' };
+  assert.match(validarFormularioCampana(sinFechas, true).errores.inicio, /obligatorio en el alta/);
+  assert.match(validarFormularioCampana(sinFechas, true).errores.fin, /obligatorio en el alta/);
+  assert.throws(() => prepararCampana(sinFechas, true), /obligatorio en el alta/);
+  assert.deepEqual(validarFormularioCampana(sinFechas).errores, {}, 'la edición admite fechas vacías');
+  const ofertaMayor = { ...form, descuento_normal_pct: '10', descuento_oferta_pct: '15' };
+  assert.match(validarFormularioCampana(ofertaMayor).errores.descuento_oferta_pct, /no puede superar/);
+  assert.throws(() => prepararCampana(ofertaMayor), /no puede superar/);
   assert.throws(() => prepararCampana({ ...form, fin: form.inicio }), /posterior al inicio/);
+  assert.equal(validarFormularioCampana({ ...form, comision_pct: '   ' }).errores.comision_pct, 'La comisión es obligatoria.');
+  assert.equal(validarFormularioCampana({ ...form, comision_pct: true }).errores.comision_pct, 'La comisión es obligatoria.');
+  assert.equal(validarFormularioCampana({ ...form, inicio: '2026-02-30T10:00' }).errores.inicio, 'Revisa la fecha de vigencia.');
+  assert.throws(() => prepararCampana({ ...form, inicio: '2026-02-30T10:00' }), /fecha de vigencia/);
+  assert.deepEqual(validarFormularioCampana({
+    ...form, inicio: '2026-12-01T08:00:00.000Z', fin: '2026-12-15T20:00:00-03:00',
+  }).errores, {});
+  assert.match(prepararCampana({ ...form, inicio: '2026-12-01T08:00:00.000Z' }).inicio, /^2026-12-01T08:00:00\.000Z$/);
+  assert.throws(() => prepararCampana({ ...form, fin: '2026-12-01T07:59' }), /posterior al inicio/);
+});
+
+test('la edición normaliza tasas nulas y conserva los valores existentes', async t => {
+  const existente = {
+    ...campana(31, 'Campaña heredada'),
+    descuento_oferta_pct: null,
+    inicio: '2026-12-01T11:00:00.000Z',
+    fin: null,
+  };
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => [existente]),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña heredada');
+  assert.equal(campo('Descuento a precio normal').props.value, 15);
+  assert.equal(campo('Descuento en oferta').props.value, '');
+  assert.equal(campo('Comisión').props.value, 10);
+  assert.ok(campo('Inicio').props.value);
+  assert.equal(campo('Término').props.value, '');
+  assert.equal(campo('Descuento en oferta').props.error, false);
+  await act(async () => campo('Descuento en oferta').props.onChange({ target: { value: '5' } }));
+  assert.equal(campo('Descuento en oferta').props.value, '5');
 });
 
 // Pruebas de condiciones y aceptación de campañas del dueño.
@@ -734,4 +810,93 @@ test('muestra descuento normal, oferta y comisión; NULL no se convierte en cero
   assert.match(h.texto(), /10,25/);
   assert.doesNotMatch(h.texto(), /0,00%/);
   assert.doesNotMatch(h.texto(), /4,50/);
+});
+
+test('el validador del formulario devuelve errores por campo sin descartar valores válidos', () => {
+  const { modulo } = cargarServicioCampanas();
+  const { errores, nombre } = modulo.validarFormularioCampana({
+    nombre: 'Campaña válida', descuento_normal_pct: '', descuento_oferta_pct: '150',
+    comision_pct: '10', inicio: '2026-12-15T10:00', fin: '2026-12-01T10:00',
+  });
+  assert.deepEqual(Object.keys(errores).sort(),
+    ['descuento_normal_pct', 'descuento_oferta_pct', 'fin']);
+  assert.match(errores.descuento_normal_pct, /obligatorio/);
+  assert.match(errores.descuento_oferta_pct, /entre 0 y 100/);
+  assert.match(errores.fin, /posterior al inicio/);
+  assert.equal(nombre, 'Campaña válida');
+
+  const fechas = modulo.validarFormularioCampana({
+    nombre: 'Campaña válida', descuento_normal_pct: '15', descuento_oferta_pct: '5',
+    comision_pct: '10', inicio: 'fecha-invalida', fin: '2026-12-15T10:00',
+  }).errores;
+  assert.deepEqual(Object.keys(fechas), ['inicio']);
+});
+
+test('el formulario marca el campo obligatorio omitido y conserva los datos válidos', async t => {
+  const creados = [];
+  const h = await montar(t, {
+    campanas: servicio(async () => [], {
+      crear: async (cafeteriaId, form) => { creados.push({ cafeteriaId, form }); return { id: 1 }; },
+    }),
+  });
+  await act(async () => h.boton('Nueva campaña').props.onClick());
+  const campos = () => Object.fromEntries(h.tree.root.findAllByType('TextField')
+    .map(c => [c.props.label, c]));
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+  // Sin noValidate, el navegador bloquearía el submit antes de mostrar estos errores.
+  assert.equal(formulario().props.noValidate, true);
+  assert.equal(campos()['Comisión'].props.inputProps.step, 0.01);
+  const enviar = () => formulario().props.onSubmit({ preventDefault() {} });
+  const cambiar = async (etiqueta, valor) => {
+    await act(async () => { campos()[etiqueta].props.onChange({ target: { value: valor } }); });
+  };
+
+  await cambiar('Nombre de la campaña', 'Campaña de prueba');
+  await cambiar('Descuento a precio normal', '15');
+  await cambiar('Comisión', '10');
+  await act(async () => enviar());
+
+  assert.equal(campos()['Descuento en oferta'].props.error, true);
+  assert.match(campos()['Descuento en oferta'].props.helperText, /obligatorio/);
+  assert.equal(campos()['Nombre de la campaña'].props.error, false);
+  assert.equal(campos()['Comisión'].props.error, false);
+  assert.equal(campos()['Nombre de la campaña'].props.value, 'Campaña de prueba');
+  assert.equal(campos()['Descuento a precio normal'].props.value, '15');
+  assert.equal(campos()['Comisión'].props.value, '10');
+  assert.match(h.texto(), /Revisa los campos marcados/);
+  assert.equal(creados.length, 0);
+
+  await cambiar('Descuento en oferta', '5');
+  await cambiar('Inicio', '2026-12-01T08:00');
+  await cambiar('Término', '2026-12-15T20:00');
+  assert.equal(campos()['Descuento en oferta'].props.error, false);
+  await cambiar('Comisión', '12.345');
+  await act(async () => enviar());
+  assert.equal(campos()['Comisión'].props.error, true);
+  assert.match(campos()['Comisión'].props.helperText, /dos decimales/);
+  assert.equal(creados.length, 0);
+
+  await cambiar('Comisión', '10');
+  await cambiar('Descuento en oferta', '20');
+  await act(async () => enviar());
+  assert.equal(campos()['Descuento en oferta'].props.error, true);
+  assert.match(campos()['Descuento en oferta'].props.helperText, /no puede superar/);
+  assert.equal(creados.length, 0, 'un descuento en oferta mayor no debe llegar al gateway');
+
+  await cambiar('Descuento en oferta', '5');
+  await cambiar('Inicio', '');
+  await cambiar('Término', '');
+  await act(async () => enviar());
+  assert.equal(campos()['Inicio'].props.error, true);
+  assert.equal(campos()['Término'].props.error, true);
+  assert.equal(creados.length, 0, 'el alta sin vigencia no debe llegar al gateway');
+
+  await cambiar('Inicio', '2026-12-01T08:00');
+  await cambiar('Término', '2026-12-15T20:00');
+  await act(async () => enviar());
+
+  assert.equal(creados.length, 1);
+  assert.equal(creados[0].cafeteriaId, 7);
+  assert.equal(creados[0].form.nombre, 'Campaña de prueba');
+  assert.equal(creados[0].form.descuento_oferta_pct, '5');
 });
