@@ -128,12 +128,19 @@ async function main() {
         sql(fs.readFileSync(path.join(migrations, files[0]), 'utf8'));
       }
       sql(fs.readFileSync(path.join(root, 'database/fixes/exponer_solicitudes_afiliacion.sql'), 'utf8'));
-      if (probarA06) sql(`ALTER TABLE public.cafeterias ADD COLUMN campus_id bigint, ADD COLUMN descripcion text,
+      if (probarA06) {
+        sql(`ALTER TABLE public.cafeterias ADD COLUMN campus_id bigint, ADD COLUMN descripcion text,
         ADD COLUMN hora_apertura time, ADD COLUMN hora_cierre time, ADD COLUMN telefono text, ADD COLUMN imagen_url text;
         UPDATE public.cafeterias SET nombre = CASE id WHEN 7 THEN 'Norte A06' ELSE 'Sur A06' END;
         ALTER TABLE public.cafeterias ENABLE ROW LEVEL SECURITY;
         GRANT SELECT ON public.cafeterias TO anon, authenticated;
-        CREATE POLICY cafeteria_publica ON public.cafeterias FOR SELECT TO anon, authenticated USING (activa);`);
+        CREATE POLICY cafeteria_publica ON public.cafeterias FOR SELECT TO anon, authenticated USING (activa);
+        ALTER TABLE public.pedidos ADD COLUMN estado text NOT NULL DEFAULT 'listo';`);
+        const v12 = await fetch('https://raw.githubusercontent.com/Diego24Vas/db_CoffeeFaster/884f25698e76df7d50a08b8a0d0a81a1059733e9/supabase/migrations/20261118211348_consulta_saldo_afiliado.sql',
+          { signal: AbortSignal.timeout(15000) });
+        assert.equal(v12.status, 200, 'No se pudo leer la migración oficial fijada de V12');
+        sql(await v12.text());
+      }
     }
 
     docker(['run', '-d', '--name', names.auth, '--network', id, '-p', '127.0.0.1::9999',

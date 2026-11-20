@@ -26,10 +26,7 @@ export default function ComisionesAfiliado({ afiliacion, historial }) {
     {!afiliacion.codigo_activo && <Text style={styles.texto}>El código está desactivado. Puedes consultar tus comisiones e historial.</Text>}
     {actual.estado === 'cargando' && <ActivityIndicator accessibilityLabel="Cargando comisiones" />}
     {actual.error ? <Text accessibilityRole="alert" style={styles.error}>{`${actual.error}${actual.filas ? ' Se conserva la última consulta.' : ''}`}</Text> : null}
-    {actual.resumen && <>
-      <Text style={styles.titulo}>{`Saldo de comisiones disponibles: ${pesos(actual.resumen.disponible)}`}</Text>
-      <Text style={styles.texto}>{`Comisiones pendientes: ${pesos(actual.resumen.pendiente)}`}</Text>
-    </>}
+    {actual.resumen && <Text style={styles.texto}>Movimientos de esta afiliación. El saldo total y los retiros se consultan en el resumen de tu cuenta.</Text>}
     {historial && actual.filas && <>
       {actual.filas.length === 0 && <Text style={styles.texto}>Todavía no hay movimientos de comisión registrados.</Text>}
       {[...actual.filas].reverse().map(m => <View key={m.id} style={styles.movimiento}>
@@ -38,7 +35,6 @@ export default function ComisionesAfiliado({ afiliacion, historial }) {
         <Text style={styles.texto}>{new Date(m.creado_en).toLocaleString('es-CL')}</Text>
       </View>)}
     </>}
-    <Text style={styles.texto}>El retiro de comisiones todavía no está disponible.</Text>
     <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Actualizar comisiones de afiliación ${afiliacion.id}`}
       onPress={() => setIntento(valor => valor + 1)} style={styles.boton}>
       <Text style={styles.botonTexto}>Actualizar comisiones</Text>

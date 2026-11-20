@@ -16,6 +16,7 @@ jest.mock('../../lib/supabase', () => {
   return { supabase: {
     auth: { getSession: async () => ({ data: { session: { access_token: token } }, error: null }) },
     from: (...args) => client.from(...args),
+    rpc: (...args) => client.rpc(...args),
   } };
 });
 const integracion = process.env.A06_INTEGRATION_URL ? test : test.skip;
@@ -90,20 +91,58 @@ integracion('A06: solicitud y aprobación reales; desactivar conserva código re
     expect(db).toMatch(/^cf-c03-auth-\d+-\d+-db$/);
     expect(Number.isSafeInteger(solicitud.id)).toBe(true);
     execFileSync('docker', ['exec', '-i', db, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], {
-      input: `INSERT INTO public.pedidos VALUES (1001,7),(1002,7),(1003,7);
+      input: `INSERT INTO public.pedidos(id,cafeteria_id,estado) VALUES (1001,7,'listo'),(1002,7,'entregado'),(1003,7,'entregado');
         INSERT INTO public.movimientos_comision(afiliacion_id,pedido_id,tipo,base_calculo_clp,tasa_comision,monto_clp)
-        VALUES (${solicitud.id},1001,'comision',8500,10,850),
-          (${solicitud.id},1002,'comision',2000,10,200),
-          (${solicitud.id},1003,'comision',3500,10,350);
-        UPDATE public.movimientos_comision SET estado='disponible' WHERE afiliacion_id=${solicitud.id};`,
+        VALUES (${solicitud.id},1001,'comision',5000,10,500),
+          (${solicitud.id},1002,'comision',6000,10,600),
+          (${solicitud.id},1003,'comision',4000,10,400);
+        UPDATE public.movimientos_comision SET estado='disponible' WHERE afiliacion_id=${solicitud.id} AND pedido_id IN (1002,1003);
+        INSERT INTO public.retiros_afiliado(estudiante_id,monto_clp) VALUES (901,300);`,
       encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
     });
     await pulsar('Ganancias');
-    await esperar(() => texto().includes('Saldo de comisiones disponibles: $1.400'));
+    await esperar(() => texto().includes('Saldo disponible para retirar: $700'));
+    expect(texto()).toContain('Comisiones pendientes: $500');
+    expect(texto()).toContain('Comisiones retiradas: $300');
+    expect(texto()).not.toContain('Saldo disponible para retirar: $1.200');
+    const montoRetiro = valor => act(() => tree.root.findAllByType(TextInput)
+      .find(n => n.props.accessibilityLabel === 'Monto del retiro simulado en pesos chilenos').props.onChangeText(valor));
+    montoRetiro('0');
+    await pulsar('Revisar solicitud de retiro simulado');
+    expect(texto()).toContain('mayor que $0');
+    montoRetiro('701');
+    await pulsar('Revisar solicitud de retiro simulado');
+    expect(texto()).toContain('no puede superar tu saldo disponible de $700');
+    montoRetiro('500');
+    await pulsar('Revisar solicitud de retiro simulado');
+    expect(texto()).toContain('Monto válido para revisar: $500');
+    expect(texto()).toContain('Cuenta de prueba CoffeeFast (destino ficticio)');
+    expect(texto()).toContain('todavía no se ha enviado');
+    expect(texto()).toContain('Saldo disponible para retirar: $700');
+    const retiros = execFileSync('docker', ['exec', db, 'psql', '-U', 'postgres', '-At', '-c',
+      'SELECT count(*), sum(monto_clp) FROM public.retiros_afiliado WHERE estudiante_id=901'], { encoding: 'utf8' });
+    expect(retiros.trim()).toBe('1|300');
+    console.log('PASS A11: cero y superior rechazados, $500 válido con destino ficticio; saldo $700 y retiro histórico $300 sin cambios');
+    const saldoPropio = await api('/rest/v1/rpc/consultar_saldo_afiliado', process.env.A06_STUDENT_TOKEN, 'POST', {});
+    expect(saldoPropio).toEqual([{ pendiente_clp: 500, disponible_clp: 700, retirado_clp: 300 }]);
+    const saldoAjeno = await api('/rest/v1/rpc/consultar_saldo_afiliado', process.env.A09_OTHER_STUDENT_TOKEN, 'POST', {});
+    expect(saldoAjeno).toEqual([{ pendiente_clp: 0, disponible_clp: 0, retirado_clp: 0 }]);
+    console.log('PASS A09 antes de entrega controlada: pendiente $500, disponible neto $700, retirado $300; otro estudiante en cero');
+    // Fixture de transición: no se presenta como prueba del trigger V11 de entrega.
+    execFileSync('docker', ['exec', '-i', db, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], {
+      input: `BEGIN; UPDATE public.pedidos SET estado='entregado' WHERE id=1001;
+        UPDATE public.movimientos_comision SET estado='disponible' WHERE afiliacion_id=${solicitud.id} AND pedido_id=1001; COMMIT;`,
+      encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    await pulsar('Actualizar saldo de comisiones');
+    await esperar(() => texto().includes('Saldo disponible para retirar: $1.200'));
+    expect(texto()).toContain('Comisiones pendientes: $0');
+    expect(texto()).toContain('Comisiones retiradas: $300');
+    console.log('PASS A09 después de entrega controlada: pendiente $0, disponible $1.200, retirado $300; RPC oficial V12');
     await api(recurso, process.env.A06_OWNER_TOKEN, 'PATCH', { decision: 'desactivar' });
     await pulsar('Actualizar mis solicitudes');
     await esperar(() => texto().includes('El código está desactivado'));
-    expect(texto()).toContain('Saldo de comisiones disponibles: $1.400');
+    expect(texto()).toContain('Saldo disponible para retirar: $1.200');
     await pulsar('Mis códigos');
     await esperar(() => texto().includes('Código desactivado: ya no se puede usar'));
     expect(texto()).toContain(aprobada.codigo);
@@ -113,8 +152,8 @@ integracion('A06: solicitud y aprobación reales; desactivar conserva código re
     await esperar(() => texto().includes('Comisión · Pedido #1001'));
     expect(texto()).toContain('Comisión · Pedido #1002');
     expect(texto()).toContain('Comisión · Pedido #1003');
-    expect(texto()).toContain('Saldo de comisiones disponibles: $1.400');
-    console.log('PASS A06: tres movimientos con límite de dos filas; código desactivado conserva saldo $1.400 e historial por RLS real');
+    expect(texto()).toContain('Saldo disponible para retirar: $1.200');
+    console.log('PASS A06/A09: tres movimientos con límite de dos filas; código desactivado conserva saldo neto $1.200 e historial por RLS real');
     act(() => tree.unmount()); tree = null;
     await montar();
     await esperar(() => texto().includes('Código desactivado: ya no se puede usar'));
@@ -122,7 +161,7 @@ integracion('A06: solicitud y aprobación reales; desactivar conserva código re
     await esperar(() => texto().includes('Comisión · Pedido #1001'));
     expect(texto()).toContain('Comisión · Pedido #1002');
     expect(texto()).toContain('Comisión · Pedido #1003');
-    expect(texto()).toContain('Saldo de comisiones disponibles: $1.400');
+    expect(texto()).toContain('Saldo disponible para retirar: $1.200');
     if (process.env.A06_FOREIGN_CODE) expect(texto()).not.toContain(process.env.A06_FOREIGN_CODE);
     console.log('PASS A06: reabrir consulta estado, saldo e historial persistidos sin recuperar código activo');
   } finally {
