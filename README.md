@@ -23,7 +23,7 @@ Aplicación full-stack para pedidos anticipados en cafeterías universitarias. P
 │   ├── ms-cafeterias/       # Servicio de cafeterías y catálogo
 │   ├── ms-menus/            # Servicio de menús y productos
 │   ├── ms-pedidos/          # Servicio de pedidos y pagos
-│   ├── ms-afiliados/        # Base del servicio de afiliados
+│   ├── ms-afiliados/        # Campañas y solicitudes de afiliación
 │   ├── shared/              # Librería interna compartida
 │   └── docker-compose.yml   # Orquestación local
 ├── k8s-next/                # Manifiestos Kubernetes (producción)

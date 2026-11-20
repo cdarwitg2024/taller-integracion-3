@@ -144,11 +144,11 @@ async function main() {
     process.env.SUPABASE_URL = `http://127.0.0.1:${supabaseProxy.address().port}`;
     process.env.SUPABASE_PUBLISHABLE_KEY = anon;
     delete process.env.SUPABASE_SERVICE_KEY; delete process.env.SUPABASE_KEY; delete process.env.SUPABASE_ANON_KEY;
-    const app = require(path.join(root, 'Microservices/ms-pedidos/src/app'));
+    const app = require(path.join(root, 'Microservices/ms-afiliados/src/app'));
     server.app = await new Promise(resolve => { const listener = app.listen(0, '0.0.0.0', () => resolve(listener)); });
     // Usa las reglas reales del gateway; solo sustituye los destinos para aislar la prueba.
     let nginx = fs.readFileSync(path.join(root, 'Microservices/gateway/nginx.conf'), 'utf8')
-      .replace(/http:\/\/ms-(pedidos|menus|cafeterias):\d+/g, `http://host.docker.internal:${server.app.address().port}`);
+      .replace(/http:\/\/ms-(afiliados|pedidos|menus|cafeterias):\d+/g, `http://host.docker.internal:${server.app.address().port}`);
     nginx = nginx.replace('  location / {', `  location /auth/v1/ { proxy_pass http://${names.auth}:9999/; }
       location /rest/v1/ { proxy_pass http://${names.rest}:3000/; }
       location / {`);
@@ -158,7 +158,7 @@ async function main() {
       process.env.TEST_GATEWAY_IMAGE || 'nginx:1.27-alpine']);
     const base = `http://127.0.0.1:${portOf(names.gateway, 80)}`;
     await waitFor('Gateway', async () => (await fetch(`${base}/gateway/health`, { signal: AbortSignal.timeout(2000) })).ok);
-    console.log('PREPARADO: gateway nginx y ms-pedidos reales');
+    console.log('PREPARADO: gateway nginx y ms-afiliados reales');
 
     async function call(url, token, method = 'GET', body) {
       const response = await fetch(base + url, { method, headers: {

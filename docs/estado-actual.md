@@ -6,7 +6,7 @@ Revisión documental del 11 de noviembre de 2026. El estado del código y las pr
 
 - Mobile: React Native + Expo. Auth, perfil, wallet, menú con stock, lectura de pedidos/QR y Realtime usan Supabase; cafeterías, creación de pedidos y cambios de estado utilizan el gateway. Cancelación mantiene respaldo a su RPC autenticada. La configuración local apunta al gateway de Compose, no a backend-node.
 - Desktop: React/Vite/Electron. Usa Supabase para lecturas y gestión; estados de pedidos y validación QR se envían al gateway.
-- Gateway Nginx: /api/cafeterias → ms-cafeterias:3002; /api/menus → ms-menus:3003; /api/pedidos y /api/afiliados → ms-pedidos:3005. POST /api/menus/precios es interno y está bloqueado en el gateway.
+- Gateway Nginx en el código: `/api/cafeterias` → ms-cafeterias:3002, `/api/menus` → ms-menus:3003, `/api/pedidos` → ms-pedidos:3005 y `/api/afiliados` → ms-afiliados:3006. El gateway bloquea el acceso externo a `POST /api/menus/precios`.
 - `backend-node` sigue presente como servidor legacy y conserva el cliente de inventario anterior.
 - Se retiraron de backend-node el catálogo duplicado, sus dos mocks exclusivos y el endpoint de pago no implementado. Se conserva lo que aún tiene dependencias legacy; ver [alcance del retiro](backend-node/guias/README.md).
 - `BotTelegramCoffeFaster` es un servicio separado para alertas de stock.

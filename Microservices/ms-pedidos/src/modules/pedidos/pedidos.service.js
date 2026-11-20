@@ -12,7 +12,7 @@
 // historico a la interfaz plana: `shared` exporta `supabase`, `httpClient` y
 // `HttpError` de forma estable (ver shared/src/index.js).
 const { supabase, httpClient, HttpError } = require('@coffeefaster/shared');
-const crearClienteAutenticado = require('../../cliente-autenticado');
+const crearClienteAutenticado = require('@coffeefaster/shared/src/cliente-autenticado');
 const {
   normalizarEstado,
   puedeTransicionar,

@@ -28,6 +28,8 @@ services:
         condition: service_healthy
       ms-pedidos:
         condition: service_healthy
+      ms-afiliados:
+        condition: service_healthy
     networks:
       - cf-ms
 
@@ -111,7 +113,6 @@ services:
 
   # ------------------------------------------------------------- ms-afiliados
   ms-afiliados:
-    profiles: [afiliados]
     build:
       context: .
       dockerfile: ms-afiliados/Dockerfile
@@ -119,6 +120,10 @@ services:
     restart: unless-stopped
     environment:
       PORT: 3006
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:${MS_AFILIADOS_PORT:-3006}:3006"
     healthcheck:

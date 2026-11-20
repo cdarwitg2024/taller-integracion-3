@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-afiliados
+  namespace: student-cdarwitg
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-afiliados
+  template:
+    metadata:
+      labels:
+        app: ms-afiliados
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: ms-afiliados
+          # Sustituir por el digest de la publicación antes de aplicar.
+          image: cdarwitg2024/ms-afiliados:release
+          ports:
+            - name: http
+              containerPort: 3006
+          env:
+            - name: SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: coffeesecret-supabase
+                  key: SUPABASE_URL
+            - name: SUPABASE_PUBLISHABLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: coffeesecret-supabase
+                  key: SUPABASE_PUBLISHABLE_KEY
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 150m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ['ALL']

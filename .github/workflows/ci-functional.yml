@@ -117,7 +117,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - run: npm ci --prefix Microservices/ms-pedidos
-      - run: ln -s ../ms-pedidos/node_modules Microservices/shared/node_modules
+      - run: npm ci --prefix Microservices/ms-afiliados
+      - run: ln -s ../ms-afiliados/node_modules Microservices/shared/node_modules
       - name: C03 through gateway, real Auth JWTs, PostgREST, RPC and RLS
         run: node .github/scripts/test-afiliados-auth-integration.cjs
