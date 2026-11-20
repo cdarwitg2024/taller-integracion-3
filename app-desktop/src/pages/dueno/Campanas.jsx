@@ -32,6 +32,27 @@ const porcentaje = (valor) => (valor === '' || valor === null || valor === undef
 const fecha = (iso) => (iso ? new Date(iso).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' }) : 'Sin límite');
 // Texto legible del estado de la campaña.
 const estadoTexto = (campana) => (campana?.estado ? String(campana.estado) : 'sin estado');
+// Acción de estado permitida por la RPC: solo activa/aceptada se pausan y solo pausada se activa.
+function accionEstado(campana) {
+  if (!campana || campana.estado === 'finalizada') return null;
+  // La RPC exige aceptación vigente para reactivar; sin ella la campaña quedaría atrapada en pausada.
+  const version = String(campana.version_confirmada || '').trim();
+  if (!campana.confirmada_por_dueno || !version
+    || version !== String(campana.version_condiciones || '').trim()) return null;
+  const db = String(campana.estado_db || '').toLowerCase();
+  if (db === 'pausada') return 'activar';
+  if (db === 'activa' || db === 'aceptada') return 'pausar';
+  return null;
+}
+
+// Botón de cambio de estado; no se renderiza cuando la campaña no admite la acción.
+function BotonEstado({ campana, onCambiarEstado, size }) {
+  const accion = accionEstado(campana);
+  if (!accion) return null;
+  return <Button size={size} onClick={() => onCambiarEstado(campana, accion)}>
+    {accion === 'pausar' ? 'Pausar' : 'Activar'}
+  </Button>;
+}
 
 // Convierte una fecha ISO al valor local que espera <input type="datetime-local">.
 const paraInput = (iso) => {
@@ -100,6 +121,22 @@ function Campanas({ currentUser }) {
     volverAlListado();
   };
 
+  // Pausa o reactiva una campaña y recarga el listado de la cafetería activa.
+  const cambiarEstado = async (campana, accion) => {
+    const origen = cafeteriaId;
+    if (origen !== cafeteriaActual.current) return;
+    try {
+      await campanasAfiliados.cambiarEstado(origen, campana.id, accion === 'pausar');
+    } catch (err) {
+      if (origen !== cafeteriaActual.current) return;
+      setListado(prev => (prev.cafeteriaId === origen
+        ? { ...prev, error: err.message || 'No se pudo cambiar el estado de la campaña.' }
+        : prev));
+      return;
+    }
+    await cargar();
+  };
+
   // Resuelve las rutas que dependen del listado: carga, error con reintento o
   // contenido. Solo tras una carga exitosa se puede hablar de campaña inexistente.
   const detalle = (contenido) => {
@@ -122,7 +159,7 @@ function Campanas({ currentUser }) {
     <Routes>
       <Route index element={
         <Listado campanas={campanas} loading={loading} error={error} cafeteriaId={cafeteriaId}
-          onReintentar={cargar} onNueva={() => navigate(`${LISTADO}/nueva`)}
+          onReintentar={cargar} onNueva={() => navigate(`${LISTADO}/nueva`)} onCambiarEstado={cambiarEstado}
           onResumen={(c) => navigate(`${LISTADO}/${c.id}`)} onEditar={(c) => navigate(`${LISTADO}/${c.id}/editar`)} />
       } />
       <Route path="nueva" element={
@@ -134,7 +171,7 @@ function Campanas({ currentUser }) {
           onGuardado={guardarYVolver} />
       )} />
       <Route path=":id" element={detalle(
-        <Resumen campanas={campanas} onVolver={volverAlListado}
+        <Resumen campanas={campanas} onVolver={volverAlListado} onCambiarEstado={cambiarEstado}
           onEditar={(c) => navigate(`${LISTADO}/${c.id}/editar`)} />
       )} />
     </Routes>
@@ -147,7 +184,7 @@ function Cargando() {
 }
 
 // Listado de campañas con estados de carga, error y vacío.
-function Listado({ campanas, loading, error, cafeteriaId, onReintentar, onNueva, onResumen, onEditar }) {
+function Listado({ campanas, loading, error, cafeteriaId, onReintentar, onNueva, onResumen, onEditar, onCambiarEstado }) {
   return (
     <Box>
       <PageHeader
@@ -194,6 +231,7 @@ function Listado({ campanas, loading, error, cafeteriaId, onReintentar, onNueva,
               <Stack direction="row" spacing={1} justifyContent="flex-end">
                 <Button size="small" onClick={() => onResumen(c)}>Ver resumen</Button>
                 <Button size="small" onClick={() => onEditar(c)}>Editar</Button>
+                <BotonEstado campana={c} onCambiarEstado={onCambiarEstado} size="small" />
               </Stack>
             </Paper>
           ))}
@@ -299,7 +337,7 @@ function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
 }
 
 // Resumen de solo lectura de una campaña del listado.
-function Resumen({ campanas, onVolver, onEditar }) {
+function Resumen({ campanas, onVolver, onEditar, onCambiarEstado }) {
   const { id } = useParams();
   const campana = campanas.find(c => String(c.id) === String(id));
   if (!campana) {
@@ -325,7 +363,10 @@ function Resumen({ campanas, onVolver, onEditar }) {
           <Typography>Comisión del afiliado: <strong>{porcentaje(campana.comision_pct)}</strong></Typography>
           <Typography>Inicio: {fecha(campana.inicio)}</Typography>
           <Typography>Término: {fecha(campana.fin)}</Typography>
-          <Stack direction="row" justifyContent="flex-end"><Button onClick={() => onEditar(campana)}>Editar campaña</Button></Stack>
+          <Stack direction="row" justifyContent="flex-end">
+            <Button onClick={() => onEditar(campana)}>Editar campaña</Button>
+            <BotonEstado campana={campana} onCambiarEstado={onCambiarEstado} />
+          </Stack>
         </Stack>
       </Paper>
     </Box>
