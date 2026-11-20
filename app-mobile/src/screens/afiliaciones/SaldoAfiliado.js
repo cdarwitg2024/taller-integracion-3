@@ -3,6 +3,7 @@ import { ActivityIndicator, Text, TouchableOpacity, View, StyleSheet } from 'rea
 import { consultarSaldoAfiliado } from '../../services/saldoAfiliado';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
+import SolicitudRetiroSimulado from './SolicitudRetiroSimulado';
 const pesos = valor => `${valor < 0 ? '-' : ''}$${Math.abs(valor).toLocaleString('es-CL')}`;
 
 export default function SaldoAfiliado({ revision, vista }) {
@@ -35,7 +36,7 @@ export default function SaldoAfiliado({ revision, vista }) {
       <Text style={styles.texto}>{`Comisiones retiradas: ${pesos(datos.saldo.retirado_clp)}`}</Text>
     </View>}
     <Text style={styles.texto}>Las comisiones pendientes no están disponibles para retiro. El disponible ya descuenta los retiros confirmados.</Text>
-    <Text style={styles.texto}>La operación de retirar comisiones todavía no está habilitada en esta pantalla.</Text>
+    {datos.saldo && <SolicitudRetiroSimulado disponible={datos.saldo.disponible_clp} confirmado={datos.estado === 'listo'} />}
     {!datos.prohibido && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Actualizar saldo de comisiones"
       disabled={datos.estado === 'cargando'} accessibilityState={{ disabled: datos.estado === 'cargando', busy: datos.estado === 'cargando' }}
       onPress={() => setIntento(valor => valor + 1)} style={styles.boton}>

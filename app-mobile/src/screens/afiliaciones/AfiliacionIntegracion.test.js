@@ -105,6 +105,24 @@ integracion('A06: solicitud y aprobación reales; desactivar conserva código re
     expect(texto()).toContain('Comisiones pendientes: $500');
     expect(texto()).toContain('Comisiones retiradas: $300');
     expect(texto()).not.toContain('Saldo disponible para retirar: $1.200');
+    const montoRetiro = valor => act(() => tree.root.findAllByType(TextInput)
+      .find(n => n.props.accessibilityLabel === 'Monto del retiro simulado en pesos chilenos').props.onChangeText(valor));
+    montoRetiro('0');
+    await pulsar('Revisar solicitud de retiro simulado');
+    expect(texto()).toContain('mayor que $0');
+    montoRetiro('701');
+    await pulsar('Revisar solicitud de retiro simulado');
+    expect(texto()).toContain('no puede superar tu saldo disponible de $700');
+    montoRetiro('500');
+    await pulsar('Revisar solicitud de retiro simulado');
+    expect(texto()).toContain('Monto válido para revisar: $500');
+    expect(texto()).toContain('Cuenta de prueba CoffeeFast (destino ficticio)');
+    expect(texto()).toContain('todavía no se ha enviado');
+    expect(texto()).toContain('Saldo disponible para retirar: $700');
+    const retiros = execFileSync('docker', ['exec', db, 'psql', '-U', 'postgres', '-At', '-c',
+      'SELECT count(*), sum(monto_clp) FROM public.retiros_afiliado WHERE estudiante_id=901'], { encoding: 'utf8' });
+    expect(retiros.trim()).toBe('1|300');
+    console.log('PASS A11: cero y superior rechazados, $500 válido con destino ficticio; saldo $700 y retiro histórico $300 sin cambios');
     const saldoPropio = await api('/rest/v1/rpc/consultar_saldo_afiliado', process.env.A06_STUDENT_TOKEN, 'POST', {});
     expect(saldoPropio).toEqual([{ pendiente_clp: 500, disponible_clp: 700, retirado_clp: 300 }]);
     const saldoAjeno = await api('/rest/v1/rpc/consultar_saldo_afiliado', process.env.A09_OTHER_STUDENT_TOKEN, 'POST', {});

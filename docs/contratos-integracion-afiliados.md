@@ -68,6 +68,16 @@ Ver [A06](mobile/validacion/A06-Solicitudes-aprobacion.md) para paginación,
 comprobaciones del historial y [A09](mobile/validacion/A09-Comisiones-saldo-disponible.md)
 para el saldo V12, sus dependencias y el alcance de la transición de entrega controlada.
 
+### Captura local de retiro simulado (A11)
+
+A11 permite preparar un monto entero positivo en CLP, no superior al
+`disponible_clp` confirmado de V12. Muestra como destino de prueba
+«Cuenta de prueba CoffeeFast (destino ficticio)», de solo lectura y sin
+campos bancarios. No establece un contrato HTTP de retiro ni genera un
+comprobante: revisar el formulario no envía, reserva o descuenta saldo.
+La validación local deberá complementarse con la revalidación del servidor
+cuando se integre la operación de retiro. [Registro A11](mobile/validacion/A11-Solicitud-retiro-simulado.md).
+
 ## 3. Cotización y compra
 
 Ana envía su sesión desde móvil. La cotización calcula el precio vigente sin cobrar ni consumir el beneficio.
