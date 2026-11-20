@@ -1,6 +1,6 @@
 # Estado actual de CoffeeFast
 
-Revisión documental del 11 de noviembre de 2026. El estado del código y las pruebas locales se contrastó con el repositorio. El módulo de campañas de afiliados se añadió el 15 de noviembre y se corrigió el 16 de noviembre. Las observaciones de Cloud y Kubernetes conservan la fecha de su verificación.
+Revisión documental del 11 de noviembre de 2026. El estado del código y las pruebas locales se contrastó con el repositorio. El módulo de campañas de afiliados se añadió el 15 de noviembre y se corrigió el 16 de noviembre; la gestión de solicitudes E10 se registró el 20 de noviembre. Las observaciones de Cloud y Kubernetes conservan la fecha de su verificación.
 
 ## Arquitectura
 
@@ -24,6 +24,7 @@ Revisión documental del 11 de noviembre de 2026. El estado del código y las pr
 | Campañas activas móvil (A03) | Conectadas a C04 con campos oficiales, selección por cafetería, filtro de vigencia, vacío y descarte de respuestas atrasadas. Pantalla comprobada con campañas persistidas activa/pausada/vencida, JWT real, gateway y PostgreSQL desechables el 18 de noviembre. [Pruebas y alcance](mobile/validacion/A03-Campanas-activas.md) | Prueba visual del APK; Mis códigos y Ganancias conservan el alcance de A02 |
 | Condiciones de campaña móvil (A04) | Despliegue dentro de Oportunidades con beneficio del comprador, comisión al entregar, reglas de elegibilidad y ejemplo calculado con tasas de C04. [Registro reproducible](mobile/validacion/A04-Condiciones-campana-carrito.md) | Elegibilidad personal y cotización/persistencia de beneficios corresponden a tareas posteriores; prueba visual en emulador pendiente |
 | Acceso Afiliados (V01) | Menú y ruta protegida del dueño; contexto desde el perfil y aviso sin asignación. [Pruebas locales](desktop/validacion/V01-CAM-223-Acceso-Afiliados.md) | Listados, formularios y gestión de solicitudes en tareas posteriores |
+| Aprobación de afiliados (E10) | Solicitudes por campaña con comisión vigente, filtro local por estado, aprobación con código opcional, rechazo y desactivación contra C05; paginación por cursor, reintento y descarte de respuestas atrasadas. [Pruebas y alcance](desktop/validacion/E10-Aprobar-afiliados-y-gestionar-codigos.md) | Integración HTTP C05 en entorno desechable y revisión visual en navegador/Electron; `reenviar-aviso` no existe en el código |
 | Campañas de afiliados (E03/E04/E06) | Vista de listado, formulario y resumen en `/dueno/afiliados/campanas`, con el contexto de cafetería del perfil, descarte de respuestas y guardados atrasados, reinicio del formulario al cambiar de cafetería y error de carga con reintento. E04 conserva el listado ligado a la cafetería vigente durante cambios de contexto con solicitudes pendientes. E06 acredita el alta y la edición del servicio de escritorio contra gateway, Auth, RPC y RLS reales en contenedores desechables. [Pruebas E03](desktop/validacion/E03-CAM-290-Vista-Campanas.md), [E04](desktop/validacion/E04-CAM-225-Cambio-Cafeteria-Campanas.md) y [E06](desktop/validacion/E06-Conexion-alta-y-edicion-campanas.md) | Activación y pausa desde la interfaz (E07) y ajuste de guardado (E08) |
 | Dashboard | Indicadores y ranking sin filtro diario; solo ventas por hora usa hoy. Realtime y respaldo cada 10 s | Comprobar con usuarios del entorno definitivo |
 | Stock manual | UPDATE real, alcance por cafetería y comprobación de stock anterior en los formularios afectados | No se modificaron existencias Cloud para probarlo |
@@ -54,7 +55,7 @@ El aviso de voz se dispara por un pedido nuevo recibido por Realtime con voz act
 ## Últimas validaciones registradas
 
 - Mobile: 68 pruebas en 11 suites, con regresiones de sesión vencida y recuperación de pedidos. Las lecturas reintentan una vez tras renovar el JWT. El flujo de compra y cancelación conserva sus llamadas de escritura sin reintento automático por vencimiento.
-- Desktop: 103 pruebas locales, incluidas 33 de campañas y 26 del KDS (24 de cambio de cafetería y 2 de reintentos) añadidas en E04. Backend legacy: 36 pruebas vigentes aprobadas. Microservicios: 214, además de 5 de shared. Telegram: 11, incluida una integración con PostgreSQL.
+- Desktop: 118 pruebas locales, incluidas 33 de campañas, 26 del KDS (24 de cambio de cafetería y 2 de reintentos) añadidas en E04 y 12 de gestión de solicitudes añadidas en E10. Backend legacy: 36 pruebas vigentes aprobadas. Microservicios: 214, además de 5 de shared. Telegram: 11, incluida una integración con PostgreSQL.
 - PostgreSQL aislado: 18 escenarios de compra, cancelación y concurrencia. Catálogo: 7 escenarios HTTP con PostgREST y PostgreSQL. Las pruebas detectaron 11 defectos introducidos en copias temporales.
 - La ejecución en GitHub Actions, la prueba manual de retiro y la cobertura completa de Supabase Auth/RLS se verifican por separado. Ver [evidencia y alcance](calidad/validacion/revision-pruebas.md).
 
