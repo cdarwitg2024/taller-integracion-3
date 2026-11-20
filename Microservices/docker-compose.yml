@@ -109,6 +109,27 @@ services:
     networks:
       - cf-ms
 
+  # ------------------------------------------------------------- ms-afiliados
+  ms-afiliados:
+    profiles: [afiliados]
+    build:
+      context: .
+      dockerfile: ms-afiliados/Dockerfile
+    image: coffeefaster/ms-afiliados:local
+    restart: unless-stopped
+    environment:
+      PORT: 3006
+    ports:
+      - "127.0.0.1:${MS_AFILIADOS_PORT:-3006}:3006"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3006/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - cf-ms
+
 networks:
   cf-ms:
     driver: bridge

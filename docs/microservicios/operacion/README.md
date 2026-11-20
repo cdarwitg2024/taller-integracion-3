@@ -32,6 +32,18 @@ en Docker contra el Supabase local del host.
 
 ## Levantar
 
+La base de `ms-afiliados` usa Express y Node.js 22. Para probar su arranque,
+ejecuta desde `Microservices`:
+
+```bash
+docker compose up --build -d ms-afiliados
+curl http://127.0.0.1:3006/health
+```
+
+Compose incluye el servicio en el perfil opcional `afiliados`. El puerto local
+se puede configurar con `MS_AFILIADOS_PORT`. Durante esta etapa el gateway
+sirve `/api/afiliados` desde `ms-pedidos`.
+
 ```bash
 cd Microservices
 cp .env.example .env      # y poner SUPABASE_SERVICE_KEY (ver abajo)
