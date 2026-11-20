@@ -48,19 +48,25 @@ Los dos listados devuelven hasta 100 solicitudes por página, en orden descenden
 
 El formulario de «Promocionar» exige una explicación y admite un enlace público opcional. Si el dueño invita a alguien, esa persona usa el mismo formulario. Una campaña admite varios afiliados con sus propios códigos. El dueño asigna el código al aprobar y el servidor comprueba su unicidad en todo CoffeeFast. Una aprobación guarda el código en el perfil y dispara el aviso por correo. Si falla el correo, el código sigue visible y el dueño puede reenviar el aviso. Una aprobación anticipada permite compartir el código, con canje desde el inicio y mientras la campaña esté activa.
 
-### Lectura del panel móvil A06
+### Lectura del panel móvil A06/A09
 
 C05 devuelve solicitudes y códigos, no saldo ni historial financiero. El panel
 móvil consulta `public.movimientos_comision` con la sesión Supabase del usuario,
 de acuerdo con el permiso SELECT y RLS de V04 (`0020`). Filtra la afiliación
 aprobada devuelta por C05, incluso si `codigo_activo` pasa a `false`.
-El saldo disponible suma comisiones con estado `disponible`; las pendientes se
-presentan aparte. Las revertidas y sus compensaciones quedan en el historial,
-sin sumar un crédito o descontarlo dos veces. No existe una operación de retiro
-en este contrato y A06 no modifica importes ni la Wallet.
+Las revertidas y sus compensaciones quedan en el historial sin sumar un crédito
+o descontarlo dos veces. El resumen de A09 usa la RPC oficial V12
+`consultar_saldo_afiliado()` con ese mismo JWT, sin parámetros de identidad.
+Devuelve `pendiente_clp`, `disponible_clp` y `retirado_clp` para todas las
+afiliaciones del estudiante en una instantánea. El disponible ya resta los
+retiros confirmados; el móvil no los descuenta nuevamente ni añade pendientes.
+Requiere instalar la migración V12 del [commit oficial 884f256](https://github.com/Diego24Vas/db_CoffeeFaster/commit/884f25698e76df7d50a08b8a0d0a81a1059733e9)
+en el entorno de destino. No hay fallback a sumas locales si la RPC falta.
+No se implementa una operación de retiro en esta pantalla ni se modifica la Wallet.
 
 Ver [A06](mobile/validacion/A06-Solicitudes-aprobacion.md) para paginación,
-comprobaciones y alcance de la prueba con RLS real.
+comprobaciones del historial y [A09](mobile/validacion/A09-Comisiones-saldo-disponible.md)
+para el saldo V12, sus dependencias y el alcance de la transición de entrega controlada.
 
 ## 3. Cotización y compra
 

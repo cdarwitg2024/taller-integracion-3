@@ -6,6 +6,9 @@ import MisAfiliacionesScreen from './MisAfiliacionesScreen';
 import Header from '../components/Header';
 import Button from '../components/Button';
 import { supabase } from '../lib/supabase';
+jest.mock('../services/saldoAfiliado', () => ({
+  consultarSaldoAfiliado: jest.fn(async () => ({ pendiente_clp: 0, disponible_clp: 0, retirado_clp: 0 })),
+}));
 
 jest.mock('../lib/supabase', () => ({
   supabase: { from: jest.fn(), channel: jest.fn(), removeChannel: jest.fn() },
@@ -159,7 +162,7 @@ test.each([
     expect(textoVisible()).toContain('Cuenta activa: Estudiante');
     expect(textoVisible()).toContain(contenido);
     expect(textoVisible()).toContain(nombre === 'Oportunidades'
-      ? 'Elige una cafetería' : nombre === 'Mis códigos' ? 'CF-PRUEBA-PERFIL' : 'Saldo de comisiones disponibles');
+      ? 'Elige una cafetería' : nombre === 'Mis códigos' ? 'CF-PRUEBA-PERFIL' : 'Saldo disponible para retirar');
     const header = tree.root.findByType(Header);
     expect(header.findByType(TouchableOpacity).props.accessibilityLabel).toBe('Volver a Mis afiliaciones');
     await act(async () => header.findByType(TouchableOpacity).props.onPress());
