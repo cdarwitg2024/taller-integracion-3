@@ -10,6 +10,7 @@ import { crearPedidoDesdeCarrito } from '../services/crearPedidoDesdeCarrito';
 import { apiPost } from '../services/backendClient';
 
 jest.mock('../services/backendClient', () => ({ apiPost: jest.fn() }));
+jest.mock('../services/intentoCompra', () => ({ obtenerClaveIntentoCompra: async () => 'intento-prueba' }));
 const producto = (cafeteriaId = 7) => ({
   id: cafeteriaId * 10, cafeteriaId, name: 'Café de prueba', price: 10000, quantity: 1,
 });
@@ -20,7 +21,7 @@ function CarritoActivo({ visible }) {
   estado = useCart();
   return visible ? <CartScreen cart={estado.cart} codigo={estado.codigo}
     onCodigoChange={estado.setCodigo} idCarrito={estado.idCarrito}
-    onCheckout={(retiro) => crearPedidoDesdeCarrito(estado.cafeteriaId, estado.cart, retiro, 15000)} /> : null;
+    onCheckout={(retiro) => crearPedidoDesdeCarrito(estado.cafeteriaId, estado.cart, retiro, 15000, 'comprador-prueba')} /> : null;
 }
 const vista = (visible = true) => <CartProvider><CarritoActivo visible={visible} /></CartProvider>;
 const texto = () => tree.root.findAllByType(Text).flatMap(nodo => nodo.props.children).join(' ');
@@ -49,7 +50,7 @@ test('salir y volver conserva el código y la cotización del carrito activo', (
   expect(tree.root.findByType(Input).props.value).toBe('NORTE');
 });
 
-test('cambiar de cafetería limpia código, entrada y cotización antes del checkout', () => {
+test('cambiar de cafetería limpia código, entrada y cotización antes del checkout', async () => {
   aplicarCodigo();
   cotizar();
   act(() => estado.setCart([producto(12)]));
@@ -59,7 +60,8 @@ test('cambiar de cafetería limpia código, entrada y cotización antes del chec
   expect(tree.root.findByType(Input).props.value).toBe('');
   expect(texto()).toContain('Sin código seleccionado');
   act(() => tree.root.findByProps({ accessibilityLabel: 'Retirar lo antes posible' }).props.onPress());
-  pulsar('Proceder al Pago');
+  await act(async () => tree.root.findAllByType(Button)
+    .find(nodo => nodo.props.title === 'Proceder al Pago').props.onPress());
   expect(apiPost.mock.calls[0][1]).toMatchObject({ cafeteria_id: 12 });
   expect(apiPost.mock.calls[0][1]).not.toHaveProperty('codigo');
 });

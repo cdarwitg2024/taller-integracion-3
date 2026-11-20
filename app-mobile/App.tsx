@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
@@ -30,6 +30,7 @@ import { CartProvider, useCart } from './src/context/CartContext';
 import { useCartTotals } from './src/hooks/useCartTotals';
 import { ApiError } from './src/services/backendClient';
 import { crearPedidoDesdeCarrito, RetiroCheckout } from './src/services/crearPedidoDesdeCarrito';
+import { reiniciarIntentoCompra } from './src/services/intentoCompra';
 import {
   evaluarDisponibilidad,
   mensajeProblemas,
@@ -140,7 +141,7 @@ function AppContent() {
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
-  const { cart, setCart, clearCart, hydrated, codigo, setCodigo, idCarrito } = useCart() as {
+  const { cart, setCart, clearCart: vaciarCarrito, hydrated, codigo, setCodigo, idCarrito } = useCart() as {
     cart: CartItem[];
     setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
     clearCart: () => void;
@@ -150,6 +151,15 @@ function AppContent() {
     idCarrito: number;
   };
   const [paying, setPaying] = useState(false);
+  const checkoutEnCurso = useRef(false);
+  const finalizarPago = () => { checkoutEnCurso.current = false; setPaying(false); };
+  const clearCart = () => {
+    if (session?.user.id) {
+      void reiniciarIntentoCompra(session.user.id).catch(() =>
+        console.warn('No se pudo limpiar el intento de compra local.'));
+    }
+    vaciarCarrito();
+  };
   const [pedidoConfirmado, setPedidoConfirmado] = useState<PedidoConfirmado | null>(null);
 
   useEffect(() => {
@@ -429,6 +439,10 @@ function AppContent() {
   };
 
   const decreaseQuantity = (id: number) => {
+    if (cart.length === 1 && cart[0].id === id && cart[0].quantity === 1) {
+      clearCart();
+      return;
+    }
     setCart((currentCart: CartItem[]) =>
       currentCart
         .map((item) =>
@@ -439,6 +453,10 @@ function AppContent() {
   };
 
   const removeFromCart = (id: number) => {
+    if (cart.length === 1 && cart[0].id === id) {
+      clearCart();
+      return;
+    }
     setCart((currentCart: CartItem[]) =>
       currentCart.filter((item) => item.id !== id)
     );
@@ -496,10 +514,9 @@ function AppContent() {
       return;
     }
 
-    // Guardia de reentrada: dos toques antes de que resuelva el `POST
-    // /api/pedidos` intentarian cobrar dos veces. El UNIQUE en pagos.pedido_id
-    // es la red real, pero esto evita siquiera intentarlo.
-    if (paying) return;
+    // La referencia bloquea otro toque incluso antes del siguiente render.
+    if (checkoutEnCurso.current) return;
+    checkoutEnCurso.current = true;
     setPaying(true);
 
     // Revalidación no destructiva del carrito antes de pagar.
@@ -519,7 +536,7 @@ function AppContent() {
             'No se pudo verificar disponibilidad',
             'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
           );
-          setPaying(false);
+          finalizarPago();
           return;
         }
 
@@ -527,7 +544,7 @@ function AppContent() {
 
         if (issues.length > 0) {
           Alert.alert('Hay cambios en la disponibilidad', mensajeProblemas(issues));
-          setPaying(false);
+          finalizarPago();
           return;
         }
       }
@@ -537,7 +554,7 @@ function AppContent() {
         'No se pudo verificar disponibilidad',
         'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
       );
-      setPaying(false);
+      finalizarPago();
       return;
     }
 
@@ -548,7 +565,7 @@ function AppContent() {
       // `procesar_pago` lo recalcula desde productos.precio: si se enviara,
       // un cliente podria pagar $100 un sándwich de $2.000.
       const respuesta = await crearPedidoDesdeCarrito<RespuestaCrearPedido | null>(
-        cafeteriaId, cart, franjaRetiro, TIMEOUT_CREAR_PEDIDO_MS
+        cafeteriaId, cart, franjaRetiro, TIMEOUT_CREAR_PEDIDO_MS, session.user.id
       );
 
       // El backend responde HTTP 201 con `{ ok: true, pedido: <retorno de
@@ -641,7 +658,7 @@ function AppContent() {
           : 'Ocurrio un error inesperado. Intentalo nuevamente.'
       );
     } finally {
-      setPaying(false);
+      finalizarPago();
     }
   };
 
