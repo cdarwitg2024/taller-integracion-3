@@ -1,8 +1,9 @@
 import React from 'react';
-import { AppState, Text, TextInput, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, AppState, Text, TextInput, TouchableOpacity } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import MisAfiliacionesScreen from '../MisAfiliacionesScreen';
 import { consultarAfiliaciones, solicitarAfiliacion, consultarMovimientosComision } from '../../services/afiliaciones';
+import { listarCampanasActivas } from '../../services/campanasAfiliados';
 
 jest.mock('../../lib/supabase', () => ({ supabase: { auth: {}, from: jest.fn() } }));
 jest.mock('../../services/afiliaciones', () => ({
@@ -161,6 +162,8 @@ test('solicitud con plan obligatorio, bloqueo de doble envío y estado pendiente
   await act(async () => { void enviar(); void enviar(); });
   expect(solicitarAfiliacion).toHaveBeenCalledTimes(1);
   expect(solicitarAfiliacion).toHaveBeenCalledWith(7, 31, 'Compartiré un video', '');
+  expect(tree.root.findAllByType(ActivityIndicator).some(n => n.props.accessibilityLabel === 'Enviando solicitud de afiliación')).toBe(true);
+  expect(texto()).toContain('Campaña Norte');
   perfil = [pendiente];
   await act(async () => envio.resolve(pendiente));
   expect(texto()).toContain('Solicitud pendiente');
@@ -177,4 +180,83 @@ test('otra cuenta no recibe respuestas pendientes de la cuenta anterior', async 
   await act(async () => anterior.resolve([{ ...aprobada, codigo: 'CF-CUENTA-A' }]));
   expect(texto()).toContain('CF-CUENTA-B');
   expect(texto()).not.toContain('CF-CUENTA-A');
+});
+
+test('carga inicial y lista vacía son estados distintos y no envían solicitudes', async () => {
+  const carga = diferida();
+  consultarAfiliaciones.mockReturnValueOnce(carga.promise);
+  await montar();
+  expect(texto()).toContain('Actualizando el estado de tus solicitudes');
+  expect(texto()).not.toContain('Todavía no tienes solicitudes');
+  await act(async () => carga.resolve([]));
+  expect(texto()).toContain('Todavía no tienes solicitudes de afiliación');
+  expect(texto()).not.toContain('No pudimos actualizar');
+  expect(boton('Oportunidades')).toBeDefined();
+  expect(solicitarAfiliacion).not.toHaveBeenCalled();
+});
+
+test.each([0, 503])('fallo de solicitud HTTP %s conserva campañas y campos; el reintento usa el mismo alcance', async status => {
+  solicitarAfiliacion.mockRejectedValueOnce(Object.assign(new Error('fallo controlado'), { status }))
+    .mockResolvedValueOnce(pendiente);
+  await montar();
+  await pulsar('Oportunidades');
+  await pulsar('Ver campañas de Norte');
+  await pulsar('Solicitar afiliación a Campaña Norte');
+  act(() => {
+    tree.root.findAllByType(TextInput).find(n => n.props.accessibilityLabel === 'Plan de promoción').props.onChangeText('Video para Norte');
+    tree.root.findAllByType(TextInput).find(n => n.props.accessibilityLabel === 'Enlace público opcional').props.onChangeText('https://example.test/norte');
+  });
+  await pulsar('Enviar solicitud de afiliación');
+  expect(texto()).toContain('No pudimos confirmar el envío');
+  expect(texto()).toContain('Campaña Norte');
+  expect(tree.root.findAllByType(TextInput).map(n => n.props.value)).toEqual(['Video para Norte', 'https://example.test/norte']);
+  expect(listarCampanasActivas).toHaveBeenCalledTimes(1);
+  expect(solicitarAfiliacion).toHaveBeenCalledTimes(1);
+  perfil = [pendiente];
+  await pulsar('Reintentar solicitud de afiliación');
+  expect(solicitarAfiliacion.mock.calls).toEqual([
+    [7, 31, 'Video para Norte', 'https://example.test/norte'],
+    [7, 31, 'Video para Norte', 'https://example.test/norte'],
+  ]);
+  expect(texto()).toContain('Solicitud pendiente');
+  expect(texto()).toContain('Campaña Norte');
+  expect(listarCampanasActivas).toHaveBeenCalledTimes(1);
+});
+
+test('si falla la consulta posterior al alta, actualizar solo consulta y no repite el POST', async () => {
+  solicitarAfiliacion.mockResolvedValueOnce(pendiente);
+  await montar();
+  await pulsar('Oportunidades');
+  await pulsar('Ver campañas de Norte');
+  await pulsar('Solicitar afiliación a Campaña Norte');
+  act(() => tree.root.findAllByType(TextInput).find(n => n.props.accessibilityLabel === 'Plan de promoción').props.onChangeText('Video para Norte'));
+  consultarAfiliaciones.mockRejectedValueOnce(Object.assign(new Error('sin red'), { status: 0 }));
+  await pulsar('Enviar solicitud de afiliación');
+  expect(texto()).toContain('No pudimos actualizar tus solicitudes');
+  expect(texto()).toContain('Se conserva la última consulta');
+  expect(texto()).toContain('Solicitud pendiente');
+  expect(texto()).toContain('Campaña Norte');
+  expect(solicitarAfiliacion).toHaveBeenCalledTimes(1);
+  perfil = [pendiente];
+  const consultas = consultarAfiliaciones.mock.calls.length;
+  await pulsar('Actualizar mis solicitudes');
+  expect(consultarAfiliaciones).toHaveBeenCalledTimes(consultas + 1);
+  expect(solicitarAfiliacion).toHaveBeenCalledTimes(1);
+  expect(listarCampanasActivas).toHaveBeenCalledTimes(1);
+  expect(texto()).not.toContain('No pudimos actualizar tus solicitudes');
+});
+
+test.each([401, 403])('un HTTP %s al enviar no ofrece reintentar el alta con permisos inválidos', async status => {
+  solicitarAfiliacion.mockRejectedValueOnce(Object.assign(new Error('no autorizado'), { status }));
+  await montar();
+  await pulsar('Oportunidades');
+  await pulsar('Ver campañas de Norte');
+  await pulsar('Solicitar afiliación a Campaña Norte');
+  act(() => tree.root.findAllByType(TextInput).find(n => n.props.accessibilityLabel === 'Plan de promoción').props.onChangeText('Video para Norte'));
+  await pulsar('Enviar solicitud de afiliación');
+  expect(texto()).toContain(status === 401 ? 'Tu sesión venció' : 'Tu cuenta no tiene permiso');
+  expect(texto()).toContain('Campaña Norte');
+  expect(boton('Enviar solicitud de afiliación')).toBeUndefined();
+  expect(boton('Reintentar solicitud de afiliación')).toBeUndefined();
+  expect(solicitarAfiliacion).toHaveBeenCalledTimes(1);
 });
