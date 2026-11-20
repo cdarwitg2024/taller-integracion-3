@@ -299,8 +299,11 @@ export const pedidosService = {
     if (cafeteriaId === null || cafeteriaId === undefined || cafeteriaId === '') {
       throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
     }
+    if (typeof cafeteriaId !== 'number' && typeof cafeteriaId !== 'string') {
+      throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
+    }
     const cid = Number(cafeteriaId);
-    if (!Number.isFinite(cid)) {
+    if (!Number.isSafeInteger(cid) || cid <= 0) {
       throw new Error('No se pudo determinar la cafetería autorizada del empleado. Sin asociación válida.');
     }
     let query = supabase

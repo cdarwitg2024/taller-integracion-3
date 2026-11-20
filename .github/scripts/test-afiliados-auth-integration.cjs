@@ -7,6 +7,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { execFileSync, spawnSync } = require('node:child_process');
+const { pathToFileURL } = require('node:url');
 
 const root = path.resolve(__dirname, '../..');
 const probarA06 = process.argv.includes('--a06');
@@ -45,6 +46,33 @@ async function waitFor(name, check) {
 }
 const portOf = (name, port) => docker(['port', name, String(port)]).split(':').pop();
 const quote = value => "'" + String(value).replaceAll("'", "''") + "'";
+
+// Carga los servicios reales de escritorio contra el gateway desechable con el JWT de la sesión.
+async function cargarServicioCampanasEscritorio(destino, base, token) {
+  fs.mkdirSync(destino, { recursive: true });
+  fs.writeFileSync(path.join(destino, 'package.json'), '{"type":"module"}');
+  for (const nombre of ['backendApi.js', 'campanasAfiliados.js']) {
+    const origen = path.join(root, 'app-desktop/src/services', nombre);
+    // La copia conserva el código real; Node ESM necesita las extensiones que Vite resuelve.
+    const importes = nombre === 'backendApi.js'
+      ? [["from './supabase'", "from './supabase.js'"]]
+      : [["from './backendApi'", "from './backendApi.js'"]];
+    let código = fs.readFileSync(origen, 'utf8');
+    for (const [buscado, reemplazo] of importes) {
+      assert.ok(código.includes(buscado), `No se encontró ${buscado} en ${nombre}`);
+      código = código.replace(buscado, reemplazo);
+    }
+    if (nombre === 'backendApi.js') {
+      assert.ok(código.includes("'http://localhost:3000'"), 'No se encontró la base del gateway en backendApi.js');
+      código = código.replace("'http://localhost:3000'", JSON.stringify(base));
+    }
+    fs.writeFileSync(path.join(destino, nombre), código);
+  }
+  const sesión = JSON.stringify({ data: { session: { access_token: token } } });
+  fs.writeFileSync(path.join(destino, 'supabase.js'),
+    `export const supabase = { auth: { getSession: async () => (${sesión}) } };`);
+  return import(pathToFileURL(path.join(destino, 'campanasAfiliados.js')).href);
+}
 
 async function main() {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'cf-c03-auth-'));
@@ -280,7 +308,26 @@ async function main() {
       assert.equal(r.body.campanas.find(c=>c.id===acceptable.id).estado,'activa');
       assert.equal(r.body.campanas.length,2);
     });
-    console.log(`${checks} escenarios C03 con Auth, JWT, gateway, PostgREST y RLS reales aprobados.`);
+    await check('E06: alta y edición del servicio de escritorio persisten por el gateway con JWT real', async () => {
+      const modulo = await cargarServicioCampanasEscritorio(path.join(temp, 'escritorio'), base, tokens.dueno);
+      const servicio = modulo.campanasAfiliados;
+      const form = {
+        nombre: 'Campaña E06 escritorio',
+        descuento_normal_pct: 15, descuento_oferta_pct: 5, comision_pct: 10,
+        inicio: new Date(Date.now() + 3 * 86400000).toISOString(),
+        fin: new Date(Date.now() + 4 * 86400000).toISOString(),
+      };
+      const creada = await servicio.crear(7, form);
+      assert.ok(Number.isSafeInteger(Number(creada.id)), JSON.stringify(creada));
+      const listadas = await servicio.listar(7);
+      assert.equal(listadas.find(c => c.id === creada.id)?.nombre, form.nombre);
+      const editada = await servicio.actualizar(7, creada.id, { ...form, descuento_normal_pct: 12 });
+      assert.equal(editada.descuento_normal_pct, 12);
+      const sinVigencia = await servicio.actualizar(7, creada.id, { ...form, descuento_normal_pct: 13, inicio: '', fin: '' });
+      assert.equal(sinVigencia.inicio, creada.inicio);
+      assert.equal(sinVigencia.fin, creada.fin);
+    });
+    console.log(`${checks} escenarios C03/E06 con Auth, JWT, gateway, PostgREST y RLS reales aprobados.`);
   } finally {
     for (const listener of server ? [server.app, server.proxy].filter(Boolean) : []) {
       listener.closeAllConnections(); await new Promise(resolve=>listener.close(resolve));
