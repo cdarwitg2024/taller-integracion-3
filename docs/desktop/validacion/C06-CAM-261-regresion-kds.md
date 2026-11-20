@@ -15,6 +15,22 @@ El KDS mostró «¡Entrega Validada Exitosamente!» en los dos primeros retiros 
 
 Se verificó la eliminación de los pedidos y las cuentas Auth temporales. La prueba usó pedidos sin afiliación. La comisión queda pendiente de [V11](https://linear.app/camilodarwitg/issue/CAM-179/v11-habilitar-comision-en-la-entrega-efectiva) y [C09](https://linear.app/camilodarwitg/issue/CAM-255/c09-probar-segunda-validacion-de-retiro). Cámara física, Electron y gateway quedaron fuera de esta corrida.
 
+## Preparación de la base de datos
+
+Antes de desplegar el `ms-pedidos` de C06 en un entorno autorizado, aplicar [`agregar_qr_usado_pedidos.sql`](../../../database/fixes/agregar_qr_usado_pedidos.sql) sobre la base que usa el servicio. La tabla `public.pedidos` debe existir. El SQL crea la columna booleana con valor inicial `false` cuando falta. Si ya existe, conserva sus valores, incluidos los `NULL` históricos que el servicio acepta para pedidos en estado `listo`.
+
+Tras aplicar el SQL, verificar que la consulta devuelva una fila con `data_type = boolean` antes de publicar el servicio. Si falta la fila o el tipo es distinto, resolver la discrepancia del esquema antes del despliegue.
+
+```sql
+SELECT data_type, column_default, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'pedidos'
+  AND column_name = 'qr_usado';
+```
+
+La migración se verificó en una base desechable de PostgreSQL local. Con la columna ausente, la fila existente quedó en `false` y los nuevos pedidos recibieron el mismo valor por defecto. Al reaplicar el SQL, se preservó la marca `true`. En un esquema con la columna nullable se conservaron las marcas `true`, `false` y `NULL`.
+
 ## Pruebas reproducibles
 
 El script [de regresión HTTP](../../../Microservices/ms-pedidos/scripts/regresion-entrega-qr.cjs) crea pedidos temporales en Supabase local y registra estados y respuestas. Cubre las dos credenciales, el segundo uso, el uso cruzado de credenciales, la concurrencia y los rechazos por credencial, estado, rol y cafetería. Se ejecuta con `node scripts/regresion-entrega-qr.cjs` desde `Microservices/ms-pedidos` con `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` y `MS_PEDIDOS_URL` del entorno local. Complementa la prueba desde el KDS.
