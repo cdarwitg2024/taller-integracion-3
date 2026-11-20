@@ -100,6 +100,12 @@ TypeScript, 111 enlaces relativos y `git diff --check` aprobados. El runner
 pasó **1/1 integración Mobile con V12 y seis escenarios C05**. Los contenedores,
 volúmenes, red y archivos temporales se eliminaron al finalizar.
 
+Corrección tras CI del PR #87: el último ajuste de la vista retiró el encabezado
+vacío «Comisiones por entregas», pero la regresión de navegación del perfil
+todavía lo esperaba. Se actualizó esa expectativa a «Saldo de tus comisiones»,
+conservando las comprobaciones de cuenta, importes, navegación y regreso al
+perfil. La suite completa se repitió sobre esta versión final.
+
 Exportación Android: **PASS**, bundle Hermes y recursos. Se usaron
 `EXPO_NO_DOTENV=1`, `EXPO_OFFLINE=1`, `CI=1`, URLs locales y una clave pública
 sintéticas. Desde `app-mobile`: `node node_modules/expo/bin/cli export

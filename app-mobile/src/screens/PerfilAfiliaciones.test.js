@@ -152,7 +152,7 @@ const textoVisible = () => tree.root.findAllByType(Text)
 test.each([
   ['Oportunidades', 'Campañas de cafeterías'],
   ['Mis códigos', 'Tus solicitudes y códigos de afiliado'],
-  ['Ganancias', 'Comisiones por entregas'],
+  ['Ganancias', 'Saldo de tus comisiones'],
 ])(
   'A02: abre %s desde una sola entrada y vuelve a Mis afiliaciones y al perfil', async (nombre, contenido) => {
     await montar();
