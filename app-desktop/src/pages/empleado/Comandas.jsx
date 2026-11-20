@@ -16,6 +16,20 @@ import vozKds, { VOZ_APAGADA, VOZ_SILENCIADA } from '../../services/vozKdsServic
 import { kdsColors } from '../../theme/theme';
 import { COLORS } from '../../design/tokens';
 
+// Estado aislado de una cafetería: nunca reutiliza pedidos, errores ni selección de la anterior.
+function estadoInicialKds(cafeteriaKey) {
+  return {
+    cafeteriaKey,
+    pedidos: [],
+    selectedPedido: null,
+    loading: true,
+    conexion: ESTADO_RECONECTANDO,
+    errorComandas: '',
+    errorOperacion: '',
+    procesando: new Set(),
+  };
+}
+
 // Estado vacío de una columna. Se define una sola vez para las tres columnas.
 function EstadoVacioColumna() {
   return (
@@ -43,33 +57,81 @@ const COLUMNAS = [
   { estado: 'listo', titulo: 'Listos para Retiro', backgroundColor: COLORS.infoBg },
 ];
 
+function cafeteriaIdValido(valor) {
+  if (typeof valor !== 'number' && typeof valor !== 'string') return null;
+  const id = Number(valor);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function cafeteriaDelUsuario(usuario) {
+  const candidatos = [
+    usuario?.cafeteria_id,
+    usuario?.cafeteriaId,
+    usuario?.usuario?.cafeteria_id,
+    usuario?.perfil?.cafeteria_id,
+  ];
+  return candidatos.map(cafeteriaIdValido).find(id => id !== null) ?? null;
+}
+
+function conservarDetallesPedido(anterior, actualizado) {
+  if (!actualizado) return anterior;
+  const fusionado = { ...anterior, ...actualizado };
+  if ((!Array.isArray(actualizado.productos) || actualizado.productos.length === 0)
+    && Array.isArray(anterior?.productos) && anterior.productos.length > 0) {
+    fusionado.productos = anterior.productos;
+  }
+  if ((!Array.isArray(actualizado.detalles_pedido) || actualizado.detalles_pedido.length === 0)
+    && Array.isArray(anterior?.detalles_pedido) && anterior.detalles_pedido.length > 0) {
+    fusionado.detalles_pedido = anterior.detalles_pedido;
+  }
+  return fusionado;
+}
+
 function Comandas({ currentUser }) {
-  const [pedidos, setPedidos] = useState([]);
-  const [selectedPedido, setSelectedPedido] = useState(null);
+  const cafeteriaIdEmpleado = cafeteriaDelUsuario(currentUser);
+  const sinCafeteriaAsociada = cafeteriaIdEmpleado === null;
+  const cafeteriaKey = sinCafeteriaAsociada ? 'sin-cafeteria' : String(cafeteriaIdEmpleado);
+
+  const [estado, setEstado] = useState(() => estadoInicialKds(cafeteriaKey));
   const [escaneando, setEscaneando] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [conexion, setConexion] = useState(ESTADO_RECONECTANDO);
   const [estadoVoz, setEstadoVoz] = useState(vozKds.obtenerEstado());
   const [diagnosticoVoz, setDiagnosticoVoz] = useState(vozKds.obtenerDiagnostico());
   const [avisoVoz, setAvisoVoz] = useState(null);
-  const [errorComandas, setErrorComandas] = useState('');
-  const [errorOperacion, setErrorOperacion] = useState('');
-  const [procesando, setProcesando] = useState(new Set());
   const [busqueda, setBusqueda] = useState('');
 
   const pedidosRealtime = useRef(new Map());
+  const anunciadosRef = useRef(new Set());
+  const contextoRef = useRef(cafeteriaKey);
+  const generacionRef = useRef(0);
+  const montadoRef = useRef(true);
 
-  const cafeteriaIdEmpleado = Number(
-    currentUser?.cafeteria_id ??
-    currentUser?.cafeteriaId ??
-    currentUser?.usuario?.cafeteria_id ??
-    currentUser?.perfil?.cafeteria_id
-  );
-  const sinCafeteriaAsociada = !Number.isFinite(cafeteriaIdEmpleado);
+  // Invalidar antes de los efectos evita que una promesa de la cafetería anterior
+  // publique estado en el primer render de la nueva.
+  if (contextoRef.current !== cafeteriaKey) {
+    contextoRef.current = cafeteriaKey;
+    generacionRef.current += 1;
+    pedidosRealtime.current.clear();
+    anunciadosRef.current.clear();
+  }
+  const generacion = generacionRef.current;
+
+  const datos = estado.cafeteriaKey === cafeteriaKey ? estado : estadoInicialKds(cafeteriaKey);
+  const {
+    pedidos, selectedPedido, loading, conexion, errorComandas, errorOperacion, procesando,
+  } = datos;
+  const pedidosRef = useRef(pedidos);
+  pedidosRef.current = pedidos;
+  const escaneandoVisible = estado.cafeteriaKey === cafeteriaKey && escaneando;
+  const busquedaVisible = estado.cafeteriaKey === cafeteriaKey ? busqueda : '';
+
+  useEffect(() => {
+    montadoRef.current = true;
+    return () => { montadoRef.current = false; };
+  }, []);
 
   // T16 · Avisos de voz: la UI refleja el estado del servicio de voz.
-  useEffect(() => vozKds.suscribir((estado, diagnostico) => {
-    setEstadoVoz(estado);
+  useEffect(() => vozKds.suscribir((estadoVozServicio, diagnostico) => {
+    setEstadoVoz(estadoVozServicio);
     setDiagnosticoVoz(diagnostico);
   }), []);
 
@@ -90,169 +152,204 @@ function Comandas({ currentUser }) {
     }
   }, [estadoVoz, diagnosticoVoz]);
 
-  const mergeConSnapshot = useCallback((snapshot) => {
-    setPedidos(prev => {
+  useEffect(() => {
+    setEstado(prev => (prev.cafeteriaKey === cafeteriaKey ? prev : estadoInicialKds(cafeteriaKey)));
+    setEscaneando(false);
+    setBusqueda('');
+  }, [cafeteriaKey]);
+
+  // Solo publican estado la generación vigente: ni respuestas atrasadas ni desmontaje.
+  const vigente = useCallback((gen = generacion) => (
+    montadoRef.current && gen === generacionRef.current && contextoRef.current === cafeteriaKey
+  ), [cafeteriaKey, generacion]);
+
+  const actualizar = useCallback((cambios, gen = generacion) => {
+    if (!vigente(gen)) return;
+    setEstado(prev => (prev.cafeteriaKey === cafeteriaKey
+      ? { ...prev, ...(typeof cambios === 'function' ? cambios(prev) : cambios) }
+      : prev));
+  }, [vigente, cafeteriaKey, generacion]);
+
+  // Un pedido sin cafetería explícita no se acepta como nuevo: solo se admite
+  // como actualización de una comanda ya visible en este contexto.
+  const perteneceACafeteria = useCallback((comanda) => (
+    Number.isFinite(cafeteriaIdEmpleado)
+      && comanda?.cafeteria_id != null
+      && Number(comanda.cafeteria_id) === cafeteriaIdEmpleado
+  ), [cafeteriaIdEmpleado]);
+
+  const mergeConSnapshot = useCallback((snapshot, gen = generacion) => {
+    actualizar(prev => {
       const idsSnap = new Set(snapshot.map(p => String(p.id)));
       const extra = [];
       pedidosRealtime.current.forEach((comanda, id) => {
-        if (!idsSnap.has(id) && !prev.some(p => String(p.id) === id)) extra.push(comanda);
+        if (!idsSnap.has(id) && !prev.pedidos.some(p => String(p.id) === id)) extra.push(comanda);
       });
       // `getAll` viene ordenado de más nuevo a más viejo: sin volver a
       // ordenar, el poll de respaldo.botaba el orden por hora en cada pasada.
-      return ordenarPedidos([...extra, ...snapshot]);
-    });
-  }, []);
+      return { pedidos: ordenarPedidos([...extra, ...snapshot]) };
+    }, gen);
+  }, [actualizar, generacion]);
 
-  const fetchPedidos = useCallback(async (isRetry = false) => {
+  const fetchPedidos = useCallback(async (isRetry = false, gen = generacion) => {
+    if (!vigente(gen)) return;
     if (sinCafeteriaAsociada) {
-      setPedidos([]);
-      setErrorComandas('Este empleado no tiene una cafetería asociada. No es posible consultar comandas.');
-      setLoading(false);
+      actualizar({
+        pedidos: [],
+        errorComandas: 'Este empleado no tiene una cafetería asociada. No es posible consultar comandas.',
+        loading: false,
+      }, gen);
       return;
     }
+    actualizar(prev => ({ loading: true, errorComandas: isRetry ? prev.errorComandas : '' }), gen);
     try {
-      if (!isRetry) {
-        setErrorComandas('');
-      }
       const data = await pedidosService.getAll({ cafeteriaId: cafeteriaIdEmpleado });
-      setErrorComandas('');
-      mergeConSnapshot(data);
+      if (!vigente(gen)) return;
+      actualizar({ errorComandas: '', loading: false }, gen);
+      mergeConSnapshot(data, gen);
     } catch (err) {
+      if (!vigente(gen)) return;
       console.error('Error cargando comandas:', err);
-      const mensaje = err?.message || 'Error al cargar comandas';
-      // Si ya hay comandas visibles, no las borramos por un error temporal
-      if (pedidos.length > 0) {
-        setErrorComandas(mensaje);
-      } else {
-        setErrorComandas(mensaje);
-      }
-    } finally {
-      setLoading(false);
+      actualizar({ errorComandas: err?.message || 'Error al cargar comandas', loading: false }, gen);
     }
-  }, [mergeConSnapshot, cafeteriaIdEmpleado, sinCafeteriaAsociada, pedidos.length]);
+  }, [vigente, actualizar, mergeConSnapshot, sinCafeteriaAsociada, cafeteriaIdEmpleado, generacion]);
 
-  const agregarComandaRealTime = useCallback((comanda) => {
-    if (sinCafeteriaAsociada) return;
-    if (Number.isFinite(cafeteriaIdEmpleado) && comanda?.cafeteria_id != null && Number(comanda.cafeteria_id) !== cafeteriaIdEmpleado) {
-      return;
-    }
+  const agregarComandaRealTime = useCallback((comanda, gen = generacion) => {
+    if (!vigente(gen) || sinCafeteriaAsociada || !comanda?.id || !perteneceACafeteria(comanda)) return;
     const id = String(comanda.id);
+    const yaConocida = pedidosRealtime.current.has(id) || pedidosRef.current.some(p => String(p.id) === id);
     pedidosRealtime.current.set(id, comanda);
-    setPedidos(prev => (prev.some(p => String(p.id) === id) ? prev : ordenarPedidos([comanda, ...prev])));
-    // T16 · aviso de voz: solo en ingresos reales por Realtime (nunca en
-    // la carga inicial de la pantalla ni en cambios de estado).
-    vozKds.anunciar(comanda);
-  }, [sinCafeteriaAsociada, cafeteriaIdEmpleado]);
+    if (!yaConocida) actualizar(prev => ({ pedidos: ordenarPedidos([comanda, ...prev.pedidos]) }), gen);
+    // T16 · un UPDATE adelantado no debe quitar el aviso del pedido nuevo.
+    if (!anunciadosRef.current.has(id)) {
+      anunciadosRef.current.add(id);
+      vozKds.anunciar(comanda);
+    }
+  }, [vigente, perteneceACafeteria, actualizar, sinCafeteriaAsociada, generacion]);
 
-  const actualizarPedidoRealTime = useCallback((comanda) => {
-    if (sinCafeteriaAsociada) return;
-    if (Number.isFinite(cafeteriaIdEmpleado) && comanda?.cafeteria_id != null && Number(comanda.cafeteria_id) !== cafeteriaIdEmpleado) {
-      return;
-    }
+  const actualizarPedidoRealTime = useCallback((comanda, gen = generacion) => {
+    if (!vigente(gen) || sinCafeteriaAsociada || !comanda?.id) return;
     const id = String(comanda.id);
+    const conocida = pedidosRealtime.current.has(id) || pedidosRef.current.some(p => String(p.id) === id);
+    // Con cafetería declarada se exige la propia, aunque el ID ya sea conocido.
+    if (comanda.cafeteria_id != null ? !perteneceACafeteria(comanda) : !conocida) return;
     pedidosRealtime.current.set(id, comanda);
-    setPedidos(prev => {
-      if (!prev.some(p => String(p.id) === id)) return ordenarPedidos([comanda, ...prev]);
-      return ordenarPedidos(prev.map(p => (String(p.id) === id ? comanda : p)));
-    });
-    setSelectedPedido(prev => (prev && String(prev.id) === id ? { ...prev, ...comanda } : prev));
-  }, [sinCafeteriaAsociada, cafeteriaIdEmpleado]);
+    actualizar(prev => ({
+      pedidos: prev.pedidos.some(p => String(p.id) === id)
+        ? ordenarPedidos(prev.pedidos.map(p => (
+          String(p.id) === id ? conservarDetallesPedido(p, comanda) : p
+        )))
+        : ordenarPedidos([comanda, ...prev.pedidos]),
+      selectedPedido: prev.selectedPedido && String(prev.selectedPedido.id) === id
+        ? conservarDetallesPedido(prev.selectedPedido, comanda)
+        : prev.selectedPedido,
+    }), gen);
+  }, [vigente, perteneceACafeteria, actualizar, sinCafeteriaAsociada, generacion]);
 
   useEffect(() => {
-    setLoading(true);
     fetchPedidos(false);
   }, [fetchPedidos]);
 
   useEffect(() => {
     if (sinCafeteriaAsociada) {
-      setConexion(ESTADO_RECONECTANDO);
+      actualizar({ conexion: ESTADO_RECONECTANDO }, generacion);
       return undefined;
     }
+    const gen = generacion;
     const suscripcion = kdsRealtime.suscribir({
-      onComanda: agregarComandaRealTime,
-      onActualizar: actualizarPedidoRealTime,
-      onEstadoCanal: setConexion,
+      onComanda: comanda => agregarComandaRealTime(comanda, gen),
+      onActualizar: comanda => actualizarPedidoRealTime(comanda, gen),
+      onEstadoCanal: estadoCanal => actualizar({ conexion: estadoCanal }, gen),
       cafeteriaId: cafeteriaIdEmpleado,
     });
     return () => suscripcion.cerrar();
-  }, [agregarComandaRealTime, actualizarPedidoRealTime, cafeteriaIdEmpleado, sinCafeteriaAsociada]);
+  }, [agregarComandaRealTime, actualizarPedidoRealTime, actualizar, cafeteriaIdEmpleado, sinCafeteriaAsociada, generacion]);
 
   useEffect(() => {
     if (sinCafeteriaAsociada) return;
+    const gen = generacion;
     const poll = setInterval(() => {
       pedidosService.getAll({ cafeteriaId: cafeteriaIdEmpleado })
         .then((data) => {
-          setErrorComandas('');
-          mergeConSnapshot(data);
+          if (!vigente(gen)) return;
+          actualizar({ errorComandas: '' }, gen);
+          mergeConSnapshot(data, gen);
         })
         .catch((err) => {
+          if (!vigente(gen)) return;
           console.error('Error en polling de comandas:', err);
           // No eliminar comandas ya visibles ante fallo temporal
         });
     }, 10000);
     return () => clearInterval(poll);
-  }, [mergeConSnapshot, cafeteriaIdEmpleado, sinCafeteriaAsociada]);
+  }, [actualizar, mergeConSnapshot, vigente, cafeteriaIdEmpleado, sinCafeteriaAsociada, generacion]);
 
   useEffect(() => {
+    if (estado.cafeteriaKey !== cafeteriaKey) return;
     const idsVisibles = new Set(pedidos.map(p => String(p.id)));
     pedidosRealtime.current.forEach((_comanda, id) => {
       if (!idsVisibles.has(id)) pedidosRealtime.current.delete(id);
     });
-  }, [pedidos]);
+  }, [pedidos, estado.cafeteriaKey, cafeteriaKey]);
 
   const handleCambiarEstado = async (id, nuevoEstado, e) => {
     if (e) e.stopPropagation();
-    const pedidoId = id;
-    const key = String(pedidoId);
-    if (procesando.has(key)) return;
-    setProcesando(prev => {
-      const next = new Set(prev);
-      next.add(key);
-      return next;
-    });
+    const gen = generacion;
+    if (!vigente(gen)) return;
+    const key = String(id);
+    if (procesando.has(key) || !pedidosRef.current.some(p => String(p.id) === key)) return;
+    actualizar(prev => ({ procesando: new Set(prev.procesando).add(key) }), gen);
     try {
-      const actualizado = await pedidosService.updateEstado(pedidoId, nuevoEstado);
+      const actualizado = await pedidosService.updateEstado(id, nuevoEstado);
+      if (!vigente(gen)) return;
       if (actualizado) {
-        actualizarPedidoRealTime(actualizado);
+        actualizarPedidoRealTime(actualizado, gen);
       } else {
-        setPedidos(prev => prev.map(p => String(p.id) === key ? { ...p, estado: nuevoEstado } : p));
-        if (selectedPedido && String(selectedPedido.id) === key) {
-          setSelectedPedido(prev => ({ ...prev, estado: nuevoEstado }));
-        }
+        actualizar(prev => ({
+          pedidos: prev.pedidos.map(p => (String(p.id) === key ? { ...p, estado: nuevoEstado } : p)),
+          selectedPedido: prev.selectedPedido && String(prev.selectedPedido.id) === key
+            ? { ...prev.selectedPedido, estado: nuevoEstado }
+            : prev.selectedPedido,
+        }), gen);
       }
     } catch (err) {
+      if (!vigente(gen)) return;
       console.error('Error al cambiar estado:', err);
       const msg = err?.message || 'No se pudo cambiar el estado del pedido';
+      let mensaje;
       if (String(msg).toLowerCase().includes('no autorizado') || err?.status === 401 || err?.code === 'UNAUTHORIZED') {
-        setErrorOperacion('Sesión inválida o vencida. No se pudo cambiar el estado. Inicie sesión nuevamente.');
+        mensaje = 'Sesión inválida o vencida. No se pudo cambiar el estado. Inicie sesión nuevamente.';
       } else if (err?.status === 403) {
-        setErrorOperacion('No tiene permisos para cambiar el estado de este pedido.');
+        mensaje = 'No tiene permisos para cambiar el estado de este pedido.';
       } else if (err?.status === 409) {
-        setErrorOperacion('No se pudo cambiar el estado: hay un conflicto con el estado actual del pedido.');
+        mensaje = 'No se pudo cambiar el estado: hay un conflicto con el estado actual del pedido.';
       } else if (String(msg).toLowerCase().includes('failed to fetch') || String(msg).toLowerCase().includes('network')) {
-        setErrorOperacion('Sin conexión al backend. Verifique su red e inténtelo nuevamente.');
+        mensaje = 'Sin conexión al backend. Verifique su red e inténtelo nuevamente.';
       } else {
-        setErrorOperacion(`Error al cambiar estado: ${msg}`);
+        mensaje = `Error al cambiar estado: ${msg}`;
       }
+      actualizar({ errorOperacion: mensaje }, gen);
     } finally {
-      setProcesando(prev => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
-      });
+      if (vigente(gen)) {
+        actualizar(prev => {
+          const next = new Set(prev.procesando);
+          next.delete(key);
+          return { procesando: next };
+        }, gen);
+      }
     }
   };
 
   const pedidosOrdenados = useMemo(() => ordenarPedidos(pedidos), [pedidos]);
   const pedidosFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
+    const q = busquedaVisible.trim().toLowerCase();
     if (!q) return pedidosOrdenados;
     return pedidosOrdenados.filter(p => {
       const codigo = String(p.codigo_pedido || '').toLowerCase();
       const id = String(p.id || p.rawId || '').toLowerCase();
       return codigo.includes(q) || id.includes(q);
     });
-  }, [pedidosOrdenados, busqueda]);
+  }, [pedidosOrdenados, busquedaVisible]);
   const pedidosOperativos = pedidosFiltrados.filter(p =>
     p.estado === 'pendiente' || p.estado === 'preparando' || p.estado === 'en_preparacion' || p.estado === 'listo'
   );
@@ -275,7 +372,7 @@ function Comandas({ currentUser }) {
           onActivarVoz={() => vozKds.activar()}
           onSilenciarVoz={() => vozKds.silenciar()}
           avisoVoz={avisoVoz}
-          busqueda={busqueda}
+          busqueda={busquedaVisible}
           onBusquedaChange={setBusqueda}
         />
       </Box>
@@ -293,12 +390,12 @@ function Comandas({ currentUser }) {
           )}
           {errorOperacion && (
             <Box sx={{ mb: 2 }}>
-              <Alert severity="error" onClose={() => setErrorOperacion('')} action={<Button color="inherit" size="small">Entendido</Button>}>{errorOperacion}</Alert>
+              <Alert severity="error" onClose={() => actualizar({ errorOperacion: '' }, generacion)} action={<Button color="inherit" size="small">Entendido</Button>}>{errorOperacion}</Alert>
             </Box>
           )}
           {errorComandas && (
             <Box sx={{ mb: 2 }}>
-              <Alert severity="warning" action={<Button color="inherit" size="small" onClick={() => { setLoading(true); fetchPedidos(true); }}>Reintentar</Button>}>
+              <Alert severity="warning" action={<Button color="inherit" size="small" onClick={() => fetchPedidos(true, generacion)}>Reintentar</Button>}>
                 {errorComandas}
               </Alert>
             </Box>
@@ -334,7 +431,7 @@ function Comandas({ currentUser }) {
                     <PedidoCard
                       key={pedido.id}
                       pedido={pedido}
-                      onOpen={setSelectedPedido}
+                      onOpen={pedido => actualizar({ selectedPedido: pedido }, generacion)}
                       onChangeEstado={handleCambiarEstado}
                       procesando={procesando.has(String(pedido.id))}
                     />
@@ -349,14 +446,16 @@ function Comandas({ currentUser }) {
       )}
 
       <DetallePedidoDialog
+        key={cafeteriaKey}
         pedido={selectedPedido}
-        onClose={() => setSelectedPedido(null)}
+        onClose={() => actualizar({ selectedPedido: null }, generacion)}
         onChangeEstado={handleCambiarEstado}
       />
 
       <EscanearQrDialog
-        open={escaneando}
+        open={escaneandoVisible}
         cafeteriaId={cafeteriaIdEmpleado}
+        usuarioId={currentUser?.id != null ? String(currentUser.id) : 'empleado'}
         onClose={() => setEscaneando(false)}
       />
     </Box>

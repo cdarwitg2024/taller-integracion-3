@@ -106,6 +106,9 @@ Públicas, por el gateway:
 | GET | `/api/afiliados/cafeterias/:cafeteriaId/campanas/administracion` | ms-pedidos (sesión dueño) |
 | POST | `/api/afiliados/cafeterias/:cafeteriaId/campanas` | ms-pedidos |
 | PATCH | `/api/afiliados/cafeterias/:cafeteriaId/campanas/:campanaId` | ms-pedidos |
+| POST / GET | `/api/afiliados/cafeterias/:cafeteriaId/campanas/:campanaId/solicitudes` | Crear como estudiante y listar como dueño |
+| PATCH | `/api/afiliados/cafeterias/:cafeteriaId/campanas/:campanaId/solicitudes/:solicitudId` | Resolver como dueño |
+| GET | `/api/afiliados/mi-perfil` | Consultar afiliaciones propias como estudiante |
 | GET | `/gateway/health` | nginx (estático) |
 
 Internas, **fuera** del gateway a propósito:
@@ -177,6 +180,8 @@ gana el más corto, así que `location /api/menus` se comería
 (`~ ^/api/menus/precios/?$`) y está declarada antes.
 
 ## Administración de campañas de afiliados
+
+Para habilitar las solicitudes y decisiones de C05, aplicar las dependencias SQL de V04, V05 y C04 y luego [el SQL de C05](../../../database/fixes/exponer_solicitudes_afiliacion.sql). Las rutas usan el JWT de la sesión y delegan a V05 las decisiones y el estado del código. [Prueba local de C05](../validacion/C05-solicitudes-afiliacion.md).
 
 `ms-pedidos` expone el alta, la edición, el listado administrativo y los cambios de estado del [contrato C02](../../contratos-integracion-afiliados.md) en `/api/afiliados`. El dueño se identifica con su JWT: las RPC `administrar_campana_afiliados` y `listar_campanas_afiliados` usan `public.dueno_campana_id(p_cafeteria_id)`, la función de identidad de V05 que exige usuario y rol activos, y limitan la fila o el listado por cafetería. Los porcentajes y la vigencia quedan fijos desde el inicio; pausar y reanudar conserva condiciones, versión y aceptación.
 

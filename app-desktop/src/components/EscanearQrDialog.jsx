@@ -116,7 +116,7 @@ function ejecutarVibracion() {
   }
 }
 
-function EscanearQrDialog({ open, cafeteriaId, onClose }) {
+function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
   const procesando = useRef(false);
   const ultimoToken = useRef(null);
   const videoRef = useRef(null);
@@ -124,6 +124,9 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
   const streamRef = useRef(null);
   const animFrameRef = useRef(null);
   const fileInputRef = useRef(null);
+  const usuarioIdRef = useRef(usuarioId);
+  const cafeteriaIdRef = useRef(cafeteriaId);
+  const generacionRef = useRef(0);
   const resultadoRef = useRef(null);
 
   const [modo, setModo] = useState('qr'); // 'qr' | 'token'
@@ -133,6 +136,18 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
   const [estadoCamara, setEstadoCamara] = useState('iniciando'); // 'iniciando' | 'activa' | 'error'
   const [errorCamara, setErrorCamara] = useState('');
   const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    if (usuarioIdRef.current !== usuarioId || cafeteriaIdRef.current !== cafeteriaId) {
+      generacionRef.current += 1;
+      procesando.current = false;
+      ultimoToken.current = null;
+      setResultado(null);
+      setErrorConexion('');
+    }
+    usuarioIdRef.current = usuarioId;
+    cafeteriaIdRef.current = cafeteriaId;
+  }, [usuarioId, cafeteriaId]);
 
   useEffect(() => {
     resultadoRef.current = resultado;
@@ -160,6 +175,7 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
   }, []);
 
   const resetear = useCallback(() => {
+    generacionRef.current += 1;
     setResultado(null);
     setErrorConexion('');
     procesando.current = false;
@@ -185,6 +201,7 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
       procesando.current = false;
       ultimoToken.current = null;
     } else {
+      generacionRef.current += 1;
       detenerCamara();
     }
   }, [open, detenerCamara]);
@@ -199,6 +216,7 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
     // Si ya mostró resultado para este mismo texto, evitar repetición continua
     if (ultimoToken.current === textoLimpio && resultadoRef.current) return;
 
+    const activacion = generacionRef.current;
     procesando.current = true;
     ultimoToken.current = textoLimpio;
     setErrorConexion('');
@@ -231,6 +249,8 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
         throw new Error('El servicio de pedidos devolvió una respuesta inválida al validar la entrega.');
       }
 
+      if (generacionRef.current !== activacion) return;
+
       // Garantizar que siempre haya una razón explicativa si es rechazo
       if (res.valido === false && !res.razon) {
         res.razon = 'Código QR o Token no válido para entrega.';
@@ -245,12 +265,13 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
         reproducirSonidoRechazo();
       }
     } catch (err) {
+      if (generacionRef.current !== activacion) return;
       console.error('[KDS Escáner] Error validando QR:', err);
       setResultado(null);
       setErrorConexion(err.message || 'Error de conexión: No se pudo contactar al servidor para validar el código.');
       reproducirSonidoRechazo();
     } finally {
-      procesando.current = false;
+      if (generacionRef.current === activacion) procesando.current = false;
     }
   }, []);
 
@@ -389,6 +410,9 @@ function EscanearQrDialog({ open, cafeteriaId, onClose }) {
       detenerCamara();
     };
   }, [open, modo, resultado, intento, detenerCamara, validar]);
+
+  // Invalida los callbacks en vuelo cuando el KDS abandona el escáner.
+  useEffect(() => () => { generacionRef.current += 1; }, []);
 
   const reencenderCamara = () => {
     setErrorCamara('');

@@ -39,9 +39,44 @@ El dueño define los tres porcentajes. Si cambia alguno antes del inicio, se avi
 | Dueño, escritorio | `GET /api/afiliados/cafeterias/7/campanas/31/solicitudes` | `200 {"solicitudes":[{"id":82,"solicitante":"Diego","estado":"pendiente","plan_promocion":"Compartiré un video en la comunidad universitaria.","enlace_publico":"https://example.com/diego"}]}` | `403 {"error":"sin_acceso_cafeteria"}` |
 | Dueño, escritorio | `PATCH /api/afiliados/cafeterias/7/campanas/31/solicitudes/82` con `{"decision":"aprobar","codigo":"DIEGO-PROMO1"}` o `{"decision":"rechazar"}` | `200 {"id":82,"estado":"aprobada","codigo":"DIEGO-PROMO1"}` o `200 {"id":82,"estado":"rechazada"}` | `409 {"error":"codigo_en_uso"}`. La solicitud sigue pendiente. |
 | Diego, móvil | `GET /api/afiliados/mi-perfil` | `200 {"solicitudes":[{"id":82,"cafeteria_id":7,"campana_id":31,"estado":"aprobada","codigo":"DIEGO-PROMO1"}]}` | `401 {"error":"sesion_invalida"}` |
+| Dueño, escritorio | `PATCH /api/afiliados/cafeterias/7/campanas/31/solicitudes/82` con `{"decision":"desactivar"}` | `200 {"id":82,"estado":"aprobada","codigo":"DIEGO-PROMO1","codigo_activo":false}` | `409 {"error":"resolucion_en_conflicto"}` si la solicitud no está aprobada |
 | Dueño, escritorio | `POST /api/afiliados/cafeterias/7/campanas/31/solicitudes/82/reenviar-aviso` | `202 {"estado":"aviso_pendiente"}` | `409 {"error":"solicitud_no_aprobada"}` |
 
+C05 devuelve `201` en la primera solicitud y `200` con el mismo ID y el estado persistido al repetirla. La aprobación admite una propuesta opcional de `codigo`. Si se omite, SQL lo genera. Las respuestas aprobadas incluyen `codigo_activo`. Al desactivar, el código queda reservado y un reintento de aprobación conserva la desactivación. El correo y el reenvío corresponden a una tarea posterior. [Validación de C05](microservicios/validacion/C05-solicitudes-afiliacion.md).
+
+Los dos listados devuelven hasta 100 solicitudes por página, en orden descendente de ID. Si hay más filas, la respuesta incluye `siguiente_antes_de`. Para continuar, repite el mismo GET con la misma sesión y añade `?antes_de=<siguiente_antes_de>`. Cuando el campo está ausente, llegaste al final. Una página puede traer menos de 100 filas por el límite de PostgREST. La autorización se verifica en cada página.
+
 El formulario de «Promocionar» exige una explicación y admite un enlace público opcional. Si el dueño invita a alguien, esa persona usa el mismo formulario. Una campaña admite varios afiliados con sus propios códigos. El dueño asigna el código al aprobar y el servidor comprueba su unicidad en todo CoffeeFast. Una aprobación guarda el código en el perfil y dispara el aviso por correo. Si falla el correo, el código sigue visible y el dueño puede reenviar el aviso. Una aprobación anticipada permite compartir el código, con canje desde el inicio y mientras la campaña esté activa.
+
+### Lectura del panel móvil A06/A09
+
+C05 devuelve solicitudes y códigos, no saldo ni historial financiero. El panel
+móvil consulta `public.movimientos_comision` con la sesión Supabase del usuario,
+de acuerdo con el permiso SELECT y RLS de V04 (`0020`). Filtra la afiliación
+aprobada devuelta por C05, incluso si `codigo_activo` pasa a `false`.
+Las revertidas y sus compensaciones quedan en el historial sin sumar un crédito
+o descontarlo dos veces. El resumen de A09 usa la RPC oficial V12
+`consultar_saldo_afiliado()` con ese mismo JWT, sin parámetros de identidad.
+Devuelve `pendiente_clp`, `disponible_clp` y `retirado_clp` para todas las
+afiliaciones del estudiante en una instantánea. El disponible ya resta los
+retiros confirmados; el móvil no los descuenta nuevamente ni añade pendientes.
+Requiere instalar la migración V12 del [commit oficial 884f256](https://github.com/Diego24Vas/db_CoffeeFaster/commit/884f25698e76df7d50a08b8a0d0a81a1059733e9)
+en el entorno de destino. No hay fallback a sumas locales si la RPC falta.
+No se implementa una operación de retiro en esta pantalla ni se modifica la Wallet.
+
+Ver [A06](mobile/validacion/A06-Solicitudes-aprobacion.md) para paginación,
+comprobaciones del historial y [A09](mobile/validacion/A09-Comisiones-saldo-disponible.md)
+para el saldo V12, sus dependencias y el alcance de la transición de entrega controlada.
+
+### Captura local de retiro simulado (A11)
+
+A11 permite preparar un monto entero positivo en CLP, no superior al
+`disponible_clp` confirmado de V12. Muestra como destino de prueba
+«Cuenta de prueba CoffeeFast (destino ficticio)», de solo lectura y sin
+campos bancarios. No establece un contrato HTTP de retiro ni genera un
+comprobante: revisar el formulario no envía, reserva o descuenta saldo.
+La validación local deberá complementarse con la revalidación del servidor
+cuando se integre la operación de retiro. [Registro A11](mobile/validacion/A11-Solicitud-retiro-simulado.md).
 
 ## 3. Cotización y compra
 
