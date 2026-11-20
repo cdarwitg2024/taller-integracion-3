@@ -21,6 +21,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [E03 / CAM-290 — Vista principal de campañas del dueño](desktop/validacion/E03-CAM-290-Vista-Campanas.md)
 - [E04 / CAM-225 — Listado de campañas por cafetería del dueño](desktop/validacion/E04-CAM-225-Cambio-Cafeteria-Campanas.md)
 - [E06 — Conexión de alta y edición de campañas con el gateway](desktop/validacion/E06-Conexion-alta-y-edicion-campanas.md)
+- [E13 — Estados de carga, vacío y error de campañas](desktop/validacion/E13-Estados-carga-vacio-y-error-campanas.md)
 - [S2-T15 - Validación flujo integrado y recuperación del KDS](desktop/validacion/S2-T15-Validacion-Flujo-Integrado-KDS.md)
 - [S2-T17 - Validación flujo completo del KDS](desktop/validacion/S2-T17-Validacion-Flujo-Completo-KDS.md)
 - [C08 / CAM-242 — Verificar entrega por QR y token desde KDS](desktop/validacion/C08-CAM-242-entrega-qr-token-kds.md)
