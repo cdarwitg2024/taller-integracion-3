@@ -190,7 +190,75 @@ async function cancelarPedido({ accessToken, id }) {
   });
 }
 
-async function crearPedido({ user, accessToken, body }) {
+async function confirmarPago(cliente, cafeteriaId, body, clave) {
+  const { items, codigo = null, total_aceptado, franja_retiro } = body;
+  if (!/^[!-~]{1,128}$/.test(clave ?? '') || clave.includes(',') ||
+      !Number.isSafeInteger(total_aceptado) || total_aceptado < 0 ||
+      (codigo !== null && typeof codigo !== 'string') ||
+      typeof franja_retiro !== 'string' || items.length > 100) {
+    throw new HttpError(400, 'confirmacion_invalida');
+  }
+
+  // V08: la RPC resuelve el reintento y revalida precios dentro de la transacción.
+  const { data, error } = await cliente.rpc('procesar_pago', {
+    p_cafeteria_id: cafeteriaId,
+    p_items: items,
+    p_franja_retiro: franja_retiro,
+    p_codigo: codigo,
+    p_total_aceptado: total_aceptado,
+    p_clave_idempotencia: clave
+  });
+  if (error) {
+    if (error.code === '22023') throw new HttpError(400, 'confirmacion_invalida');
+    if (error.code === '42501') throw new HttpError(403, 'sin_acceso');
+    if (['PGRST301', 'PGRST303', '28000'].includes(error.code)) {
+      throw new HttpError(401, 'sesion_invalida');
+    }
+    throw new HttpError(503, 'No se pudo confirmar el pago');
+  }
+
+  switch (data?.error) {
+    case 'precio_actualizado':
+      if (typeof data.motivo !== 'string' ||
+          !Number.isSafeInteger(data.total_actualizado) || data.total_actualizado < 0 ||
+          !Number.isSafeInteger(data.descuento_afiliado) || data.descuento_afiliado < 0) {
+        break;
+      }
+      return {
+        status: 409,
+        body: {
+          error: data.error,
+          motivo: data.motivo,
+          total_aceptado,
+          total_actualizado: data.total_actualizado,
+          descuento_afiliado: data.descuento_afiliado,
+          cobrado: false
+        }
+      };
+    case 'clave_reintento_en_conflicto':
+      return { status: 409, body: { error: data.error } };
+    case 'saldo_insuficiente':
+      return { status: 422, body: { error: data.error, cobrado: false } };
+    case undefined:
+      if (Number.isSafeInteger(data?.pedido_id) && data.pedido_id > 0 &&
+          data.estado === 'pagado' && data.total_pagado === total_aceptado &&
+          Number.isSafeInteger(data.descuento_afiliado) && data.descuento_afiliado >= 0) {
+        return {
+          status: 201,
+          body: {
+            pedido_id: data.pedido_id,
+            estado: data.estado,
+            total_pagado: data.total_pagado,
+            descuento_afiliado: data.descuento_afiliado
+          }
+        };
+      }
+      break;
+  }
+  throw new HttpError(503, 'Respuesta inválida de procesar_pago');
+}
+
+async function crearPedido({ user, accessToken, body, idempotencyKey }) {
   if (!user || !user.authUserId) {
     throw new HttpError(401, 'Usuario no autenticado');
   }
@@ -207,6 +275,10 @@ async function crearPedido({ user, accessToken, body }) {
   }
 
   const cliente = crearClienteAutenticado(accessToken);
+  if (idempotencyKey !== undefined || Object.hasOwn(body, 'total_aceptado') ||
+      body.codigo != null) {
+    return confirmarPago(cliente, cafeteriaId, body, idempotencyKey);
+  }
 
   const { data: usuarioInterno, error: errUsuario } = await cliente
     .from('usuarios')
@@ -278,7 +350,7 @@ async function crearPedido({ user, accessToken, body }) {
     throw new HttpError(503, 'No se pudo procesar el pago', { causa: e.message });
   }
 
-  return { ok: true, pedido: pedidoResultado };
+  return { status: 201, body: { ok: true, pedido: pedidoResultado } };
 }
 
 /**

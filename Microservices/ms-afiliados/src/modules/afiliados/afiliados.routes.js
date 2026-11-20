@@ -262,5 +262,6 @@ router.post('/cafeterias/:cafeteriaId/campanas', auth.exigirAuth, administrar(tr
 router.patch('/cafeterias/:cafeteriaId/campanas/:campanaId', auth.exigirAuth, administrar(false));
 
 router.use(require('./solicitudes.routes')({ validarId, esObjeto }));
+router.use(require('./cotizaciones.routes'));
 
 module.exports = router;

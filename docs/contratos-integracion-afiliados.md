@@ -81,6 +81,8 @@ Idempotency-Key: 9853fd16-92e4-4ab6-994a-477832a4a502
 
 **Total actualizado en escritorio.** Si Ana confirma $10.000, el pedido pagado se puede consultar desde escritorio con sesión del dueño de la Cafetería A, por ejemplo `GET /api/pedidos/502` → `200 {"id":502,"cafeteria_id":7,"estado":"pagado","total_pagado":10000}`. Si Ana vuelve al carrito tras el `409`, ese intento no crea un pedido para el panel. Una consulta fuera del alcance de la cafetería devuelve `403`.
 
+C07 conecta la cotización con V06. Para `campana_no_iniciada`, la versión actual de la RPC devuelve el motivo y omite la fecha `inicio` del ejemplo de C02. La firma provisional para la confirmación y el ensayo aislado están en el [registro C07](microservicios/validacion/C07-cotizacion-compra-gateway.md).
+
 ## 4. Retiro y comisión
 
 Se mantienen las credenciales de retiro existentes. Los siguientes resultados describen el comportamiento que debe integrar el piloto, siguiendo el flujo actual de [compra y retiro](microservicios/operacion/puesta_en_marcha_flujo_pedidos.md).
