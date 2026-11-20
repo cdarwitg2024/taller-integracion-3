@@ -16,7 +16,7 @@ beforeEach(() => {
   (supabase.auth.getSession as jest.Mock).mockResolvedValue({ data: { session: { access_token: 'jwt-estudiante-a06' } }, error: null });
   transporte = jest.fn(); global.fetch = transporte;
   query = { select: jest.fn(() => query), eq: jest.fn(() => query), order: jest.fn(() => query),
-    range: jest.fn(async () => ({ data: [movimiento()], error: null })) };
+    range: jest.fn(async () => ({ data: [movimiento()], count: 1, error: null })) };
   (supabase.from as jest.Mock).mockReturnValue(query);
 });
 afterEach(() => {
@@ -93,18 +93,44 @@ test('lee movimientos autenticados, por afiliación y con rango acotado', async 
   expect(await consultarMovimientosComision(82)).toEqual([movimiento()]);
   expect(supabase.from).toHaveBeenCalledWith('movimientos_comision');
   expect(query.eq).toHaveBeenCalledWith('afiliacion_id', 82);
+  expect(query.select).toHaveBeenCalledWith('id,afiliacion_id,pedido_id,tipo,estado,monto_clp,creado_en', { count: 'exact' });
   expect(query.range).toHaveBeenCalledWith(0, 199);
 });
 test('página completa obliga a leer la siguiente antes de publicar el saldo', async () => {
-  query.range.mockResolvedValueOnce({ data: Array.from({ length: 200 }, (_, i) => movimiento({ id: i + 1 })), error: null })
-    .mockResolvedValueOnce({ data: [movimiento({ id: 201 })], error: null });
+  query.range.mockResolvedValueOnce({ data: Array.from({ length: 200 }, (_, i) => movimiento({ id: i + 1 })), count: 201, error: null })
+    .mockResolvedValueOnce({ data: [movimiento({ id: 201 })], count: 201, error: null });
   expect(await consultarMovimientosComision(82)).toHaveLength(201);
   expect(query.range).toHaveBeenLastCalledWith(200, 399);
 });
+
+test('recupera tres movimientos aunque PostgREST limite cada respuesta a dos filas', async () => {
+  query.range.mockResolvedValueOnce({ data: [movimiento(), movimiento({ id: 2, monto_clp: 200 })], count: 3, error: null })
+    .mockResolvedValueOnce({ data: [movimiento({ id: 3, monto_clp: 350 })], count: 3, error: null });
+  const filas = await consultarMovimientosComision(82);
+  expect(filas.map(f => f.id)).toEqual([1, 2, 3]);
+  expect(query.range.mock.calls).toEqual([[0, 199], [2, 201]]);
+  expect(resumirComisiones(filas)).toEqual({ disponible: 1400, pendiente: 0 });
+});
+
 test.each([
-  { data: null, error: null }, { data: [], error: { code: 'XX000' } },
-  { data: [movimiento({ afiliacion_id: 99 })], error: null },
-  { data: [movimiento(), movimiento()], error: null },
+  { data: [movimiento()], count: null, error: null },
+  { data: [], count: 3, error: null },
+  { data: [movimiento({ id: 3 })], count: 4, error: null },
+  { data: null, count: null, error: { code: 'XX000' } },
+])('una segunda página incompleta o inconsistente no publica un saldo parcial: %j', async segunda => {
+  query.range.mockResolvedValueOnce({ data: [movimiento(), movimiento({ id: 2 })], count: 3, error: null })
+    .mockResolvedValueOnce(segunda);
+  await expect(consultarMovimientosComision(82)).rejects.toThrow();
+});
+
+test('un total exacto cero confirma que no hay movimientos', async () => {
+  query.range.mockResolvedValueOnce({ data: [], count: 0, error: null });
+  expect(await consultarMovimientosComision(82)).toEqual([]);
+});
+test.each([
+  { data: null, count: 0, error: null }, { data: [], count: 0, error: { code: 'XX000' } },
+  { data: [movimiento({ afiliacion_id: 99 })], count: 1, error: null },
+  { data: [movimiento(), movimiento()], count: 2, error: null },
 ])('no presenta como saldo cero un error o filas ajenas: %j', async respuesta => {
   query.range.mockResolvedValue(respuesta);
   await expect(consultarMovimientosComision(82)).rejects.toThrow();

@@ -33,6 +33,9 @@ export default function SolicitarAfiliacion({ campana, solicitud, perfilEstado, 
       if (montado.current) setBusy(false);
     }
   };
+  if (perfilEstado === 'prohibido') return <Text accessibilityRole="alert" style={styles.error}>
+    Tu cuenta no tiene permisos para solicitar afiliación. Contacta al administrador de la cafetería.
+  </Text>;
   if (solicitud) return <EstadoAfiliacion solicitud={solicitud} confirmado={perfilEstado === 'listo'} />;
   if (perfilEstado !== 'listo') return <Text style={styles.texto}>Actualiza tus solicitudes para poder solicitar afiliación.</Text>;
   return <View style={styles.container}>

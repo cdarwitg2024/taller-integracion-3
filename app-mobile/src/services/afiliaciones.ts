@@ -83,12 +83,16 @@ export async function consultarMovimientosComision(afiliacionId: number): Promis
   const afiliacion = id(afiliacionId);
   const filas: MovimientoComision[] = [];
   const vistos = new Set<number>();
+  let total: number | undefined;
   for (let pagina = 0; pagina < 50; pagina++) {
-    const { data, error } = await leerConRenovacion(() => supabase.from('movimientos_comision')
-      .select('id,afiliacion_id,pedido_id,tipo,estado,monto_clp,creado_en')
-      .eq('afiliacion_id', afiliacion).order('id', { ascending: true }).range(pagina * 200, pagina * 200 + 199));
+    const { data, count, error } = await leerConRenovacion(() => supabase.from('movimientos_comision')
+      .select('id,afiliacion_id,pedido_id,tipo,estado,monto_clp,creado_en', { count: 'exact' })
+      .eq('afiliacion_id', afiliacion).order('id', { ascending: true }).range(filas.length, filas.length + 199));
     if (error) throw new Error('No se pudieron consultar las comisiones. Intenta nuevamente.');
-    if (!Array.isArray(data)) throw new Error('La respuesta de comisiones no es válida.');
+    if (!Array.isArray(data) || typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0 ||
+        (total !== undefined && count !== total) || filas.length + data.length > count ||
+        (!data.length && filas.length < count)) throw new Error('No se pudo confirmar el historial completo de comisiones. Actualiza la consulta.');
+    total = count;
     for (const fila of data) {
       const movimientoId = id(fila.id);
       if (id(fila.afiliacion_id) !== afiliacion || vistos.has(movimientoId) ||
@@ -100,7 +104,7 @@ export async function consultarMovimientosComision(afiliacionId: number): Promis
       vistos.add(movimientoId);
       filas.push({ ...fila, id: movimientoId, afiliacion_id: afiliacion, pedido_id: id(fila.pedido_id) });
     }
-    if (data.length < 200) return filas;
+    if (filas.length === total) return filas;
   }
   throw new Error('El historial es demasiado extenso para cargarlo completo. No se muestra un saldo parcial.');
 }

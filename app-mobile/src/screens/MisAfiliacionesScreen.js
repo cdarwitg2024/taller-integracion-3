@@ -32,8 +32,9 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
       if (montado.current && numero === consulta.current) setPerfil({ estado: 'listo', solicitudes, error: '' });
     }).catch(error => {
       if (montado.current && numero === consulta.current) setPerfil(prev => ({
-        estado: 'error', solicitudes: [401, 403].includes(error.status) ? [] : prev.solicitudes,
+        estado: error.status === 403 ? 'prohibido' : 'error', solicitudes: [401, 403].includes(error.status) ? [] : prev.solicitudes,
         error: error.status === 401 ? 'Tu sesión venció. Vuelve a iniciar sesión.'
+          : error.status === 403 ? 'Tu cuenta no tiene permisos para consultar afiliaciones. Contacta al administrador de la cafetería.'
           : 'No pudimos actualizar tus solicitudes. Intenta nuevamente.',
       }));
     });
@@ -80,9 +81,9 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
         {perfil.estado === 'cargando' && <View><ActivityIndicator accessibilityLabel="Actualizando solicitudes" />
           <Text style={styles.description}>Actualizando el estado de tus solicitudes…</Text></View>}
         {perfil.error ? <Text accessibilityRole="alert" style={styles.error}>{perfil.error}</Text> : null}
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Actualizar mis solicitudes" onPress={recargar}>
+        {perfil.estado !== 'prohibido' && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Actualizar mis solicitudes" onPress={recargar}>
           <Text style={styles.accesoTitulo}>Actualizar mis solicitudes</Text>
-        </TouchableOpacity>
+        </TouchableOpacity>}
         {actual ? (
           <>
             <View accessibilityRole="tablist" style={styles.tabs}>

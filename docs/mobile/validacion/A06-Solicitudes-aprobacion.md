@@ -1,8 +1,9 @@
 # A06 · Solicitar afiliación y mostrar aprobación en Mobile
 
-18 de noviembre de 2026. Rama `S3-T6-Ariel-Diaz-Solicitar-afiliacion-y-mostrar-aprobacion`,
+Implementación del 18 de noviembre y revisión del 20 de noviembre de 2026.
+Rama `S3-T6-Ariel-Diaz-Solicitar-afiliacion-y-mostrar-aprobacion`,
 basada en A03/A04 (`693645b`), con la corrección de vencimiento de A03 y
-`develop` actualizado a `446127f`, que incluye C05 paginado (`1977914`).
+`develop` actualizado a `1f92411`, con A03/A04 integradas y C05 paginado (`1977914`).
 Los cambios de A06 permanecen en su rama; no se publican directamente en `develop`.
 
 ## Flujo y estados
@@ -46,14 +47,22 @@ usuario. Los números de solicitud y los flags de montaje impiden publicar
 respuestas anteriores al cambiar de vista o cuenta. Los errores 401/403 retiran
 el código y el panel previamente cargados. Se eliminan los listeners al salir.
 
+Un `403` del perfil tiene estado propio `prohibido` y mensaje de falta de
+permisos; remite al administrador de la cafetería. No muestra «Actualizar mis
+solicitudes» ni el formulario de envío, y Oportunidades no invita a actualizar
+para reintentar. Los errores transitorios conservan la posibilidad de reintento.
+
 ## Saldo e historial persistidos
 
 C05 devuelve solicitudes, no importes. A06 reutiliza el cliente Supabase de la
 sesión para leer `public.movimientos_comision`. El contrato de BD V04/`0020`
 concede SELECT a `authenticated`, limitado por RLS al estudiante de la afiliación.
 El gateway y el cliente Supabase Mobile deben usar el mismo entorno Auth/BD.
-La consulta filtra el ID devuelto por C05, solicita columnas explícitas y pagina
-de 200 en 200. Una respuesta de otra afiliación, duplicada o malformada se rechaza.
+La consulta filtra el ID devuelto por C05 y pide un máximo de 200 filas junto
+al total exacto (`count: exact`). Avanza el rango por las filas recibidas, aunque
+PostgREST imponga un límite menor, y termina solo al alcanzar ese total.
+Una respuesta de otra afiliación, duplicada o malformada se rechaza. Un total
+ausente o cambiante, o una página vacía antes de completarlo, producen error.
 Si se alcanza el límite de lectura, informa error y no publica un saldo parcial.
 
 - Disponible: suma `tipo = comision`, `estado = disponible`.
@@ -91,6 +100,16 @@ no crea un endpoint, un pago o una deducción de saldo.
   y modo `--a06` del [runner compartido](../../../.github/scripts/test-afiliados-auth-integration.cjs).
 - Índice, estado funcional y contrato de lectura; se conserva el registro C05
   integrado desde `develop`.
+
+## Integración en CI
+
+[CI Functional](../../../.github/workflows/ci-functional.yml) incorpora el job
+`mobile-afiliaciones` para los PR hacia `develop`/`main`. Instala las dependencias
+de Mobile, ms-pedidos y ms-cafeterías, prepara shared y descarga las migraciones
+del repositorio oficial de BD fijadas al SHA `07b5a6a`. Ejecuta el runner con
+`--a06`, que comprueba también los seis escenarios C05. La prueba deja de quedar
+solo como una ejecución manual; se conserva asimismo el job C03/E06 sin flags.
+El workflow no cambia las reglas de protección de ramas de GitHub.
 
 ## Registro reproducible
 
@@ -137,27 +156,30 @@ el flujo de compra, entrega y generación automática de comisiones.
 | Abrir con solicitudes pendiente y rechazada persistidas de un estudiante nuevo | Mensajes reales; sin código ni controles Mis códigos/Ganancias/Historial |
 | Abrir Oportunidades, elegir Norte y solicitar con plan | POST real crea pendiente; no muestra código ni aprobación local |
 | Dueño aprueba por C05; actualizar solicitudes | Muestra el código generado por SQL y habilita el panel |
-| Registrar una comisión y marcarla disponible en el fixture; abrir Ganancias | Saldo disponible $850 leído mediante PostgREST y RLS del estudiante |
-| Dueño desactiva por C05; actualizar | Aviso de código desactivado; saldo $850 conservado |
-| Abrir Mis códigos e Historial | Conserva el código reservado e informa que no se usa; muestra Pedido #1001 y comisión disponible |
+| Registrar tres comisiones disponibles de $850, $200 y $350; abrir Ganancias con PostgREST limitado a dos filas | Recupera las tres y muestra saldo $1.400, no el subtotal de la primera página |
+| Dueño desactiva por C05; actualizar | Aviso de código desactivado; saldo $1.400 conservado |
+| Abrir Mis códigos e Historial | Conserva el código reservado e informa que no se usa; muestra los pedidos #1001, #1002 y #1003 |
 | Desmontar y reabrir con el mismo JWT | Consulta de nuevo y conserva código desactivado, saldo e historial persistidos |
 | Cambiar de cuenta con una consulta anterior pendiente, en prueba controlada | La respuesta anterior no aparece en la cuenta nueva |
 | Fallar una lectura de comisiones | No inventa saldo cero ni elimina una consulta válida anterior |
 | Doble toque en Enviar, en prueba controlada | Una llamada; C05 también comprueba reintentos concurrentes en su integración |
+| Responder 403 al perfil y abrir Oportunidades, en prueba controlada | Mensaje de permisos, sin código/panel, formulario ni invitación a actualizar para reintentar |
+| Fallar una segunda página o recibir un total ausente/cambiante, en prueba controlada | No publica un historial o saldo parcial |
 
 Resultados finales:
 
-- Suite móvil: **192/192 PASS en 20 suites**, con `--testTimeout=20000`. El
+- Suite móvil: **199/199 PASS en 20 suites**, con `--testTimeout=20000`. El
   límite ampliado corresponde al timeout local de Pedidos ya documentado en A01;
   no se modificó la configuración de Jest.
-- A06: **36 pruebas nuevas** de servicio/pantalla; las regresiones de perfil y
+- A06: **43 pruebas de servicio/pantalla**; las regresiones de perfil y
   las vistas de A03/A04 permanecen aprobadas.
 - Integración A06: **1/1 PASS**, además de **seis escenarios reales de C05**.
   PostgREST limita las páginas a dos filas: Mis códigos conserva la solicitud
   pendiente de la segunda página, además de la rechazada y la aprobada.
-- Runner compartido sin flags: **12 escenarios reales de C03 PASS** después de
-  añadir la espera de finalización, sin alterar sus aserciones.
-- TypeScript, 105 enlaces relativos y `git diff --check`: **PASS**.
+- Referencia histórica del runner sin flags (18 de noviembre): **12 escenarios
+  reales de C03 PASS** después de añadir la espera de finalización. La versión
+  actual incorpora también E06 desde develop y conserva su propio job de CI.
+- TypeScript, 111 enlaces relativos y `git diff --check`: **PASS**.
 - Exportación Android: **PASS**, 780 módulos y bundle Hermes, sin cargar `.env`
   y con valores públicos sintéticos. No es una construcción de APK.
 

@@ -121,3 +121,27 @@ jobs:
       - run: ln -s ../ms-pedidos/node_modules Microservices/shared/node_modules
       - name: C03 through gateway, real Auth JWTs, PostgREST, RPC and RLS
         run: node .github/scripts/test-afiliados-auth-integration.cjs
+  mobile-afiliaciones:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: Diego24Vas/db_CoffeeFaster
+          ref: 07b5a6aaad2a1ea8eb73ae5dbce5af9db02d16f2
+          path: .test-bd
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --prefix Microservices/ms-pedidos
+      - run: npm ci --prefix Microservices/ms-cafeterias
+      - run: ln -s ../ms-pedidos/node_modules Microservices/shared/node_modules
+      - run: npm ci --prefix app-mobile
+      - name: A06 and C05 through gateway, real Auth JWTs, PostgreSQL and RLS
+        env:
+          COFFEEFAST_DB_MIGRATIONS: ${{ github.workspace }}/.test-bd/supabase/migrations
+          TEST_AUTH_IMAGE: supabase/gotrue:v2.197.0
+          TEST_REST_IMAGE: postgrest/postgrest:v16.3
+        run: node .github/scripts/test-afiliados-auth-integration.cjs --a06

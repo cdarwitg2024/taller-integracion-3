@@ -112,6 +112,25 @@ test.each([401, 403])('HTTP %s retira el código y el panel de una consulta ante
   expect(boton('Ganancias')).toBeUndefined();
 });
 
+test('403 del perfil explica los permisos, retira el panel y no invita a reintentar el formulario', async () => {
+  perfil = [aprobada];
+  await montar();
+  consultarAfiliaciones.mockRejectedValue(Object.assign(new Error('prohibido'), { status: 403 }));
+  await pulsar('Actualizar mis solicitudes');
+  expect(texto()).toContain('Tu cuenta no tiene permisos para consultar afiliaciones');
+  expect(texto()).not.toContain('CF-DEL-SERVIDOR');
+  expect(boton('Ganancias')).toBeUndefined();
+  expect(boton('Actualizar mis solicitudes')).toBeUndefined();
+  await pulsar('Oportunidades');
+  await pulsar('Ver campañas de Norte');
+  expect(texto()).toContain('Tu cuenta no tiene permisos para solicitar afiliación');
+  expect(texto()).not.toContain('Actualiza tus solicitudes para poder solicitar');
+  expect(texto()).not.toContain('Intenta nuevamente');
+  expect(boton('Solicitar afiliación a Campaña Norte')).toBeUndefined();
+  expect(boton('Enviar solicitud de afiliación')).toBeUndefined();
+  expect(solicitarAfiliacion).not.toHaveBeenCalled();
+});
+
 test('fallar la consulta de movimientos no presenta un saldo cero ni elimina un saldo previo', async () => {
   perfil = [aprobada];
   consultarMovimientosComision.mockRejectedValueOnce(new Error('sin conexión'));
