@@ -36,6 +36,8 @@ kubectl -n student-cdarwitg rollout status deployment/ms-pedidos
 
 Si Services/HPA ya existen, comparar primero y aplicar solo los archivos que corresponda actualizar. Gateway depende de su Service, ConfigMap y Deployment; un cambio del ConfigMap no demuestra que los procesos Nginx hayan recargado la configuración. Revisar y realizar el rollout correspondiente cuando esté autorizado. Ingress se define en ingress-api.yaml.
 
+El [HPA de ms-afiliados](../../../k8s-next/ms-afiliados/hpa.yaml) replica la política de `ms-menus`. Define entre 1 y 3 réplicas, un objetivo de CPU del 70 % sobre el request de 50m por Pod y una ventana de estabilización de 300 s al reducir réplicas. Para el primer despliegue, verificar la Metrics API y la cuota del namespace, aprovisionar el Deployment con el digest de publicación y comprobar sus Pods antes de aplicar el HPA y habilitar el tráfico por el gateway.
+
 Nunca usar apply recursivo sobre todo el árbol ni aplicar ejemplos de Secrets. No se necesita crear un Pod curl para una inspección rutinaria; las consultas de estado son de solo lectura.
 
 ## Verificación
