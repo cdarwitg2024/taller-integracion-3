@@ -1,16 +1,16 @@
 import React from 'react';
-import { Alert, TouchableOpacity } from 'react-native';
+import { Alert, Text, TouchableOpacity } from 'react-native';
 import { act, create, ReactTestRenderer } from 'react-test-renderer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { randomUUID } from 'expo-crypto';
 import App from '../App';
 import CartScreen from '../src/screens/CartScreen';
+import Button from '../src/components/Button';
 import MenuScreen from '../src/screens/MenuScreen';
 import { CafeteriaListScreen } from '../src/screens/CafeteriaListScreen';
 import { supabase } from '../src/lib/supabase';
 
 jest.mock('expo-crypto', () => ({ randomUUID: jest.fn() }));
-jest.mock('../src/screens/CartScreen', () => () => null);
 jest.mock('../src/screens/MenuScreen', () => () => null);
 jest.mock('../src/screens/CafeteriaListScreen', () => ({ CafeteriaListScreen: () => null }));
 jest.mock('react-native-safe-area-context', () => {
@@ -31,6 +31,11 @@ const urlAnterior = process.env.EXPO_PUBLIC_API_URL;
 let tree: ReactTestRenderer, transporte: jest.Mock, disponibilidad: jest.Mock;
 const confirmar = () => tree.root.findByType(CartScreen).props.onCheckout(retiro);
 const claves = () => transporte.mock.calls.map(([, opciones]) => opciones.headers['Idempotency-Key']);
+async function pagarDesdePantalla() {
+  await act(async () => tree.root.findByProps({ accessibilityLabel: 'Retirar lo antes posible' }).props.onPress());
+  await act(async () => { await tree.root.findAllByType(Button)
+    .find(nodo => nodo.props.title === 'Proceder al Pago')!.props.onPress(); });
+}
 async function pestaña(nombre: string) {
   await act(async () => tree.root.findAllByType(TouchableOpacity).find(nodo =>
     nodo.props.accessibilityRole === 'tab' && nodo.props.accessibilityLabel.startsWith(nombre))!.props.onPress());
@@ -45,6 +50,7 @@ async function agregarOtraCompra() {
 
 beforeEach(async () => {
   jest.useFakeTimers();
+  jest.setSystemTime(new Date(2026, 10, 20, 12, 14));
   jest.clearAllMocks();
   await AsyncStorage.clear();
   await AsyncStorage.setItem('@coffeefast/cart', JSON.stringify([producto]));
@@ -89,12 +95,29 @@ test('App confirma el pedido y otra compra idéntica recibe una clave nueva', as
   transporte.mockResolvedValue({ ok: true, status: 201, text: async () => JSON.stringify({ pedido: {
     ok: true, pedido_id: 501, total: 2500, saldo_restante: 7500,
   } }) });
-  await act(async () => { await confirmar(); });
+  await pagarDesdePantalla();
   expect(tree.root.findByType(CartScreen).props.cart).toHaveLength(0);
+  act(() => jest.advanceTimersByTime(120000));
   await agregarOtraCompra();
-  await act(async () => { await confirmar(); });
+  await pagarDesdePantalla();
   expect(claves()[1]).not.toBe(claves()[0]);
+  expect(JSON.parse(transporte.mock.calls[1][1].body).franja_retiro).toBe('12:15-12:30');
 });
+
+test.each(['respuesta perdida', 'respuesta incompleta'])(
+  'pantalla real: %s y cambio automático de franja conservan clave y cuerpo', async caso => {
+    if (caso === 'respuesta perdida') transporte.mockRejectedValueOnce(new Error('respuesta perdida'));
+    await pagarDesdePantalla();
+    const original = transporte.mock.calls[0][1];
+    expect(JSON.parse(original.body).franja_retiro).toBe('12:00-12:15');
+    act(() => jest.advanceTimersByTime(120000));
+    expect(tree.root.findAllByType(Text).flatMap(nodo => nodo.props.children).join(' '))
+      .toContain('12:15 - 12:30');
+    await pagarDesdePantalla();
+    expect(claves()[1]).toBe(claves()[0]);
+    expect(transporte.mock.calls[1][1].body).toBe(original.body);
+    expect(randomUUID).toHaveBeenCalledTimes(1);
+  });
 
 test('retirar el último producto y crear otro carrito renueva la clave aunque los datos coincidan', async () => {
   await act(async () => { await confirmar(); });

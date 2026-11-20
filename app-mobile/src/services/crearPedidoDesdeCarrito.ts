@@ -1,5 +1,5 @@
 import { apiPost } from './backendClient';
-import { obtenerClaveIntentoCompra } from './intentoCompra';
+import { obtenerIntentoCompra } from './intentoCompra';
 
 export type RetiroCheckout = { franja: string; codigo?: string };
 type ProductoCarrito = { id: number; quantity: number; price: number };
@@ -22,6 +22,6 @@ export async function crearPedidoDesdeCarrito<T>(
     franja_retiro: retiro.franja,
     ...(codigo ? { codigo } : {}),
   };
-  const claveIdempotencia = await obtenerClaveIntentoCompra(usuarioId, cuerpo);
-  return apiPost<T>('/api/pedidos', cuerpo, { timeoutMs, claveIdempotencia });
+  const intento = await obtenerIntentoCompra(usuarioId, cuerpo);
+  return apiPost<T>('/api/pedidos', intento.cuerpo, { timeoutMs, claveIdempotencia: intento.clave });
 }

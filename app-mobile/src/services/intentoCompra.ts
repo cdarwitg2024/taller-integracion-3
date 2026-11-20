@@ -1,7 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { randomUUID } from 'expo-crypto';
 
-type IntentoCompra = { firma: string; clave: string };
+type CuerpoCompra = Record<string, unknown> & { franja_retiro: string };
+type IntentoGuardado = { firma: string; clave: string };
+type IntentoCompra<T> = { cuerpo: T; clave: string };
 const colas = new Map<string, Promise<unknown>>();
 const invalidados = new Set<string>();
 const almacenamiento = (usuarioId: string) => `@coffeefast/intento-compra/${usuarioId}`;
@@ -13,21 +15,33 @@ function enOrden<T>(usuarioId: string, operacion: () => Promise<T>): Promise<T> 
   return siguiente;
 }
 
-export function obtenerClaveIntentoCompra(usuarioId: string, cuerpo: unknown): Promise<string> {
+function confirmacion(cuerpo: CuerpoCompra): string {
+  const { franja_retiro, ...datos } = cuerpo;
+  return JSON.stringify(datos);
+}
+
+export function obtenerIntentoCompra<T extends CuerpoCompra>(usuarioId: string, cuerpo: T): Promise<IntentoCompra<T>> {
   if (!usuarioId) return Promise.reject(new Error('La compra requiere una cuenta activa.'));
   const firma = JSON.stringify(cuerpo);
   return enOrden(usuarioId, async () => {
     const guardado = await AsyncStorage.getItem(almacenamiento(usuarioId));
     // Una lectura dañada no permite saber si el intento anterior llegó a cobrarse.
-    const anterior: IntentoCompra | null = guardado ? JSON.parse(guardado) : null;
+    const anterior: IntentoGuardado | null = guardado ? JSON.parse(guardado) : null;
     if (guardado && (!anterior || typeof anterior.firma !== 'string' || typeof anterior.clave !== 'string' || !anterior.clave)) {
       throw new Error('No se pudo recuperar el intento de compra. Revisa tus pedidos.');
     }
-    if (!invalidados.has(usuarioId) && anterior?.firma === firma) return anterior.clave;
+    // La firma contiene el cuerpo original; también recupera los registros previos de D07.
+    const original: T | null = anterior ? JSON.parse(anterior.firma) : null;
+    if (anterior && (!original || typeof original.franja_retiro !== 'string')) {
+      throw new Error('No se pudo recuperar el cuerpo del intento. Revisa tus pedidos.');
+    }
+    if (!invalidados.has(usuarioId) && anterior && original && confirmacion(original) === confirmacion(cuerpo)) {
+      return { clave: anterior.clave, cuerpo: original };
+    }
     const clave = randomUUID();
     await AsyncStorage.setItem(almacenamiento(usuarioId), JSON.stringify({ firma, clave }));
     invalidados.delete(usuarioId);
-    return clave;
+    return { clave, cuerpo: JSON.parse(firma) as T };
   });
 }
 

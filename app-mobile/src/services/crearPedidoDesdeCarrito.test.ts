@@ -50,24 +50,33 @@ test('respuesta perdida y reintento manual conservan la misma clave y cuerpo', a
 
 test('otra instancia recupera la clave desde almacenamiento, sin memoria del módulo anterior', async () => {
   await enviar();
-  let recuperar!: typeof import('./intentoCompra').obtenerClaveIntentoCompra;
+  let recuperar!: typeof import('./intentoCompra').obtenerIntentoCompra;
   jest.isolateModules(() => {
     jest.doMock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: AsyncStorage }));
-    recuperar = require('./intentoCompra').obtenerClaveIntentoCompra;
+    recuperar = require('./intentoCompra').obtenerIntentoCompra;
   });
   const cuerpo = JSON.parse(transporte.mock.calls[0][1].body);
-  expect(await recuperar('comprador-a', cuerpo)).toBe(claves()[0]);
+  const recuperado = await recuperar('comprador-a', { ...cuerpo, franja_retiro: '12:45-13:00' });
+  expect(recuperado.clave).toBe(claves()[0]);
+  expect(recuperado.cuerpo).toEqual(cuerpo);
 });
 
-test.each(['cantidad', 'cafetería', 'precio', 'código', 'franja'])(
+test.each(['cantidad', 'cafetería', 'precio', 'código'])(
   'otra confirmación con distinto %s recibe otra clave', async cambio => {
     await enviar();
     await crearPedidoDesdeCarrito(cambio === 'cafetería' ? 12 : 7,
       [{ ...productos[0], quantity: cambio === 'cantidad' ? 2 : 1, price: cambio === 'precio' ? 3000 : 2500 }],
-      { ...retiro, codigo: cambio === 'código' ? 'SUR' : retiro.codigo,
-        franja: cambio === 'franja' ? '12:45-13:00' : retiro.franja }, 15000, 'comprador-a');
+      { ...retiro, codigo: cambio === 'código' ? 'SUR' : retiro.codigo }, 15000, 'comprador-a');
     expect(claves()[1]).not.toBe(claves()[0]);
   });
+
+test('cambiar solo la franja automática conserva la clave y el cuerpo originales', async () => {
+  transporte.mockRejectedValueOnce(new Error('respuesta perdida'));
+  await expect(enviar()).rejects.toMatchObject({ resultadoIncierto: true });
+  await crearPedidoDesdeCarrito(7, productos, { ...retiro, franja: '12:45-13:00' }, 15000, 'comprador-a');
+  expect(claves()[1]).toBe(claves()[0]);
+  expect(transporte.mock.calls[1][1].body).toBe(transporte.mock.calls[0][1].body);
+});
 
 test('vaciar o confirmar la compra permite otra idéntica con una clave nueva', async () => {
   await enviar();
