@@ -12,7 +12,8 @@ const mockEstado = {
   usuarios: new Map(),
   cafeteriaUsuarios: [],
   logs: [],
-  consultas: []
+  consultas: [],
+  qrEsUuid: false
 };
 
 const resetMockEstado = () => {
@@ -21,6 +22,7 @@ const resetMockEstado = () => {
   mockEstado.cafeteriaUsuarios.length = 0;
   mockEstado.logs.length = 0;
   mockEstado.consultas.length = 0;
+  mockEstado.qrEsUuid = false;
 };
 
 jest.mock('@coffeefaster/shared', () => {
@@ -92,6 +94,10 @@ jest.mock('@coffeefaster/shared', () => {
       }
 
       if (tabla === 'pedidos') {
+        if (mockEstado.qrEsUuid && filtros.some((f) => f.tipo === 'orQr' &&
+          !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(f.valor))) {
+          return { data: null, error: { code: '22P02', message: 'invalid input syntax for type uuid' } };
+        }
         const filas = resolver(tabla, [...mockEstado.pedidos.values()], filtros);
         if (modoLista) return { data: filas.map((fila) => ({ ...fila })), error: null };
         const [fila] = filas;
@@ -206,6 +212,22 @@ describe('POST /api/pedidos/validar-qr', () => {
     expect(res.status).toBe(200);
     expect(res.body.valido).toBe(true);
     expect(pedido100()).toMatchObject({ estado: 'entregado', qr_usado: true });
+  });
+
+  test.each([
+    ['QR UUID', '12345678-1234-4234-8234-123456789abc'],
+    ['contingencia con columna QR de tipo UUID', 'CF-0425']
+  ])('%s confirma la entrega', async (_caso, credencial) => {
+    const pedido = sembrar();
+    mockEstado.qrEsUuid = true;
+    pedido.qr_token = '12345678-1234-4234-8234-123456789abc';
+    pedido.codigo_retiro_diario = 'CF-0425';
+
+    const res = await entregar(credencial);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ valido: true, motivo: 'entregado' });
+    expect(pedido).toMatchObject({ estado: 'entregado', qr_usado: true });
   });
 
   test('repetir el QR devuelve ya_entregado y no reescribe la entrega', async () => {

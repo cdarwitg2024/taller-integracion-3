@@ -820,11 +820,21 @@ async function validarQr({ user, body }) {
     );
   }
 
-  const { data: coincidencias, error: errPedido } = await cliente
+  let { data: coincidencias, error: errPedido } = await cliente
     .from('pedidos')
     .select(CAMPOS_PEDIDO_PUBLICOS)
     .or(`qr_token.eq.${credencial},codigo_retiro_diario.eq.${credencial}`)
     .limit(2);
+
+  // Si qr_token es UUID, PostgreSQL rechaza un codigo de contingencia no UUID
+  // antes de evaluar el OR. Con qr_token de texto, el OR conserva los QR legados.
+  if (errPedido?.code === '22P02') {
+    ({ data: coincidencias, error: errPedido } = await cliente
+      .from('pedidos')
+      .select(CAMPOS_PEDIDO_PUBLICOS)
+      .eq('codigo_retiro_diario', credencial)
+      .limit(2));
+  }
 
   if (errPedido) throw new HttpError(503, errPedido.message);
   if (!Array.isArray(coincidencias) || coincidencias.length === 0) {
