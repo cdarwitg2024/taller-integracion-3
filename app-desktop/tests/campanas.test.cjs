@@ -967,9 +967,26 @@ test('un error al cambiar el estado se muestra conservando el listado', async t 
   }) });
   await act(async () => h.boton('Pausar').props.onClick());
   assert.match(h.texto(), /campana_no_activa/);
+  assert.match(h.texto(), /Semana del café/);
+  assert.ok(h.boton('Pausar'));
   assert.ok(h.boton('Reintentar'));
   await act(async () => h.boton('Reintentar').props.onClick());
   assert.match(h.texto(), /Semana del café/);
+  assert.doesNotMatch(h.texto(), /campana_no_activa/);
+});
+
+test('un error al cambiar el estado en el resumen conserva la campaña abierta', async t => {
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31',
+    campanas: servicio(async () => [campana(31, 'Semana del café')], {
+      cambiarEstado: async () => { throw new Error('campana_no_activa'); },
+    }),
+  });
+  await act(async () => h.boton('Pausar').props.onClick());
+  assert.match(h.texto(), /campana_no_activa/);
+  assert.match(h.texto(), /Semana del café/);
+  assert.ok(h.boton('Pausar'));
+  assert.ok(h.boton('Reintentar'));
 });
 
 test('cambiar de cafetería durante el PATCH descarta el resultado y el error atrasados', async t => {

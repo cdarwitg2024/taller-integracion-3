@@ -56,8 +56,13 @@ protegidos por `assert`. El escenario encadena:
 
 - Integración desechable: 14 escenarios aprobados, incluido el nuevo, con Auth,
   JWT, gateway, PostgREST, RPC y RLS reales; sin Cloud ni archivos `.env`.
-- Escritorio: 112/112 pruebas aprobadas y compilación de producción correcta.
+- Escritorio: 113/113 pruebas aprobadas y compilación de producción correcta.
 - `git diff --check` sin errores.
+
+Tras la revisión de cdarwitg2024 en el PR #89 se separó el error de la operación
+del error de carga: si falla Pausar o Activar, el aviso y las tarjetas ya
+cargadas se muestran juntos, tanto en el listado como en el resumen. Las pruebas
+verifican ese estado antes de reintentar y que el aviso desaparece después.
 
 ## Límites de la evidencia
 
