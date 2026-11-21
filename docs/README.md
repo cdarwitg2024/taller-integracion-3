@@ -17,6 +17,8 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 
 ### Validación
 
+- [C06 / CAM-261 — Regresión de entrega desde el KDS](desktop/validacion/C06-CAM-261-regresion-kds.md)
+
 - [V01 / CAM-223 — Acceso Afiliados del dueño](desktop/validacion/V01-CAM-223-Acceso-Afiliados.md)
 - [E03 / CAM-290 — Vista principal de campañas del dueño](desktop/validacion/E03-CAM-290-Vista-Campanas.md)
 - [E04 / CAM-225 — Listado de campañas por cafetería del dueño](desktop/validacion/E04-CAM-225-Cambio-Cafeteria-Campanas.md)
