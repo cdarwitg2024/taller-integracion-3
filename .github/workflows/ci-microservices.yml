@@ -38,7 +38,7 @@ jobs:
         run: npm ci --prefix Microservices/${{ matrix.service }}
       - name: Resolve the shared package dependencies
         # file:../shared is a symlink; Node resolves from shared/, not the service.
-        run: ln -s ../${{ matrix.service }}/node_modules Microservices/shared/node_modules
+        run: ln -sfn ../${{ matrix.service }}/node_modules Microservices/shared/node_modules
       - run: npm test --prefix Microservices/shared
       - run: npm test --prefix Microservices/${{ matrix.service }} -- --ci
       - name: Verify tests detect a functional defect in this service

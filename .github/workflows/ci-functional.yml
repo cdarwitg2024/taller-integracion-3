@@ -18,7 +18,7 @@ jobs:
           node-version: '22'
       - run: npm ci --prefix Microservices/ms-menus
       - run: npm ci --prefix Microservices/ms-cafeterias
-      - run: ln -s ../ms-menus/node_modules Microservices/shared/node_modules
+      - run: ln -sfn ../ms-menus/node_modules Microservices/shared/node_modules
       - name: HTTP APIs through real PostgREST and PostgreSQL
         run: node .github/scripts/test-catalog-integration.cjs
   telegram:
@@ -118,7 +118,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --prefix Microservices/ms-pedidos
-      - run: ln -s ../ms-pedidos/node_modules Microservices/shared/node_modules
+      - run: ln -sfn ../ms-pedidos/node_modules Microservices/shared/node_modules
       - name: C03 through gateway, real Auth JWTs, PostgREST, RPC and RLS
         run: node .github/scripts/test-afiliados-auth-integration.cjs
   mobile-afiliaciones:
@@ -137,7 +137,7 @@ jobs:
           node-version: '22'
       - run: npm ci --prefix Microservices/ms-pedidos
       - run: npm ci --prefix Microservices/ms-cafeterias
-      - run: ln -s ../ms-pedidos/node_modules Microservices/shared/node_modules
+      - run: ln -sfn ../ms-pedidos/node_modules Microservices/shared/node_modules
       - run: npm ci --prefix app-mobile
       - name: A06 and C05 through gateway, real Auth JWTs, PostgreSQL and RLS
         env:
