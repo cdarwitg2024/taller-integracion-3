@@ -27,7 +27,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import jsQR from 'jsqr';
 
 import backendApi from '../services/backendApi';
-import pedidosService, { normalizarTokenQR } from '../services/pedidosService';
+import { normalizarTokenQR } from '../services/pedidosService';
 
 const FALLOS_DE_CAMARA = new Set([
   'NotAllowedError',
@@ -217,8 +217,6 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
     if (ultimoToken.current === textoLimpio && resultadoRef.current) return;
 
     const activacion = generacionRef.current;
-    const usuario = usuarioIdRef.current;
-    const cafeteria = cafeteriaIdRef.current;
     procesando.current = true;
     ultimoToken.current = textoLimpio;
     setErrorConexion('');
@@ -242,45 +240,19 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
     }
 
     try {
-      let res = null;
-      let fuePorBackend = false;
+      // El servicio es la UNICA autoridad de entrega. El KDS no escribe en
+      // Supabase ni reinterpreta un rechazo: muestra lo que responde el
+      // contrato POST /api/pedidos/validar-qr con { qr_token }.
+      const res = await backendApi.validarQr(token);
 
-      try {
-        res = await backendApi.validarQr(token);
-        fuePorBackend = true;
-        if (generacionRef.current !== activacion) return;
-      } catch (backendErr) {
-        if (generacionRef.current !== activacion) return;
-        console.warn('[KDS Escáner] MS Comercio no disponible para validar QR, fallback a Supabase:', backendErr.message);
-        res = await pedidosService.validarQrEntrega(token, usuario, cafeteria);
-        if (generacionRef.current !== activacion) return;
-      }
-
-      // Si el MS Comercio rechazó (ej. no tenía el token en memoria), verificar en Supabase
-      if (
-        fuePorBackend &&
-        res &&
-        res.valido === false &&
-        !res.razon?.includes('ya fue entregado') &&
-        !res.razon?.includes('no está listo')
-      ) {
-        if (generacionRef.current !== activacion) return;
-        try {
-          const porSupabase = await pedidosService.validarQrEntrega(token, usuario, cafeteria);
-          if (generacionRef.current !== activacion) return;
-          if (porSupabase && porSupabase.valido) {
-            console.warn('[KDS Escáner] MS Comercio rechazó la credencial, Supabase sí la aceptó:', res.razon);
-            res = porSupabase;
-          }
-        } catch {
-          // Mantener el rechazo del backend
-        }
+      if (!res || typeof res.valido === 'undefined') {
+        throw new Error('El servicio de pedidos devolvió una respuesta inválida al validar la entrega.');
       }
 
       if (generacionRef.current !== activacion) return;
 
       // Garantizar que siempre haya una razón explicativa si es rechazo
-      if (res && res.valido === false && !res.razon) {
+      if (res.valido === false && !res.razon) {
         res.razon = 'Código QR o Token no válido para entrega.';
       }
 
@@ -738,7 +710,7 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
                     Pedido #{resultado.pedido.id}
                   </Typography>
                   <Typography variant="caption" sx={{ color: '#A5D6A7', display: 'block' }}>
-                    Estado actual: Entregado
+                    Estado actual: {resultado.pedido.estado === 'entregado' ? 'Entregado' : resultado.pedido.estado}
                   </Typography>
                   {resultado.pedido.usuarios?.nombre && (
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>
@@ -843,7 +815,7 @@ function EscanearQrDialog({ open, cafeteriaId, usuarioId, onClose }) {
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             {modo === 'qr'
               ? 'Apunta la cámara al código QR generado por la app móvil.'
-              : 'Acepta token del QR, código de contingencia o ID del pedido.'}
+              : 'Acepta el token del QR o el código de contingencia del pedido.'}
           </Typography>
           {modo === 'qr' && !resultado && (
             <Button
