@@ -231,7 +231,32 @@ async function main() {
       await require('./test-solicitudes-afiliacion-c05.cjs')({ check, call, sql, tokens });
       if (probarA06) await require('./test-mobile-afiliacion-a06.cjs')({ call, sql, tokens, base, anon,
         supabaseUrl: process.env.SUPABASE_URL, dbContainer: names.pg });
-      console.log(`${checks} escenarios C05 con Auth, JWT, gateway y PostgreSQL reales aprobados.`);
+      await check('E08: pausar retira la campaña de oportunidades móviles y activar la devuelve', async () => {
+        // La cafetería 8 evita el tope de dos filas de PostgREST que usa C05.
+        const cafeteriaId = 8;
+        const modulo = await cargarServicioCampanasEscritorio(path.join(temp, 'escritorio-e08'), base, tokens.otro);
+        const servicio = modulo.campanasAfiliados;
+        const oportunidades = async () => {
+          const respuesta = await call('/rest/v1/rpc/listar_oportunidades_campana', tokens.estudiante, 'POST', { p_cafeteria_id: cafeteriaId });
+          assert.equal(respuesta.status, 200, JSON.stringify(respuesta.body));
+          assert.ok(Array.isArray(respuesta.body));
+          return respuesta.body;
+        };
+        const campana = JSON.parse(sql(`INSERT INTO public.campanas(cafeteria_id,nombre,estado,tasa_descuento,tasa_descuento_oferta,tasa_comision,vigencia_desde,vigencia_hasta)
+          VALUES (${cafeteriaId},'Campaña E08 móvil','pendiente_aceptacion',15,5,10,now()-interval '1 hour',now()+interval '1 day')
+          RETURNING json_build_object('id',id,'version',version_condiciones);`).split('\n')[0]);
+        const aceptada = await call('/rest/v1/rpc/confirmar_condiciones_campana', tokens.otro, 'POST', {
+          p_campana_id: campana.id, p_cafeteria_id: cafeteriaId, p_version: campana.version,
+        });
+        assert.equal(aceptada.status, 200, JSON.stringify(aceptada.body));
+        const visible = lista => lista.some(c => Number(c.id) === Number(campana.id));
+        assert.ok(visible(await oportunidades()), 'La campaña aceptada no aparece en oportunidades');
+        assert.equal((await servicio.cambiarEstado(cafeteriaId, campana.id, true)).estado, 'pausada');
+        assert.equal(visible(await oportunidades()), false, 'La campaña pausada sigue en oportunidades');
+        assert.equal((await servicio.cambiarEstado(cafeteriaId, campana.id, false)).estado, 'activa');
+        assert.ok(visible(await oportunidades()), 'La campaña reactivada no volvió a oportunidades');
+      });
+      console.log(`${checks} escenarios C05/E08 con Auth, JWT, gateway y PostgreSQL reales aprobados.`);
       return;
     }
     const resource = '/api/afiliados/cafeterias/7/campanas';

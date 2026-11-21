@@ -168,7 +168,7 @@ function Campanas({ currentUser }) {
           onGuardado={guardarYVolver} />
       } />
       <Route path=":id/editar" element={detalle(
-        <Formulario key={cafeteriaId} campanas={campanas} cafeteriaId={cafeteriaId} onVolver={volverAlListado}
+        <FormularioEdicion campanas={campanas} cafeteriaId={cafeteriaId} onVolver={volverAlListado}
           onGuardado={guardarYVolver} />
       )} />
       <Route path=":id" element={detalle(
@@ -245,6 +245,12 @@ function Listado({ campanas, loading, error, errorAccion, cafeteriaId, onReinten
       )}
     </Box>
   );
+}
+
+// Remonta el formulario al cambiar de campaña para no reutilizar los datos de la anterior.
+function FormularioEdicion(props) {
+  const { id } = useParams();
+  return <Formulario key={`${props.cafeteriaId}-${id}`} {...props} />;
 }
 
 // Formulario de creación y edición de una campaña.
