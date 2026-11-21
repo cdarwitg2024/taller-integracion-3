@@ -914,7 +914,7 @@ test('E14: tasas en los límites y vigencia inválida identifican el campo en el
     ['descuento_normal_pct', '-0.01', /El descuento a precio normal debe estar entre 0 y 100/],
     ['descuento_normal_pct', '100.01', /El descuento a precio normal debe estar entre 0 y 100/],
     ['descuento_oferta_pct', '-0.01', /El descuento en oferta debe estar entre 0 y 100/],
-    ['descuento_oferta_pct', '100.01', /El descuento en oferta no puede superar/],
+    ['descuento_oferta_pct', '100.01', /El descuento en oferta debe estar entre 0 y 100/],
     ['comision_pct', '-0.01', /La comisión debe estar entre 0 y 100/],
     ['comision_pct', '100.01', /La comisión debe estar entre 0 y 100/],
   ]) {

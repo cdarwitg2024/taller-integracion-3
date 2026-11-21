@@ -33,7 +33,7 @@ y se reflejan en `docs/contratos-integracion-afiliados.md`.
 | Tasas en `0` y `100`, con oferta `0` y comisión `100` | Sin errores; la prueba verifica la comisión, el descuento normal y el inicio guardados | Aprobado |
 | Descuento normal o comisión en `-0.01` y `100.01` | Error en ese campo: «debe estar entre 0 y 100»; no se crea la campaña | Aprobado |
 | Descuento en oferta en `-0.01` | Error «El descuento en oferta debe estar entre 0 y 100» | Aprobado |
-| Descuento en oferta en `100.01` | Error «El descuento en oferta no puede superar el descuento a precio normal», que también identifica el campo | Aprobado |
+| Descuento en oferta en `100.01` | Error «El descuento en oferta debe estar entre 0 y 100»; la comparación entre descuentos se comprueba aparte con tasas dentro del rango | Aprobado |
 | Inicio `2026-12-01T25:00`, `2026-12-01T08:60` o `2026-09-31T08:00` | Error «Revisa la fecha de vigencia» en `inicio` | Aprobado |
 | Comisión `101` e inicio `2026-12-01T25:00` en el formulario | `helperText` de Comisión y de Inicio identifica cada dato a corregir; cero llamadas a `crear` | Aprobado |
 | Corregir comisión a `100` e inicio a `2026-12-01T08:00` y volver a enviar | Se crea la campaña con los valores válidos | Aprobado |
