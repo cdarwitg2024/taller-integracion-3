@@ -59,10 +59,10 @@ git diff --check
 
 Resultados:
 
-- Escritorio: 118/118 pruebas aprobadas; incluye doce escenarios nuevos de
+- Escritorio: 120/120 pruebas aprobadas; incluye catorce escenarios nuevos de
   carga por campaña, filtro local, aprobación con código en uso, rechazo,
   desactivación, descarte de respuesta atrasada, cambio de cafetería, reintentos,
-  paginación, cuerpos PATCH y errores C05.
+  paginación, cuerpos PATCH, errores C05 y respuestas tardías de decisión.
 - Compilación de producción: correcta, código de salida 0.
 - `git diff --check`: sin errores.
 

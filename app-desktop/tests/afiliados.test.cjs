@@ -307,6 +307,48 @@ test('cambiar de campaña descarta solicitudes que llegan después', async t => 
   assert.doesNotMatch(h.texto(), /Estudiante 82/);
 });
 
+// Cubre éxito y fallo tardíos de la campaña anterior con otra decisión en curso.
+for (const desenlace of ['resolver', 'rechazar']) {
+  test(`una respuesta ${desenlace} de la campaña anterior no altera la decisión vigente`, async t => {
+    let completarA;
+    let rechazarA;
+    let completarB;
+    const parcheA = new Promise((resolve, reject) => { completarA = resolve; rechazarA = reject; });
+    const parcheB = new Promise(resolve => { completarB = resolve; });
+    const decisiones = [];
+    const h = await montar(t, {
+      campanas: {
+        ...servicioVacio(),
+        listar: async () => campanasDePrueba,
+        listarSolicitudes: async (_cafeteria, campana) => [solicitud(campana === 31 ? 82 : 99, 'pendiente')],
+        resolverSolicitud: async (_cafeteria, campana, solicitudId, decision, codigo) => {
+          decisiones.push([campana, solicitudId, decision, codigo]);
+          return campana === 31 ? parcheA : parcheB;
+        },
+      },
+    });
+    await act(async () => h.accion('Aprobar').props.onClick());
+    await act(async () => h.tree.root.findByType('TextField').props.onChange({ target: { value: 'CF-A' } }));
+    await act(async () => { h.accion('Confirmar').props.onClick(); });
+    await h.seleccionar('Campaña', 32);
+    await act(async () => h.accion('Aprobar').props.onClick());
+    await act(async () => h.tree.root.findByType('TextField').props.onChange({ target: { value: 'CF-B' } }));
+    await act(async () => { h.accion('Confirmar').props.onClick(); });
+    assert.equal(h.accion('Confirmar').props.disabled, true);
+    await act(async () => {
+      if (desenlace === 'resolver') completarA({});
+      else rechazarA(new Error('error de la campaña 31'));
+    });
+    assert.match(h.texto(), /Asignar código a Estudiante 99/);
+    assert.equal(h.tree.root.findByType('TextField').props.value, 'CF-B');
+    assert.equal(h.accion('Confirmar').props.disabled, true);
+    assert.equal(h.tree.root.findAllByType('Alert').filter(a => a.props.severity === 'error').length, 0);
+    assert.deepEqual(decisiones, [[31, 82, 'aprobar', 'CF-A'], [32, 99, 'aprobar', 'CF-B']]);
+    await act(async () => completarB({}));
+    assert.equal(h.accion('Confirmar'), undefined);
+  });
+}
+
 test('el servicio pagina el listado y envía solo la decisión permitida por C05', async () => {
   const base = 'http://gateway/api/afiliados/cafeterias/7/campanas/31/solicitudes';
   const { modulo, llamadas } = cargarServicioSolicitudes([

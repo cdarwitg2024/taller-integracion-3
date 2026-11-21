@@ -39,6 +39,9 @@ export default function Afiliados({ currentUser }) {
   const solicitudesReq = useRef(0);
   const cafeteriaActual = useRef(cafeteriaId);
   cafeteriaActual.current = cafeteriaId;
+  // La campaña vigente se lee del render actual: el cierre de resolver pertenece al render que lo inició.
+  const campanaActual = useRef(campanaId);
+  campanaActual.current = campanaId;
   const campanasVigentes = campanas.clave === claveCafeteria;
   const campanaActiva = campanasVigentes && campanas.datos.some(c => c.id === campanaId) ? campanaId : null;
   const claveSolicitudes = `${claveCafeteria}:${campanaActiva ?? ''}`;
@@ -94,19 +97,21 @@ export default function Afiliados({ currentUser }) {
   async function resolver(decision, solicitud) {
     const objetivo = cafeteriaId;
     const campana = campanaId;
+    // Las tres ramas consultan los refs: el cierre capturó la campaña de inicio, no la vigente.
+    const vigente = () => objetivo === cafeteriaActual.current && campana === campanaActual.current;
     setGuardando(true);
     setErrorAccion('');
     try {
       await campanasAfiliados.resolverSolicitud(objetivo, campana, solicitud.id, decision, codigo);
-      if (objetivo !== cafeteriaActual.current || campana !== campanaId) return;
+      if (!vigente()) return;
       setAccion(null);
       setCodigo('');
       setIntentoSolicitudes(n => n + 1);
     } catch (err) {
-      if (objetivo !== cafeteriaActual.current || campana !== campanaId) return;
+      if (!vigente()) return;
       setErrorAccion(err.message || 'No se pudo registrar la decisión.');
     } finally {
-      if (objetivo === cafeteriaActual.current && campana === campanaId) setGuardando(false);
+      if (vigente()) setGuardando(false);
     }
   }
 
