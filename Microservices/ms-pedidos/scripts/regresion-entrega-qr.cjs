@@ -78,8 +78,26 @@ const buscarUsuarioPorEmail = async (email) => {
   return res.body[0];
 };
 
-const borrar = async (ruta) => {
-  await rest(ruta, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+const borrar = async (ruta, verificarAusencia) => {
+  const eliminado = await api(ruta, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+  if (eliminado.status < 200 || eliminado.status >= 300) {
+    throw new Error(`DELETE ${ruta}: HTTP ${eliminado.status}`);
+  }
+  await verificarAusencia(ruta);
+};
+
+const verificarFilasEliminadas = async (ruta) => {
+  const { status, body } = await api(`${ruta}&select=id&limit=1`);
+  if (status !== 200 || !Array.isArray(body) || body.length !== 0) {
+    throw new Error(`No se confirmó la ausencia de filas en ${ruta} (HTTP ${status})`);
+  }
+};
+
+const verificarCuentaEliminada = async (ruta) => {
+  const { status } = await api(ruta);
+  if (status !== 404) {
+    throw new Error(`No se confirmó la eliminación de la cuenta en ${ruta} (HTTP ${status})`);
+  }
 };
 
 const adminCrearUsuario = async (email) => {
@@ -338,24 +356,38 @@ function imprimirReporte() {
     console.error(`\nREGRESION FALLIDA: ${err.message}`);
     process.exitCode = 1;
   } finally {
-    try {
-      if (datos.pedidos.length) {
-        await borrar(`/logs_validacion_qr?pedido_id=in.(${datos.pedidos.join(',')})`);
-        await borrar(`/pedidos?id=in.(${datos.pedidos.join(',')})`);
+    const rutas = [];
+    if (datos.pedidos.length) {
+      rutas.push(
+        `/rest/v1/logs_validacion_qr?pedido_id=in.(${datos.pedidos.join(',')})`,
+        `/rest/v1/pedidos?id=in.(${datos.pedidos.join(',')})`
+      );
+    }
+    if (datos.usuarios.length) {
+      rutas.push(
+        `/rest/v1/cafeteria_usuarios?usuario_id=in.(${datos.usuarios.join(',')})`,
+        `/rest/v1/usuarios?id=in.(${datos.usuarios.join(',')})`
+      );
+    }
+    if (datos.cafeterias.length) {
+      rutas.push(`/rest/v1/cafeterias?id=in.(${datos.cafeterias.join(',')})`);
+    }
+    const errores = [];
+    const limpieza = [
+      ...rutas.map((ruta) => [ruta, verificarFilasEliminadas]),
+      ...datos.auth.map((id) => [`/auth/v1/admin/users/${id}`, verificarCuentaEliminada])
+    ];
+    for (const [ruta, verificarAusencia] of limpieza) {
+      try {
+        await borrar(ruta, verificarAusencia);
+      } catch (err) {
+        errores.push(`${ruta}: ${err.message}`);
       }
-      if (datos.usuarios.length) {
-        await borrar(`/cafeteria_usuarios?usuario_id=in.(${datos.usuarios.join(',')})`);
-        await borrar(`/usuarios?id=in.(${datos.usuarios.join(',')})`);
-      }
-      if (datos.cafeterias.length) {
-        await borrar(`/cafeterias?id=in.(${datos.cafeterias.join(',')})`);
-      }
-      for (const id of datos.auth) {
-        await api(`/auth/v1/admin/users/${id}`, { method: 'DELETE' });
-      }
+    }
+    if (errores.length === 0) {
       console.log('Datos temporales eliminados.');
-    } catch (err) {
-      console.error(`Limpieza incompleta: ${err.message}`);
+    } else {
+      console.error(`Limpieza incompleta:\n${errores.join('\n')}`);
       process.exitCode = 1;
     }
   }
