@@ -44,7 +44,7 @@ async function main() {
       '-e', `PGRST_DB_URI=postgres://postgres@${pg}:5432/catalog`,
       '-e', 'PGRST_DB_ANON_ROLE=catalog_reader', '-e', 'PGRST_DB_SCHEMAS=public',
       '-e', `PGRST_JWT_SECRET=${secret}`,
-      process.env.TEST_REST_IMAGE || 'public.ecr.aws/supabase/postgrest:v16.2']);
+      process.env.TEST_REST_IMAGE || 'postgrest/postgrest:v16.3']);
     const port = docker(['port', rest, '3000']).split(':').pop();
     const url = `http://127.0.0.1:${port}`;
     ready = false;
