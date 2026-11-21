@@ -36,17 +36,21 @@ export function validarFormularioCampana(form = {}, esAlta = false) {
   const porcentaje = (valor, etiqueta, campo, obligatorio = 'obligatorio') => {
     if (typeof valor === 'boolean' || (typeof valor === 'string' && valor.trim() === '')) {
       errores[campo] = `${etiqueta} es ${obligatorio}.`;
-      return;
+      return undefined;
     }
     if (valor === '' || valor === null || valor === undefined) {
       errores[campo] = `${etiqueta} es ${obligatorio}.`;
-      return;
+      return undefined;
     }
     const n = Number(valor);
+    // Un valor inválido se descarta: la comparación de descuentos no debe sobrescribir su error de rango.
     if (!Number.isFinite(n) || n < 0 || n > 100) {
       errores[campo] = `${etiqueta} debe estar entre 0 y 100.`;
-    } else if (Math.abs(n * 100 - Math.round(n * 100)) > 1e-9) {
+      return undefined;
+    }
+    if (Math.abs(n * 100 - Math.round(n * 100)) > 1e-9) {
       errores[campo] = `${etiqueta} debe tener hasta dos decimales.`;
+      return undefined;
     }
     return n;
   };
