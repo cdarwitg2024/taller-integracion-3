@@ -19,9 +19,11 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 
 - [V01 / CAM-223 — Acceso Afiliados del dueño](desktop/validacion/V01-CAM-223-Acceso-Afiliados.md)
 - [E03 / CAM-290 — Vista principal de campañas del dueño](desktop/validacion/E03-CAM-290-Vista-Campanas.md)
-- [E05 / CAM-225 — Listado de campañas por cafetería del dueño](desktop/validacion/E04-CAM-225-Cambio-Cafeteria-Campanas.md)
+- [E04 / CAM-225 — Listado de campañas por cafetería del dueño](desktop/validacion/E04-CAM-225-Cambio-Cafeteria-Campanas.md)
+- [E06 — Conexión de alta y edición de campañas con el gateway](desktop/validacion/E06-Conexion-alta-y-edicion-campanas.md)
 - [S2-T15 - Validación flujo integrado y recuperación del KDS](desktop/validacion/S2-T15-Validacion-Flujo-Integrado-KDS.md)
 - [S2-T17 - Validación flujo completo del KDS](desktop/validacion/S2-T17-Validacion-Flujo-Completo-KDS.md)
+- [C08 / CAM-242 — Verificar entrega por QR y token desde KDS](desktop/validacion/C08-CAM-242-entrega-qr-token-kds.md)
 - [S2-T18 — Validación integrada del panel administrativo](desktop/validacion/S2-T18_validacion_panel_administrativo.md)
 
 ## Móvil
@@ -57,6 +59,9 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [A02 — Pantalla Mis afiliaciones: oportunidades, códigos y ganancias](mobile/validacion/A02-Mis-Afiliaciones.md)
 - [A03 — Campañas activas conectadas a C04: filtro, vacío y prueba desechable](mobile/validacion/A03-Campanas-activas.md)
 - [A04 — Condiciones de campaña: beneficio del referido, comisión y elegibilidad](mobile/validacion/A04-Condiciones-campana-carrito.md)
+- [A06 — Solicitud, aprobación, código desactivado y panel de comisiones](mobile/validacion/A06-Solicitudes-aprobacion.md)
+- [A09 — Comisiones pendientes, disponibles y retiradas con V12](mobile/validacion/A09-Comisiones-saldo-disponible.md)
+- [A11 — Formulario de monto y destino ficticio para retiro simulado](mobile/validacion/A11-Solicitud-retiro-simulado.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 - [D02 - Estado del código asociado al carrito](mobile/validacion/D02-Estado-codigo-carrito.md)
 

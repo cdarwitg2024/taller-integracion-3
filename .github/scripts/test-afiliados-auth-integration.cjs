@@ -7,9 +7,11 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { execFileSync, spawnSync } = require('node:child_process');
+const { pathToFileURL } = require('node:url');
 
 const root = path.resolve(__dirname, '../..');
-const probarC05 = process.argv.includes('--c05');
+const probarA06 = process.argv.includes('--a06');
+const probarC05 = process.argv.includes('--c05') || probarA06;
 const id = `cf-c03-auth-${process.pid}-${Date.now()}`;
 const names = { pg: `${id}-db`, auth: `${id}-auth`, rest: `${id}-rest`, gateway: `${id}-gateway` };
 const secret = crypto.randomBytes(40).toString('hex');
@@ -44,6 +46,33 @@ async function waitFor(name, check) {
 }
 const portOf = (name, port) => docker(['port', name, String(port)]).split(':').pop();
 const quote = value => "'" + String(value).replaceAll("'", "''") + "'";
+
+// Carga los servicios reales de escritorio contra el gateway desechable con el JWT de la sesión.
+async function cargarServicioCampanasEscritorio(destino, base, token) {
+  fs.mkdirSync(destino, { recursive: true });
+  fs.writeFileSync(path.join(destino, 'package.json'), '{"type":"module"}');
+  for (const nombre of ['backendApi.js', 'campanasAfiliados.js']) {
+    const origen = path.join(root, 'app-desktop/src/services', nombre);
+    // La copia conserva el código real; Node ESM necesita las extensiones que Vite resuelve.
+    const importes = nombre === 'backendApi.js'
+      ? [["from './supabase'", "from './supabase.js'"]]
+      : [["from './backendApi'", "from './backendApi.js'"]];
+    let código = fs.readFileSync(origen, 'utf8');
+    for (const [buscado, reemplazo] of importes) {
+      assert.ok(código.includes(buscado), `No se encontró ${buscado} en ${nombre}`);
+      código = código.replace(buscado, reemplazo);
+    }
+    if (nombre === 'backendApi.js') {
+      assert.ok(código.includes("'http://localhost:3000'"), 'No se encontró la base del gateway en backendApi.js');
+      código = código.replace("'http://localhost:3000'", JSON.stringify(base));
+    }
+    fs.writeFileSync(path.join(destino, nombre), código);
+  }
+  const sesión = JSON.stringify({ data: { session: { access_token: token } } });
+  fs.writeFileSync(path.join(destino, 'supabase.js'),
+    `export const supabase = { auth: { getSession: async () => (${sesión}) } };`);
+  return import(pathToFileURL(path.join(destino, 'campanasAfiliados.js')).href);
+}
 
 async function main() {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'cf-c03-auth-'));
@@ -99,6 +128,19 @@ async function main() {
         sql(fs.readFileSync(path.join(migrations, files[0]), 'utf8'));
       }
       sql(fs.readFileSync(path.join(root, 'database/fixes/exponer_solicitudes_afiliacion.sql'), 'utf8'));
+      if (probarA06) {
+        sql(`ALTER TABLE public.cafeterias ADD COLUMN campus_id bigint, ADD COLUMN descripcion text,
+        ADD COLUMN hora_apertura time, ADD COLUMN hora_cierre time, ADD COLUMN telefono text, ADD COLUMN imagen_url text;
+        UPDATE public.cafeterias SET nombre = CASE id WHEN 7 THEN 'Norte A06' ELSE 'Sur A06' END;
+        ALTER TABLE public.cafeterias ENABLE ROW LEVEL SECURITY;
+        GRANT SELECT ON public.cafeterias TO anon, authenticated;
+        CREATE POLICY cafeteria_publica ON public.cafeterias FOR SELECT TO anon, authenticated USING (activa);
+        ALTER TABLE public.pedidos ADD COLUMN estado text NOT NULL DEFAULT 'listo';`);
+        const v12 = await fetch('https://raw.githubusercontent.com/Diego24Vas/db_CoffeeFaster/884f25698e76df7d50a08b8a0d0a81a1059733e9/supabase/migrations/20261118211348_consulta_saldo_afiliado.sql',
+          { signal: AbortSignal.timeout(15000) });
+        assert.equal(v12.status, 200, 'No se pudo leer la migración oficial fijada de V12');
+        sql(await v12.text());
+      }
     }
 
     docker(['run', '-d', '--name', names.auth, '--network', id, '-p', '127.0.0.1::9999',
@@ -144,7 +186,14 @@ async function main() {
     process.env.SUPABASE_URL = `http://127.0.0.1:${supabaseProxy.address().port}`;
     process.env.SUPABASE_PUBLISHABLE_KEY = anon;
     delete process.env.SUPABASE_SERVICE_KEY; delete process.env.SUPABASE_KEY; delete process.env.SUPABASE_ANON_KEY;
-    const app = require(path.join(root, 'Microservices/ms-afiliados/src/app'));
+    const afiliadosApp = require(path.join(root, 'Microservices/ms-afiliados/src/app'));
+    const pedidosApp = probarA06 ? require(path.join(root, 'Microservices/ms-pedidos/src/app')) : null;
+    const cafeteriasApp = probarA06 ? require(path.join(root, 'Microservices/ms-cafeterias/src/app')) : null;
+    const app = probarA06 ? http.createServer((req, res) => {
+      if (req.url.startsWith('/api/cafeterias')) return cafeteriasApp(req, res);
+      if (req.url.startsWith('/api/pedidos')) return pedidosApp(req, res);
+      return afiliadosApp(req, res);
+    }) : afiliadosApp;
     server.app = await new Promise(resolve => { const listener = app.listen(0, '0.0.0.0', () => resolve(listener)); });
     // Usa las reglas reales del gateway; solo sustituye los destinos para aislar la prueba.
     let nginx = fs.readFileSync(path.join(root, 'Microservices/gateway/nginx.conf'), 'utf8')
@@ -184,6 +233,8 @@ async function main() {
     }
     if (probarC05) {
       await require('./test-solicitudes-afiliacion-c05.cjs')({ check, call, sql, tokens });
+      if (probarA06) await require('./test-mobile-afiliacion-a06.cjs')({ call, sql, tokens, base, anon,
+        supabaseUrl: process.env.SUPABASE_URL, dbContainer: names.pg });
       console.log(`${checks} escenarios C05 con Auth, JWT, gateway y PostgreSQL reales aprobados.`);
       return;
     }
@@ -268,7 +319,26 @@ async function main() {
       assert.equal(r.body.campanas.find(c=>c.id===acceptable.id).estado,'activa');
       assert.equal(r.body.campanas.length,2);
     });
-    console.log(`${checks} escenarios C03 con Auth, JWT, gateway, PostgREST y RLS reales aprobados.`);
+    await check('E06: alta y edición del servicio de escritorio persisten por el gateway con JWT real', async () => {
+      const modulo = await cargarServicioCampanasEscritorio(path.join(temp, 'escritorio'), base, tokens.dueno);
+      const servicio = modulo.campanasAfiliados;
+      const form = {
+        nombre: 'Campaña E06 escritorio',
+        descuento_normal_pct: 15, descuento_oferta_pct: 5, comision_pct: 10,
+        inicio: new Date(Date.now() + 3 * 86400000).toISOString(),
+        fin: new Date(Date.now() + 4 * 86400000).toISOString(),
+      };
+      const creada = await servicio.crear(7, form);
+      assert.ok(Number.isSafeInteger(Number(creada.id)), JSON.stringify(creada));
+      const listadas = await servicio.listar(7);
+      assert.equal(listadas.find(c => c.id === creada.id)?.nombre, form.nombre);
+      const editada = await servicio.actualizar(7, creada.id, { ...form, descuento_normal_pct: 12 });
+      assert.equal(editada.descuento_normal_pct, 12);
+      const sinVigencia = await servicio.actualizar(7, creada.id, { ...form, descuento_normal_pct: 13, inicio: '', fin: '' });
+      assert.equal(sinVigencia.inicio, creada.inicio);
+      assert.equal(sinVigencia.fin, creada.fin);
+    });
+    console.log(`${checks} escenarios C03/E06 con Auth, JWT, gateway, PostgREST y RLS reales aprobados.`);
   } finally {
     for (const listener of server ? [server.app, server.proxy].filter(Boolean) : []) {
       listener.closeAllConnections(); await new Promise(resolve=>listener.close(resolve));
@@ -283,4 +353,8 @@ async function main() {
     fs.rmSync(temp,{recursive:true,force:true});
   }
 }
-main().catch(error=>{ console.error(error.message); process.exitCode=1; });
+// Algunas solicitudes fetch no mantienen vivo Node en Windows durante el arranque.
+// El proceso debe esperar a las aserciones y a la limpieza, nunca salir con éxito antes.
+const guardia = setInterval(() => {}, 1000);
+main().catch(error=>{ console.error(error.message); process.exitCode=1; })
+  .finally(() => clearInterval(guardia));
