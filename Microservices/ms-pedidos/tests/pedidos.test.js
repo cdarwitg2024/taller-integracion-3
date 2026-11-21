@@ -226,6 +226,24 @@ describe('ms-pedidos', () => {
     expect(opciones.auth.persistSession).toBe(false);
   });
 
+  test('POST /api/pedidos conserva el contrato móvil anterior con solo el código', async () => {
+    httpMock.post.mockResolvedValue(respuestaPrecios([producto({ id: 1, cafeteria_id: 1 })]));
+    const res = await request(app).post('/api/pedidos').send(bodyPedido({ codigo: 'DIEGO-PROMO1' }));
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ ok: true, pedido: expect.any(Object) });
+  });
+
+  test('POST /api/pedidos no confirma cotizaciones con la integración deshabilitada', async () => {
+    const res = await request(app).post('/api/pedidos')
+      .set('Idempotency-Key', 'c07-confirmacion')
+      .send(bodyPedido({ codigo: 'DIEGO-PROMO1', total_aceptado: 8500 }));
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('confirmacion_afiliada_no_disponible');
+    expect(httpMock.post).not.toHaveBeenCalled();
+  });
+
   test('POST /api/pedidos permite varios productos de la misma cafeteria', async () => {
     httpMock.post.mockResolvedValue(respuestaPrecios([
       producto({ id: 1, cafeteria_id: 1 }),

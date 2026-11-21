@@ -21,6 +21,7 @@ services:
       <<: *supabase
       PORT: 3005
       MS_MENUS_URL: http://ms-menus:54321
+      HABILITAR_CONFIRMACION_AFILIADA: "true"
   ms-afiliados:
     build:
       context: .

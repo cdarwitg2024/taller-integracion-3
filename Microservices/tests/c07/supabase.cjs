@@ -7,6 +7,7 @@ const comprador = '793e98b0-6882-4c3b-9794-60b70c125a31';
 let estado = { saldo: 50000, pedidos: [], comisiones: [], intentos: {} };
 let pausada = false;
 let fallar = false;
+let compradorActivo = true;
 
 function cotizar(codigo) {
   const motivo = codigo === null ? 'sin_codigo'
@@ -33,6 +34,10 @@ const server = createServer(async (req, res) => {
     fallar = !fallar;
     return json(200, { fallar });
   }
+  if (path === '/comprador' && req.method === 'POST') {
+    compradorActivo = !compradorActivo;
+    return json(200, { activo: compradorActivo });
+  }
 
   if (path === '/api/menus/precios') {
     return json(200, { data: [{ id: 41, precio: 10000, activo: true, cafeteria_id: 7 }] });
@@ -44,7 +49,7 @@ const server = createServer(async (req, res) => {
   if (path === '/auth/v1/user') {
     return json(200, { id: comprador, role: 'authenticated', user_metadata: {} });
   }
-  if (path === '/rest/v1/usuarios') return json(200, [{ id: 15 }]);
+  if (path === '/rest/v1/usuarios') return json(200, [{ id: 15, activo: compradorActivo }]);
   if (!['/rest/v1/rpc/cotizar_carrito_afiliado', '/rest/v1/rpc/procesar_pago'].includes(path)) {
     return json(404, { message: 'Ruta desconocida' });
   }
@@ -58,10 +63,17 @@ const server = createServer(async (req, res) => {
   }
   const cotizacion = cotizar(args.p_codigo ?? null);
   if (path.endsWith('/cotizar_carrito_afiliado')) {
+    if (args.p_codigo === 'RPC-SIN-ACCESO') return json(403, { code: '42501' });
+    if (args.p_codigo === 'RPC-MALFORMADA') return json(200, [{ motivo: null }]);
+    if (args.p_codigo === 'CAMPANA-FUTURA') {
+      return json(200, [{ ...cotizacion, motivo: 'campana_no_iniciada' }]);
+    }
     return json(200, [{ ...cotizacion, comision: cotizacion.motivo ? 0 : 850 }]);
   }
 
   const clave = args.p_clave_idempotencia;
+  if (clave === 'c07-saldo-insuficiente') return json(200, { error: 'saldo_insuficiente' });
+  if (clave === 'c07-rpc-malformada') return json(200, { pedido_id: 0 });
   const huella = JSON.stringify(args);
   if (clave && Object.hasOwn(estado.intentos, clave)) {
     const intento = estado.intentos[clave];

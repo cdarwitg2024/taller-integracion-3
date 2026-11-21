@@ -52,11 +52,25 @@ async function main() {
   await post(pedidos, afiliado, 401, undefined, 'sesion-invalida');
   const cotizacion = await post(cotizaciones, afiliado, 200);
   assert.deepEqual(cotizacion, { subtotal: 10000, descuento_afiliado: 1500, total: 8500 });
+  await post(cotizaciones, { ...carrito, codigo: 'RPC-SIN-ACCESO' }, 403);
+  await post(cotizaciones, { ...carrito, codigo: 'RPC-MALFORMADA' }, 503);
+  assert.deepEqual(await post(cotizaciones, { ...carrito, codigo: 'CAMPANA-FUTURA' }, 422), {
+    error: 'campana_no_iniciada'
+  });
   assert.deepEqual(await leerFixture('/estado'), inicial);
 
   const compra = { ...afiliado, franja_retiro: '12:30-12:45', total_aceptado: cotizacion.total };
   await post(pedidos, compra, 400);
   await post(pedidos, afiliado, 400, 'c07-incompleta');
+  await post(pedidos, { ...compra, cafeteria_id: 8 }, 400, 'c07-cafeteria-ajena');
+  await leerFixture('/comprador', 'POST');
+  await post(pedidos, compra, 403, 'c07-comprador-inactivo');
+  await leerFixture('/comprador', 'POST');
+  assert.deepEqual(await post(pedidos, compra, 422, 'c07-saldo-insuficiente'), {
+    error: 'saldo_insuficiente', cobrado: false
+  });
+  await post(pedidos, compra, 503, 'c07-rpc-malformada');
+  assert.deepEqual(await leerFixture('/estado'), inicial);
   await leerFixture('/pausar', 'POST');
   const rechazada = await post(cotizaciones, afiliado, 422);
   assert.equal(rechazada.error, 'campana_pausada');
@@ -95,7 +109,7 @@ async function main() {
   assert.deepEqual(trasNormal.pedidos, [pagada, original]);
   assert.deepEqual(trasNormal.comisiones, trasAfiliada.comisiones);
 
-  const legacy = await post(pedidos, { ...carrito, franja_retiro: compra.franja_retiro }, 201);
+  const legacy = await post(pedidos, { ...afiliado, franja_retiro: compra.franja_retiro }, 201);
   assert.equal(legacy.ok, true);
   assert.equal(legacy.pedido.total, 10000);
   assert.equal((await leerFixture('/estado')).saldo, 21500);

@@ -275,14 +275,14 @@ async function crearPedido({ user, accessToken, body, idempotencyKey }) {
   }
 
   const cliente = crearClienteAutenticado(accessToken);
-  if (idempotencyKey !== undefined || Object.hasOwn(body, 'total_aceptado') ||
-      body.codigo != null) {
-    return confirmarPago(cliente, cafeteriaId, body, idempotencyKey);
+  const confirmaCotizacion = idempotencyKey !== undefined || Object.hasOwn(body, 'total_aceptado');
+  if (confirmaCotizacion && process.env.HABILITAR_CONFIRMACION_AFILIADA !== 'true') {
+    return { status: 503, body: { error: 'confirmacion_afiliada_no_disponible' } };
   }
 
   const { data: usuarioInterno, error: errUsuario } = await cliente
     .from('usuarios')
-    .select('id')
+    .select('id, activo')
     .eq('auth_user_id', user.authUserId)
     .maybeSingle();
 
@@ -291,6 +291,9 @@ async function crearPedido({ user, accessToken, body, idempotencyKey }) {
   }
   if (!usuarioInterno) {
     throw new HttpError(404, 'Usuario no encontrado');
+  }
+  if (confirmaCotizacion && usuarioInterno.activo !== true) {
+    throw new HttpError(403, 'sin_acceso');
   }
 
   let preciosResp;
@@ -330,6 +333,10 @@ async function crearPedido({ user, accessToken, body, idempotencyKey }) {
   );
   if (productoDeOtraCafeteria) {
     throw new HttpError(400, 'Uno o mas productos no pertenecen a la cafeteria indicada');
+  }
+
+  if (confirmaCotizacion) {
+    return confirmarPago(cliente, cafeteriaId, body, idempotencyKey);
   }
 
   // El calculo monetario NO se duplica aqui: `procesar_pago` sigue siendo la

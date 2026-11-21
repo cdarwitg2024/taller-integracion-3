@@ -2,7 +2,9 @@
 
 [CAM-184](https://linear.app/camilodarwitg/issue/CAM-184/c07-integrar-cotizacion-y-compra-por-el-gateway) usa el contrato [C02](../../contratos-integracion-afiliados.md). `POST /api/afiliados/cotizaciones` llama a `cotizar_carrito_afiliado` con el JWT del comprador. Devuelve subtotal, descuento y total en CLP, o `422` con el motivo de inelegibilidad de V06.
 
-`POST /api/pedidos` recibe `Idempotency-Key`, `total_aceptado` y el código opcional. La clave identifica el mismo intento con el mismo cuerpo. Para aceptar un total actualizado, el cliente envía una clave nueva. La confirmación usa el JWT del comprador y delega la revalidación y la resolución de reintentos a una sola llamada. La compra existente sin clave, código ni total aceptado conserva la firma de tres parámetros y la respuesta `{ok, pedido}`.
+`POST /api/pedidos` distingue la confirmación por `Idempotency-Key` o `total_aceptado`. La confirmación está deshabilitada por defecto y responde `503 confirmacion_afiliada_no_disponible`. La compra móvil vigente, que puede enviar solo el código, conserva la firma de tres parámetros, el cobro sin descuento afiliado y la respuesta `{ok, pedido}`.
+
+El Compose desechable habilita la confirmación con `HABILITAR_CONFIRMACION_AFILIADA=true`. Con esa opción, el servicio comprueba la cuenta activa y la pertenencia de los productos a la cafetería antes de confirmar. La clave identifica el mismo intento con el mismo cuerpo. Para aceptar un total actualizado, el cliente envía una clave nueva. La RPC recibe el JWT del comprador y resuelve la revalidación y los reintentos.
 
 ## Contrato provisional de Supabase
 
@@ -27,3 +29,5 @@ El escenario usa Node 22 y el Nginx del repositorio. Las solicitudes entran por 
 - Los reintentos afiliado y sin código devuelven cada uno su pedido original. Reutilizar una clave con un total distinto devuelve `409`. El escenario también comprueba que la compra legacy sigue llegando a la RPC de tres parámetros.
 
 El 20 de noviembre de 2026, Docker Compose 5.1.1 en Windows ejecutó el escenario con código de salida 0. Los reintentos devolvieron los IDs ficticios 501 y 502, respectivamente. El saldo quedó en $50.000 tras el `409` y el `503`, en $41.500 tras la compra afiliada y en $31.500 tras la compra sin código con clave. Con Node 22.23.5 en Windows también pasaron 131 pruebas de `ms-pedidos` y 49 de `ms-afiliados`.
+
+Tras integrar `develop` en la rama del PR #90, el escenario de Compose volvió a terminar con código 0. La cobertura incluyó la petición móvil vigente con solo el código, la campaña futura, la cuenta inactiva, el producto de otra cafetería, el saldo insuficiente, los permisos de cotización y las respuestas RPC malformadas. Con Node 22.23.5 pasaron 133 pruebas de `ms-pedidos` y 49 de `ms-afiliados`. La confirmación y la reversión en PostgreSQL con la RPC definitiva de V08/V15 siguen pendientes.
