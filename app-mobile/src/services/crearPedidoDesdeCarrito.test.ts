@@ -48,6 +48,15 @@ test('respuesta perdida y reintento manual conservan la misma clave y cuerpo', a
   expect(transporte.mock.calls[1][1].body).toBe(transporte.mock.calls[0][1].body);
 });
 
+test.each([401, 500])('HTTP %s solo invalida cuando el rechazo es un 401 definitivo', async status => {
+  transporte.mockResolvedValueOnce({ ok: false, status,
+    text: async () => JSON.stringify({ error: 'Solicitud rechazada' }) });
+  await expect(enviar()).rejects.toMatchObject({ status, resultadoIncierto: false });
+  const guardado = JSON.parse((await AsyncStorage.getItem('@coffeefast/intento-compra/comprador-a'))!);
+  if (status === 401) expect(guardado).toEqual({ invalidado: true });
+  else expect(guardado).toMatchObject({ pendiente: true, clave: claves()[0] });
+});
+
 test('otra instancia recupera la clave desde almacenamiento, sin memoria del módulo anterior', async () => {
   await enviar();
   let recuperar!: typeof import('./intentoCompra').obtenerIntentoCompra;

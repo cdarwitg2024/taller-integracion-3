@@ -1,4 +1,4 @@
-import { apiPost } from './backendClient';
+import { ApiError, apiPost } from './backendClient';
 import { obtenerIntentoCompra, marcarIntentoEnviado, reiniciarIntentoCompra } from './intentoCompra';
 
 export type RetiroCheckout = { franja: string; codigo?: string };
@@ -24,7 +24,17 @@ export async function crearPedidoDesdeCarrito<T>(
   };
   const intento = await obtenerIntentoCompra(usuarioId, cuerpo);
   await marcarIntentoEnviado(usuarioId, intento.clave);
-  const respuesta = await apiPost<T>('/api/pedidos', intento.cuerpo, { timeoutMs, claveIdempotencia: intento.clave });
+  let respuesta: T;
+  try {
+    respuesta = await apiPost<T>('/api/pedidos', intento.cuerpo, { timeoutMs, claveIdempotencia: intento.clave });
+  } catch (error) {
+    // Un 401 definitivo rechaza la solicitud antes de procesar el pago.
+    // Red, timeout y respuestas inciertas conservan el registro original.
+    if (error instanceof ApiError && error.status === 401 && !error.resultadoIncierto) {
+      await reiniciarIntentoCompra(usuarioId);
+    }
+    throw error;
+  }
   // Solo un rechazo explícito permite una nueva compra sin recuperar un cobro.
   if ((respuesta as { pedido?: { ok?: boolean } } | null)?.pedido?.ok === false) {
     await reiniciarIntentoCompra(usuarioId);

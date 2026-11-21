@@ -1,9 +1,36 @@
 import { act, Alert, AsyncStorage, CartScreen, tree, transporte, disponibilidad,
   confirmar, agregarOtraCompra, producto, pagarDesdePantalla,
 } from '../tests/support/checkoutPrueba';
+import { supabase } from '../src/lib/supabase';
 
 const registro = '@coffeefast/intento-compra/comprador-app';
 const ultimoAviso = () => (Alert.alert as jest.Mock).mock.calls.at(-1);
+
+test('401 definitivo permite otra confirmación con sesión recuperada y clave nueva', async () => {
+  transporte.mockResolvedValueOnce({ ok: false, status: 401,
+    text: async () => JSON.stringify({ error: 'Sesión vencida' }) });
+  await pagarDesdePantalla();
+  expect(transporte).toHaveBeenCalledTimes(1);
+  const primero = transporte.mock.calls[0][1];
+  expect(JSON.parse((await AsyncStorage.getItem(registro))!).invalidado).toBe(true);
+  expect(tree.root.findByType(CartScreen).props.cart).toHaveLength(1);
+  expect(ultimoAviso()[0]).toBe('No se pudo procesar el pago');
+  (supabase.auth.getSession as jest.Mock).mockResolvedValue({ data: { session: {
+    user: { id: 'comprador-app', email: 'comprador@example.test' }, access_token: 'jwt-recuperado',
+  } } });
+  transporte.mockResolvedValueOnce({ ok: true, status: 201,
+    text: async () => JSON.stringify({ pedido: { ok: true, pedido_id: 502,
+      total: 2500, saldo_restante: 7500 } }) });
+  await pagarDesdePantalla();
+  expect(transporte).toHaveBeenCalledTimes(2);
+  const segundo = transporte.mock.calls[1][1];
+  expect(segundo.headers.Authorization).toBe('Bearer jwt-recuperado');
+  expect(segundo.headers['Idempotency-Key']).not.toBe(primero.headers['Idempotency-Key']);
+  expect(segundo.body).toBe(primero.body);
+  expect(disponibilidad).toHaveBeenCalledTimes(2);
+  expect(tree.root.findByType(CartScreen).props.cart).toHaveLength(0);
+  expect(ultimoAviso()[0]).toBe('Pago aprobado');
+});
 
 test('última unidad consumida con respuesta perdida: recuperar no consulta stock ni reenvía el pago', async () => {
   disponibilidad.mockResolvedValueOnce({ data: [{ id: 41, cafeteria_id: 7, activo: true,

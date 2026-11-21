@@ -2,7 +2,7 @@
 
 ## Descripción de los cambios
 
-Base actualizada: develop en `4fd1078`, con D02 y C02 integradas.
+Base actualizada: develop en `43fa980`, con D02 y C02 integradas.
 Rama: `S3-T7-DiegoC-Mantener_clave_del_intento_de_compra`.
 
 Cada confirmación persiste UUID y cuerpo original antes del POST, separados
@@ -17,6 +17,12 @@ el POST: el primer pago pudo consumir la última unidad. El backend todavía no
 interpreta `Idempotency-Key`; reenviar podría duplicar el cobro. Los registros
 anteriores sin estado también se consideran pendientes. El servicio permite
 recuperar el cuerpo original; la interfaz no lo reenvía ante un resultado incierto.
+
+Un HTTP 401 definitivo (`ApiError`, sin resultado incierto) invalida el intento
+antes de propagar el error. El carrito permanece disponible y, con la sesión
+recuperada, otra confirmación genera una clave nueva y usa el JWT actual.
+No se repite el POST automáticamente. Red, timeout, respuesta incompleta y otros
+errores HTTP conservan el intento; no se asumen rechazos seguros para todos ellos.
 
 El reinicio escribe un marcador persistente `{invalidado:true}`, sin depender
 de un Set en memoria ni de removeItem. El checkout espera los reinicios
@@ -34,7 +40,8 @@ esperan el reinicio. Una compra posterior, aunque sea idéntica, recibe otra cla
 - `app-mobile/src/services/intentoCompra.ts`: UUID, cuerpo original, cola por
   cuenta, estado pendiente, marcador persistente y errores con diagnóstico.
 - `app-mobile/src/services/crearPedidoDesdeCarrito.ts`: prepara el cuerpo,
-  marca el intento pendiente antes del envío y reinicia ante rechazo explícito.
+  marca el intento pendiente antes del envío y reinicia ante rechazo explícito
+  o HTTP 401 definitivo, esperando su persistencia antes de propagar el error.
 - `app-mobile/src/services/backendClient.ts`: transmite la clave con sesión y timeout.
 - `app-mobile/src/hooks/useCicloIntentoCompra.ts`: observa el carrito vacío,
   permite esperar el reinicio y comunica fallos de almacenamiento.
@@ -58,12 +65,14 @@ esperan el reinicio. Una compra posterior, aunque sea idéntica, recibe otra cla
 
 ## Criterios de Aceptación Verificados
 
-Ejecución local del 20 de noviembre de 2026, Windows y Node.js 22.19.0.
+Ejecución local del 21 de noviembre de 2026, Windows y Node.js 22.19.0.
 K1 y K2 representan UUID sintéticos distintos del doble de prueba.
 
 | Paso ejecutado | Estado resultante comprobado |
 |---|---|
 | Confirmar dos veces antes del siguiente render | Una consulta de stock y un POST con K1 |
+| Recibir HTTP 401, recuperar sesión y confirmar desde CartScreen | Invalida K1 sin vaciar el carrito; el segundo POST usa JWT nuevo y K2, y el pago confirmado limpia el carrito |
+| Responder HTTP 401 o 500 desde el transporte del servicio | Propaga el ApiError original; solo el 401 definitivo persiste el marcador, el 500 conserva el intento pendiente |
 | Perder la respuesta, avanzar de las 12:14 a las 12:16 y volver a pagar | Conserva K1 y cuerpo original; no consulta stock ni repite POST |
 | Repetir con respuesta incompleta | Mismo registro pendiente; ofrece revisar Pedidos |
 | Primer pago consume la última unidad, pierde su respuesta y deja stock cero | El siguiente toque ofrece revisar Pedidos; una consulta de stock y un POST en total |
@@ -80,8 +89,8 @@ K1 y K2 representan UUID sintéticos distintos del doble de prueba.
 | Retener o fallar escritura inicial | No hay POST hasta persistir correctamente |
 | Cambiar cuenta o datos en pruebas del servicio | Registro independiente o nueva confirmación según corresponda |
 
-Resultados: **283 pruebas aprobadas en 28 suites**, dos integraciones optativas
-omitidas. Las cuatro suites de D07 suman **29 casos**. TypeScript y exportación
+Resultados: **298 pruebas aprobadas en 29 suites**, dos integraciones optativas
+omitidas. Las cuatro suites de D07 suman **32 casos**. TypeScript y exportación
 Android aprobados. Comandos desde la raíz:
 
 ```powershell
@@ -110,6 +119,8 @@ npm test --prefix app-mobile -- --ci --runInBand --runTestsByPath __tests__/Recu
 Las pruebas usan App y CartScreen reales con reloj, Auth, almacenamiento, UUID,
 catálogo y transporte controlados. No acreditan deduplicación del servidor ni
 recuperación automática por clave: Pedidos permite revisar el resultado.
+El 401 de la regresión es una respuesta HTTP simulada mediante fetch y el JWT
+nuevo es ficticio; no se ejecutó un gateway ni una renovación real de Supabase.
 No se ejecutaron compras reales, pruebas visuales nuevas en dispositivo ni
 operaciones Cloud. La exportación comprueba JavaScript y recursos; no es un APK
 ni ejecuta el módulo nativo de UUID.
