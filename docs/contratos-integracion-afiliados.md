@@ -91,7 +91,7 @@ Content-Type: application/json
 ```
 
 - **200** `{"subtotal":10000,"descuento_afiliado":1500,"total":8500}`. Para un carrito de $10.000 a precio normal y $8.000 en oferta, el subtotal es $18.000, el descuento adicional es $1.900 y el total $16.100.
-- **422** `{"error":"campana_no_iniciada","inicio":"2026-12-01T08:00:00-03:00"}`. Otros motivos son `codigo_invalido`, `campana_pausada`, `campana_finalizada` y `beneficio_usado`.
+- **422** `{"error":"campana_no_iniciada"}`. V06 devuelve el motivo y la fecha de inicio queda pendiente en el contrato de la RPC. Otros motivos son `codigo_invalido`, `campana_pausada`, `campana_finalizada` y `beneficio_usado`.
 
 ```http
 POST /api/pedidos
@@ -110,6 +110,8 @@ Idempotency-Key: 9853fd16-92e4-4ab6-994a-477832a4a502
 | Respuesta perdida | Repetir la solicitud original con la misma clave devuelve el mismo resultado registrado. | El servidor asocia la clave al usuario y a los datos del intento. Si la misma clave llega con datos distintos, devuelve `409 {"error":"clave_reintento_en_conflicto"}`. El código de afiliado es independiente de la clave interna. |
 
 **Total actualizado en escritorio.** Si Ana confirma $10.000, el pedido pagado se puede consultar desde escritorio con sesión del dueño de la Cafetería A, por ejemplo `GET /api/pedidos/502` → `200 {"id":502,"cafeteria_id":7,"estado":"pagado","total_pagado":10000}`. Si Ana vuelve al carrito tras el `409`, ese intento no crea un pedido para el panel. Una consulta fuera del alcance de la cafetería devuelve `403`.
+
+C07 conecta la cotización con V06. La confirmación con total aceptado o clave de idempotencia está deshabilitada por defecto y devuelve `503 confirmacion_afiliada_no_disponible`. El checkout vigente que envía solo el código conserva la compra anterior, sin descuento afiliado. Habilitar la confirmación requiere coordinar el checkout y verificar el pago y la reversión con V08 y V15. La firma provisional y el ensayo aislado están en el [registro C07](microservicios/validacion/C07-cotizacion-compra-gateway.md).
 
 ## 4. Retiro y comisión
 

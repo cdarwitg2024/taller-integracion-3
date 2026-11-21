@@ -2,7 +2,7 @@
 
 const { Router } = require('express');
 const { auth, HttpError } = require('@coffeefaster/shared');
-const crearClienteAutenticado = require('../../cliente-autenticado');
+const crearClienteAutenticado = require('@coffeefaster/shared/src/cliente-autenticado');
 
 const SOLICITUDES = '/cafeterias/:cafeteriaId/campanas/:campanaId/solicitudes';
 const ERRORES_SQL = {

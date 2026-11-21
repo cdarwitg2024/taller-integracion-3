@@ -2,9 +2,9 @@
 
 ## Estándar de lenguaje
 
-`ms-cafeterias`, `ms-menus`, `ms-pedidos` y `shared` usan JavaScript con CommonJS (`require` y `module.exports`) sobre Node.js 22. Los servicios HTTP usan Express. Su código ejecutable en `src/` se escribe en archivos `.js` y se ejecuta directamente con Node. CI revisa las extensiones del código fuente y valida su sintaxis.
+`ms-cafeterias`, `ms-menus`, `ms-pedidos`, `ms-afiliados` y `shared` usan JavaScript con CommonJS (`require` y `module.exports`) sobre Node.js 22. Los servicios HTTP usan Express. Su código ejecutable en `src/` se escribe en archivos `.js` y se ejecuta directamente con Node. CI revisa las extensiones del código fuente y valida su sintaxis.
 
-Se adopta el lenguaje que comparten los tres servicios. Esto mantiene los mismos puntos de entrada, el paquete compartido y las imágenes Docker sin introducir una etapa de compilación. El estándar se aplica a estos microservicios y a `shared`. Las aplicaciones cliente y las funciones de Supabase tienen sus propios entornos.
+El estándar conserva los puntos de entrada, el paquete compartido y las imágenes Docker sin introducir una etapa de compilación. Las aplicaciones cliente y las funciones de Supabase tienen sus propios entornos.
 
 Revisado el 11 de noviembre de 2026. Las apps utilizan el gateway para las operaciones de pedidos. La activación de compra y cancelación con stock en Cloud se registró el 1 de noviembre. Ver [estado funcional](../../estado-actual.md) y [procedimiento de entrega por digest](../../calidad/ci-cd/CI-CD.md).
 
@@ -31,6 +31,28 @@ en Docker contra el Supabase local del host.
 ```
 
 ## Levantar
+
+`ms-afiliados` usa Express y Node.js 22. Para probar su arranque,
+ejecuta desde `Microservices`:
+
+```bash
+docker compose up --build -d ms-afiliados
+curl http://127.0.0.1:3006/health
+```
+
+Compose inicia `ms-afiliados` como dependencia del gateway, que le reenvía
+`/api/afiliados`. El puerto local de depuración se configura con
+`MS_AFILIADOS_PORT`. Configura `SUPABASE_URL` y
+`SUPABASE_PUBLISHABLE_KEY` para las rutas autenticadas.
+Si el gateway ya estaba en ejecución, reinícialo después de levantar
+`ms-afiliados` para que Nginx lea la configuración actualizada.
+
+En Kubernetes, el primer cambio de destino requiere publicar la imagen,
+aprovisionar el Deployment y Service de `ms-afiliados` con el digest de la
+publicación y esperar que sus Pods estén listos. Después corresponde cargar
+la nueva configuración de Nginx y verificar `/api/afiliados` antes de
+actualizar `ms-pedidos` a la versión que retira el módulo. El despliegue
+requiere autorización y se realiza por separado.
 
 ```bash
 cd Microservices
@@ -132,7 +154,7 @@ otro contenedor de la red.
 ## Reglas que sigue cada servicio
 
 - **Un solo recurso.** `ms-cafeterias` expone cafeterias; `ms-menus`, productos;
-  `ms-pedidos`, pedidos y afiliados. Cualquier otra ruta responde 404.
+  `ms-pedidos`, pedidos, y `ms-afiliados`, afiliaciones. Cualquier otra ruta responde 404.
 - **Sin mocks.** Si Supabase falla, la respuesta es `503` y no hay `data`. Un
   mock en el path esconde la base caída y le devuelve al cliente datos que no
   existen.
@@ -183,7 +205,7 @@ gana el más corto, así que `location /api/menus` se comería
 
 Para habilitar las solicitudes y decisiones de C05, aplicar las dependencias SQL de V04, V05 y C04 y luego [el SQL de C05](../../../database/fixes/exponer_solicitudes_afiliacion.sql). Las rutas usan el JWT de la sesión y delegan a V05 las decisiones y el estado del código. [Prueba local de C05](../validacion/C05-solicitudes-afiliacion.md).
 
-`ms-pedidos` expone el alta, la edición, el listado administrativo y los cambios de estado del [contrato C02](../../contratos-integracion-afiliados.md) en `/api/afiliados`. El dueño se identifica con su JWT: las RPC `administrar_campana_afiliados` y `listar_campanas_afiliados` usan `public.dueno_campana_id(p_cafeteria_id)`, la función de identidad de V05 que exige usuario y rol activos, y limitan la fila o el listado por cafetería. Los porcentajes y la vigencia quedan fijos desde el inicio; pausar y reanudar conserva condiciones, versión y aceptación.
+`ms-afiliados` expone el alta, la edición, el listado administrativo y los cambios de estado del [contrato C02](../../contratos-integracion-afiliados.md) en `/api/afiliados`. El dueño se identifica con su JWT: las RPC `administrar_campana_afiliados` y `listar_campanas_afiliados` usan `public.dueno_campana_id(p_cafeteria_id)`, la función de identidad de V05 que exige usuario y rol activos, y limitan la fila o el listado por cafetería. Los porcentajes y la vigencia quedan fijos desde el inicio; pausar y reanudar conserva condiciones, versión y aceptación.
 
 La migración [administrar_campanas_afiliados.sql](../../../database/fixes/administrar_campanas_afiliados.sql) requiere el esquema V05, incluida la tabla `public.campanas` y la función `public.dueno_campana_id(bigint)`. Agrega la columna nullable `tasa_descuento_oferta` y extiende el control de versiones de condiciones para incluirla. La evidencia de solicitudes, códigos HTTP y cálculo SQL está en [S3-T3 · Administración de campañas de afiliados](../validacion/S3-T3-administracion-campanas-afiliados.md).
 

@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const release = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 assert.match(process.env.GITHUB_SHA || '', /^[a-f0-9]{40}$/);
 assert.equal(release.sha, process.env.GITHUB_SHA, 'Release commit mismatch');
-const services = ['ms-cafeterias', 'ms-menus', 'ms-pedidos'];
+const services = ['ms-cafeterias', 'ms-menus', 'ms-pedidos', 'ms-afiliados'];
 assert.deepEqual(Object.keys(release.images).sort(), [...services].sort());
 for (const service of services) {
   assert.match(release.images[service], new RegExp(
