@@ -54,7 +54,7 @@ function cargarApp(servicios) {
 }
 
 const servicio = (listar, extra = {}) => ({
-  campanasAfiliados: { listar, crear: async () => ({}), actualizar: async () => ({}), ...extra },
+  campanasAfiliados: { listar, crear: async () => ({}), actualizar: async () => ({}), cambiarEstado: async () => ({}), ...extra },
   validarFormularioCampana: cargarServicioCampanas().modulo.validarFormularioCampana,
 });
 
@@ -139,7 +139,9 @@ function textoRenderizado(nodo) {
 }
 
 const campana = (id, nombre, estado = 'activa') => ({
-  id, nombre, estado, descuento_normal_pct: 15, descuento_oferta_pct: 5, comision_pct: 10,
+  id, nombre, estado, estado_db: estado, confirmada_por_dueno: true,
+  version_confirmada: '1.0', version_condiciones: '1.0',
+  descuento_normal_pct: 15, descuento_oferta_pct: 5, comision_pct: 10,
   inicio: '2026-12-01T11:00:00.000Z', fin: '2026-12-15T23:00:00.000Z',
 });
 
@@ -257,12 +259,12 @@ test('cambiar de cafetería descarta la respuesta atrasada', async t => {
 
 // Monta Campanas directamente para observar el render inmediato al cambiar de
 // cafetería: fuera de act, tree.update() aplica el render antes de los efectos.
-function cargarCampanas(listar) {
+function cargarCampanas(listar, cambiarEstado = async () => ({})) {
   const imports = {
     '@mui/material': mui,
     'react-router-dom': require('react-router-dom'),
     '../../services/campanasAfiliados': {
-      campanasAfiliados: { listar, crear: async () => ({}), actualizar: async () => ({}) },
+      campanasAfiliados: { listar, crear: async () => ({}), actualizar: async () => ({}), cambiarEstado },
     },
     '../../components/dueno/PageHeader': cargarCond('components/dueno/PageHeader.jsx', { '@mui/material': mui }),
   };
@@ -275,8 +277,8 @@ async function completarCarga(accion) {
   await act(async () => { accion(); await Promise.resolve(); });
 }
 
-async function montarListado(t, listar, ruta = '/') {
-  const Campanas = cargarCampanas(listar);
+async function montarListado(t, listar, ruta = '/', cambiarEstado) {
+  const Campanas = cargarCampanas(listar, cambiarEstado);
   const vista = cafeteria => React.createElement(MemoryRouter, { initialEntries: [ruta] },
     React.createElement(Campanas, { currentUser: dueno(cafeteria) }));
   let tree;
@@ -899,4 +901,116 @@ test('el formulario marca el campo obligatorio omitido y conserva los datos vál
   assert.equal(creados[0].cafeteriaId, 7);
   assert.equal(creados[0].form.nombre, 'Campaña de prueba');
   assert.equal(creados[0].form.descuento_oferta_pct, '5');
+});
+
+test('cambiarEstado envía solo pausada en el PATCH del contrato C02', async () => {
+  const { modulo, llamadas } = cargarServicioCampanas();
+  await modulo.campanasAfiliados.cambiarEstado(7, 31, true);
+  await modulo.campanasAfiliados.cambiarEstado(7, 31, false);
+  assert.equal(llamadas[0].url, 'http://gateway/api/afiliados/cafeterias/7/campanas/31');
+  assert.equal(llamadas[0].opciones.method, 'PATCH');
+  assert.deepEqual(JSON.parse(llamadas[0].opciones.body), { pausada: true });
+  assert.deepEqual(JSON.parse(llamadas[1].opciones.body), { pausada: false });
+});
+
+test('pausar y activar desde el listado persiste y recarga el estado visible', async t => {
+  const cambios = [];
+  let visibles = [campana(31, 'Semana del café')];
+  const h = await montar(t, { campanas: servicio(async () => visibles, {
+    cambiarEstado: async (cafeteria, id, pausada) => {
+      cambios.push({ cafeteria, id, pausada });
+      visibles = [campana(id, 'Semana del café', pausada ? 'pausada' : 'activa')];
+    },
+  }) });
+  assert.ok(h.boton('Pausar'));
+  await act(async () => h.boton('Pausar').props.onClick());
+  assert.deepEqual(cambios, [{ cafeteria: 7, id: 31, pausada: true }]);
+  assert.equal(h.boton('Pausar'), undefined);
+  assert.ok(h.boton('Activar'));
+  assert.ok(h.chips().includes('pausada'));
+  await act(async () => h.boton('Activar').props.onClick());
+  assert.deepEqual(cambios[1], { cafeteria: 7, id: 31, pausada: false });
+  assert.ok(h.chips().includes('activa'));
+});
+
+test('el resumen permite pausar la campaña abierta', async t => {
+  const cambios = [];
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31',
+    campanas: servicio(async () => [campana(31, 'Semana del café')], {
+      cambiarEstado: async (cafeteria, id, pausada) => cambios.push({ cafeteria, id, pausada }),
+    }),
+  });
+  assert.ok(h.boton('Pausar'));
+  await act(async () => h.boton('Pausar').props.onClick());
+  assert.deepEqual(cambios, [{ cafeteria: 7, id: 31, pausada: true }]);
+});
+
+test('no se ofrece cambio de estado sin aceptación vigente ni para campañas finalizadas', async t => {
+  const h = await montar(t, { campanas: servicio(async () => [
+    { ...campana(31, 'Pendiente'), estado: 'programada', estado_db: 'pendiente_aceptacion' },
+    { ...campana(32, 'Borrador'), estado: 'programada', estado_db: 'borrador' },
+    { ...campana(33, 'Finalizada'), estado: 'finalizada', estado_db: 'activa' },
+    { ...campana(34, 'Programada aceptada'), estado: 'programada', estado_db: 'aceptada' },
+    { ...campana(35, 'Sin aceptar'), confirmada_por_dueno: false },
+    { ...campana(36, 'Versión discordante'), version_confirmada: '0.9' },
+  ]) });
+  const botones = etiqueta => h.tree.root.findAllByType('Button').filter(b =>
+    b.children.some(c => typeof c === 'string' && c.includes(etiqueta)));
+  assert.equal(botones('Pausar').length, 1);
+  assert.equal(botones('Activar').length, 0);
+});
+
+test('un error al cambiar el estado se muestra conservando el listado', async t => {
+  const h = await montar(t, { campanas: servicio(async () => [campana(31, 'Semana del café')], {
+    cambiarEstado: async () => { throw new Error('campana_no_activa'); },
+  }) });
+  await act(async () => h.boton('Pausar').props.onClick());
+  assert.match(h.texto(), /campana_no_activa/);
+  assert.match(h.texto(), /Semana del café/);
+  assert.ok(h.boton('Pausar'));
+  assert.ok(h.boton('Reintentar'));
+  await act(async () => h.boton('Reintentar').props.onClick());
+  assert.match(h.texto(), /Semana del café/);
+  assert.doesNotMatch(h.texto(), /campana_no_activa/);
+});
+
+test('un error al cambiar el estado en el resumen conserva la campaña abierta', async t => {
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31',
+    campanas: servicio(async () => [campana(31, 'Semana del café')], {
+      cambiarEstado: async () => { throw new Error('campana_no_activa'); },
+    }),
+  });
+  await act(async () => h.boton('Pausar').props.onClick());
+  assert.match(h.texto(), /campana_no_activa/);
+  assert.match(h.texto(), /Semana del café/);
+  assert.ok(h.boton('Pausar'));
+  assert.ok(h.boton('Reintentar'));
+});
+
+test('cambiar de cafetería durante el PATCH descarta el resultado y el error atrasados', async t => {
+  const pendientes = [];
+  const cambios = [];
+  const listar = id => Promise.resolve([campana(id, `Campaña de la ${id}`)]);
+  const cambiarEstado = (cafeteria, id, pausada) => {
+    cambios.push({ cafeteria, id, pausada });
+    return new Promise((resolve, reject) => pendientes.push({ resolve, reject }));
+  };
+  const h = await montarListado(t, listar, '/', cambiarEstado);
+  await act(async () => { h.boton('Pausar').props.onClick(); });
+  h.actualizar(12);
+  await completarCarga(() => pendientes[0].resolve());
+  assert.match(h.texto(), /Campaña de la 12/);
+  assert.doesNotMatch(h.texto(), /Campaña de la 7/);
+
+  await act(async () => { h.boton('Pausar').props.onClick(); });
+  h.actualizar(7);
+  await completarCarga(() => pendientes[1].reject(new Error('error de la 12')));
+  assert.match(h.texto(), /Campaña de la 7/);
+  assert.doesNotMatch(h.texto(), /error de la 12/);
+  assert.deepEqual(cambios, [
+    { cafeteria: 7, id: 7, pausada: true },
+    { cafeteria: 12, id: 12, pausada: true },
+  ]);
 });

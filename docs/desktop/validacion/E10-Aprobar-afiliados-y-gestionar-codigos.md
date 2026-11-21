@@ -59,7 +59,7 @@ git diff --check
 
 Resultados:
 
-- Escritorio: 120/120 pruebas aprobadas; incluye catorce escenarios nuevos de
+- Escritorio: 127/127 pruebas aprobadas tras integrar E07; incluye catorce escenarios nuevos de
   carga por campaña, filtro local, aprobación con código en uso, rechazo,
   desactivación, descarte de respuesta atrasada, cambio de cafetería, reintentos,
   paginación, cuerpos PATCH, errores C05 y respuestas tardías de decisión.

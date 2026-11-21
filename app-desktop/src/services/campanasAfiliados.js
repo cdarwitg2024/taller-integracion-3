@@ -159,4 +159,11 @@ export const campanasAfiliados = {
       throw explicarErrorC05(error);
     }
   },
+  // PATCH del mismo recurso con el cambio de estado aislado de las condiciones.
+  async cambiarEstado(cafeteriaId, campanaId, pausada) {
+    return request(ruta(cafeteriaId, `/${Number(campanaId)}`), {
+      method: 'PATCH',
+      body: JSON.stringify({ pausada: Boolean(pausada) }),
+    });
+  },
 };

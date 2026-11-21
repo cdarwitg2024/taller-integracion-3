@@ -6,6 +6,7 @@ import { apiGet } from '../../services/backendClient';
 import * as campanasService from '../../services/campanasAfiliados';
 
 jest.mock('../../services/backendClient', () => ({ apiGet: jest.fn() }));
+jest.mock('../../services/afiliaciones', () => ({ solicitarAfiliacion: jest.fn() }));
 const ahora = Date.parse('2026-11-17T12:00:00Z');
 const cafeterias = [{ id: 7, nombre: 'Norte' }, { id: 8, nombre: 'Sur' }];
 const campana = (cambios = {}) => ({
