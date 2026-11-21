@@ -88,6 +88,8 @@ export default function Afiliados({ currentUser }) {
 
   // Limpia la decisión pendiente cuando cambia la cafetería o la campaña.
   useEffect(() => {
+    // Invalidar también la respuesta en curso: al volver al contexto inicial, cafetería y campaña coinciden otra vez.
+    decisionReq.current += 1;
     setAccion(null);
     setCodigo('');
     setErrorAccion('');

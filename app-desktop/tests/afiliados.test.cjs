@@ -383,6 +383,36 @@ test('una decisión anterior no cierra la nueva dentro de la misma campaña', as
   assert.equal(h.accion('Confirmar'), undefined);
 });
 
+test('volver a la campaña inicial no deja que un PATCH pendiente cierre el formulario nuevo', async t => {
+  let completarPrimera;
+  const parchePrimera = new Promise(resolve => { completarPrimera = resolve; });
+  const decisiones = [];
+  const h = await montar(t, {
+    campanas: {
+      ...servicioVacio(),
+      listar: async () => campanasDePrueba,
+      listarSolicitudes: async (_cafeteria, campana) => [solicitud(campana === 31 ? 82 : 99, 'pendiente')],
+      resolverSolicitud: async (cafeteria, campana, solicitudId, decision, codigo) => {
+        decisiones.push([cafeteria, campana, solicitudId, decision, codigo]);
+        return parchePrimera;
+      },
+    },
+  });
+  await act(async () => h.accion('Aprobar').props.onClick());
+  await act(async () => h.tree.root.findByType('TextField').props.onChange({ target: { value: 'CF-PRIMERO' } }));
+  await act(async () => { h.accion('Confirmar').props.onClick(); });
+  await h.seleccionar('Campaña', 32);
+  await h.seleccionar('Campaña', 31);
+  await act(async () => h.accion('Aprobar').props.onClick());
+  await act(async () => h.tree.root.findByType('TextField').props.onChange({ target: { value: 'CF-NUEVO' } }));
+  await act(async () => completarPrimera({}));
+  assert.match(h.texto(), /Asignar código a Estudiante 82/);
+  assert.equal(h.tree.root.findByType('TextField').props.value, 'CF-NUEVO');
+  assert.equal(h.accion('Confirmar').props.disabled, false);
+  assert.equal(h.tree.root.findAllByType('Alert').filter(a => a.props.severity === 'error').length, 0);
+  assert.deepEqual(decisiones, [[7, 31, 82, 'aprobar', 'CF-PRIMERO']]);
+});
+
 test('el servicio pagina el listado y envía solo la decisión permitida por C05', async () => {
   const base = 'http://gateway/api/afiliados/cafeterias/7/campanas/31/solicitudes';
   const { modulo, llamadas } = cargarServicioSolicitudes([

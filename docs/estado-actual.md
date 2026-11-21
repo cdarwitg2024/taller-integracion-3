@@ -58,7 +58,7 @@ El aviso de voz se dispara por un pedido nuevo recibido por Realtime con voz act
 ## Últimas validaciones registradas
 
 - Mobile: 68 pruebas en 11 suites, con regresiones de sesión vencida y recuperación de pedidos. Las lecturas reintentan una vez tras renovar el JWT. El flujo de compra y cancelación conserva sus llamadas de escritura sin reintento automático por vencimiento.
-- Desktop: 128 pruebas locales, incluidas 43 de campañas (7 nuevas de E07), 26 del KDS (24 de cambio de cafetería y 2 de reintentos) añadidas en E04 y 15 de gestión de solicitudes añadidas en E10. Backend legacy: 36 pruebas vigentes aprobadas. Microservicios: 214, además de 5 de shared. Telegram: 11, incluida una integración con PostgreSQL.
+- Desktop: 129 pruebas locales, incluidas 43 de campañas (7 nuevas de E07), 26 del KDS (24 de cambio de cafetería y 2 de reintentos) añadidas en E04 y 16 de gestión de solicitudes añadidas en E10. Backend legacy: 36 pruebas vigentes aprobadas. Microservicios: 214, además de 5 de shared. Telegram: 11, incluida una integración con PostgreSQL.
 - PostgreSQL aislado: 18 escenarios de compra, cancelación y concurrencia. Catálogo: 7 escenarios HTTP con PostgREST y PostgreSQL. Las pruebas detectaron 11 defectos introducidos en copias temporales.
 - La ejecución en GitHub Actions, la prueba manual de retiro y la cobertura completa de Supabase Auth/RLS se verifican por separado. Ver [evidencia y alcance](calidad/validacion/revision-pruebas.md).
 
