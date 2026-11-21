@@ -903,6 +903,63 @@ test('el formulario marca el campo obligatorio omitido y conserva los datos vál
   assert.equal(creados[0].form.descuento_oferta_pct, '5');
 });
 
+test('E14: tasas en los límites y vigencia inválida identifican el campo en el formulario', async t => {
+  const { modulo } = cargarServicioCampanas();
+  const base = {
+    nombre: 'Campaña de límites', descuento_normal_pct: '100', descuento_oferta_pct: '0',
+    comision_pct: '100', inicio: '2026-12-01T08:00', fin: '2026-12-15T20:00',
+  };
+  assert.deepEqual(modulo.validarFormularioCampana(base).errores, {});
+  for (const [campo, valor, mensaje] of [
+    ['descuento_normal_pct', '-0.01', /El descuento a precio normal debe estar entre 0 y 100/],
+    ['descuento_normal_pct', '100.01', /El descuento a precio normal debe estar entre 0 y 100/],
+    ['descuento_oferta_pct', '-0.01', /El descuento en oferta debe estar entre 0 y 100/],
+    ['descuento_oferta_pct', '100.01', /El descuento en oferta debe estar entre 0 y 100/],
+    ['comision_pct', '-0.01', /La comisión debe estar entre 0 y 100/],
+    ['comision_pct', '100.01', /La comisión debe estar entre 0 y 100/],
+  ]) {
+    assert.match(modulo.validarFormularioCampana({ ...base, [campo]: valor }).errores[campo], mensaje);
+  }
+  for (const fecha of ['2026-12-01T25:00', '2026-12-01T08:60', '2026-09-31T08:00']) {
+    assert.equal(modulo.validarFormularioCampana({ ...base, inicio: fecha }).errores.inicio,
+      'Revisa la fecha de vigencia.');
+  }
+
+  const creados = [];
+  const h = await montar(t, {
+    campanas: servicio(async () => [], {
+      crear: async (cafeteriaId, form) => { creados.push({ cafeteriaId, form }); return { id: 1 }; },
+    }),
+  });
+  await act(async () => h.boton('Nueva campaña').props.onClick());
+  const campos = () => Object.fromEntries(h.tree.root.findAllByType('TextField')
+    .map(c => [c.props.label, c]));
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+  const enviar = () => formulario().props.onSubmit({ preventDefault() {} });
+  const cambiar = async (etiqueta, valor) => {
+    await act(async () => { campos()[etiqueta].props.onChange({ target: { value: valor } }); });
+  };
+  await cambiar('Nombre de la campaña', base.nombre);
+  await cambiar('Descuento a precio normal', base.descuento_normal_pct);
+  await cambiar('Descuento en oferta', base.descuento_oferta_pct);
+  await cambiar('Comisión', '101');
+  await cambiar('Inicio', '2026-12-01T25:00');
+  await cambiar('Término', base.fin);
+  await act(async () => enviar());
+  assert.match(campos()['Comisión'].props.helperText, /La comisión debe estar entre 0 y 100/);
+  assert.match(campos()['Inicio'].props.helperText, /Revisa la fecha de vigencia/);
+  assert.equal(campos()['Descuento en oferta'].props.error, false);
+  assert.equal(creados.length, 0);
+
+  await cambiar('Comisión', base.comision_pct);
+  await cambiar('Inicio', base.inicio);
+  await act(async () => enviar());
+  assert.equal(creados.length, 1);
+  assert.equal(creados[0].form.comision_pct, '100');
+  assert.equal(creados[0].form.descuento_normal_pct, '100');
+  assert.equal(creados[0].form.inicio, '2026-12-01T08:00');
+});
+
 test('cambiarEstado envía solo pausada en el PATCH del contrato C02', async () => {
   const { modulo, llamadas } = cargarServicioCampanas();
   await modulo.campanasAfiliados.cambiarEstado(7, 31, true);
