@@ -17,7 +17,7 @@ Los pasos 1, 3 y 4 corresponden a `app-desktop/tests/campanas.test.cjs`; el paso
 
 ## Resultado
 
-- Escritorio: 108/108 pruebas aprobadas, incluidas 38 de campañas y 2 nuevas de E13.
+- Escritorio: 115/115 pruebas aprobadas tras integrar E07, incluidas 45 de campañas (7 nuevas de E07 y 2 de E13).
 - `npm run build --prefix app-desktop`: código de salida 0.
 - `git diff --check`: sin errores.
 
