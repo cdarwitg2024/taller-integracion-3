@@ -1,16 +1,11 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { backendApi, CAFETERIA_ID } from './backendApi';
+import { backendApi } from './backendApi';
 import { parsearFecha, formatearHora, formatearHoraBucket } from '../utils/dateUtils';
 
 // Claves que el QR / el backend pueden usar para identificar un pedido. El QR y
 // el token de contingencia son credenciales distintas del MISMO pedido, asi que
 // todas son candidatas validas para el mismo fin.
 const CLAVES_CREDENCIAL = ['qr_token', 'token', 'codigo_retiro_diario', 'codigo_pedido', 'pedido_id', 'id'];
-
-// Caracteres que rompen el filtro `.or()` de PostgREST (coma abre/cierra grupo,
-// parentesis y espacio separan condiciones). Una credencial que los traiga no es
-// un token nuestro, asi que se descarta antes de armar la consulta.
-const CREDENCIAL_SEGURA = /^[A-Za-z0-9_-]+$/;
 
 // ─── Criterio comun de ventas para indicadores administrativos (S2-T11) ───
 // Periodo operativo compartido por los indicadores que representan ventas.
@@ -337,41 +332,15 @@ export const pedidosService = {
     return data ? normalizarPedido(data) : null;
   },
 
-  async getByQrToken(qrToken) {
-    if (!qrToken) return null;
-    const cleanToken = String(qrToken).trim();
-
-    if (!isSupabaseConfigured) {
-      throw new Error('Supabase no está configurado en el cliente');
-    }
-    // Una credencial con caracteres de filtro se descarta: no es un token nuestro
-    // y ensuciaria el `.or()` con una condicion invalida.
-    if (!CREDENCIAL_SEGURA.test(cleanToken)) return null;
-
-    // El QR y el token de contingencia apuntan al mismo pedido, asi que se buscan
-    // las dos columnas mas el codigo legible. Cualquiera de las tres resuelve.
-    // `ilike` en vez de `eq`: el token se escribe a mano en el KDS con teclado
-    // fisico y en mayusculas/minusculas indistinto no deberia importar.
-    const orClauses = [
-      `qr_token.ilike.${cleanToken}`,
-      `codigo_retiro_diario.ilike.${cleanToken}`,
-      `codigo_pedido.ilike.${cleanToken}`,
-    ];
-    if (/^\d+$/.test(cleanToken)) orClauses.push(`id.eq.${cleanToken}`);
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('*, usuarios(nombre, apellido), cafeterias(*), detalles_pedido(*, productos(*))')
-      .or(orClauses.join(','))
-      .maybeSingle();
-
-    if (error) {
-      console.error('Error al obtener pedido por QR token desde Supabase:', error);
-      throw error;
-    }
-    return data ? normalizarPedido(data) : null;
-  },
-
   async updateEstado(id, nuevoEstado) {
+    // La entrega NO se escribe desde el cliente. La unica operacion valida es
+    // POST /api/pedidos/validar-qr en ms-pedidos, que ejecuta la transicion
+    // atomica y consume la credencial. Este guard impide que un llamador
+    // reutilice el Kanban o el fallback para marcar un pedido como entregado.
+    if (nuevoEstado === 'entregado') {
+      throw new Error('La entrega del pedido solo se registra validando el QR o token en el servicio de pedidos.');
+    }
+
     // 0. Regla de flujo: no se puede saltar estados
     //    (pendiente -> en_preparacion -> listo -> entregado).
     const actual = await this.getById(id);
@@ -413,9 +382,6 @@ export const pedidosService = {
     const now = new Date().toISOString();
     if (nuevoEstado === 'en_preparacion' || nuevoEstado === 'preparando') updates.inicio_preparacion_en = now;
     if (nuevoEstado === 'listo') updates.listo_en = now;
-    if (nuevoEstado === 'entregado') {
-      updates.entregado_en = now;
-    }
     if (nuevoEstado === 'cancelado') updates.cancelado_en = now;
 
     const { data, error } = await supabase
@@ -430,113 +396,6 @@ export const pedidosService = {
       throw error;
     }
     return normalizarPedido(data);
-  },
-
-  /**
-   * Valida la entrega de un pedido con cualquier credencial valida: el QR
-   * escaneado o el token de contingencia tipeado a mano.
-   *
-   * Ambas son credenciales del mismo pedido, asi que no son alternativas
-   * excluyentes: se prueban TODAS las que se puedan extraer de la entrada y
-   * gana la primera que resuelva el pedido. Si el QR esta danado, ilegible o su
-   * token no coincide, el token de contingencia del mismo pedido lo entrega; y
-   * al reves, si el token fue borrado o mal tipeado, el QR lo entrega.
-   */
-  async validarQrEntrega(textoQr, idUsuario = null, cafeteriaIdValidacion = null) {
-    const candidatas = extraerCredenciales(textoQr);
-    if (candidatas.length === 0) {
-      return { valido: false, razon: 'QR vacío o ilegible, intenta nuevamente.' };
-    }
-
-    try {
-      let pedido = null;
-      let credencialUsada = candidatas[0];
-
-      for (const credencial of candidatas) {
-        const encontrado = await this.getByQrToken(credencial);
-        if (encontrado) {
-          pedido = encontrado;
-          credencialUsada = credencial;
-          break;
-        }
-      }
-
-      if (!pedido) {
-        await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'rechazado', detalle: 'QR no reconocido.', usuarioId: idUsuario });
-        return { valido: false, razon: 'QR no reconocido. Verifica que corresponda a un pedido de CoffeFaster.' };
-      }
-      const cidVal = cafeteriaIdValidacion !== null && cafeteriaIdValidacion !== undefined ? Number(cafeteriaIdValidacion) : (CAFETERIA_ID !== null && CAFETERIA_ID !== undefined ? Number(CAFETERIA_ID) : null);
-      if (Number.isFinite(cidVal) && Number(pedido.cafeteria_id) !== cidVal) {
-        const razon = `El pedido #${pedido.id} no pertenece a esta cafetería.`;
-        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
-        return { valido: false, razon };
-      }
-      if (pedido.estado === 'entregado') {
-        const razon = `El pedido #${pedido.id} ya fue entregado.`;
-        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
-        return { valido: false, razon };
-      }
-      if (pedido.estado !== 'listo') {
-        const razon = `El pedido #${pedido.id} aún no está listo para retiro (estado: ${pedido.estado}).`;
-        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
-        return { valido: false, razon };
-      }
-
-      const entregado = await this.updateEstado(pedido.rawId ?? pedido.id, 'entregado');
-      if (!entregado || entregado.estado !== 'entregado') {
-        const razon = `El pedido #${pedido.id} no pudo marcarse como entregado.`;
-        await this._registrarLogValidacion({ pedidoId: pedido.rawId ?? pedido.id, qrToken: credencialUsada, resultado: 'rechazado', detalle: razon, usuarioId: idUsuario });
-        return { valido: false, razon };
-      }
-      await this._registrarLogValidacion({
-        pedidoId: pedido.rawId ?? pedido.id,
-        qrToken: credencialUsada,
-        resultado: 'entregado',
-        detalle: `Pedido #${pedido.id} marcado como entregado por QR/Token.`,
-        usuarioId: idUsuario,
-      });
-      return {
-        valido: true,
-        mensaje: 'Entrega validada exitosamente. ¡Qué disfrute su pedido!',
-        pedido: entregado,
-        credencialUsada,
-      };
-    } catch (err) {
-      console.warn('validarQrEntrega:', err);
-      await this._registrarLogValidacion({ qrToken: candidatas[0], resultado: 'error', detalle: 'No se pudo validar el QR en este momento.', usuarioId: idUsuario });
-      return { valido: false, razon: 'No se pudo validar el QR en este momento.' };
-    }
-  },
-
-  async _registrarLogValidacion({ pedidoId = null, qrToken = null, resultado, detalle, usuarioId = null }) {
-    if (!isSupabaseConfigured) return;
-    try {
-      let finalUsuarioId = usuarioId && !isNaN(Number(usuarioId)) ? Number(usuarioId) : null;
-      if (!finalUsuarioId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user?.id) {
-          const { data: usuario } = await supabase
-            .from('usuarios')
-            .select('id')
-            .eq('auth_user_id', user.id)
-            .maybeSingle();
-          finalUsuarioId = usuario?.id ?? null;
-        }
-      }
-      const { error } = await supabase
-        .from('logs_validacion_qr')
-        .insert({
-          pedido_id: pedidoId,
-          cafeteria_id: CAFETERIA_ID,
-          usuario_id: finalUsuarioId,
-          qr_token_leido: qrToken,
-          resultado,
-          motivo_rechazo: resultado === 'rechazado' ? detalle : null,
-        });
-      if (error) console.warn('_registrarLogValidacion:', error?.message);
-    } catch (err) {
-      console.warn('_registrarLogValidacion:', err?.message || err);
-    }
   },
 
   async getEstadisticas(pedidos = null) {

@@ -3,3 +3,6 @@
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
+
+// Las pruebas de componentes controlan la respuesta del portapapeles nativo.
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }));
