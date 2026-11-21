@@ -146,12 +146,12 @@ function textoDe(e: unknown): string {
  * @param ruta  ruta relativa, p. ej. `/api/pedidos`.
  * @param cuerpo objeto serializado con `JSON.stringify` como body.
  * @param opciones configuración opcional; `timeoutMs` define el límite de
- *                 espera (por defecto 6000 ms).
+ *                 espera (por defecto 6000 ms); `claveIdempotencia` identifica el intento.
  */
 export async function apiPost<T>(
   ruta: string,
   cuerpo: unknown,
-  opciones?: { timeoutMs?: number }
+  opciones?: { timeoutMs?: number; claveIdempotencia?: string }
 ): Promise<T> {
   const url = `${urlBase()}${normalizarRuta(ruta)}`;
   const token = await tokenActual();
@@ -168,9 +168,10 @@ export async function apiPost<T>(
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
+        ...(opciones?.claveIdempotencia ? { 'Idempotency-Key': opciones.claveIdempotencia } : {}),
       },
       // Sin `no-validate` ni equivalentes: TLS queda tal cual lo resuelve el
-      // sistema. Tampoco se manda ningún header de key del lado del cliente.
+      // sistema. No se envían claves de acceso de servidor desde el cliente.
       body: JSON.stringify(cuerpo ?? {}),
       signal: controller.signal,
     });
