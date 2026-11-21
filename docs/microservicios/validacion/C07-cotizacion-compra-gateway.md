@@ -4,7 +4,7 @@
 
 `POST /api/pedidos` distingue la confirmación por `Idempotency-Key` o `total_aceptado`. La confirmación está deshabilitada por defecto y responde `503 confirmacion_afiliada_no_disponible`. La compra móvil vigente, que puede enviar solo el código, conserva la firma de tres parámetros, el cobro sin descuento afiliado y la respuesta `{ok, pedido}`.
 
-El Compose desechable habilita la confirmación con `HABILITAR_CONFIRMACION_AFILIADA=true`. Con esa opción, el servicio comprueba la cuenta activa y la pertenencia de los productos a la cafetería antes de confirmar. La clave identifica el mismo intento con el mismo cuerpo. Para aceptar un total actualizado, el cliente envía una clave nueva. La RPC recibe el JWT del comprador y resuelve la revalidación y los reintentos.
+La cotización también está deshabilitada por defecto y devuelve `503 cotizacion_afiliada_no_disponible`. El Compose desechable habilita ambos endpoints con `HABILITAR_CONFIRMACION_AFILIADA=true` en `ms-afiliados` y `ms-pedidos`. Al confirmar, el servicio comprueba la cuenta activa y la pertenencia de los productos a la cafetería. La clave identifica el mismo intento con el mismo cuerpo. Para aceptar un total actualizado, el cliente envía una clave nueva. La RPC recibe el JWT del comprador y resuelve la revalidación y los reintentos.
 
 ## Contrato provisional de Supabase
 

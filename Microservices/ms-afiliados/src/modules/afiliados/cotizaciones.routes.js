@@ -5,6 +5,10 @@ const { auth, HttpError } = require('@coffeefaster/shared');
 const crearClienteAutenticado = require('@coffeefaster/shared/src/cliente-autenticado');
 
 router.post('/cotizaciones', auth.exigirAuth, async (req, res, next) => {
+  if (process.env.HABILITAR_CONFIRMACION_AFILIADA !== 'true') {
+    return res.status(503).json({ error: 'cotizacion_afiliada_no_disponible' });
+  }
+
   try {
     const { cafeteria_id, items, codigo = null } = req.body || {};
     if (!Number.isSafeInteger(cafeteria_id) || cafeteria_id <= 0 ||

@@ -29,6 +29,7 @@ services:
     environment:
       <<: *supabase
       PORT: 3006
+      HABILITAR_CONFIRMACION_AFILIADA: "true"
   supabase-fixture:
     image: node:22-alpine
     command: ["node", "/tests/supabase.cjs"]
