@@ -3,6 +3,8 @@ import { AppState, Text, TextInput, TouchableOpacity } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import MisAfiliacionesScreen from '../MisAfiliacionesScreen';
 import { consultarAfiliaciones, solicitarAfiliacion, consultarMovimientosComision } from '../../services/afiliaciones';
+import { consultarSaldoAfiliado } from '../../services/saldoAfiliado';
+jest.mock('../../services/saldoAfiliado', () => ({ consultarSaldoAfiliado: jest.fn() }));
 
 jest.mock('../../lib/supabase', () => ({ supabase: { auth: {}, from: jest.fn() } }));
 jest.mock('../../services/afiliaciones', () => ({
@@ -24,6 +26,7 @@ beforeEach(() => {
   perfil = [];
   consultarAfiliaciones.mockImplementation(async () => perfil);
   consultarMovimientosComision.mockResolvedValue(movimientos);
+  consultarSaldoAfiliado.mockResolvedValue({ pendiente_clp: 0, disponible_clp: 850, retirado_clp: 0 });
 });
 afterEach(() => {
   if (tree) act(() => tree.unmount());
@@ -59,10 +62,20 @@ test('la aprobación habilita el código del servidor, ganancias e historial rea
   expect(boton('Ganancias')).toBeDefined();
   expect(boton('Historial')).toBeDefined();
   await pulsar('Ganancias');
-  expect(texto()).toContain('Saldo de comisiones disponibles: $850');
+  expect(texto()).toContain('Saldo disponible para retirar: $850');
   await pulsar('Historial');
   expect(texto()).toContain('Comisión · Pedido #501');
   expect(texto()).toContain('$850 · disponible');
+});
+
+test('con dos afiliaciones muestra un solo saldo global y no suma los movimientos por campaña', async () => {
+  perfil = [aprobada, { ...aprobada, id: 83, cafeteria_id: 8, campana_id: 41, codigo: 'CF-SUR' }];
+  consultarSaldoAfiliado.mockResolvedValue({ pendiente_clp: 500, disponible_clp: 700, retirado_clp: 300 });
+  await montar();
+  await pulsar('Ganancias');
+  expect(tree.root.findAllByType(Text).filter(n => String(n.props.children).startsWith('Saldo disponible para retirar:'))).toHaveLength(1);
+  expect(texto()).toContain('Saldo disponible para retirar: $700');
+  expect(consultarMovimientosComision).not.toHaveBeenCalled();
 });
 
 test('pendiente pasa a aprobada al volver al foreground, sin volver a enviar la solicitud', async () => {
@@ -83,13 +96,13 @@ test('desactivar el código conserva el saldo y el historial al actualizar y rea
   perfil = [{ ...aprobada, codigo_activo: false }];
   await pulsar('Actualizar mis solicitudes');
   expect(texto()).toContain('El código está desactivado');
-  expect(texto()).toContain('Saldo de comisiones disponibles: $850');
+  expect(texto()).toContain('Saldo disponible para retirar: $850');
   await pulsar('Mis códigos');
   expect(texto()).toContain('Código desactivado: ya no se puede usar');
   expect(texto()).toContain('CF-DEL-SERVIDOR');
   await pulsar('Historial');
   expect(texto()).toContain('Comisión · Pedido #501');
-  expect(texto()).toContain('Saldo de comisiones disponibles: $850');
+  expect(texto()).toContain('Saldo disponible para retirar: $850');
 });
 
 test('un error inicial no simula aprobación ni saldo cero; el reintento recupera el estado', async () => {
@@ -135,14 +148,14 @@ test('fallar la consulta de movimientos no presenta un saldo cero ni elimina un 
   perfil = [aprobada];
   consultarMovimientosComision.mockRejectedValueOnce(new Error('sin conexión'));
   await montar();
-  await pulsar('Ganancias');
+  await pulsar('Historial');
   expect(texto()).toContain('No pudimos actualizar las comisiones');
-  expect(texto()).not.toContain('Saldo de comisiones disponibles: $0');
+  expect(texto()).not.toContain('Saldo disponible para retirar: $0');
   await pulsar('Actualizar comisiones de afiliación 82');
-  expect(texto()).toContain('Saldo de comisiones disponibles: $850');
+  expect(texto()).toContain('Saldo disponible para retirar: $850');
   consultarMovimientosComision.mockRejectedValueOnce(new Error('sin conexión'));
   await pulsar('Actualizar comisiones de afiliación 82');
-  expect(texto()).toContain('Saldo de comisiones disponibles: $850');
+  expect(texto()).toContain('Saldo disponible para retirar: $850');
   expect(texto()).toContain('Se conserva la última consulta');
 });
 

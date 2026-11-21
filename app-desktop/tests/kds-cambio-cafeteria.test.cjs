@@ -793,7 +793,7 @@ test('Realtime: un INSERT que llega después de su UPDATE avisa por voz una sola
   assert.equal(s.anuncios.length, 1, 'un INSERT repetido no debe anunciar dos veces');
 });
 
-test('Escáner: el fallback Supabase valida contra la cafetería vigente tras un cambio', async t => {
+test('Escáner: tras cambiar de cafetería envía una sola validación al servicio', async t => {
   const llamadas = [];
   const nodo = etiqueta => props => React.createElement(etiqueta, props, props.children);
   const icono = () => React.createElement('icono');
@@ -818,16 +818,10 @@ test('Escáner: el fallback Supabase valida contra la cafetería vigente tras un
     jsqr: () => null,
     '../services/backendApi': {
       __esModule: true,
-      default: { validarQr: async () => { throw new Error('sin backend'); } },
+      default: { validarQr: async (...args) => { llamadas.push(args); return { valido: false, razon: 'rechazado' }; } },
     },
     '../services/pedidosService': {
       __esModule: true,
-      default: {
-        validarQrEntrega: (...args) => {
-          llamadas.push(args);
-          return { valido: false, razon: 'rechazado' };
-        },
-      },
       normalizarTokenQR: texto => texto,
     },
   };
@@ -848,7 +842,7 @@ test('Escáner: el fallback Supabase valida contra la cafetería vigente tras un
   await completar(() => validar.props.onClick());
 
   assert.equal(llamadas.length, 1);
-  assert.deepEqual(llamadas[0], ['QR-TST-1', '5', 12]);
+  assert.deepEqual(llamadas[0], ['QR-TST-1']);
 });
 
 test('Escáner: una validación atrasada no publica resultado, no suena ni usa fallback al cerrar, cambiar de cafetería o desmontar', async t => {

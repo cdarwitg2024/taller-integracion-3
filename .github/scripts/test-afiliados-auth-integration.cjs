@@ -128,12 +128,19 @@ async function main() {
         sql(fs.readFileSync(path.join(migrations, files[0]), 'utf8'));
       }
       sql(fs.readFileSync(path.join(root, 'database/fixes/exponer_solicitudes_afiliacion.sql'), 'utf8'));
-      if (probarA06) sql(`ALTER TABLE public.cafeterias ADD COLUMN campus_id bigint, ADD COLUMN descripcion text,
+      if (probarA06) {
+        sql(`ALTER TABLE public.cafeterias ADD COLUMN campus_id bigint, ADD COLUMN descripcion text,
         ADD COLUMN hora_apertura time, ADD COLUMN hora_cierre time, ADD COLUMN telefono text, ADD COLUMN imagen_url text;
         UPDATE public.cafeterias SET nombre = CASE id WHEN 7 THEN 'Norte A06' ELSE 'Sur A06' END;
         ALTER TABLE public.cafeterias ENABLE ROW LEVEL SECURITY;
         GRANT SELECT ON public.cafeterias TO anon, authenticated;
-        CREATE POLICY cafeteria_publica ON public.cafeterias FOR SELECT TO anon, authenticated USING (activa);`);
+        CREATE POLICY cafeteria_publica ON public.cafeterias FOR SELECT TO anon, authenticated USING (activa);
+        ALTER TABLE public.pedidos ADD COLUMN estado text NOT NULL DEFAULT 'listo';`);
+        const v12 = await fetch('https://raw.githubusercontent.com/Diego24Vas/db_CoffeeFaster/884f25698e76df7d50a08b8a0d0a81a1059733e9/supabase/migrations/20261118211348_consulta_saldo_afiliado.sql',
+          { signal: AbortSignal.timeout(15000) });
+        assert.equal(v12.status, 200, 'No se pudo leer la migración oficial fijada de V12');
+        sql(await v12.text());
+      }
     }
 
     docker(['run', '-d', '--name', names.auth, '--network', id, '-p', '127.0.0.1::9999',
@@ -327,7 +334,41 @@ async function main() {
       assert.equal(sinVigencia.inicio, creada.inicio);
       assert.equal(sinVigencia.fin, creada.fin);
     });
-    console.log(`${checks} escenarios C03/E06 con Auth, JWT, gateway, PostgREST y RLS reales aprobados.`);
+    await check('E07: pausar y activar desde el escritorio persiste el estado que filtra C04', async () => {
+      const modulo = await cargarServicioCampanasEscritorio(path.join(temp, 'escritorio-e07'), base, tokens.dueno);
+      const servicio = modulo.campanasAfiliados;
+      const form = {
+        nombre: 'Campaña E07 escritorio',
+        descuento_normal_pct: 15, descuento_oferta_pct: 5, comision_pct: 10,
+        inicio: new Date(Date.now() + 86400000).toISOString(),
+        fin: new Date(Date.now() + 172800000).toISOString(),
+      };
+      const creada = await servicio.crear(7, form);
+      // La alta exige inicio futuro y la aceptación exige campaña vigente: se
+      // anticipa la vigencia solo en la fixture desechable, antes de aceptar,
+      // con el cambio de versión que exige el disparador de V05.
+      assert.equal(creada.version_condiciones, '1.0');
+      sql(`UPDATE public.campanas SET vigencia_desde = now() - interval '1 hour',
+          version_condiciones = '1.1' WHERE id = ${Number(creada.id)};`);
+      const aceptada = await call('/rest/v1/rpc/confirmar_condiciones_campana', tokens.dueno, 'POST', {
+        p_campana_id: creada.id, p_cafeteria_id: 7, p_version: '1.1',
+      });
+      assert.equal(aceptada.status, 200, JSON.stringify(aceptada.body));
+      assert.equal(aceptada.body.confirmada_por_dueno, true);
+      assert.equal((await servicio.listar(7)).find(c => c.id === creada.id)?.estado, 'activa');
+      const pausada = await servicio.cambiarEstado(7, creada.id, true);
+      assert.equal(pausada.estado, 'pausada');
+      assert.equal(pausada.estado_db, 'pausada');
+      const listado = await servicio.listar(7);
+      assert.equal(listado.find(c => c.id === creada.id)?.estado, 'pausada');
+      const persistida = sql(`SELECT estado FROM public.campanas WHERE id = ${Number(creada.id)};`);
+      assert.equal(persistida, 'pausada');
+      const activada = await servicio.cambiarEstado(7, creada.id, false);
+      assert.equal(activada.estado, 'activa');
+      assert.equal(activada.estado_db, 'activa');
+      assert.equal(await servicio.listar(7).then(c => c.find(x => x.id === creada.id)?.estado), 'activa');
+    });
+    console.log(`${checks} escenarios C03/E06/E07 con Auth, JWT, gateway, PostgREST y RLS reales aprobados.`);
   } finally {
     for (const listener of server ? [server.app, server.proxy].filter(Boolean) : []) {
       listener.closeAllConnections(); await new Promise(resolve=>listener.close(resolve));

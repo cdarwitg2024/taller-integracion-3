@@ -97,4 +97,11 @@ export const campanasAfiliados = {
       body: JSON.stringify(prepararCampana(form)),
     });
   },
+  // PATCH del mismo recurso con el cambio de estado aislado de las condiciones.
+  async cambiarEstado(cafeteriaId, campanaId, pausada) {
+    return request(ruta(cafeteriaId, `/${Number(campanaId)}`), {
+      method: 'PATCH',
+      body: JSON.stringify({ pausada: Boolean(pausada) }),
+    });
+  },
 };
