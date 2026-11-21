@@ -349,6 +349,40 @@ for (const desenlace of ['resolver', 'rechazar']) {
   });
 }
 
+test('una decisión anterior no cierra la nueva dentro de la misma campaña', async t => {
+  let completarVieja;
+  let completarNueva;
+  const parcheVieja = new Promise(resolve => { completarVieja = resolve; });
+  const parcheNueva = new Promise(resolve => { completarNueva = resolve; });
+  const decisiones = [];
+  const h = await montar(t, {
+    campanas: {
+      ...servicioVacio(),
+      listar: async () => campanasDePrueba,
+      listarSolicitudes: async () => [solicitud(82, 'pendiente')],
+      resolverSolicitud: async (_cafeteria, campana, solicitudId, decision, codigo) => {
+        decisiones.push([campana, solicitudId, decision, codigo]);
+        return decisiones.length === 1 ? parcheVieja : parcheNueva;
+      },
+    },
+  });
+  await act(async () => h.accion('Aprobar').props.onClick());
+  await act(async () => h.tree.root.findByType('TextField').props.onChange({ target: { value: 'CF-VIEJO' } }));
+  await act(async () => { h.accion('Confirmar').props.onClick(); });
+  await act(async () => h.accion('Cancelar').props.onClick());
+  await act(async () => h.accion('Aprobar').props.onClick());
+  await act(async () => h.tree.root.findByType('TextField').props.onChange({ target: { value: 'CF-NUEVO' } }));
+  await act(async () => { h.accion('Confirmar').props.onClick(); });
+  await act(async () => completarVieja({}));
+  assert.ok(h.accion('Confirmar'));
+  assert.equal(h.tree.root.findByType('TextField').props.value, 'CF-NUEVO');
+  assert.equal(h.accion('Confirmar').props.disabled, true);
+  assert.equal(h.tree.root.findAllByType('Alert').filter(a => a.props.severity === 'error').length, 0);
+  assert.deepEqual(decisiones, [[31, 82, 'aprobar', 'CF-VIEJO'], [31, 82, 'aprobar', 'CF-NUEVO']]);
+  await act(async () => completarNueva({}));
+  assert.equal(h.accion('Confirmar'), undefined);
+});
+
 test('el servicio pagina el listado y envía solo la decisión permitida por C05', async () => {
   const base = 'http://gateway/api/afiliados/cafeterias/7/campanas/31/solicitudes';
   const { modulo, llamadas } = cargarServicioSolicitudes([

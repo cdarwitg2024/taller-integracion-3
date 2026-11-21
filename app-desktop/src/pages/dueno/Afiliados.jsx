@@ -37,6 +37,7 @@ export default function Afiliados({ currentUser }) {
   const [intentoSolicitudes, setIntentoSolicitudes] = useState(0);
   const campanasReq = useRef(0);
   const solicitudesReq = useRef(0);
+  const decisionReq = useRef(0);
   const cafeteriaActual = useRef(cafeteriaId);
   cafeteriaActual.current = cafeteriaId;
   // La campaña vigente se lee del render actual: el cierre de resolver pertenece al render que lo inició.
@@ -97,8 +98,9 @@ export default function Afiliados({ currentUser }) {
   async function resolver(decision, solicitud) {
     const objetivo = cafeteriaId;
     const campana = campanaId;
-    // Las tres ramas consultan los refs: el cierre capturó la campaña de inicio, no la vigente.
-    const vigente = () => objetivo === cafeteriaActual.current && campana === campanaActual.current;
+    const id = ++decisionReq.current;
+    // Cada decisión tiene su secuencia: la respuesta de una anterior no cierra la nueva aunque siga en la misma campaña.
+    const vigente = () => id === decisionReq.current && objetivo === cafeteriaActual.current && campana === campanaActual.current;
     setGuardando(true);
     setErrorAccion('');
     try {
