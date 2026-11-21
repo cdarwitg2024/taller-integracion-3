@@ -42,7 +42,7 @@ y se reflejan en `docs/contratos-integracion-afiliados.md`.
 
 ## Resultado
 
-- Escritorio: 114/114 pruebas aprobadas, incluida la nueva de límites de E14.
+- Escritorio: 138/138 pruebas aprobadas en la rama de E13 tras integrar `develop` con E10 y E14, incluida la nueva de límites de E14.
 - `npm run build --prefix app-desktop`: código de salida 0.
 - `git diff --check`: sin errores.
 
