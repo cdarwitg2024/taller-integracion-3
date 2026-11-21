@@ -11,6 +11,7 @@ import { apiPost } from '../services/backendClient';
 jest.mock('../services/backendClient', () => ({ apiPost: jest.fn() }));
 jest.mock('../services/intentoCompra', () => ({
   obtenerIntentoCompra: async (_, cuerpo) => ({ clave: 'intento-prueba', cuerpo }),
+  marcarIntentoEnviado: async () => {},
 }));
 
 const cart = [

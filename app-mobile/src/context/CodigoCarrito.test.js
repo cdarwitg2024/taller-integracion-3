@@ -12,6 +12,7 @@ import { apiPost } from '../services/backendClient';
 jest.mock('../services/backendClient', () => ({ apiPost: jest.fn() }));
 jest.mock('../services/intentoCompra', () => ({
   obtenerIntentoCompra: async (_, cuerpo) => ({ clave: 'intento-prueba', cuerpo }),
+  marcarIntentoEnviado: async () => {},
 }));
 const producto = (cafeteriaId = 7) => ({
   id: cafeteriaId * 10, cafeteriaId, name: 'Café de prueba', price: 10000, quantity: 1,

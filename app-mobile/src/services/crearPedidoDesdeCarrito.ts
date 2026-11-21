@@ -1,5 +1,5 @@
 import { apiPost } from './backendClient';
-import { obtenerIntentoCompra } from './intentoCompra';
+import { obtenerIntentoCompra, marcarIntentoEnviado, reiniciarIntentoCompra } from './intentoCompra';
 
 export type RetiroCheckout = { franja: string; codigo?: string };
 type ProductoCarrito = { id: number; quantity: number; price: number };
@@ -23,5 +23,11 @@ export async function crearPedidoDesdeCarrito<T>(
     ...(codigo ? { codigo } : {}),
   };
   const intento = await obtenerIntentoCompra(usuarioId, cuerpo);
-  return apiPost<T>('/api/pedidos', intento.cuerpo, { timeoutMs, claveIdempotencia: intento.clave });
+  await marcarIntentoEnviado(usuarioId, intento.clave);
+  const respuesta = await apiPost<T>('/api/pedidos', intento.cuerpo, { timeoutMs, claveIdempotencia: intento.clave });
+  // Solo un rechazo explícito permite una nueva compra sin recuperar un cobro.
+  if ((respuesta as { pedido?: { ok?: boolean } } | null)?.pedido?.ok === false) {
+    await reiniciarIntentoCompra(usuarioId);
+  }
+  return respuesta;
 }

@@ -95,7 +95,7 @@ test('cada cuenta conserva su intento por separado', async () => {
 
 test('si no puede persistir la clave, no envía el pedido', async () => {
   (AsyncStorage.setItem as jest.Mock).mockRejectedValueOnce(new Error('disco no disponible'));
-  await expect(enviar()).rejects.toThrow('disco no disponible');
+  await expect(enviar()).rejects.toMatchObject({ codigo: 'almacenamiento' });
   expect(transporte).not.toHaveBeenCalled();
 });
 

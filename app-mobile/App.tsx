@@ -30,11 +30,10 @@ import { CartProvider, useCart } from './src/context/CartContext';
 import { useCartTotals } from './src/hooks/useCartTotals';
 import { ApiError } from './src/services/backendClient';
 import { crearPedidoDesdeCarrito, RetiroCheckout } from './src/services/crearPedidoDesdeCarrito';
-import { reiniciarIntentoCompra } from './src/services/intentoCompra';
-import {
-  evaluarDisponibilidad,
-  mensajeProblemas,
-} from './src/utils/revalidacionCarrito';
+import { consultarIntentoPendiente } from './src/services/intentoCompra';
+import { avisarErrorIntentoCompra } from './src/services/avisarErrorIntentoCompra';
+import { useCicloIntentoCompra } from './src/hooks/useCicloIntentoCompra';
+import { verificarDisponibilidadCheckout } from './src/services/verificarDisponibilidadCheckout';
 import {
   clasificarResultadoPago,
   type PagoResult,
@@ -153,12 +152,19 @@ function AppContent() {
   const [paying, setPaying] = useState(false);
   const checkoutEnCurso = useRef(false);
   const finalizarPago = () => { checkoutEnCurso.current = false; setPaying(false); };
-  const clearCart = () => {
-    if (session?.user.id) {
-      void reiniciarIntentoCompra(session.user.id).catch(() =>
-        console.warn('No se pudo limpiar el intento de compra local.'));
+  const { reiniciar, esperarReinicio } = useCicloIntentoCompra(
+    session?.user.id, hydrated, cart.length === 0,
+    error => avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos')),
+  );
+  const clearCart = async () => {
+    try {
+      await reiniciar();
+      vaciarCarrito();
+      return true;
+    } catch (error) {
+      avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos'));
+      return false;
     }
-    vaciarCarrito();
   };
   const [pedidoConfirmado, setPedidoConfirmado] = useState<PedidoConfirmado | null>(null);
 
@@ -316,7 +322,7 @@ function AppContent() {
           style: 'destructive',
           onPress: async () => {
             setSelectedCafeteria(null);
-            clearCart();
+            if (!await clearCart()) return;
             setActiveTab('cafeterias');
             if (isGuest) {
               setIsGuest(false);
@@ -417,9 +423,8 @@ function AppContent() {
             style: 'destructive',
             // Se vacía y se agrega en el mismo toque: si solo se vaciaba, el
             // botón prometía algo que no pasaba.
-            onPress: () => {
-              clearCart();
-              agregarProducto(product, cafeteria);
+            onPress: async () => {
+              if (await clearCart()) agregarProducto(product, cafeteria);
             },
           },
         ]
@@ -439,10 +444,6 @@ function AppContent() {
   };
 
   const decreaseQuantity = (id: number) => {
-    if (cart.length === 1 && cart[0].id === id && cart[0].quantity === 1) {
-      clearCart();
-      return;
-    }
     setCart((currentCart: CartItem[]) =>
       currentCart
         .map((item) =>
@@ -453,10 +454,6 @@ function AppContent() {
   };
 
   const removeFromCart = (id: number) => {
-    if (cart.length === 1 && cart[0].id === id) {
-      clearCart();
-      return;
-    }
     setCart((currentCart: CartItem[]) =>
       currentCart.filter((item) => item.id !== id)
     );
@@ -475,8 +472,8 @@ function AppContent() {
       'No pudimos confirmar tu pago',
       'La conexión se interrumpió o la respuesta tardó demasiado, así que no ' +
         'podemos saber si el pedido alcanzó a registrarse.\n\n' +
-        'Tu carrito se mantiene. Revisa "Pedidos" antes de volver a pagar para ' +
-        'evitar un cobro duplicado.',
+        'Tu carrito y el intento original se mantienen. Revisa "Pedidos"; ' +
+        'no se enviará otro pago mientras el resultado siga pendiente.',
       [
         { text: 'Revisar pedidos', onPress: () => handleTabPress('pedidos') },
         { text: 'Entendido', style: 'cancel' },
@@ -519,48 +516,23 @@ function AppContent() {
     checkoutEnCurso.current = true;
     setPaying(true);
 
-    // Revalidación no destructiva del carrito antes de pagar.
-    // Diferencia error de consulta vs producto no disponible/desactivado/sin stock.
-    // No reemplaza la validación transaccional del backend.
     try {
-      const ids = Array.from(new Set(cart.map((item) => item.id)));
-      if (ids.length > 0) {
-        const { data, error } = await supabase
-          .from('productos')
-          .select('id, cafeteria_id, nombre, activo, eliminado_en, stock')
-          .in('id', ids);
-
-        if (error) {
-          console.warn('[Carrito] Error al revalidar disponibilidad:', error);
-          Alert.alert(
-            'No se pudo verificar disponibilidad',
-            'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
-          );
-          finalizarPago();
-          return;
-        }
-
-        const issues = evaluarDisponibilidad(cart, data, cafeteriaId);
-
-        if (issues.length > 0) {
-          Alert.alert('Hay cambios en la disponibilidad', mensajeProblemas(issues));
-          finalizarPago();
-          return;
-        }
+      await esperarReinicio();
+      // Recuperar un pago incierto no es una compra nueva ni depende del stock actual.
+      // El backend aún no deduplica: no se reenvía el POST hasta poder resolverlo.
+      if (await consultarIntentoPendiente(session.user.id)) {
+        alertarResultadoIncierto();
+        return;
       }
-    } catch (e) {
-      console.warn('[Carrito] Excepción al revalidar disponibilidad:', e);
-      Alert.alert(
-        'No se pudo verificar disponibilidad',
-        'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
-      );
-      finalizarPago();
-      return;
-    }
 
-    const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
+      const problema = await verificarDisponibilidadCheckout(cart, cafeteriaId);
+      if (problema) {
+        Alert.alert(problema.titulo, problema.mensaje);
+        return;
+      }
 
-    try {
+      const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
+
       // El total NO se manda. ms-pedidos lo cotiza contra ms-menus y la RPC
       // `procesar_pago` lo recalcula desde productos.precio: si se enviara,
       // un cliente podria pagar $100 un sándwich de $2.000.
@@ -624,7 +596,7 @@ function AppContent() {
       const resultado = clasificacion.resultado;
 
       // Solo un resultado confirmado y completo limpia el carrito:
-      clearCart();
+      if (!await clearCart()) return;
       setPedidoConfirmado({
         pedido_id: resultado.pedido_id,
         total: resultado.total,
@@ -641,6 +613,7 @@ function AppContent() {
           `Saldo restante: ${formatCLP(resultado.saldo_restante)}.`
       );
     } catch (e) {
+      if (avisarErrorIntentoCompra(e, reiniciar, () => handleTabPress('pedidos'))) return;
       // S2-T15: timeout o pérdida de conexión DESPUÉS de enviar la solicitud.
       // El pago pudo procesarse, así que no se presenta como rechazo, no se
       // vacía el carrito y no se reintenta automáticamente.
