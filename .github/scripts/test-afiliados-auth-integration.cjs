@@ -10,7 +10,8 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 
 const root = path.resolve(__dirname, '../..');
-const probarC05 = process.argv.includes('--c05');
+const probarA06 = process.argv.includes('--a06');
+const probarC05 = process.argv.includes('--c05') || probarA06;
 const id = `cf-c03-auth-${process.pid}-${Date.now()}`;
 const names = { pg: `${id}-db`, auth: `${id}-auth`, rest: `${id}-rest`, gateway: `${id}-gateway` };
 const secret = crypto.randomBytes(40).toString('hex');
@@ -127,6 +128,19 @@ async function main() {
         sql(fs.readFileSync(path.join(migrations, files[0]), 'utf8'));
       }
       sql(fs.readFileSync(path.join(root, 'database/fixes/exponer_solicitudes_afiliacion.sql'), 'utf8'));
+      if (probarA06) {
+        sql(`ALTER TABLE public.cafeterias ADD COLUMN campus_id bigint, ADD COLUMN descripcion text,
+        ADD COLUMN hora_apertura time, ADD COLUMN hora_cierre time, ADD COLUMN telefono text, ADD COLUMN imagen_url text;
+        UPDATE public.cafeterias SET nombre = CASE id WHEN 7 THEN 'Norte A06' ELSE 'Sur A06' END;
+        ALTER TABLE public.cafeterias ENABLE ROW LEVEL SECURITY;
+        GRANT SELECT ON public.cafeterias TO anon, authenticated;
+        CREATE POLICY cafeteria_publica ON public.cafeterias FOR SELECT TO anon, authenticated USING (activa);
+        ALTER TABLE public.pedidos ADD COLUMN estado text NOT NULL DEFAULT 'listo';`);
+        const v12 = await fetch('https://raw.githubusercontent.com/Diego24Vas/db_CoffeeFaster/884f25698e76df7d50a08b8a0d0a81a1059733e9/supabase/migrations/20261118211348_consulta_saldo_afiliado.sql',
+          { signal: AbortSignal.timeout(15000) });
+        assert.equal(v12.status, 200, 'No se pudo leer la migración oficial fijada de V12');
+        sql(await v12.text());
+      }
     }
 
     docker(['run', '-d', '--name', names.auth, '--network', id, '-p', '127.0.0.1::9999',
@@ -172,7 +186,10 @@ async function main() {
     process.env.SUPABASE_URL = `http://127.0.0.1:${supabaseProxy.address().port}`;
     process.env.SUPABASE_PUBLISHABLE_KEY = anon;
     delete process.env.SUPABASE_SERVICE_KEY; delete process.env.SUPABASE_KEY; delete process.env.SUPABASE_ANON_KEY;
-    const app = require(path.join(root, 'Microservices/ms-pedidos/src/app'));
+    const pedidosApp = require(path.join(root, 'Microservices/ms-pedidos/src/app'));
+    const cafeteriasApp = probarA06 ? require(path.join(root, 'Microservices/ms-cafeterias/src/app')) : null;
+    const app = probarA06 ? http.createServer((req, res) =>
+      (req.url.startsWith('/api/cafeterias') ? cafeteriasApp : pedidosApp)(req, res)) : pedidosApp;
     server.app = await new Promise(resolve => { const listener = app.listen(0, '0.0.0.0', () => resolve(listener)); });
     // Usa las reglas reales del gateway; solo sustituye los destinos para aislar la prueba.
     let nginx = fs.readFileSync(path.join(root, 'Microservices/gateway/nginx.conf'), 'utf8')
@@ -212,6 +229,8 @@ async function main() {
     }
     if (probarC05) {
       await require('./test-solicitudes-afiliacion-c05.cjs')({ check, call, sql, tokens });
+      if (probarA06) await require('./test-mobile-afiliacion-a06.cjs')({ call, sql, tokens, base, anon,
+        supabaseUrl: process.env.SUPABASE_URL, dbContainer: names.pg });
       console.log(`${checks} escenarios C05 con Auth, JWT, gateway y PostgreSQL reales aprobados.`);
       return;
     }
@@ -330,4 +349,8 @@ async function main() {
     fs.rmSync(temp,{recursive:true,force:true});
   }
 }
-main().catch(error=>{ console.error(error.message); process.exitCode=1; });
+// Algunas solicitudes fetch no mantienen vivo Node en Windows durante el arranque.
+// El proceso debe esperar a las aserciones y a la limpieza, nunca salir con éxito antes.
+const guardia = setInterval(() => {}, 1000);
+main().catch(error=>{ console.error(error.message); process.exitCode=1; })
+  .finally(() => clearInterval(guardia));
