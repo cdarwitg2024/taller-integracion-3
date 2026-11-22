@@ -66,6 +66,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [A04 — Condiciones de campaña: beneficio del referido, comisión y elegibilidad](mobile/validacion/A04-Condiciones-campana-carrito.md)
 - [A06 — Solicitud, aprobación, código desactivado y panel de comisiones](mobile/validacion/A06-Solicitudes-aprobacion.md)
 - [A07 — Copiar y compartir el código de una campaña](mobile/validacion/A07-Compartir-codigo-personal.md)
+- [A08 — Carga, vacío, errores y reintentos de afiliación](mobile/validacion/A08-Carga-vacio-error-afiliaciones.md)
 - [A09 — Comisiones pendientes, disponibles y retiradas con V12](mobile/validacion/A09-Comisiones-saldo-disponible.md)
 - [A11 — Formulario de monto y destino ficticio para retiro simulado](mobile/validacion/A11-Solicitud-retiro-simulado.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)

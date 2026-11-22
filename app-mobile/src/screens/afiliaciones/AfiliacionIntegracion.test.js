@@ -23,13 +23,24 @@ const integracion = process.env.A06_INTEGRATION_URL ? test : test.skip;
 integracion('A06: solicitud y aprobación reales; desactivar conserva código reservado, saldo e historial', async () => {
   const fetchAnterior = global.fetch;
   let tree;
+  let perderRespuesta = false;
+  let altaPersistida;
+  let envios = 0;
   global.fetch = (url, opciones = {}) => new Promise((resolve, reject) => {
+    const esSolicitud = opciones.method === 'POST' && String(url).includes(`/campanas/${process.env.A06_CAMPAIGN_ID}/solicitudes`);
+    if (esSolicitud) envios++;
     const headers = opciones.headers?.entries ? Object.fromEntries(opciones.headers.entries()) : opciones.headers;
     const request = http.request(String(url), { method: opciones.method, headers }, response => {
       let body = ''; response.setEncoding('utf8');
       response.on('data', chunk => { body += chunk; });
       response.on('end', () => {
         opciones.signal?.removeEventListener('abort', cancelar);
+        if (esSolicitud && response.statusCode === 201 && perderRespuesta) {
+          altaPersistida = JSON.parse(body);
+          perderRespuesta = false;
+          reject(new Error('respuesta_perdida_controlada'));
+          return;
+        }
         resolve({ ok: response.statusCode < 400, status: response.statusCode, statusText: response.statusMessage,
           text: async () => body, json: async () => JSON.parse(body), headers: { get: key => response.headers[key.toLowerCase()] } });
       });
@@ -76,11 +87,28 @@ integracion('A06: solicitud y aprobación reales; desactivar conserva código re
     await pulsar('Solicitar afiliación a Para aprobar A06');
     act(() => tree.root.findAllByType(TextInput).find(n => n.props.accessibilityLabel === 'Plan de promoción')
       .props.onChangeText('Compartiré un video desde Mobile A06'));
+    // El servidor crea la solicitud, pero el primer resultado no llega a la app.
+    perderRespuesta = true;
     await pulsar('Enviar solicitud de afiliación');
-    await esperar(() => !boton('Solicitar afiliación a Para aprobar A06'));
+    await esperar(() => texto().includes('No pudimos confirmar el envío'));
+    expect(texto()).toContain('Para aprobar A06');
+    expect(tree.root.findAllByType(TextInput).find(n => n.props.accessibilityLabel === 'Plan de promoción').props.value)
+      .toBe('Compartiré un video desde Mobile A06');
+    expect(envios).toBe(1);
+    expect(Number.isSafeInteger(altaPersistida?.id)).toBe(true);
+    await pulsar('Reintentar solicitud de afiliación');
+    await esperar(() => !boton('Reintentar solicitud de afiliación') && texto().includes('Solicitud pendiente'));
+    expect(envios).toBe(2);
     const perfil = await api('/api/afiliados/mi-perfil', process.env.A06_STUDENT_TOKEN);
     const solicitud = perfil.solicitudes.find(s => s.campana_id === Number(process.env.A06_CAMPAIGN_ID));
     expect(solicitud.estado).toBe('pendiente');
+    expect(solicitud.id).toBe(altaPersistida.id);
+    const campanaId = Number(process.env.A06_CAMPAIGN_ID);
+    expect(Number.isSafeInteger(campanaId)).toBe(true);
+    const cantidad = execFileSync('docker', ['exec', process.env.A06_DB_CONTAINER, 'psql', '-U', 'postgres', '-At', '-c',
+      `SELECT count(*) FROM public.solicitudes_afiliacion WHERE estudiante_id=901 AND campana_id=${campanaId}`], { encoding: 'utf8' });
+    expect(cantidad.trim()).toBe('1');
+    console.log('PASS A08: respuesta del alta perdida, lista y plan conservados; reintento recupera el mismo ID y una sola fila en PostgreSQL');
     const recurso = `/api/afiliados/cafeterias/7/campanas/${solicitud.campana_id}/solicitudes/${solicitud.id}`;
     const aprobada = await api(recurso, process.env.A06_OWNER_TOKEN, 'PATCH', { decision: 'aprobar' });
     await pulsar('Actualizar mis solicitudes');

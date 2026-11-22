@@ -36,7 +36,7 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
         estado: error.status === 403 ? 'prohibido' : 'error', solicitudes: [401, 403].includes(error.status) ? [] : prev.solicitudes,
         error: error.status === 401 ? 'Tu sesión venció. Vuelve a iniciar sesión.'
           : error.status === 403 ? 'Tu cuenta no tiene permisos para consultar afiliaciones. Contacta al administrador de la cafetería.'
-          : 'No pudimos actualizar tus solicitudes. Intenta nuevamente.',
+          : `No pudimos actualizar tus solicitudes. Intenta nuevamente.${prev.solicitudes.length ? ' Se conserva la última consulta.' : ''}`,
       }));
     });
   }, []);
@@ -117,6 +117,9 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
           <>
             <Text accessibilityRole="header" style={styles.title}>Tu espacio de afiliaciones</Text>
             <Text style={styles.description}>Elige qué quieres consultar de tus afiliaciones.</Text>
+            {perfil.estado === 'listo' && perfil.solicitudes.length === 0 && <Text accessibilityLiveRegion="polite" style={styles.description}>
+              Todavía no tienes solicitudes de afiliación. Explora las oportunidades disponibles.
+            </Text>}
             {perfil.solicitudes.map(s => <EstadoAfiliacion key={s.id} solicitud={s} confirmado={perfil.estado === 'listo'} />)}
             {visibles.map(item => (
               <TouchableOpacity key={item.id} accessibilityRole="button" accessibilityLabel={item.titulo}
