@@ -15,7 +15,7 @@ const pg = `${id}-db`, rest = `${id}-rest`;
 const docker = (args, input) => execFileSync('docker', args,
   { input, encoding: 'utf8', timeout: 180000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const sql = input => docker(['exec', '-i', pg, 'psql', '-U', 'postgres', '-d', 'catalog', '-v', 'ON_ERROR_STOP=1'], input);
+const sql = input => docker(['exec', '-i', pg, 'psql', '-h', '127.0.0.1', '-U', 'postgres', '-d', 'catalog', '-v', 'ON_ERROR_STOP=1'], input);
 async function main() {
   let network = false;
   let proxy;
@@ -44,7 +44,7 @@ async function main() {
       '-e', `PGRST_DB_URI=postgres://postgres@${pg}:5432/catalog`,
       '-e', 'PGRST_DB_ANON_ROLE=catalog_reader', '-e', 'PGRST_DB_SCHEMAS=public',
       '-e', `PGRST_JWT_SECRET=${secret}`,
-      process.env.TEST_REST_IMAGE || 'public.ecr.aws/supabase/postgrest:v16.2']);
+      process.env.TEST_REST_IMAGE || 'postgrest/postgrest:v16.3']);
     const port = docker(['port', rest, '3000']).split(':').pop();
     const url = `http://127.0.0.1:${port}`;
     ready = false;

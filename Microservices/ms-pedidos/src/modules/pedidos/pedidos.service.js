@@ -518,7 +518,7 @@ const ROL_EMPLEADO = 'empleado';
 async function resolverUsuarioInterno(cliente, authUserId) {
   const { data, error } = await cliente
     .from('usuarios')
-    .select('id, rol_id, activo, roles(nombre)')
+    .select('id, activo, roles(nombre)')
     .eq('auth_user_id', authUserId)
     .maybeSingle();
 
@@ -891,7 +891,7 @@ async function validarQr({ user, body }) {
       'La sesión no tiene un empleado activo asociado.'
     );
   }
-  if (Number(usuarioInterno.rol_id) !== ROL_EMPLEADO) {
+  if (usuarioInterno.roles?.nombre !== ROL_EMPLEADO) {
     return rechazoEntrega(
       'sin_autorizacion',
       'Solo un empleado puede validar la entrega de un pedido.'
