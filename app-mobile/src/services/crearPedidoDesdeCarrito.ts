@@ -28,9 +28,9 @@ export async function crearPedidoDesdeCarrito<T>(
   try {
     respuesta = await apiPost<T>('/api/pedidos', intento.cuerpo, { timeoutMs, claveIdempotencia: intento.clave });
   } catch (error) {
-    // Un 401 definitivo rechaza la solicitud antes de procesar el pago.
+    // Los HTTP 400 y 401 de este endpoint ocurren antes del cobro.
     // Red, timeout y respuestas inciertas conservan el registro original.
-    if (error instanceof ApiError && error.status === 401 && !error.resultadoIncierto) {
+    if (error instanceof ApiError && [400, 401].includes(error.status) && !error.resultadoIncierto) {
       await reiniciarIntentoCompra(usuarioId);
     }
     throw error;

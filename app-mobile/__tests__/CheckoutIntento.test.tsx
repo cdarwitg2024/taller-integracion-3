@@ -46,12 +46,17 @@ test.each(['respuesta perdida', 'respuesta incompleta'])(
     expect(randomUUID).toHaveBeenCalledTimes(1);
   });
 
-test('retirar el último producto y crear otro carrito renueva la clave aunque los datos coincidan', async () => {
-  await act(async () => { await confirmar(); });
-  await act(async () => tree.root.findByType(CartScreen).props.onRemove(41));
+test('un HTTP 400 previo al cobro permite corregir el carrito y confirmar con otra clave', async () => {
+  transporte.mockResolvedValueOnce({ ok: false, status: 400,
+    text: async () => JSON.stringify({ error: 'Uno o mas productos no pertenecen a la cafeteria indicada' }) });
+  await pagarDesdePantalla();
+  expect(tree.root.findByType(CartScreen).props.cart).toHaveLength(1);
+  expect((Alert.alert as jest.Mock).mock.calls.at(-1)[0]).toBe('No se pudo procesar el pago');
   await agregarOtraCompra();
-  await act(async () => { await confirmar(); });
+  await pagarDesdePantalla();
+  expect(transporte).toHaveBeenCalledTimes(2);
   expect(claves()[1]).not.toBe(claves()[0]);
+  expect(JSON.parse(transporte.mock.calls[1][1].body).items[0].cantidad).toBe(2);
 });
 
 test('un fallo de disponibilidad libera el bloqueo para el siguiente intento', async () => {

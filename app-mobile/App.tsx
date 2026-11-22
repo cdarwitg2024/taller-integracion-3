@@ -156,9 +156,9 @@ function AppContent() {
     session?.user.id, hydrated, cart.length === 0,
     error => avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos')),
   );
-  const clearCart = async () => {
+  const clearCart = async (conservarPendiente = true) => {
     try {
-      await reiniciar();
+      await reiniciar(conservarPendiente);
       vaciarCarrito();
       return true;
     } catch (error) {
@@ -596,7 +596,7 @@ function AppContent() {
       const resultado = clasificacion.resultado;
 
       // Solo un resultado confirmado y completo limpia el carrito:
-      if (!await clearCart()) return;
+      if (!await clearCart(false)) return;
       setPedidoConfirmado({
         pedido_id: resultado.pedido_id,
         total: resultado.total,

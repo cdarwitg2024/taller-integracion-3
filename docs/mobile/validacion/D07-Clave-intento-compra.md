@@ -2,7 +2,7 @@
 
 ## Descripción de los cambios
 
-Base actualizada: develop en `43fa980`, con D02 y C02 integradas.
+Base actualizada: develop en `7b2c811`, con D02 y C02 integradas.
 Rama: `S3-T7-DiegoC-Mantener_clave_del_intento_de_compra`.
 
 Cada confirmación persiste UUID y cuerpo original antes del POST, separados
@@ -18,9 +18,10 @@ interpreta `Idempotency-Key`; reenviar podría duplicar el cobro. Los registros
 anteriores sin estado también se consideran pendientes. El servicio permite
 recuperar el cuerpo original; la interfaz no lo reenvía ante un resultado incierto.
 
-Un HTTP 401 definitivo (`ApiError`, sin resultado incierto) invalida el intento
-antes de propagar el error. El carrito permanece disponible y, con la sesión
-recuperada, otra confirmación genera una clave nueva y usa el JWT actual.
+Los HTTP 400 y 401 definitivos de `POST /api/pedidos` invalidan el intento
+antes de propagar el error. Corresponden a validación y autenticación previas
+a la RPC de cobro. El carrito permanece disponible para corregirlo o recuperar
+la sesión. La siguiente confirmación usa una clave nueva y el JWT actual.
 No se repite el POST automáticamente. Red, timeout, respuesta incompleta y otros
 errores HTTP conservan el intento; no se asumen rechazos seguros para todos ellos.
 
@@ -32,8 +33,11 @@ acceso a Pedidos y reinicio explícito. Reiniciar no envía pagos y advierte que
 primero debe comprobarse si existe un cobro confirmado.
 
 El vaciado se detecta desde el estado resultante, incluso con dos eliminaciones
-o decrementos agrupados. Confirmar, reemplazar la cafetería y cerrar sesión
-esperan el reinicio. Una compra posterior, aunque sea idéntica, recibe otra clave.
+o decrementos agrupados. Vaciar, reemplazar la cafetería o cerrar sesión
+solo invalida intentos que todavía no se enviaron. La comprobación y la
+escritura se serializan por cuenta. Un pago incierto conserva su clave y
+cuerpo al reconstruir el carrito. Tras un pago confirmado, la próxima
+compra recibe otra clave.
 
 ## Archivos e interacción
 
@@ -41,7 +45,7 @@ esperan el reinicio. Una compra posterior, aunque sea idéntica, recibe otra cla
   cuenta, estado pendiente, marcador persistente y errores con diagnóstico.
 - `app-mobile/src/services/crearPedidoDesdeCarrito.ts`: prepara el cuerpo,
   marca el intento pendiente antes del envío y reinicia ante rechazo explícito
-  o HTTP 401 definitivo, esperando su persistencia antes de propagar el error.
+  o HTTP 400/401 definitivo, esperando su persistencia antes de propagar el error.
 - `app-mobile/src/services/backendClient.ts`: transmite la clave con sesión y timeout.
 - `app-mobile/src/hooks/useCicloIntentoCompra.ts`: observa el carrito vacío,
   permite esperar el reinicio y comunica fallos de almacenamiento.
@@ -72,14 +76,15 @@ K1 y K2 representan UUID sintéticos distintos del doble de prueba.
 |---|---|
 | Confirmar dos veces antes del siguiente render | Una consulta de stock y un POST con K1 |
 | Recibir HTTP 401, recuperar sesión y confirmar desde CartScreen | Invalida K1 sin vaciar el carrito; el segundo POST usa JWT nuevo y K2, y el pago confirmado limpia el carrito |
-| Responder HTTP 401 o 500 desde el transporte del servicio | Propaga el ApiError original; solo el 401 definitivo persiste el marcador, el 500 conserva el intento pendiente |
+| Recibir HTTP 400 y editar el carrito antes de confirmar | Conserva el carrito y permite enviar los datos corregidos con una clave nueva |
+| Responder HTTP 400, 401 o 500 desde el transporte del servicio | Propaga el ApiError original; 400 y 401 definitivos persisten el marcador, 500 conserva el intento |
 | Perder la respuesta, avanzar de las 12:14 a las 12:16 y volver a pagar | Conserva K1 y cuerpo original; no consulta stock ni repite POST |
 | Repetir con respuesta incompleta | Mismo registro pendiente; ofrece revisar Pedidos |
 | Primer pago consume la última unidad, pierde su respuesta y deja stock cero | El siguiente toque ofrece revisar Pedidos; una consulta de stock y un POST en total |
 | Recuperar desde otra instancia del módulo con otra franja | Devuelve K1 y cuerpo original sin otro UUID |
 | Confirmar y agregar productos iguales tras cambiar la franja | Otra compra usa K2 y franja actual |
-| Eliminar dos productos en el mismo act | Carrito vacío, marcador persistido y K2 al comprar otra vez |
-| Decrementar dos veces la última cantidad en el mismo act | Carrito vacío, marcador y clave nueva |
+| Perder la respuesta, eliminar dos productos en el mismo act y reconstruir el carrito | Conserva K1 y el cuerpo original; no envía otro POST y ofrece revisar Pedidos |
+| Repetir con dos decrementos agrupados | El carrito queda vacío y el intento pendiente sobrevive |
 | Simular fallo de removeItem, reiniciar y cargar otra instancia | No usa removeItem; el marcador permite generar K2 |
 | Fallar setItem al invalidar después de un pago confirmado | Conserva carrito, muestra diagnóstico y bloquea otro POST |
 | Reintentar invalidación tras fallo de escritura | Persiste marcador; deja de existir un intento pendiente |
@@ -89,8 +94,8 @@ K1 y K2 representan UUID sintéticos distintos del doble de prueba.
 | Retener o fallar escritura inicial | No hay POST hasta persistir correctamente |
 | Cambiar cuenta o datos en pruebas del servicio | Registro independiente o nueva confirmación según corresponda |
 
-Resultados: **298 pruebas aprobadas en 29 suites**, dos integraciones optativas
-omitidas. Las cuatro suites de D07 suman **32 casos**. TypeScript y exportación
+Resultados: **299 pruebas aprobadas en 29 suites**, dos integraciones optativas
+omitidas. Las cuatro suites de D07 suman **33 casos**. TypeScript y exportación
 Android aprobados. Comandos desde la raíz:
 
 ```powershell
@@ -119,7 +124,7 @@ npm test --prefix app-mobile -- --ci --runInBand --runTestsByPath __tests__/Recu
 Las pruebas usan App y CartScreen reales con reloj, Auth, almacenamiento, UUID,
 catálogo y transporte controlados. No acreditan deduplicación del servidor ni
 recuperación automática por clave: Pedidos permite revisar el resultado.
-El 401 de la regresión es una respuesta HTTP simulada mediante fetch y el JWT
+Los HTTP 400 y 401 de las regresiones se simulan mediante fetch. El JWT
 nuevo es ficticio; no se ejecutó un gateway ni una renovación real de Supabase.
 No se ejecutaron compras reales, pruebas visuales nuevas en dispositivo ni
 operaciones Cloud. La exportación comprueba JavaScript y recursos; no es un APK

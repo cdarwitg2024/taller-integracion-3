@@ -8,8 +8,8 @@ export function useCicloIntentoCompra(
   const aviso = useRef(onError);
   aviso.current = onError;
   const pendiente = useRef<{ usuarioId?: string; operacion: Promise<void> }>();
-  const reiniciar = useCallback(() => {
-    const operacion = usuarioId ? reiniciarIntentoCompra(usuarioId) : Promise.resolve();
+  const reiniciar = useCallback((conservarPendiente = false) => {
+    const operacion = usuarioId ? reiniciarIntentoCompra(usuarioId, conservarPendiente) : Promise.resolve();
     pendiente.current = { usuarioId, operacion };
     return operacion;
   }, [usuarioId]);
@@ -18,7 +18,7 @@ export function useCicloIntentoCompra(
     if (!hydrated || !carritoVacio || !usuarioId) return;
     let activo = true;
     // Se observa el estado resultante, incluso con eliminaciones agrupadas.
-    void reiniciar().catch(error => { if (activo) aviso.current(error); });
+    void reiniciar(true).catch(error => { if (activo) aviso.current(error); });
     return () => { activo = false; };
   }, [hydrated, carritoVacio, usuarioId, reiniciar]);
 

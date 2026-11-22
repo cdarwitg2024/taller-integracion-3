@@ -72,8 +72,14 @@ export function obtenerIntentoCompra<T extends CuerpoCompra>(usuarioId: string, 
   });
 }
 
-export function reiniciarIntentoCompra(usuarioId: string): Promise<void> {
-  return enOrden(usuarioId, () => guardar(usuarioId, { invalidado: true }));
+export function reiniciarIntentoCompra(usuarioId: string, conservarPendiente = false): Promise<void> {
+  return enOrden(usuarioId, async () => {
+    if (conservarPendiente) {
+      const intento = await leerIntento(usuarioId);
+      if (intento?.pendiente !== false) return;
+    }
+    await guardar(usuarioId, { invalidado: true });
+  });
 }
 
 export function marcarIntentoEnviado(usuarioId: string, clave: string): Promise<void> {

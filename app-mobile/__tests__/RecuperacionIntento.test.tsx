@@ -48,24 +48,27 @@ test('última unidad consumida con respuesta perdida: recuperar no consulta stoc
   expect(ultimoAviso()[2].some((accion: { text: string }) => accion.text === 'Revisar pedidos')).toBe(true);
 });
 
-test.each(['eliminar', 'disminuir'])('dos toques agrupados para %s vacían y reinician el intento', async modo => {
+test.each(['eliminar', 'disminuir'])('dos toques agrupados para %s conservan el intento incierto', async modo => {
   const segundo = modo === 'eliminar' ? { ...producto, id: 42, name: 'Alfajor' } : producto;
   await agregarOtraCompra(segundo);
   disponibilidad.mockResolvedValue({ data: [41, 42].map(id => ({ id, cafeteria_id: 7,
     activo: true, eliminado_en: null, stock: 20 })), error: null });
+  transporte.mockRejectedValueOnce(new Error('respuesta perdida después del cobro'));
   await act(async () => { await confirmar(); });
-  const clave = JSON.parse((await AsyncStorage.getItem(registro))!).clave;
+  const intentoOriginal = await AsyncStorage.getItem(registro);
   await act(async () => {
     const props = tree.root.findByType(CartScreen).props;
     if (modo === 'eliminar') { props.onRemove(41); props.onRemove(42); }
     else { props.onDecrease(41); props.onDecrease(41); }
   });
   expect(tree.root.findByType(CartScreen).props.cart).toHaveLength(0);
-  expect(JSON.parse((await AsyncStorage.getItem(registro))!).invalidado).toBe(true);
+  expect(await AsyncStorage.getItem(registro)).toBe(intentoOriginal);
   await agregarOtraCompra();
   await agregarOtraCompra(segundo);
   await act(async () => { await confirmar(); });
-  expect(transporte.mock.calls[1][1].headers['Idempotency-Key']).not.toBe(clave);
+  expect(transporte).toHaveBeenCalledTimes(1);
+  expect(await AsyncStorage.getItem(registro)).toBe(intentoOriginal);
+  expect(ultimoAviso()[0]).toBe('No pudimos confirmar tu pago');
 });
 
 test('si falla el marcador tras un pago confirmado, no limpia ni anuncia éxito y bloquea otro POST', async () => {

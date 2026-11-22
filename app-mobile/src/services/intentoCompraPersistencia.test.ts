@@ -14,10 +14,10 @@ beforeEach(async () => {
   (randomUUID as jest.Mock).mockImplementation(() => `uuid-${++numero}`);
 });
 
-test('el reinicio persiste un marcador y no depende de removeItem ni de memoria anterior', async () => {
+test('el vaciado invalida un intento no enviado sin depender de removeItem ni de memoria anterior', async () => {
   const anterior = await obtenerIntentoCompra(usuario, cuerpo);
   (AsyncStorage.removeItem as jest.Mock).mockRejectedValueOnce(new Error('remove falló'));
-  await reiniciarIntentoCompra(usuario);
+  await reiniciarIntentoCompra(usuario, true);
   expect(AsyncStorage.removeItem).not.toHaveBeenCalled();
   expect(JSON.parse((await AsyncStorage.getItem(llave))!).invalidado).toBe(true);
   let recuperar!: typeof obtenerIntentoCompra;
@@ -39,6 +39,9 @@ test('el reinicio espera la escritura y comunica un fallo en vez de afirmar que 
 });
 
 test('un registro previo sin estado se considera pendiente y no una compra nueva', async () => {
-  await AsyncStorage.setItem(llave, JSON.stringify({ firma: JSON.stringify(cuerpo), clave: 'clave-previa' }));
+  const original = JSON.stringify({ firma: JSON.stringify(cuerpo), clave: 'clave-previa' });
+  await AsyncStorage.setItem(llave, original);
+  await reiniciarIntentoCompra(usuario, true);
+  expect(await AsyncStorage.getItem(llave)).toBe(original);
   expect(await consultarIntentoPendiente(usuario)).toBe(true);
 });
