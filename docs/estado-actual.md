@@ -6,7 +6,7 @@ Revisión documental del 11 de noviembre de 2026. El estado del código y las pr
 
 - Mobile: React Native + Expo. Auth, perfil, wallet, menú con stock, lectura de pedidos/QR y Realtime usan Supabase; cafeterías, creación de pedidos y cambios de estado utilizan el gateway. Cancelación mantiene respaldo a su RPC autenticada. La configuración local apunta al gateway de Compose, no a backend-node.
 - Desktop: React/Vite/Electron. Usa Supabase para lecturas y gestión; estados de pedidos y validación QR se envían al gateway.
-- Gateway Nginx: /api/cafeterias → ms-cafeterias:3002; /api/menus → ms-menus:3003; /api/pedidos y /api/afiliados → ms-pedidos:3005. POST /api/menus/precios es interno y está bloqueado en el gateway.
+- Gateway Nginx en el código: `/api/cafeterias` → ms-cafeterias:3002, `/api/menus` → ms-menus:3003, `/api/pedidos` → ms-pedidos:3005 y `/api/afiliados` → ms-afiliados:3006. El gateway bloquea el acceso externo a `POST /api/menus/precios`.
 - `backend-node` sigue presente como servidor legacy y conserva el cliente de inventario anterior.
 - Se retiraron de backend-node el catálogo duplicado, sus dos mocks exclusivos y el endpoint de pago no implementado. Se conserva lo que aún tiene dependencias legacy; ver [alcance del retiro](backend-node/guias/README.md).
 - `BotTelegramCoffeFaster` es un servicio separado para alertas de stock.
@@ -16,7 +16,7 @@ Revisión documental del 11 de noviembre de 2026. El estado del código y las pr
 | Área | Código actual / evidencia | Pendiente |
 |---|---|---|
 | Identidad | Auth UUID → usuarios.auth_user_id → usuarios.id → cafeteria_usuarios | Sin asociación se bloquea la operación; no asumir cafetería 1 |
-| Cotización afiliada (V06) | Función SQL de solo lectura en `db_CoffeeFaster`, con precios/promociones vigentes, tasas normal/oferta, comisión y motivos de rechazo; sin fixtures de V06. [Contrato y comprobación estructural](base-datos/validacion/V06-CAM-288-Cotizacion-carrito.md) | Publicación SQL; integración HTTP C07; consumo transaccional y revalidación V07/V08 |
+| Cotización y compra afiliada (V06/C07) | [RPC de cotización](base-datos/validacion/V06-CAM-288-Cotizacion-carrito.md) en `db_CoffeeFaster` y rutas autenticadas de cotización y confirmación. [Prueba de gateway en Compose](microservicios/validacion/C07-cotizacion-compra-gateway.md) con doble de Supabase. | Publicación SQL; contrato transaccional V07/V08, reversión en PostgreSQL V15 y consumo móvil |
 | Código del carrito (D02) | Código vinculado a la cafetería del carrito activo; limpieza al reemplazar/vaciar e invalidación de cotizaciones y respuestas antiguas. [Pruebas locales](mobile/validacion/D02-Estado-codigo-carrito.md) | Conectar cotización C02; validación visual en dispositivo |
 | Intento de compra (D07) | UUID y cuerpo original persistidos por cuenta/confirmación. Ante un pago incierto ofrece revisar Pedidos sin repetir stock ni POST. Doble toque bloqueado, reinicio persistente y renovación incluso con vaciado agrupado. Diagnóstico y reinicio explícito ante errores locales. [Registro local](mobile/validacion/D07-Clave-intento-compra.md) | Idempotencia transaccional en backend; recuperación automática por clave y comprobación en dispositivo |
 | Grupos equivalentes (S3-T6) | Catálogo canónico de tipo/presentación y referencia nullable en productos, con permisos e índice en `db_CoffeeFaster`. [Contrato y alcance](base-datos/grupos-equivalentes.md) | Revisión de Camilo y vocabulario inicial; publicación SQL; controles S3-T7/S3-T8 y consulta A15 |

@@ -38,7 +38,7 @@ jobs:
       - name: Build ALL images before allowing ANY push
         run: |
           set -euo pipefail
-          for service in ms-cafeterias ms-menus ms-pedidos; do
+          for service in ms-cafeterias ms-menus ms-afiliados ms-pedidos; do
             docker build --platform linux/amd64 \
               --label "org.opencontainers.image.revision=$GITHUB_SHA" \
               --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           node -e 'require("fs").writeFileSync("release.json", JSON.stringify({sha:process.env.GITHUB_SHA,images:{}}))'
-          for service in ms-cafeterias ms-menus ms-pedidos; do
+          for service in ms-cafeterias ms-menus ms-afiliados ms-pedidos; do
             image="cdarwitg2024/$service:sha-$GITHUB_SHA"
             docker push "$image"
             digest=$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')

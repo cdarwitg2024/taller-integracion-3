@@ -108,12 +108,12 @@ async function main() {
     process.env.SUPABASE_URL = `http://127.0.0.1:${proxy.address().port}`;
     process.env.SUPABASE_PUBLISHABLE_KEY = anon;
     delete process.env.SUPABASE_SERVICE_KEY; delete process.env.SUPABASE_KEY; delete process.env.SUPABASE_ANON_KEY;
-    const pedidos = require(path.join(root, 'Microservices/ms-pedidos/src/app'));
+    const afiliados = require(path.join(root, 'Microservices/ms-afiliados/src/app'));
     const cafeterias = require(path.join(root, 'Microservices/ms-cafeterias/src/app'));
-    server = http.createServer((req, res) => (req.url.startsWith('/api/cafeterias') ? cafeterias : pedidos)(req, res));
+    server = http.createServer((req, res) => (req.url.startsWith('/api/cafeterias') ? cafeterias : afiliados)(req, res));
     await new Promise(resolve => server.listen(0, '0.0.0.0', resolve));
     let nginx = fs.readFileSync(path.join(root, 'Microservices/gateway/nginx.conf'), 'utf8')
-      .replace(/http:\/\/ms-(pedidos|menus|cafeterias):\d+/g, `http://host.docker.internal:${server.address().port}`);
+      .replace(/http:\/\/ms-(afiliados|pedidos|menus|cafeterias):\d+/g, `http://host.docker.internal:${server.address().port}`);
     nginx = nginx.replace('  location / {', `  location /auth/v1/ { proxy_pass http://${names.auth}:9999/; }\n  location / {`);
     fs.writeFileSync(path.join(temp, 'nginx.conf'), nginx);
     docker(['run', '-d', '--name', names.gateway, '--network', id, '--add-host', 'host.docker.internal:host-gateway',

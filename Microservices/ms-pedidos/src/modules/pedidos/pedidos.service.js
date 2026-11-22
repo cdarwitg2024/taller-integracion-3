@@ -12,7 +12,7 @@
 // historico a la interfaz plana: `shared` exporta `supabase`, `httpClient` y
 // `HttpError` de forma estable (ver shared/src/index.js).
 const { supabase, httpClient, HttpError } = require('@coffeefaster/shared');
-const crearClienteAutenticado = require('../../cliente-autenticado');
+const crearClienteAutenticado = require('@coffeefaster/shared/src/cliente-autenticado');
 const {
   normalizarEstado,
   puedeTransicionar,
@@ -190,7 +190,75 @@ async function cancelarPedido({ accessToken, id }) {
   });
 }
 
-async function crearPedido({ user, accessToken, body }) {
+async function confirmarPago(cliente, cafeteriaId, body, clave) {
+  const { items, codigo = null, total_aceptado, franja_retiro } = body;
+  if (!/^[!-~]{1,128}$/.test(clave ?? '') || clave.includes(',') ||
+      !Number.isSafeInteger(total_aceptado) || total_aceptado < 0 ||
+      (codigo !== null && typeof codigo !== 'string') ||
+      typeof franja_retiro !== 'string' || items.length > 100) {
+    throw new HttpError(400, 'confirmacion_invalida');
+  }
+
+  // V08: la RPC resuelve el reintento y revalida precios dentro de la transacción.
+  const { data, error } = await cliente.rpc('procesar_pago', {
+    p_cafeteria_id: cafeteriaId,
+    p_items: items,
+    p_franja_retiro: franja_retiro,
+    p_codigo: codigo,
+    p_total_aceptado: total_aceptado,
+    p_clave_idempotencia: clave
+  });
+  if (error) {
+    if (error.code === '22023') throw new HttpError(400, 'confirmacion_invalida');
+    if (error.code === '42501') throw new HttpError(403, 'sin_acceso');
+    if (['PGRST301', 'PGRST303', '28000'].includes(error.code)) {
+      throw new HttpError(401, 'sesion_invalida');
+    }
+    throw new HttpError(503, 'No se pudo confirmar el pago');
+  }
+
+  switch (data?.error) {
+    case 'precio_actualizado':
+      if (typeof data.motivo !== 'string' ||
+          !Number.isSafeInteger(data.total_actualizado) || data.total_actualizado < 0 ||
+          !Number.isSafeInteger(data.descuento_afiliado) || data.descuento_afiliado < 0) {
+        break;
+      }
+      return {
+        status: 409,
+        body: {
+          error: data.error,
+          motivo: data.motivo,
+          total_aceptado,
+          total_actualizado: data.total_actualizado,
+          descuento_afiliado: data.descuento_afiliado,
+          cobrado: false
+        }
+      };
+    case 'clave_reintento_en_conflicto':
+      return { status: 409, body: { error: data.error } };
+    case 'saldo_insuficiente':
+      return { status: 422, body: { error: data.error, cobrado: false } };
+    case undefined:
+      if (Number.isSafeInteger(data?.pedido_id) && data.pedido_id > 0 &&
+          data.estado === 'pagado' && data.total_pagado === total_aceptado &&
+          Number.isSafeInteger(data.descuento_afiliado) && data.descuento_afiliado >= 0) {
+        return {
+          status: 201,
+          body: {
+            pedido_id: data.pedido_id,
+            estado: data.estado,
+            total_pagado: data.total_pagado,
+            descuento_afiliado: data.descuento_afiliado
+          }
+        };
+      }
+      break;
+  }
+  throw new HttpError(503, 'Respuesta inválida de procesar_pago');
+}
+
+async function crearPedido({ user, accessToken, body, idempotencyKey }) {
   if (!user || !user.authUserId) {
     throw new HttpError(401, 'Usuario no autenticado');
   }
@@ -207,10 +275,14 @@ async function crearPedido({ user, accessToken, body }) {
   }
 
   const cliente = crearClienteAutenticado(accessToken);
+  const confirmaCotizacion = Object.hasOwn(body, 'total_aceptado');
+  if (confirmaCotizacion && process.env.HABILITAR_CONFIRMACION_AFILIADA !== 'true') {
+    return { status: 503, body: { error: 'confirmacion_afiliada_no_disponible' } };
+  }
 
   const { data: usuarioInterno, error: errUsuario } = await cliente
     .from('usuarios')
-    .select('id')
+    .select('id, activo')
     .eq('auth_user_id', user.authUserId)
     .maybeSingle();
 
@@ -219,6 +291,9 @@ async function crearPedido({ user, accessToken, body }) {
   }
   if (!usuarioInterno) {
     throw new HttpError(404, 'Usuario no encontrado');
+  }
+  if (confirmaCotizacion && usuarioInterno.activo !== true) {
+    throw new HttpError(403, 'sin_acceso');
   }
 
   let preciosResp;
@@ -260,6 +335,10 @@ async function crearPedido({ user, accessToken, body }) {
     throw new HttpError(400, 'Uno o mas productos no pertenecen a la cafeteria indicada');
   }
 
+  if (confirmaCotizacion) {
+    return confirmarPago(cliente, cafeteriaId, body, idempotencyKey);
+  }
+
   // El calculo monetario NO se duplica aqui: `procesar_pago` sigue siendo la
   // autoridad transaccional del pago y obtiene los precios reales directamente
   // desde public.productos.
@@ -278,7 +357,7 @@ async function crearPedido({ user, accessToken, body }) {
     throw new HttpError(503, 'No se pudo procesar el pago', { causa: e.message });
   }
 
-  return { ok: true, pedido: pedidoResultado };
+  return { status: 201, body: { ok: true, pedido: pedidoResultado } };
 }
 
 /**
@@ -296,7 +375,7 @@ async function listarPedidos({ user, accessToken }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
   const cliente = crearClienteAutenticado(accessToken);
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
-  const rol = Number(usuarioInterno.rol_id);
+  const rol = usuarioInterno.roles?.nombre;
 
   if (rol !== ROL_ESTUDIANTE && rol !== ROL_EMPLEADO) {
     throw new HttpError(403, 'No autorizado para listar pedidos');
@@ -334,7 +413,7 @@ async function obtenerPedido({ user, id }) {
   const pedidoId = validarPedidoId(id);
   const cliente = supabase.obtenerCliente();
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
-  const rol = Number(usuarioInterno.rol_id);
+  const rol = usuarioInterno.roles?.nombre;
 
   if (rol !== ROL_ESTUDIANTE && rol !== ROL_EMPLEADO) {
     throw new HttpError(404, 'Pedido no encontrado');
@@ -375,7 +454,7 @@ async function obtenerPedidosPorCafeteria({ user, cafeteriaId }) {
   const cliente = supabase.obtenerCliente();
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
 
-  if (Number(usuarioInterno.rol_id) !== ROL_EMPLEADO) {
+  if (usuarioInterno.roles?.nombre !== ROL_EMPLEADO) {
     throw new HttpError(403, 'No autorizado para listar pedidos de esta cafeteria');
   }
 
@@ -406,7 +485,7 @@ async function obtenerPedidosPorUsuario({ user, usuarioId }) {
   const cliente = supabase.obtenerCliente();
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
 
-  if (Number(usuarioInterno.rol_id) !== ROL_ESTUDIANTE) {
+  if (usuarioInterno.roles?.nombre !== ROL_ESTUDIANTE) {
     throw new HttpError(403, 'No autorizado para listar pedidos de este usuario');
   }
   if (usuarioIdNum !== Number(usuarioInterno.id)) {
@@ -421,13 +500,12 @@ async function obtenerPedidosPorUsuario({ user, usuarioId }) {
   return data || [];
 }
 
-// Roles internos (public.usuarios.rol_id) confirmados contra la BD real:
-// 1 = estudiante, 2 = empleado, 3 = dueño.
-// D.3: SOLO el empleado (2) opera comandas; el dueño (3) NO recibe permisos.
+// Nombres del catalogo public.roles; los IDs dependen del entorno.
+// D.3: SOLO el empleado opera comandas; el dueño NO recibe permisos.
 // D.5-B: lecturas -> estudiante ve lo suyo; empleado ve sus cafeterias; el
 // dueño NO recibe permisos nuevos (403 en colecciones, 404 en individuales).
-const ROL_ESTUDIANTE = 1;
-const ROL_EMPLEADO = 2;
+const ROL_ESTUDIANTE = 'estudiante';
+const ROL_EMPLEADO = 'empleado';
 
 /**
  * Resuelve la fila interna de `public.usuarios` a partir del UUID de auth
@@ -440,7 +518,7 @@ const ROL_EMPLEADO = 2;
 async function resolverUsuarioInterno(cliente, authUserId) {
   const { data, error } = await cliente
     .from('usuarios')
-    .select('id, rol_id, activo')
+    .select('id, activo, roles(nombre)')
     .eq('auth_user_id', authUserId)
     .maybeSingle();
 
@@ -512,7 +590,7 @@ async function perteneceACafeteria(cliente, usuarioId, cafeteriaId, mensajeError
  *
  * Reglas:
  *  - El usuario autenticado debe tener cuenta interna (`usuarios`).
- *  - Debe ser EMPLEADO (rol_id = 2).
+ *  - Debe ser EMPLEADO.
  *  - Debe pertenecer a la cafeteria DEL PEDIDO (`cafeteria_usuarios`); el
  *    `cafeteria_id` autoritativo es `pedido.cafeteria_id`, nunca el del body.
  */
@@ -524,7 +602,7 @@ async function autorizarTransicionKds(cliente, authUserId, pedido) {
     throw new HttpError(404, 'Usuario no encontrado');
   }
 
-  if (Number(usuarioInterno.rol_id) !== ROL_EMPLEADO) {
+  if (usuarioInterno.roles?.nombre !== ROL_EMPLEADO) {
     throw new HttpError(403, 'Solo un empleado puede cambiar el estado del pedido');
   }
 
@@ -699,7 +777,7 @@ async function obtenerQr({ user, id }) {
 
   // Se comprueba el rol ANTES de leer el pedido: asi un empleado/dueño no puede
   // distinguir un pedido existente de uno inexistente (siempre 404).
-  if (Number(usuarioInterno.rol_id) !== ROL_ESTUDIANTE) {
+  if (usuarioInterno.roles?.nombre !== ROL_ESTUDIANTE) {
     throw new HttpError(404, 'Pedido no encontrado');
   }
 
@@ -813,7 +891,7 @@ async function validarQr({ user, body }) {
       'La sesión no tiene un empleado activo asociado.'
     );
   }
-  if (Number(usuarioInterno.rol_id) !== ROL_EMPLEADO) {
+  if (usuarioInterno.roles?.nombre !== ROL_EMPLEADO) {
     return rechazoEntrega(
       'sin_autorizacion',
       'Solo un empleado puede validar la entrega de un pedido.'
