@@ -338,7 +338,41 @@ async function main() {
       assert.equal(sinVigencia.inicio, creada.inicio);
       assert.equal(sinVigencia.fin, creada.fin);
     });
-    console.log(`${checks} escenarios C03/E06 con Auth, JWT, gateway, PostgREST y RLS reales aprobados.`);
+    await check('E07: pausar y activar desde el escritorio persiste el estado que filtra C04', async () => {
+      const modulo = await cargarServicioCampanasEscritorio(path.join(temp, 'escritorio-e07'), base, tokens.dueno);
+      const servicio = modulo.campanasAfiliados;
+      const form = {
+        nombre: 'Campaña E07 escritorio',
+        descuento_normal_pct: 15, descuento_oferta_pct: 5, comision_pct: 10,
+        inicio: new Date(Date.now() + 86400000).toISOString(),
+        fin: new Date(Date.now() + 172800000).toISOString(),
+      };
+      const creada = await servicio.crear(7, form);
+      // La alta exige inicio futuro y la aceptación exige campaña vigente: se
+      // anticipa la vigencia solo en la fixture desechable, antes de aceptar,
+      // con el cambio de versión que exige el disparador de V05.
+      assert.equal(creada.version_condiciones, '1.0');
+      sql(`UPDATE public.campanas SET vigencia_desde = now() - interval '1 hour',
+          version_condiciones = '1.1' WHERE id = ${Number(creada.id)};`);
+      const aceptada = await call('/rest/v1/rpc/confirmar_condiciones_campana', tokens.dueno, 'POST', {
+        p_campana_id: creada.id, p_cafeteria_id: 7, p_version: '1.1',
+      });
+      assert.equal(aceptada.status, 200, JSON.stringify(aceptada.body));
+      assert.equal(aceptada.body.confirmada_por_dueno, true);
+      assert.equal((await servicio.listar(7)).find(c => c.id === creada.id)?.estado, 'activa');
+      const pausada = await servicio.cambiarEstado(7, creada.id, true);
+      assert.equal(pausada.estado, 'pausada');
+      assert.equal(pausada.estado_db, 'pausada');
+      const listado = await servicio.listar(7);
+      assert.equal(listado.find(c => c.id === creada.id)?.estado, 'pausada');
+      const persistida = sql(`SELECT estado FROM public.campanas WHERE id = ${Number(creada.id)};`);
+      assert.equal(persistida, 'pausada');
+      const activada = await servicio.cambiarEstado(7, creada.id, false);
+      assert.equal(activada.estado, 'activa');
+      assert.equal(activada.estado_db, 'activa');
+      assert.equal(await servicio.listar(7).then(c => c.find(x => x.id === creada.id)?.estado), 'activa');
+    });
+    console.log(`${checks} escenarios C03/E06/E07 con Auth, JWT, gateway, PostgREST y RLS reales aprobados.`);
   } finally {
     for (const listener of server ? [server.app, server.proxy].filter(Boolean) : []) {
       listener.closeAllConnections(); await new Promise(resolve=>listener.close(resolve));

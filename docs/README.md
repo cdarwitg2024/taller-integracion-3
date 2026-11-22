@@ -17,10 +17,15 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 
 ### Validación
 
+- [C06 / CAM-261 — Regresión de entrega desde el KDS](desktop/validacion/C06-CAM-261-regresion-kds.md)
+
 - [V01 / CAM-223 — Acceso Afiliados del dueño](desktop/validacion/V01-CAM-223-Acceso-Afiliados.md)
 - [E03 / CAM-290 — Vista principal de campañas del dueño](desktop/validacion/E03-CAM-290-Vista-Campanas.md)
 - [E04 / CAM-225 — Listado de campañas por cafetería del dueño](desktop/validacion/E04-CAM-225-Cambio-Cafeteria-Campanas.md)
 - [E06 — Conexión de alta y edición de campañas con el gateway](desktop/validacion/E06-Conexion-alta-y-edicion-campanas.md)
+- [E07 — Conexión de activación y pausa de campañas](desktop/validacion/E07-Conexion-activacion-y-pausa-campanas.md)
+- [E14 — Probar tasas y vigencia](desktop/validacion/E14-Probar-tasas-y-vigencia.md)
+- [E10 / CAM-232 — Aprobar afiliados y gestionar códigos](desktop/validacion/E10-Aprobar-afiliados-y-gestionar-codigos.md)
 - [S2-T15 - Validación flujo integrado y recuperación del KDS](desktop/validacion/S2-T15-Validacion-Flujo-Integrado-KDS.md)
 - [S2-T17 - Validación flujo completo del KDS](desktop/validacion/S2-T17-Validacion-Flujo-Completo-KDS.md)
 - [C08 / CAM-242 — Verificar entrega por QR y token desde KDS](desktop/validacion/C08-CAM-242-entrega-qr-token-kds.md)
@@ -60,6 +65,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [A03 — Campañas activas conectadas a C04: filtro, vacío y prueba desechable](mobile/validacion/A03-Campanas-activas.md)
 - [A04 — Condiciones de campaña: beneficio del referido, comisión y elegibilidad](mobile/validacion/A04-Condiciones-campana-carrito.md)
 - [A06 — Solicitud, aprobación, código desactivado y panel de comisiones](mobile/validacion/A06-Solicitudes-aprobacion.md)
+- [A07 — Copiar y compartir el código de una campaña](mobile/validacion/A07-Compartir-codigo-personal.md)
 - [A09 — Comisiones pendientes, disponibles y retiradas con V12](mobile/validacion/A09-Comisiones-saldo-disponible.md)
 - [A11 — Formulario de monto y destino ficticio para retiro simulado](mobile/validacion/A11-Solicitud-retiro-simulado.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
@@ -124,6 +130,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [C02 — Contratos de integración de afiliados](contratos-integracion-afiliados.md)
 - [C01 — Reglas del piloto de afiliados](reglas-piloto-afiliados.md)
 - [D.2.1 — Cancelación de pedido con reembolso a Wallet (traspaso a Base de Datos)](base-datos/D2.1_cancelacion_reembolso.md)
+- [V09 / CAM-177 — Reversión de comisión en cancelación](base-datos/validacion/V09-CAM-177-Reversion-cancelacion.md)
 - [D.4 — Validación QR y entrega de pedido (traspaso a Base de Datos)](base-datos/D4_validacion_qr_entrega.md)
 - [S2-T16 — Dependencias SQL del flujo de pedidos](base-datos/dependencias-sql-ms-pedidos.md)
 - [Promociones y configuración del dueño](base-datos/promociones-configuracion-dueno.md)

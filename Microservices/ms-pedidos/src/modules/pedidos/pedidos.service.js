@@ -518,7 +518,7 @@ const ROL_EMPLEADO = 'empleado';
 async function resolverUsuarioInterno(cliente, authUserId) {
   const { data, error } = await cliente
     .from('usuarios')
-    .select('id, roles(nombre)')
+    .select('id, rol_id, activo, roles(nombre)')
     .eq('auth_user_id', authUserId)
     .maybeSingle();
 
@@ -711,6 +711,53 @@ async function actualizarEstado({ user, accessToken, id, body }) {
 // Se compara contra el slug canonico (tolera aliases historicos de lectura).
 const ESTADOS_QR_DISPONIBLE = ['pendiente', 'en_preparacion', 'listo'];
 
+// Credenciales de retiro aceptadas por `POST /validar-qr`. El QR y el codigo de
+// contingencia se persisten en columnas distintas, pero ambos son la MISMA
+// operacion de entrega. El formato se restringe para no construir un filtro
+// PostgREST con comas, parentesis ni comodines.
+const CREDENCIAL_ENTREGA_SEGURA = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * Resultado de negocio de una entrega rechazada. Se devuelve con HTTP 200 para
+ * que el KDS muestre la razon; no se modifica ninguna fila.
+ */
+function rechazoEntrega(motivo, razon, pedido = null) {
+  const respuesta = { valido: false, motivo, razon };
+  if (pedido) {
+    respuesta.pedido = {
+      id: pedido.id,
+      estado: normalizarEstado(pedido.estado) || pedido.estado,
+      qr_usado: pedido.qr_usado === true,
+      entregado_en: pedido.entregado_en || null
+    };
+  }
+  return respuesta;
+}
+
+/**
+ * Audita el intento en `logs_validacion_qr` con columnas comunes al DDL
+ * versionado y al esquema local. La entrega ya fue confirmada por el UPDATE
+ * atomico, asi que un fallo de auditoria no revierte la entrega: se registra
+ * en el log del servicio y se continua.
+ */
+async function registrarLogEntrega(cliente, { pedido, usuarioId, credencial, resultado, detalle }) {
+  if (!pedido?.id) return;
+  try {
+    const { error } = await cliente.from('logs_validacion_qr').insert({
+      pedido_id: pedido.id,
+      cafeteria_id: pedido.cafeteria_id,
+      usuario_id: usuarioId,
+      qr_token: credencial,
+      resultado,
+      detalle,
+      validado_en: new Date().toISOString()
+    });
+    if (error) console.warn('[ms-pedidos] No se pudo auditar la validacion QR:', error.message);
+  } catch (err) {
+    console.warn('[ms-pedidos] No se pudo auditar la validacion QR:', err.message);
+  }
+}
+
 /**
  * GET /:id/qr — CREDENCIAL de retiro del pedido.
  *
@@ -794,11 +841,203 @@ async function obtenerTokenContingencia({ user, id }) {
   return { token: pedido.codigo_retiro_diario };
 }
 
+/**
+ * POST /validar-qr — UNICA operacion de entrega (`listo -> entregado`).
+ *
+ * Contrato del KDS: `{ qr_token }`. El valor puede ser el `qr_token` o el
+ * `codigo_retiro_diario` persistido del pedido; ambos resuelven la MISMA
+ * operacion. No se aceptan IDs ni codigos legibles.
+ *
+ * Orden de la operacion:
+ *  1. Resolver la identidad desde el JWT y exigir empleado activo. El rol se
+ *     comprueba ANTES de leer el pedido: una sesion sin permiso no debe poder
+ *     inferir nada de un pedido a partir de una credencial.
+ *  2. Resolver el pedido por las credenciales persistidas.
+ *  3. Comprobar que el empleado pertenece a la cafeteria DEL PEDIDO. Si no
+ *     pertenece, el rechazo no incluye id, estado ni fecha de entrega.
+ *  4. Ejecutar UN UPDATE condicionado a `estado = listo` y `qr_usado = false`.
+ *     Postgres bloquea la fila: dos intentos simultaneos no pueden confirmar
+ *     la misma transicion. Solo la peticion que obtiene la fila devuelve
+ *     `valido: true`.
+ *  5. Auditar el intento.
+ *
+ * La comision del piloto queda fuera de esta operacion hasta que exista un
+ * contrato de atribucion del pedido (C08/C09 + V07/V08). No se leen ni se
+ * escriben columnas hipoteticas.
+ *
+ * Si el pedido ya fue entregado se devuelve `motivo: 'ya_entregado'` y
+ * `razon: 'Este pedido ya fue entregado.'`, sin reescribir `entregado_en` ni
+ * `qr_usado`.
+ */
 async function validarQr({ user, body }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
-  const { data, error } = await supabase.obtenerCliente().rpc('log_qr_validation', { p_qr_token: body?.qr_token });
-  if (error) throw new HttpError(503, error.message);
-  return data;
+
+  const credencial = typeof body?.qr_token === 'string' ? body.qr_token.trim() : '';
+  if (!credencial || !CREDENCIAL_ENTREGA_SEGURA.test(credencial)) {
+    return rechazoEntrega(
+      'credencial_invalida',
+      'QR o token de retiro no válido. Verifica el código e intenta nuevamente.'
+    );
+  }
+
+  const cliente = supabase.obtenerCliente();
+
+  // Autorizacion de rol ANTES de tocar el pedido. Un estudiante o un usuario
+  // inactivo no puede distinguir si la credencial existe.
+  const usuarioInterno = await resolverUsuarioInterno(cliente, user.authUserId || user.id);
+  if (!usuarioInterno || usuarioInterno.activo === false) {
+    return rechazoEntrega(
+      'sin_autorizacion',
+      'La sesión no tiene un empleado activo asociado.'
+    );
+  }
+  if (Number(usuarioInterno.rol_id) !== ROL_EMPLEADO) {
+    return rechazoEntrega(
+      'sin_autorizacion',
+      'Solo un empleado puede validar la entrega de un pedido.'
+    );
+  }
+
+  let { data: coincidencias, error: errPedido } = await cliente
+    .from('pedidos')
+    .select(CAMPOS_PEDIDO_PUBLICOS)
+    .or(`qr_token.eq.${credencial},codigo_retiro_diario.eq.${credencial}`)
+    .limit(2);
+
+  // Si qr_token es UUID, PostgreSQL rechaza un codigo de contingencia no UUID
+  // antes de evaluar el OR. Con qr_token de texto, el OR conserva los QR legados.
+  if (errPedido?.code === '22P02') {
+    ({ data: coincidencias, error: errPedido } = await cliente
+      .from('pedidos')
+      .select(CAMPOS_PEDIDO_PUBLICOS)
+      .eq('codigo_retiro_diario', credencial)
+      .limit(2));
+  }
+
+  if (errPedido) throw new HttpError(503, errPedido.message);
+  if (!Array.isArray(coincidencias) || coincidencias.length === 0) {
+    return rechazoEntrega(
+      'credencial_invalida',
+      'QR o token de retiro no reconocido. Verifica que corresponda a un pedido de CoffeeFast.'
+    );
+  }
+  if (coincidencias.length > 1) {
+    return rechazoEntrega(
+      'credencial_invalida',
+      'La credencial coincide con más de un pedido. Revisa los datos antes de entregar.'
+    );
+  }
+  const pedido = coincidencias[0];
+
+  const pertenece = await perteneceACafeteria(
+    cliente,
+    usuarioInterno.id,
+    pedido.cafeteria_id,
+    'No se pudo verificar la cafetería del empleado'
+  );
+  if (!pertenece) {
+    await registrarLogEntrega(cliente, {
+      pedido,
+      usuarioId: usuarioInterno.id,
+      credencial,
+      resultado: 'rechazado',
+      detalle: 'El empleado no pertenece a la cafetería del pedido.'
+    });
+    // No se devuelve `pedido`: un empleado de otra cafeteria no debe recibir
+    // id, estado ni fecha de entrega del pedido.
+    return rechazoEntrega(
+      'sin_autorizacion',
+      'El empleado no pertenece a la cafetería del pedido.'
+    );
+  }
+
+  const estadoActual = normalizarEstado(pedido.estado);
+  if (estadoActual === 'entregado' || pedido.qr_usado === true) {
+    await registrarLogEntrega(cliente, {
+      pedido,
+      usuarioId: usuarioInterno.id,
+      credencial,
+      resultado: 'rechazado',
+      detalle: 'Este pedido ya fue entregado.'
+    });
+    return rechazoEntrega('ya_entregado', 'Este pedido ya fue entregado.', pedido);
+  }
+  if (estadoActual !== 'listo') {
+    const razon = `El pedido #${pedido.id} aún no está listo para retiro (estado: ${estadoActual || pedido.estado}).`;
+    await registrarLogEntrega(cliente, {
+      pedido,
+      usuarioId: usuarioInterno.id,
+      credencial,
+      resultado: 'rechazado',
+      detalle: razon
+    });
+    return rechazoEntrega('no_listo', razon, pedido);
+  }
+
+  // Transicion atomica. Se conserva el valor persistido de `estado` para
+  // tolerar filas historicas con alias ('Listo') sin reescribir el slug.
+  const { data: actualizado, error: errUpdate } = await cliente
+    .from('pedidos')
+    .update({
+      estado: 'entregado',
+      entregado_en: new Date().toISOString(),
+      qr_usado: true
+    })
+    .eq('id', pedido.id)
+    .eq('estado', pedido.estado)
+    .or('qr_usado.eq.false,qr_usado.is.null')
+    .select(CAMPOS_PEDIDO_PUBLICOS)
+    .maybeSingle();
+
+  if (errUpdate) throw new HttpError(503, errUpdate.message);
+
+  if (!actualizado) {
+    // Otra peticion confirmo la transicion entre la lectura y el UPDATE. Se
+    // relee para informar el resultado real sin volver a escribir.
+    const { data: vigente, error: errVigente } = await cliente
+      .from('pedidos')
+      .select('id, cafeteria_id, estado, qr_usado, entregado_en')
+      .eq('id', pedido.id)
+      .maybeSingle();
+    if (errVigente) throw new HttpError(503, errVigente.message);
+
+    if (vigente && (normalizarEstado(vigente.estado) === 'entregado' || vigente.qr_usado === true)) {
+      await registrarLogEntrega(cliente, {
+        pedido,
+        usuarioId: usuarioInterno.id,
+        credencial,
+        resultado: 'rechazado',
+        detalle: 'Este pedido ya fue entregado.'
+      });
+      return rechazoEntrega('ya_entregado', 'Este pedido ya fue entregado.', vigente);
+    }
+
+    const estado = normalizarEstado(vigente?.estado) || vigente?.estado || pedido.estado;
+    const razon = `El pedido #${pedido.id} aún no está listo para retiro (estado: ${estado}).`;
+    await registrarLogEntrega(cliente, {
+      pedido,
+      usuarioId: usuarioInterno.id,
+      credencial,
+      resultado: 'rechazado',
+      detalle: razon
+    });
+    return rechazoEntrega('no_listo', razon, vigente || pedido);
+  }
+
+  await registrarLogEntrega(cliente, {
+    pedido,
+    usuarioId: usuarioInterno.id,
+    credencial,
+    resultado: 'entregado',
+    detalle: `Pedido #${pedido.id} entregado mediante QR/token.`
+  });
+
+  return {
+    valido: true,
+    motivo: 'entregado',
+    mensaje: 'Entrega validada exitosamente. ¡Qué disfrute su pedido!',
+    pedido: actualizado
+  };
 }
 
 module.exports = {
