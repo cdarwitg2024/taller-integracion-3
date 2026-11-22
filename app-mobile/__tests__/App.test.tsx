@@ -7,6 +7,7 @@ import ReactTestRenderer from 'react-test-renderer';
 import App from '../App';
 import { LoginScreen } from '../src/screens/LoginScreen';
 import { RegisterScreen } from '../src/screens/RegisterScreen';
+jest.mock('expo-crypto', () => ({ randomUUID: jest.fn() }));
 
 jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');

@@ -67,8 +67,8 @@ const CartScreen = ({
       alert('Selecciona retirar lo antes posible para continuar.');
       return;
     }
-    // Se calcula al confirmar: no enviar un horario viejo si cambió el minuto.
-    onCheckout({
+    // Una compra nueva toma la franja actual; el servicio conserva la original al reintentar.
+    return onCheckout({
       franja: franjaRetiroActual(getReferenciaHoraria()).id,
       ...(codigo ? { codigo } : {}),
     });

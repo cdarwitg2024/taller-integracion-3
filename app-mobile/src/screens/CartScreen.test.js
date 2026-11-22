@@ -9,6 +9,10 @@ import { crearPedidoDesdeCarrito } from '../services/crearPedidoDesdeCarrito';
 import { apiPost } from '../services/backendClient';
 
 jest.mock('../services/backendClient', () => ({ apiPost: jest.fn() }));
+jest.mock('../services/intentoCompra', () => ({
+  obtenerIntentoCompra: async (_, cuerpo) => ({ clave: 'intento-prueba', cuerpo }),
+  marcarIntentoEnviado: async () => {},
+}));
 
 const cart = [
   { id: 1, name: 'Café latte', price: 2000, quantity: 2, cafeteriaId: 7 },
@@ -80,33 +84,33 @@ describe('D01 - código de afiliado en checkout', () => {
   const pulsar = (tree, title) => act(() => boton(tree, title).props.onPress());
   const preparar = () => {
     const tree = montar({ onCheckout: (retiro) =>
-      crearPedidoDesdeCarrito(7, cart, retiro, 15000) });
+      crearPedidoDesdeCarrito(7, cart, retiro, 15000, 'comprador-prueba') });
     act(() => chip(tree, 'Retirar lo antes posible').props.onPress());
     return tree;
   };
 
-  test('aplicar y corregir envía el código seleccionado junto al pedido', () => {
+  test('aplicar y corregir envía el código seleccionado junto al pedido', async () => {
     const tree = preparar();
     escribir(tree, '  DIEGO-PROMO1  ');
     pulsar(tree, 'Aplicar');
     expect(textos(tree)).toContain('Código seleccionado: DIEGO-PROMO1');
-    act(() => botonPagar(tree).props.onPress());
+    await act(async () => botonPagar(tree).props.onPress());
     expect(apiPost).toHaveBeenLastCalledWith('/api/pedidos', {
       cafeteria_id: 7,
       items: cart.map((item) => ({ producto_id: item.id,
         cantidad: item.quantity, precio_esperado: item.price })),
       franja_retiro: '12:00-12:15', codigo: 'DIEGO-PROMO1',
-    }, { timeoutMs: 15000 });
+    }, { timeoutMs: 15000, claveIdempotencia: 'intento-prueba', antesDeEnviar: expect.any(Function) });
     escribir(tree, 'CORREGIDO');
     expect(textos(tree)).toContain('Sin código seleccionado');
     pulsar(tree, 'Aplicar');
-    act(() => botonPagar(tree).props.onPress());
+    await act(async () => botonPagar(tree).props.onPress());
     expect(apiPost.mock.calls.at(-1)[1].codigo).toBe('CORREGIDO');
     act(() => tree.unmount());
   });
 
   test.each(['vacío', 'espacios', 'borrado', 'quitado', 'sin aplicar', 'edición pendiente'])(
-    '%s: el pedido omite la propiedad codigo', (caso) => {
+    '%s: el pedido omite la propiedad codigo', async (caso) => {
       const tree = preparar();
       if (['borrado', 'quitado', 'edición pendiente'].includes(caso)) {
         escribir(tree, 'DIEGO-PROMO1');
@@ -116,7 +120,7 @@ describe('D01 - código de afiliado en checkout', () => {
       if (caso === 'borrado') escribir(tree, '');
       if (caso === 'quitado') pulsar(tree, 'Quitar');
       if (['sin aplicar', 'edición pendiente'].includes(caso)) escribir(tree, 'NUEVO');
-      act(() => botonPagar(tree).props.onPress());
+      await act(async () => botonPagar(tree).props.onPress());
       expect(apiPost.mock.calls.at(-1)[1]).not.toHaveProperty('codigo');
       act(() => tree.unmount());
     });

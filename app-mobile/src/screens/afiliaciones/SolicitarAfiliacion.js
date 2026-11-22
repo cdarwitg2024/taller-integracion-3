@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Text, TextInput, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, Text, TextInput, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { solicitarAfiliacion } from '../../services/afiliaciones';
 import EstadoAfiliacion from './EstadoAfiliacion';
 import { colors } from '../../theme/colors';
@@ -11,6 +11,8 @@ export default function SolicitarAfiliacion({ campana, solicitud, perfilEstado, 
   const [enlace, setEnlace] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [reintento, setReintento] = useState(false);
+  const [bloqueado, setBloqueado] = useState(false);
   const envio = useRef(false);
   const montado = useRef(true);
   useEffect(() => { montado.current = true; return () => { montado.current = false; }; }, []);
@@ -21,13 +23,17 @@ export default function SolicitarAfiliacion({ campana, solicitud, perfilEstado, 
     setBusy(true); setError('');
     try {
       const resultado = await solicitarAfiliacion(campana.cafeteria_id, campana.id, plan, enlace);
-      if (montado.current) { onSolicitada?.(resultado); setAbierto(false); }
+      if (montado.current) { setReintento(false); onSolicitada?.(resultado); setAbierto(false); }
     } catch (fallo) {
-      if (montado.current) setError(fallo.status === 409 ? 'Esta campaña ya no admite solicitudes. Actualiza las oportunidades.'
+      if (montado.current) {
+        setReintento(fallo.status === 0 || fallo.status >= 500 || fallo.resultadoIncierto === true);
+        setBloqueado(fallo.status === 401 || fallo.status === 403);
+        setError(fallo.status === 409 ? 'Esta campaña ya no admite solicitudes. Actualiza las oportunidades.'
         : fallo.status === 401 ? 'Tu sesión venció. Vuelve a iniciar sesión.'
           : fallo.status === 403 ? 'Tu cuenta no tiene permiso para solicitar esta afiliación.'
             : fallo.status === 0 || fallo.status >= 500 ? 'No pudimos confirmar el envío. Puedes reintentar sin crear una solicitud duplicada.'
               : fallo.status ? 'Revisa el plan y el enlace de la solicitud.' : fallo.message || 'No se pudo enviar la solicitud. Puedes reintentar.');
+      }
     } finally {
       envio.current = false;
       if (montado.current) setBusy(false);
@@ -37,6 +43,7 @@ export default function SolicitarAfiliacion({ campana, solicitud, perfilEstado, 
     Tu cuenta no tiene permisos para solicitar afiliación. Contacta al administrador de la cafetería.
   </Text>;
   if (solicitud) return <EstadoAfiliacion solicitud={solicitud} confirmado={perfilEstado === 'listo'} />;
+  if (bloqueado) return <Text accessibilityRole="alert" style={styles.error}>{error}</Text>;
   if (perfilEstado !== 'listo') return <Text style={styles.texto}>Actualiza tus solicitudes para poder solicitar afiliación.</Text>;
   return <View style={styles.container}>
     <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Solicitar afiliación a ${campana.nombre}`}
@@ -50,9 +57,11 @@ export default function SolicitarAfiliacion({ campana, solicitud, perfilEstado, 
       <TextInput accessibilityLabel="Enlace público opcional" value={enlace} editable={!busy} autoCapitalize="none"
         keyboardType="url" onChangeText={setEnlace} style={styles.input} placeholder="https://… (opcional)" />
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Enviar solicitud de afiliación"
+      {busy && <ActivityIndicator accessibilityLabel="Enviando solicitud de afiliación" color={colors.cafeOscuro} />}
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={reintento ? 'Reintentar solicitud de afiliación' : 'Enviar solicitud de afiliación'}
         accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={enviar} style={styles.boton}>
-        <Text style={styles.botonTexto}>{busy ? 'Enviando solicitud…' : 'Enviar solicitud de afiliación'}</Text>
+        <Text accessibilityLiveRegion="polite" style={styles.botonTexto}>{busy ? 'Enviando solicitud…'
+          : reintento ? 'Reintentar solicitud de afiliación' : 'Enviar solicitud de afiliación'}</Text>
       </TouchableOpacity>
     </>}
   </View>;
