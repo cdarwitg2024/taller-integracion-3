@@ -12,6 +12,8 @@ Al confirmar una cotización sin código, el pedido lleva `total_aceptado` con
 el importe mostrado y la cabecera `Idempotency-Key` de D07. C07 revalida ese
 total antes del cobro. Ante `409 precio_actualizado`, el carrito se vuelve a
 cotizar y espera otra confirmación manual con una clave nueva.
+Si la recotización falla, el pago queda bloqueado y se ofrece **Reintentar
+cotización**. El bloqueo sigue activo al salir y volver a la pantalla.
 
 El pago con código sigue deshabilitado. Sin cotización válida, la compra sin
 código conserva el contrato anterior y el resumen identifica la estimación
@@ -39,8 +41,11 @@ pantalla muestra $11.000 con un precio local de $2.500. Al tocar el botón,
 el POST envía el total aceptado de $11.000 con clave y recibe una confirmación
 C07. Otro caso simula un 409: muestra $12.000 tras recotizar y solo envía ese
 importe cuando el comprador vuelve a confirmar.
+La variante `409 → 503` verifica que un nuevo toque no hace otro POST.
+Reintentar la cotización recupera $12.000 y solo la confirmación manual
+siguiente envía ese monto con una clave nueva.
 
-Validación local con Node 22.19.0: 309 pruebas móviles aprobadas (seis
+Validación local con Node 22.19.0: 310 pruebas móviles aprobadas (siete
 de D03), dos integraciones optativas omitidas, TypeScript y exportación
 Android correctos. No se realizaron compras reales ni pruebas en dispositivo.
 

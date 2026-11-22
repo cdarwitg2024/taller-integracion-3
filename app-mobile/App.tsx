@@ -152,6 +152,8 @@ function AppContent() {
     idCarrito: number;
   };
   const [paying, setPaying] = useState(false);
+  const [requiereRecotizar, setRequiereRecotizar] = useState(false);
+  const recotizar = () => setCart(actual => [...actual]);
   const checkoutEnCurso = useRef(false);
   const finalizarPago = () => { checkoutEnCurso.current = false; setPaying(false); };
   const { reiniciar, esperarReinicio } = useCicloIntentoCompra(
@@ -508,6 +510,8 @@ function AppContent() {
       return;
     }
 
+    if (requiereRecotizar && franjaRetiro.totalAceptado === undefined) return;
+
     // La referencia bloquea otro toque incluso antes del siguiente render.
     if (checkoutEnCurso.current) return;
     checkoutEnCurso.current = true;
@@ -594,6 +598,7 @@ function AppContent() {
 
       // Solo un resultado confirmado y completo limpia el carrito:
       if (!await clearCart(false)) return;
+      setRequiereRecotizar(false);
       setPedidoConfirmado({
         pedido_id: resultado.pedido_id,
         total: resultado.total,
@@ -613,7 +618,8 @@ function AppContent() {
     } catch (e) {
       if (avisarErrorIntentoCompra(e, reiniciar, () => handleTabPress('pedidos'))) return;
       if (e instanceof ApiError && e.status === 409 && e.message === 'precio_actualizado') {
-        setCart(actual => [...actual]);
+        setRequiereRecotizar(true);
+        recotizar();
         Alert.alert('Cambió el total', 'No se realizó el cobro. Revisa la nueva cotización antes de confirmar.');
         return;
       }
@@ -753,11 +759,13 @@ function AppContent() {
               cafeteriaName={cartCafeteria?.nombre}
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
-            onRemove={removeFromCart}
-            onCheckout={handleCheckout}
-            onBack={() => handleTabPress('cafeterias')}
-            paying={paying}
-          />
+              onRemove={removeFromCart}
+              onCheckout={handleCheckout}
+              onBack={() => handleTabPress('cafeterias')}
+              paying={paying}
+              requiereRecotizar={requiereRecotizar}
+              onRecotizar={recotizar}
+            />
           )}
 
 {activeTab === 'wallet' && (

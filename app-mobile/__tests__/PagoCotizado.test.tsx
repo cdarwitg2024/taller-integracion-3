@@ -39,8 +39,10 @@ test('tras quitar el código, el toque de pago acepta el total cotizado aunque e
   expect(Alert.alert).toHaveBeenCalledWith('Pago aprobado', `Total pagado: ${importe(11000)}.`);
 });
 
-test('un 409 recotiza sin cobrar y espera otra confirmación con una clave nueva', async () => {
-  cotizar.mockResolvedValueOnce(cotizacion(11000)).mockResolvedValueOnce(cotizacion(12000));
+test.each([false, true])('un 409 exige una cotización válida antes de confirmar (fallo inicial: %s)', async falla => {
+  cotizar.mockResolvedValueOnce(cotizacion(11000));
+  if (falla) cotizar.mockResolvedValueOnce(json(503, { error: 'No se pudo cotizar' }));
+  cotizar.mockResolvedValueOnce(cotizacion(12000));
   await pestaña('Cafeterías');
   await pestaña('Carrito');
   transporte.mockResolvedValueOnce(json(409, {
@@ -48,8 +50,16 @@ test('un 409 recotiza sin cobrar y espera otra confirmación con una clave nueva
   }));
   await pagarDesdePantalla();
   expect(transporte).toHaveBeenCalledTimes(1);
-  expect(textos()).toContain(importe(12000));
   expect(Alert.alert).toHaveBeenCalledWith('Cambió el total', expect.stringContaining('No se realizó el cobro'));
+  if (falla) {
+    const pagar = tree.root.findAllByType(Button).find(n => n.props.title === 'Proceder al Pago')!;
+    expect(pagar.props.disabled).toBe(true);
+    await pagarDesdePantalla();
+    expect(transporte).toHaveBeenCalledTimes(1);
+    await pulsar('Reintentar cotización');
+    expect(transporte).toHaveBeenCalledTimes(1);
+  }
+  expect(textos()).toContain(importe(12000));
   await pagarDesdePantalla();
   expect(transporte).toHaveBeenCalledTimes(2);
   const [primero, segundo] = transporte.mock.calls.map(([, opciones]) => opciones);

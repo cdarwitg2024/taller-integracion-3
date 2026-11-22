@@ -36,6 +36,8 @@ const CartScreen = ({
   idCarrito,
   usuarioId,
   paying = false,
+  requiereRecotizar = false,
+  onRecotizar,
 }) => {
   // Antes caía a 'Cafetería Central', un nombre inventado: si el usuario
   // perdía la cafetería seleccionada, el carrito mostraba un punto de retiro
@@ -49,7 +51,8 @@ const CartScreen = ({
   const { totalProducts, subtotal, total } = useCartTotals(cart);
   const { estado, cotizacion } = useCotizacionCarrito(usuarioId);
   const requiereQuitarCodigo = Boolean(usuarioId && codigo);
-  const bloqueaPago = estado === 'cargando' || requiereQuitarCodigo;
+  const faltaCotizacion = requiereRecotizar && !cotizacion;
+  const bloqueaPago = estado === 'cargando' || requiereQuitarCodigo || faltaCotizacion;
 
   // Actualizar referencia horaria mientras la pantalla esté visible
   useEffect(() => {
@@ -219,6 +222,9 @@ const CartScreen = ({
               {estado === 'cargando' && <Text accessibilityLiveRegion="polite">Consultando cotización…</Text>}
               {estado === 'inelegible' && <Text accessibilityLiveRegion="polite">Este código no se puede aplicar a tu carrito.</Text>}
               {estado === 'no_disponible' && <Text accessibilityLiveRegion="polite">No se pudo obtener la cotización.</Text>}
+              {faltaCotizacion && estado !== 'cargando' && (
+                <Button title="Reintentar cotización" onPress={onRecotizar} disabled={paying} />
+              )}
               {requiereQuitarCodigo && <Text>El pago con código todavía no está disponible. Quita el código para continuar.</Text>}
 
               <Button
