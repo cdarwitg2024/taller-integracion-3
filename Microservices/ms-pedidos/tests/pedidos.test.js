@@ -234,6 +234,17 @@ describe('ms-pedidos', () => {
     expect(res.body).toMatchObject({ ok: true, pedido: expect.any(Object) });
   });
 
+  test('POST /api/pedidos conserva la compra normal de D07 con clave de intento y C07 deshabilitado', async () => {
+    httpMock.post.mockResolvedValue(respuestaPrecios([producto({ id: 1, cafeteria_id: 1 })]));
+    const res = await request(app).post('/api/pedidos')
+      .set('Idempotency-Key', 'd07-compra-normal')
+      .send(bodyPedido());
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ ok: true, pedido: expect.any(Object) });
+    expect(httpMock.post).toHaveBeenCalledTimes(1);
+  });
+
   test('POST /api/pedidos no confirma cotizaciones con la integración deshabilitada', async () => {
     const res = await request(app).post('/api/pedidos')
       .set('Idempotency-Key', 'c07-confirmacion')

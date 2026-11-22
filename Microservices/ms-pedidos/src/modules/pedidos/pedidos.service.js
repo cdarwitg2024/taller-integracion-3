@@ -275,7 +275,7 @@ async function crearPedido({ user, accessToken, body, idempotencyKey }) {
   }
 
   const cliente = crearClienteAutenticado(accessToken);
-  const confirmaCotizacion = idempotencyKey !== undefined || Object.hasOwn(body, 'total_aceptado');
+  const confirmaCotizacion = Object.hasOwn(body, 'total_aceptado');
   if (confirmaCotizacion && process.env.HABILITAR_CONFIRMACION_AFILIADA !== 'true') {
     return { status: 503, body: { error: 'confirmacion_afiliada_no_disponible' } };
   }

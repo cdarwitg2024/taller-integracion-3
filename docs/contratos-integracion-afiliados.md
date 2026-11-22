@@ -111,7 +111,7 @@ Idempotency-Key: 9853fd16-92e4-4ab6-994a-477832a4a502
 
 **Total actualizado en escritorio.** Si Ana confirma $10.000, el pedido pagado se puede consultar desde escritorio con sesión del dueño de la Cafetería A, por ejemplo `GET /api/pedidos/502` → `200 {"id":502,"cafeteria_id":7,"estado":"pagado","total_pagado":10000}`. Si Ana vuelve al carrito tras el `409`, ese intento no crea un pedido para el panel. Una consulta fuera del alcance de la cafetería devuelve `403`.
 
-C07 conecta la cotización con V06. La cotización está deshabilitada por defecto y devuelve `503 cotizacion_afiliada_no_disponible`. La confirmación con total aceptado o clave de idempotencia está deshabilitada por defecto y devuelve `503 confirmacion_afiliada_no_disponible`. El checkout vigente que envía solo el código conserva la compra anterior, sin descuento afiliado. Habilitar la confirmación requiere coordinar el checkout y verificar el pago y la reversión con V08 y V15. La firma provisional y el ensayo aislado están en el [registro C07](microservicios/validacion/C07-cotizacion-compra-gateway.md).
+C07 conecta la cotización con V06. La cotización está deshabilitada por defecto y devuelve `503 cotizacion_afiliada_no_disponible`. La confirmación con total aceptado está deshabilitada por defecto y devuelve `503 confirmacion_afiliada_no_disponible`. El checkout vigente que envía solo el código conserva la compra anterior, sin descuento afiliado. Habilitar la confirmación requiere coordinar el checkout y verificar el pago y la reversión con V08 y V15. La firma provisional y el ensayo aislado están en el [registro C07](microservicios/validacion/C07-cotizacion-compra-gateway.md).
 
 ## 4. Retiro y comisión
 
