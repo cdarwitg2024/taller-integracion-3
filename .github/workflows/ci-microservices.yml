@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [ms-cafeterias, ms-menus, ms-pedidos]
+        service: [ms-cafeterias, ms-menus, ms-pedidos, ms-afiliados]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
@@ -34,7 +34,7 @@ jobs:
             printf 'Microservice source uses JavaScript CommonJS in .js files. Review:\n%s\n' "$incompatible" >&2
             exit 1
           fi
-      - name: Install shared dependencies from the service lockfile
+      - name: Install dependencies from the service lockfile
         run: npm ci --prefix Microservices/${{ matrix.service }}
       - name: Resolve the shared package dependencies
         # file:../shared is a symlink; Node resolves from shared/, not the service.

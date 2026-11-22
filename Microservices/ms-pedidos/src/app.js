@@ -1,7 +1,7 @@
 /**
  * Aplicación Express de ms-pedidos.
  *
- * Monta los recursos de pedidos y afiliados, y centraliza la respuesta 404 y
+ * Monta los recursos de pedidos y centraliza la respuesta 404 y
  * el manejo de errores HTTP del servicio.
  */
 
@@ -11,7 +11,6 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 
 const { HttpError } = require('@coffeefaster/shared');
-const afiliadosRoutes = require('./modules/afiliados/afiliados.routes');
 const pedidosRoutes = require('./modules/pedidos/pedidos.routes');
 
 const app = express();
@@ -31,13 +30,12 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/pedidos', pedidosRoutes);
-app.use('/api/afiliados', afiliadosRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
     error: 'Ruta no encontrada',
     servicio: 'ms-pedidos',
-    recurso: '/api/pedidos, /api/afiliados',
+    recurso: '/api/pedidos',
     path: req.originalUrl
   });
 });

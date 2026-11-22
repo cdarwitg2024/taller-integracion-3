@@ -48,19 +48,35 @@ Los dos listados devuelven hasta 100 solicitudes por página, en orden descenden
 
 El formulario de «Promocionar» exige una explicación y admite un enlace público opcional. Si el dueño invita a alguien, esa persona usa el mismo formulario. Una campaña admite varios afiliados con sus propios códigos. El dueño asigna el código al aprobar y el servidor comprueba su unicidad en todo CoffeeFast. Una aprobación guarda el código en el perfil y dispara el aviso por correo. Si falla el correo, el código sigue visible y el dueño puede reenviar el aviso. Una aprobación anticipada permite compartir el código, con canje desde el inicio y mientras la campaña esté activa.
 
-### Lectura del panel móvil A06
+### Lectura del panel móvil A06/A09
 
 C05 devuelve solicitudes y códigos, no saldo ni historial financiero. El panel
 móvil consulta `public.movimientos_comision` con la sesión Supabase del usuario,
 de acuerdo con el permiso SELECT y RLS de V04 (`0020`). Filtra la afiliación
 aprobada devuelta por C05, incluso si `codigo_activo` pasa a `false`.
-El saldo disponible suma comisiones con estado `disponible`; las pendientes se
-presentan aparte. Las revertidas y sus compensaciones quedan en el historial,
-sin sumar un crédito o descontarlo dos veces. No existe una operación de retiro
-en este contrato y A06 no modifica importes ni la Wallet.
+Las revertidas y sus compensaciones quedan en el historial sin sumar un crédito
+o descontarlo dos veces. El resumen de A09 usa la RPC oficial V12
+`consultar_saldo_afiliado()` con ese mismo JWT, sin parámetros de identidad.
+Devuelve `pendiente_clp`, `disponible_clp` y `retirado_clp` para todas las
+afiliaciones del estudiante en una instantánea. El disponible ya resta los
+retiros confirmados; el móvil no los descuenta nuevamente ni añade pendientes.
+Requiere instalar la migración V12 del [commit oficial 884f256](https://github.com/Diego24Vas/db_CoffeeFaster/commit/884f25698e76df7d50a08b8a0d0a81a1059733e9)
+en el entorno de destino. No hay fallback a sumas locales si la RPC falta.
+No se implementa una operación de retiro en esta pantalla ni se modifica la Wallet.
 
 Ver [A06](mobile/validacion/A06-Solicitudes-aprobacion.md) para paginación,
-comprobaciones y alcance de la prueba con RLS real.
+comprobaciones del historial y [A09](mobile/validacion/A09-Comisiones-saldo-disponible.md)
+para el saldo V12, sus dependencias y el alcance de la transición de entrega controlada.
+
+### Captura local de retiro simulado (A11)
+
+A11 permite preparar un monto entero positivo en CLP, no superior al
+`disponible_clp` confirmado de V12. Muestra como destino de prueba
+«Cuenta de prueba CoffeeFast (destino ficticio)», de solo lectura y sin
+campos bancarios. No establece un contrato HTTP de retiro ni genera un
+comprobante: revisar el formulario no envía, reserva o descuenta saldo.
+La validación local deberá complementarse con la revalidación del servidor
+cuando se integre la operación de retiro. [Registro A11](mobile/validacion/A11-Solicitud-retiro-simulado.md).
 
 ## 3. Cotización y compra
 
@@ -75,7 +91,7 @@ Content-Type: application/json
 ```
 
 - **200** `{"subtotal":10000,"descuento_afiliado":1500,"total":8500}`. Para un carrito de $10.000 a precio normal y $8.000 en oferta, el subtotal es $18.000, el descuento adicional es $1.900 y el total $16.100.
-- **422** `{"error":"campana_no_iniciada","inicio":"2026-12-01T08:00:00-03:00"}`. Otros motivos son `codigo_invalido`, `campana_pausada`, `campana_finalizada` y `beneficio_usado`.
+- **422** `{"error":"campana_no_iniciada"}`. V06 devuelve el motivo y la fecha de inicio queda pendiente en el contrato de la RPC. Otros motivos son `codigo_invalido`, `campana_pausada`, `campana_finalizada` y `beneficio_usado`.
 
 ```http
 POST /api/pedidos
@@ -94,6 +110,8 @@ Idempotency-Key: 9853fd16-92e4-4ab6-994a-477832a4a502
 | Respuesta perdida | Repetir la solicitud original con la misma clave devuelve el mismo resultado registrado. | El servidor asocia la clave al usuario y a los datos del intento. Si la misma clave llega con datos distintos, devuelve `409 {"error":"clave_reintento_en_conflicto"}`. El código de afiliado es independiente de la clave interna. |
 
 **Total actualizado en escritorio.** Si Ana confirma $10.000, el pedido pagado se puede consultar desde escritorio con sesión del dueño de la Cafetería A, por ejemplo `GET /api/pedidos/502` → `200 {"id":502,"cafeteria_id":7,"estado":"pagado","total_pagado":10000}`. Si Ana vuelve al carrito tras el `409`, ese intento no crea un pedido para el panel. Una consulta fuera del alcance de la cafetería devuelve `403`.
+
+C07 conecta la cotización con V06. La cotización está deshabilitada por defecto y devuelve `503 cotizacion_afiliada_no_disponible`. La confirmación con total aceptado está deshabilitada por defecto y devuelve `503 confirmacion_afiliada_no_disponible`. El checkout vigente que envía solo el código conserva la compra anterior, sin descuento afiliado. Habilitar la confirmación requiere coordinar el checkout y verificar el pago y la reversión con V08 y V15. La firma provisional y el ensayo aislado están en el [registro C07](microservicios/validacion/C07-cotizacion-compra-gateway.md).
 
 ## 4. Retiro y comisión
 

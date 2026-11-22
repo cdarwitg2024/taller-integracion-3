@@ -1,8 +1,12 @@
 # A08 · Carga, vacío y error en afiliaciones
 
-20 de noviembre de 2026. Rama `S3-T8-Ariel-Diaz-Cubrir-carga-vacio-y-error`,
-basada en A06 (`a9e1f1c`) y A03 integrada en develop. A07 no es dependencia
-y no se incorpora a esta rama. Primero debe integrarse A06 (#80).
+Implementación del 20 de noviembre de 2026; integración revisada el 22 de
+noviembre. Rama `S3-T8-Ariel-Diaz-Cubrir-carga-vacio-y-error`, actualizada con
+`develop` (`7952432`), que ya incluye A06, A07, A09 y A11. Se resuelven los
+conflictos conservando el import de `listarCampanasActivas`, el import/mock de
+`consultarSaldoAfiliado`, las expectativas de saldo y las entradas documentales
+de las tareas integradas, incluidas E07. El diff frente a esta base contiene
+únicamente los siete archivos propios de A08.
 
 ## Cambios y comportamiento
 
@@ -71,9 +75,11 @@ La integración modifica solo el transporte del primer resultado: C05, Auth,
 gateway, RPC, RLS y PostgreSQL son reales y desechables. La solicitud se crea
 realmente antes de perder la respuesta; no se sustituye el alta por una función
 de prueba. Tras el reintento continúan los escenarios de aprobación, saldo e
-historial de A06. No se generan altas adicionales desde reintentos de lectura.
+historial de A06, saldo de A09 y captura simulada de A11. El gateway enruta
+afiliaciones al servicio `ms-afiliados` incorporado en develop. No se generan
+altas adicionales desde reintentos de lectura.
 
-Resultados: **33/33 pruebas de pantalla PASS**, **205/205 pruebas móviles PASS
+Resultados originales del 20 de noviembre: **33/33 pruebas de pantalla PASS**, **205/205 pruebas móviles PASS
 en 20 suites** (dos integraciones omitidas en la ejecución normal), TypeScript,
 98 enlaces relativos y `git diff --check` aprobados. La ejecución con Docker
 pasó **1/1 integración Mobile**, incluido el escenario A08 y los estados A06,
@@ -81,7 +87,18 @@ además de **seis escenarios C05**. La aserción SQL final exige una sola fila
 para el estudiante 901 y la campaña seleccionada después de los dos POST.
 Los recursos desechables se eliminan al finalizar el runner.
 
-Exportación Android: **PASS**, bundle Hermes y recursos. Se ejecutó desde
+Revalidación de la combinación con `develop` del 22 de noviembre: **272 pruebas
+aprobadas en 25 suites**, dos integraciones omitidas en la suite normal;
+TypeScript, **119 enlaces relativos** y `git diff --check` aprobados. El runner
+`--a06` volvió a pasar **1/1 integración Mobile y seis escenarios C05** contra
+Auth, gateway, `ms-afiliados`, RPC, RLS y PostgreSQL desechables. El registro
+confirma el mismo ID y una sola fila tras los dos POST, conserva la paginación
+de tres movimientos con límite de dos filas y verifica el saldo A09 y el
+formulario simulado A11. La exportación Android de la combinación también
+finalizó correctamente (bundle Hermes y recursos). Se eliminaron los
+contenedores de prueba al terminar.
+
+Exportación Android original: **PASS**, bundle Hermes y recursos. Se ejecutó desde
 `app-mobile` con `EXPO_NO_DOTENV=1`, `EXPO_OFFLINE=1`, `CI=1`, URLs locales y
 clave pública sintéticas: `node node_modules/expo/bin/cli export --platform
 android --max-workers 2 --output-dir RUTA_DE_SALIDA`. El primer intento se

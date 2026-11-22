@@ -6,6 +6,7 @@ import AppIcon from '../components/AppIcon';
 import OportunidadesScreen from './afiliaciones/OportunidadesScreen';
 import EstadoAfiliacion from './afiliaciones/EstadoAfiliacion';
 import ComisionesAfiliado from './afiliaciones/ComisionesAfiliado';
+import SaldoAfiliado from './afiliaciones/SaldoAfiliado';
 import { consultarAfiliaciones } from '../services/afiliaciones';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -104,8 +105,12 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
               {perfil.solicitudes.map(s => <EstadoAfiliacion key={s.id} solicitud={s} confirmado={perfil.estado === 'listo'} />)}
             </View>}
             {['ganancias', 'historial'].includes(seccion) && <>
-              <Text accessibilityRole="header" style={styles.title}>{seccion === 'historial' ? 'Historial de comisiones' : 'Comisiones por entregas'}</Text>
-              {aprobadas.map(s => <ComisionesAfiliado key={s.id} afiliacion={s} historial={seccion === 'historial'} />)}
+              <SaldoAfiliado revision={perfil.solicitudes} vista={seccion} />
+              {aprobadas.filter(s => !s.codigo_activo).map(s => <Text key={s.id} style={styles.description}>
+                {`El código está desactivado (cafetería #${s.cafeteria_id}, campaña #${s.campana_id}). Sus comisiones e historial siguen disponibles.`}
+              </Text>)}
+              {seccion === 'historial' && <Text accessibilityRole="header" style={styles.title}>Historial de comisiones</Text>}
+              {seccion === 'historial' && aprobadas.map(s => <ComisionesAfiliado key={s.id} afiliacion={s} historial />)}
             </>}
           </>
         ) : (

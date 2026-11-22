@@ -41,7 +41,8 @@ module.exports = async ({ call, sql, tokens, base, anon, supabaseUrl, dbContaine
       '--runTestsByPath', path.join(root, 'app-mobile/src/screens/afiliaciones/AfiliacionIntegracion.test.js')], {
       cwd: path.join(root, 'app-mobile'), stdio: 'inherit', env: { ...process.env,
         EXPO_PUBLIC_API_URL: base, A06_INTEGRATION_URL: base, A06_STUDENT_TOKEN: token,
-        A06_OWNER_TOKEN: tokens.dueno, A06_SUPABASE_URL: supabaseUrl, A06_ANON_KEY: anon,
+        A06_OWNER_TOKEN: tokens.dueno, A09_OTHER_STUDENT_TOKEN: tokens.estudiante,
+        A06_SUPABASE_URL: supabaseUrl, A06_ANON_KEY: anon,
         A06_CAMPAIGN_ID: String(ids[2]), A06_DB_CONTAINER: dbContainer, A06_FOREIGN_CODE: codigoAjeno || '',
       },
     });
