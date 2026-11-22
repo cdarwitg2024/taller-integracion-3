@@ -70,6 +70,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [A11 — Formulario de monto y destino ficticio para retiro simulado](mobile/validacion/A11-Solicitud-retiro-simulado.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 - [D02 - Estado del código asociado al carrito](mobile/validacion/D02-Estado-codigo-carrito.md)
+- [D03 - Cotización de carrito completo](mobile/validacion/D03-Cotizacion-carrito-completo.md)
 
 ## Backend Node
 

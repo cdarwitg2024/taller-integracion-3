@@ -748,6 +748,7 @@ function AppContent() {
               codigo={codigo}
               onCodigoChange={setCodigo}
               idCarrito={idCarrito}
+              usuarioId={isGuest ? null : session?.user?.id}
               cafeteriaName={cartCafeteria?.nombre}
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}

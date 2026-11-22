@@ -11,6 +11,7 @@ import AppIcon from '../components/AppIcon';
 import CartItem from '../components/CartItem';
 import CodigoAfiliadoCarrito from '../components/CodigoAfiliadoCarrito';
 import { useCartTotals } from '../hooks/useCartTotals';
+import { useCotizacionCarrito } from '../hooks/useCotizacionCarrito';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import Header from '../components/Header';
@@ -33,6 +34,7 @@ const CartScreen = ({
   codigo = '',
   onCodigoChange,
   idCarrito,
+  usuarioId,
   paying = false,
 }) => {
   // Antes caía a 'Cafetería Central', un nombre inventado: si el usuario
@@ -45,6 +47,9 @@ const CartScreen = ({
   const [franjaSeleccionada, setFranjaSeleccionada] = useState(false);
   const [ahora, setAhora] = useState(() => getReferenciaHoraria());
   const { totalProducts, subtotal, total } = useCartTotals(cart);
+  const { estado, cotizacion } = useCotizacionCarrito(usuarioId);
+  const requiereQuitarCodigo = Boolean(usuarioId && codigo);
+  const bloqueaPago = estado === 'cargando' || requiereQuitarCodigo;
 
   // Actualizar referencia horaria mientras la pantalla esté visible
   useEffect(() => {
@@ -57,7 +62,7 @@ const CartScreen = ({
   const franjaActual = useMemo(() => franjaRetiroActual(ahora), [ahora]);
 
   const handleCheckout = () => {
-    if (paying) return;
+    if (paying || bloqueaPago) return;
     if (!franjaSeleccionada) {
       alert('Selecciona retirar lo antes posible para continuar.');
       return;
@@ -181,16 +186,22 @@ const CartScreen = ({
                   </Text>
 
                   <Text style={styles.subtotal}>
-                    ${subtotal.toLocaleString('es-CL')}
+                    ${(cotizacion?.subtotal ?? subtotal).toLocaleString('es-CL')}
                   </Text>
                 </View>
 
+                {cotizacion && (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.subtotalLabel}>Descuento de afiliado</Text>
+                    <Text style={styles.subtotal}>${cotizacion.descuento_afiliado.toLocaleString('es-CL')}</Text>
+                  </View>
+                )}
                 <View style={styles.divider} />
 
                 <View style={styles.totalRow}>
                   <View>
                     <Text style={styles.totalLabel}>
-                      Total a Pagar
+                      {cotizacion ? 'Total cotizado' : estado === 'inactiva' ? 'Total a Pagar' : 'Total estimado'}
                     </Text>
 
                     <Text style={styles.iva}>
@@ -199,15 +210,20 @@ const CartScreen = ({
                   </View>
 
                   <Text style={styles.total}>
-                    ${total.toLocaleString('es-CL')}
+                    ${(cotizacion?.total ?? total).toLocaleString('es-CL')}
                   </Text>
                 </View>
               </Card>
 
+              {estado === 'cargando' && <Text accessibilityLiveRegion="polite">Consultando cotización…</Text>}
+              {estado === 'inelegible' && <Text accessibilityLiveRegion="polite">Este código no se puede aplicar a tu carrito.</Text>}
+              {estado === 'no_disponible' && <Text accessibilityLiveRegion="polite">No se pudo obtener la cotización.</Text>}
+              {requiereQuitarCodigo && <Text>El pago con código todavía no está disponible. Quita el código para continuar.</Text>}
+
               <Button
                 title={paying ? 'Procesando pago...' : 'Proceder al Pago'}
                 onPress={handleCheckout}
-                disabled={paying || !franjaSeleccionada}
+                disabled={paying || bloqueaPago || !franjaSeleccionada}
                 loading={paying}
               />
 
