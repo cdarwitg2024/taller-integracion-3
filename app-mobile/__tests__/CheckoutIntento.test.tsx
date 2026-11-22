@@ -1,6 +1,19 @@
 import { act, Text, randomUUID, CartScreen, tree, transporte, disponibilidad,
   confirmar, retiro, claves, pagarDesdePantalla, agregarOtraCompra, AsyncStorage, Alert,
 } from '../tests/support/checkoutPrueba';
+import { supabase } from '../src/lib/supabase';
+
+test('recuperar la sesión después de fallar su lectura permite confirmar sin bloqueo', async () => {
+  (supabase.auth.getSession as jest.Mock).mockRejectedValueOnce(new Error('sesión no disponible'));
+  await pagarDesdePantalla();
+  expect(transporte).not.toHaveBeenCalled();
+  const registro = '@coffeefast/intento-compra/comprador-app';
+  const preparado = JSON.parse((await AsyncStorage.getItem(registro))!);
+  expect(preparado.pendiente).toBe(false);
+  await pagarDesdePantalla();
+  expect(transporte).toHaveBeenCalledTimes(1);
+  expect(claves()).toEqual([preparado.clave]);
+});
 test('App bloquea el doble toque antes de otro render y conserva la clave en el reintento', async () => {
   transporte.mockRejectedValueOnce(new Error('respuesta perdida'));
   const checkout = tree.root.findByType(CartScreen).props.onCheckout;

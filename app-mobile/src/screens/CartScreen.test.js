@@ -100,7 +100,7 @@ describe('D01 - código de afiliado en checkout', () => {
       items: cart.map((item) => ({ producto_id: item.id,
         cantidad: item.quantity, precio_esperado: item.price })),
       franja_retiro: '12:00-12:15', codigo: 'DIEGO-PROMO1',
-    }, { timeoutMs: 15000, claveIdempotencia: 'intento-prueba' });
+    }, { timeoutMs: 15000, claveIdempotencia: 'intento-prueba', antesDeEnviar: expect.any(Function) });
     escribir(tree, 'CORREGIDO');
     expect(textos(tree)).toContain('Sin código seleccionado');
     pulsar(tree, 'Aplicar');

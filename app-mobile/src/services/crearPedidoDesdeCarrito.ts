@@ -23,10 +23,12 @@ export async function crearPedidoDesdeCarrito<T>(
     ...(codigo ? { codigo } : {}),
   };
   const intento = await obtenerIntentoCompra(usuarioId, cuerpo);
-  await marcarIntentoEnviado(usuarioId, intento.clave);
   let respuesta: T;
   try {
-    respuesta = await apiPost<T>('/api/pedidos', intento.cuerpo, { timeoutMs, claveIdempotencia: intento.clave });
+    respuesta = await apiPost<T>('/api/pedidos', intento.cuerpo, {
+      timeoutMs, claveIdempotencia: intento.clave,
+      antesDeEnviar: () => marcarIntentoEnviado(usuarioId, intento.clave),
+    });
   } catch (error) {
     // Los HTTP 400 y 401 de este endpoint ocurren antes del cobro.
     // Red, timeout y respuestas inciertas conservan el registro original.

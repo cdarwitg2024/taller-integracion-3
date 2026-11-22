@@ -31,7 +31,7 @@ import { useCartTotals } from './src/hooks/useCartTotals';
 import { ApiError } from './src/services/backendClient';
 import { crearPedidoDesdeCarrito, RetiroCheckout } from './src/services/crearPedidoDesdeCarrito';
 import { consultarIntentoPendiente } from './src/services/intentoCompra';
-import { avisarErrorIntentoCompra } from './src/services/avisarErrorIntentoCompra';
+import { avisarErrorIntentoCompra, ofrecerResolverIntento } from './src/services/avisarErrorIntentoCompra';
 import { useCicloIntentoCompra } from './src/hooks/useCicloIntentoCompra';
 import { verificarDisponibilidadCheckout } from './src/services/verificarDisponibilidadCheckout';
 import {
@@ -468,16 +468,11 @@ function AppContent() {
    * antes de volver a pagar para evitar un cobro duplicado.
    */
   const alertarResultadoIncierto = () => {
-    Alert.alert(
+    ofrecerResolverIntento(
       'No pudimos confirmar tu pago',
-      'La conexión se interrumpió o la respuesta tardó demasiado, así que no ' +
-        'podemos saber si el pedido alcanzó a registrarse.\n\n' +
-        'Tu carrito y el intento original se mantienen. Revisa "Pedidos"; ' +
-        'no se enviará otro pago mientras el resultado siga pendiente.',
-      [
-        { text: 'Revisar pedidos', onPress: () => handleTabPress('pedidos') },
-        { text: 'Entendido', style: 'cancel' },
-      ]
+      'El pedido pudo registrarse. Revisa Pedidos antes de iniciar otra compra.',
+      reiniciar,
+      () => handleTabPress('pedidos'),
     );
   };
 

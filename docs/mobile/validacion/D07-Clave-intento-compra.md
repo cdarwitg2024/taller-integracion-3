@@ -1,131 +1,48 @@
 # D07 · Mantener la clave del intento de compra
 
-## Descripción de los cambios
+Base: develop en `7952432`, con D02, C02 y C07 integradas.
 
-Base actualizada: develop en `7b2c811`, con D02 y C02 integradas.
-Rama: `S3-T7-DiegoC-Mantener_clave_del_intento_de_compra`.
+La app guarda la clave y el cuerpo por cuenta antes de enviar el pedido. El
+cliente obtiene el JWT antes de marcar el intento como enviado y espera esa
+escritura antes del POST. Un fallo de sesión deja el intento preparado. Un
+HTTP 400/401 definitivo o un rechazo explícito lo invalida de forma persistente.
 
-Cada confirmación persiste UUID y cuerpo original antes del POST, separados
-por cuenta. El cliente envía `Idempotency-Key` según
-[C02](../../contratos-integracion-afiliados.md). No guarda credenciales.
-El cuerpo conserva cafetería, productos, cantidades, precios, código y franja.
-El avance automático del reloj no cambia el intento guardado.
+El checkout comprueba si hay un envío pendiente antes de consultar stock.
+Una respuesta perdida, incompleta o un fallo de resultado incierto conserva
+el registro aunque cambie la franja o se vacíe, reconstruya o cambie el carrito.
+C07 mantiene la compra anterior cuando el móvil envía solo la clave sin
+`total_aceptado`; ese flujo todavía no deduplica pagos.
 
-Una compra nueva consulta disponibilidad. Si existe un pago pendiente, App
-conserva el intento y ofrece **Revisar pedidos**, sin consultar stock ni repetir
-el POST: el primer pago pudo consumir la última unidad. El backend todavía no
-interpreta `Idempotency-Key`; reenviar podría duplicar el cobro. Los registros
-anteriores sin estado también se consideran pendientes. El servicio permite
-recuperar el cuerpo original; la interfaz no lo reenvía ante un resultado incierto.
+En el aviso, **Revisar pedidos** abre los pedidos. Al volver al carrito y
+confirmar, el aviso permite **Reiniciar intento** y pide declarar que ya se
+revisaron los pedidos. Esa acción solo invalida el registro; otra compra
+requiere una confirmación manual y recibe una clave nueva. No hay conciliación
+automática con el servidor. Si el resultado sigue sin aclararse, el aviso
+indica esperar antes de comprar otra vez.
 
-Los HTTP 400 y 401 definitivos de `POST /api/pedidos` invalidan el intento
-antes de propagar el error. Corresponden a validación y autenticación previas
-a la RPC de cobro. El carrito permanece disponible para corregirlo o recuperar
-la sesión. La siguiente confirmación usa una clave nueva y el JWT actual.
-No se repite el POST automáticamente. Red, timeout, respuesta incompleta y otros
-errores HTTP conservan el intento; no se asumen rechazos seguros para todos ellos.
+## Evidencia
 
-El reinicio escribe un marcador persistente `{invalidado:true}`, sin depender
-de un Set en memoria ni de removeItem. El checkout espera los reinicios
-pendientes. Un pago confirmado espera esa escritura antes de limpiar el carrito
-y anunciar éxito. Si falla, conserva el carrito y muestra un diagnóstico con
-acceso a Pedidos y reinicio explícito. Reiniciar no envía pagos y advierte que
-primero debe comprobarse si existe un cobro confirmado.
-
-El vaciado se detecta desde el estado resultante, incluso con dos eliminaciones
-o decrementos agrupados. Vaciar, reemplazar la cafetería o cerrar sesión
-solo invalida intentos que todavía no se enviaron. La comprobación y la
-escritura se serializan por cuenta. Un pago incierto conserva su clave y
-cuerpo al reconstruir el carrito. Tras un pago confirmado, la próxima
-compra recibe otra clave.
-
-## Archivos e interacción
-
-- `app-mobile/src/services/intentoCompra.ts`: UUID, cuerpo original, cola por
-  cuenta, estado pendiente, marcador persistente y errores con diagnóstico.
-- `app-mobile/src/services/crearPedidoDesdeCarrito.ts`: prepara el cuerpo,
-  marca el intento pendiente antes del envío y reinicia ante rechazo explícito
-  o HTTP 400/401 definitivo, esperando su persistencia antes de propagar el error.
-- `app-mobile/src/services/backendClient.ts`: transmite la clave con sesión y timeout.
-- `app-mobile/src/hooks/useCicloIntentoCompra.ts`: observa el carrito vacío,
-  permite esperar el reinicio y comunica fallos de almacenamiento.
-- `app-mobile/src/services/avisarErrorIntentoCompra.ts`: diagnóstico, acceso a
-  Pedidos y reinicio explícito sin enviar compras.
-- `app-mobile/src/services/verificarDisponibilidadCheckout.ts`: conserva la
-  validación y los mensajes de disponibilidad, extraídos de App.
-- `app-mobile/App.tsx`: separa compra nueva y pago incierto; bloquea doble toque
-  y espera la invalidación persistente antes de completar el flujo.
-- `app-mobile/src/screens/CartScreen.js`: devuelve la promesa del checkout.
-- `app-mobile/package.json` y `package-lock.json`: expo-crypto compatible con
-  Expo 52 para UUID nativos.
-- `app-mobile/__tests__/CheckoutIntento.test.tsx` y `RecuperacionIntento.test.tsx`:
-  montan App y CartScreen reales. Comparten preparación en
-  `app-mobile/tests/support/checkoutPrueba.tsx`.
-- `app-mobile/src/services/crearPedidoDesdeCarrito.test.ts` e
-  `intentoCompraPersistencia.test.ts`: transporte, cuerpo, cuentas, concurrencia,
-  persistencia y recuperación desde otra instancia del módulo.
-- Las regresiones de App, CartScreen y CodigoCarrito adaptan sus dobles al
-  almacenamiento asíncrono. El índice y estado funcional enlazan esta evidencia.
-
-## Criterios de Aceptación Verificados
-
-Ejecución local del 21 de noviembre de 2026, Windows y Node.js 22.19.0.
-K1 y K2 representan UUID sintéticos distintos del doble de prueba.
-
-| Paso ejecutado | Estado resultante comprobado |
+| Paso | Resultado comprobado |
 |---|---|
-| Confirmar dos veces antes del siguiente render | Una consulta de stock y un POST con K1 |
-| Recibir HTTP 401, recuperar sesión y confirmar desde CartScreen | Invalida K1 sin vaciar el carrito; el segundo POST usa JWT nuevo y K2, y el pago confirmado limpia el carrito |
-| Recibir HTTP 400 y editar el carrito antes de confirmar | Conserva el carrito y permite enviar los datos corregidos con una clave nueva |
-| Responder HTTP 400, 401 o 500 desde el transporte del servicio | Propaga el ApiError original; 400 y 401 definitivos persisten el marcador, 500 conserva el intento |
-| Perder la respuesta, avanzar de las 12:14 a las 12:16 y volver a pagar | Conserva K1 y cuerpo original; no consulta stock ni repite POST |
-| Repetir con respuesta incompleta | Mismo registro pendiente; ofrece revisar Pedidos |
-| Primer pago consume la última unidad, pierde su respuesta y deja stock cero | El siguiente toque ofrece revisar Pedidos; una consulta de stock y un POST en total |
-| Recuperar desde otra instancia del módulo con otra franja | Devuelve K1 y cuerpo original sin otro UUID |
-| Confirmar y agregar productos iguales tras cambiar la franja | Otra compra usa K2 y franja actual |
-| Perder la respuesta, eliminar dos productos en el mismo act y reconstruir el carrito | Conserva K1 y el cuerpo original; no envía otro POST y ofrece revisar Pedidos |
-| Repetir con dos decrementos agrupados | El carrito queda vacío y el intento pendiente sobrevive |
-| Simular fallo de removeItem, reiniciar y cargar otra instancia | No usa removeItem; el marcador permite generar K2 |
-| Fallar setItem al invalidar después de un pago confirmado | Conserva carrito, muestra diagnóstico y bloquea otro POST |
-| Reintentar invalidación tras fallo de escritura | Persiste marcador; deja de existir un intento pendiente |
-| Corromper registro y pagar | Diagnóstico específico sin POST; ofrece revisar Pedidos o reiniciar |
-| Pulsar Reiniciar intento ante registro dañado | Persiste marcador sin pagar; permite una confirmación posterior |
-| Leer registro antiguo sin estado | Se considera pendiente, no una compra nueva |
-| Retener o fallar escritura inicial | No hay POST hasta persistir correctamente |
-| Cambiar cuenta o datos en pruebas del servicio | Registro independiente o nueva confirmación según corresponda |
+| Doble toque o respuesta perdida/incompleta seguida de cambio de franja | Un POST; se conserva la clave y el cuerpo originales |
+| Perder la respuesta y agotar stock | Revisar Pedidos sin otra consulta de stock ni POST |
+| Vaciar con eliminaciones/decrementos agrupados y reconstruir | El intento incierto sobrevive y bloquea otro envío |
+| Confirmar el reinicio explícito y luego pagar manualmente | El reinicio no envía pagos; el nuevo POST usa otra clave |
+| Fallar al leer sesión y recuperar el JWT | Cero POST durante el fallo; después se puede confirmar |
+| Recibir 400 y editar, o recibir 401 y recuperar sesión | Otra confirmación usa otra clave |
+| Confirmar un pago y comprar otra vez | Clave nueva; la invalidación se espera antes de limpiar el carrito |
+| Fallar al persistir, leer un registro dañado o reiniciar el módulo | Los errores se muestran; el marcador persistido impide reutilizar una clave invalidada |
 
-Resultados: **299 pruebas aprobadas en 29 suites**, dos integraciones optativas
-omitidas. Las cuatro suites de D07 suman **33 casos**. TypeScript y exportación
-Android aprobados. Comandos desde la raíz:
+Desde la raíz, con Node 22:
 
 ```powershell
-npm test --prefix app-mobile -- --ci --runInBand --testTimeout=20000
-node app-mobile/node_modules/typescript/bin/tsc --noEmit --project app-mobile/tsconfig.json
-git diff --check
+npm test --prefix app-mobile -- --ci --runInBand --runTestsByPath __tests__/CheckoutIntento.test.tsx __tests__/RecuperacionIntento.test.tsx src/services/crearPedidoDesdeCarrito.test.ts src/services/intentoCompraPersistencia.test.ts
 ```
 
-Exportación desde app-mobile, sin cargar .env:
+Las regresiones de pantalla montan App y CartScreen y simulan Auth,
+almacenamiento y transporte. No se hicieron compras reales ni se verificó
+deduplicación de pagos en servidor.
 
-```powershell
-$env:EXPO_NO_DOTENV = '1'
-$env:CI = '1'
-node node_modules/expo/bin/cli export --platform android --output-dir "$env:TEMP/coffeefast-d07-android"
-```
-
-## Cómo comprobar la tarea y límites
-
-La clave no se muestra en la interfaz. Para repetir las nuevas regresiones
-sin compras reales, desde la raíz:
-
-```powershell
-npm test --prefix app-mobile -- --ci --runInBand --runTestsByPath __tests__/RecuperacionIntento.test.tsx src/services/intentoCompraPersistencia.test.ts
-```
-
-Las pruebas usan App y CartScreen reales con reloj, Auth, almacenamiento, UUID,
-catálogo y transporte controlados. No acreditan deduplicación del servidor ni
-recuperación automática por clave: Pedidos permite revisar el resultado.
-Los HTTP 400 y 401 de las regresiones se simulan mediante fetch. El JWT
-nuevo es ficticio; no se ejecutó un gateway ni una renovación real de Supabase.
-No se ejecutaron compras reales, pruebas visuales nuevas en dispositivo ni
-operaciones Cloud. La exportación comprueba JavaScript y recursos; no es un APK
-ni ejecuta el módulo nativo de UUID.
+Validación local del 22 de noviembre de 2026 con Node 22.19.0: 297 pruebas
+aprobadas y dos integraciones optativas omitidas. TypeScript y exportación
+Android correctos.

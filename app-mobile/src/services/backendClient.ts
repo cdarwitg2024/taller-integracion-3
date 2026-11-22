@@ -151,10 +151,11 @@ function textoDe(e: unknown): string {
 export async function apiPost<T>(
   ruta: string,
   cuerpo: unknown,
-  opciones?: { timeoutMs?: number; claveIdempotencia?: string }
+  opciones?: { timeoutMs?: number; claveIdempotencia?: string; antesDeEnviar?: () => Promise<void> }
 ): Promise<T> {
   const url = `${urlBase()}${normalizarRuta(ruta)}`;
   const token = await tokenActual();
+  await opciones?.antesDeEnviar?.();
 
   // S2-T15: límite de espera explícito. Si se agota DESPUÉS de enviar la
   // solicitud no se sabe si el backend alcanzó a procesarla.

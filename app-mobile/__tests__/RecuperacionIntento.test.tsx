@@ -5,6 +5,8 @@ import { supabase } from '../src/lib/supabase';
 
 const registro = '@coffeefast/intento-compra/comprador-app';
 const ultimoAviso = () => (Alert.alert as jest.Mock).mock.calls.at(-1);
+const pulsarAviso = (texto: string) =>
+  ultimoAviso()[2].find((accion: { text: string }) => accion.text === texto).onPress();
 
 test('401 definitivo permite otra confirmación con sesión recuperada y clave nueva', async () => {
   transporte.mockResolvedValueOnce({ ok: false, status: 401,
@@ -46,6 +48,17 @@ test('última unidad consumida con respuesta perdida: recuperar no consulta stoc
   expect(await AsyncStorage.getItem(registro)).toBe(original);
   expect(ultimoAviso()[0]).toBe('No pudimos confirmar tu pago');
   expect(ultimoAviso()[2].some((accion: { text: string }) => accion.text === 'Revisar pedidos')).toBe(true);
+  await act(async () => { pulsarAviso('Reiniciar intento'); });
+  expect(await AsyncStorage.getItem(registro)).toBe(original);
+  await act(async () => { await pulsarAviso('Ya revisé, reiniciar'); });
+  expect(transporte).toHaveBeenCalledTimes(1);
+  expect(JSON.parse((await AsyncStorage.getItem(registro))!).invalidado).toBe(true);
+  disponibilidad.mockResolvedValue({ data: [{ id: 41, cafeteria_id: 7, activo: true,
+    eliminado_en: null, stock: 1 }], error: null });
+  await pagarDesdePantalla();
+  expect(transporte).toHaveBeenCalledTimes(2);
+  expect(transporte.mock.calls[1][1].headers['Idempotency-Key'])
+    .not.toBe(transporte.mock.calls[0][1].headers['Idempotency-Key']);
 });
 
 test.each(['eliminar', 'disminuir'])('dos toques agrupados para %s conservan el intento incierto', async modo => {
@@ -96,8 +109,10 @@ test('un registro dañado muestra diagnóstico y permite reiniciar explícitamen
   await act(async () => { await confirmar(); });
   expect(transporte).not.toHaveBeenCalled();
   expect(ultimoAviso()[1]).toContain('No se pudo recuperar el intento local');
-  const reiniciar = ultimoAviso()[2].find((accion: { text: string }) => accion.text === 'Reiniciar intento');
-  await act(async () => { await reiniciar.onPress(); });
+  await act(async () => {
+    pulsarAviso('Reiniciar intento');
+    await pulsarAviso('Ya revisé, reiniciar');
+  });
   expect(JSON.parse((await AsyncStorage.getItem(registro))!).invalidado).toBe(true);
   expect(transporte).not.toHaveBeenCalled();
   await act(async () => { await confirmar(); });

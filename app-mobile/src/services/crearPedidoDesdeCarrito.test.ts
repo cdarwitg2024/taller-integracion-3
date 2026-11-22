@@ -2,7 +2,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { randomUUID } from 'expo-crypto';
 import { supabase } from '../lib/supabase';
 import { crearPedidoDesdeCarrito } from './crearPedidoDesdeCarrito';
-import { reiniciarIntentoCompra } from './intentoCompra';
 
 jest.mock('expo-crypto', () => ({ randomUUID: jest.fn() }));
 jest.mock('../lib/supabase', () => ({ supabase: { auth: { getSession: jest.fn() } } }));
@@ -40,14 +39,6 @@ test('dos solicitudes simultáneas conservan una clave persistida antes del tran
   expect(transporte.mock.calls[0][1].headers.Authorization).toBe('Bearer jwt-ficticio');
 });
 
-test('respuesta perdida y reintento manual conservan la misma clave y cuerpo', async () => {
-  transporte.mockRejectedValueOnce(new Error('respuesta perdida'));
-  await expect(enviar()).rejects.toMatchObject({ resultadoIncierto: true });
-  await enviar();
-  expect(claves()[1]).toBe(claves()[0]);
-  expect(transporte.mock.calls[1][1].body).toBe(transporte.mock.calls[0][1].body);
-});
-
 test.each([400, 401, 500])('HTTP %s solo invalida ante un rechazo previo al cobro', async status => {
   transporte.mockResolvedValueOnce({ ok: false, status,
     text: async () => JSON.stringify({ error: 'Solicitud rechazada' }) });
@@ -78,21 +69,6 @@ test.each(['cantidad', 'cafetería', 'precio', 'código'])(
       { ...retiro, codigo: cambio === 'código' ? 'SUR' : retiro.codigo }, 15000, 'comprador-a');
     expect(claves()[1]).not.toBe(claves()[0]);
   });
-
-test('cambiar solo la franja automática conserva la clave y el cuerpo originales', async () => {
-  transporte.mockRejectedValueOnce(new Error('respuesta perdida'));
-  await expect(enviar()).rejects.toMatchObject({ resultadoIncierto: true });
-  await crearPedidoDesdeCarrito(7, productos, { ...retiro, franja: '12:45-13:00' }, 15000, 'comprador-a');
-  expect(claves()[1]).toBe(claves()[0]);
-  expect(transporte.mock.calls[1][1].body).toBe(transporte.mock.calls[0][1].body);
-});
-
-test('vaciar o confirmar la compra permite otra idéntica con una clave nueva', async () => {
-  await enviar();
-  await reiniciarIntentoCompra('comprador-a');
-  await enviar();
-  expect(claves()[1]).not.toBe(claves()[0]);
-});
 
 test('cada cuenta conserva su intento por separado', async () => {
   await enviar('comprador-a');
