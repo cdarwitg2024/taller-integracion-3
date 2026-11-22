@@ -31,6 +31,30 @@ beforeEach(() => {
 
 afterAll(() => { process.env = entornoAnterior; });
 
+test('la cotización afiliada está deshabilitada por defecto y no llama a la RPC', async () => {
+  delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+  await request(app).post('/api/afiliados/cotizaciones')
+    .set('Authorization', 'Bearer sesion-estudiante')
+    .send({ cafeteria_id: 7, items: [{ producto_id: 41, cantidad: 1 }], codigo: 'DIEGO-PROMO1' })
+    .expect(503, { error: 'cotizacion_afiliada_no_disponible' });
+  expect(rpc).not.toHaveBeenCalled();
+});
+
+test('la cotización afiliada habilitada consulta V06 con la sesión del comprador', async () => {
+  process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+  const items = [{ producto_id: 41, cantidad: 1 }];
+  const cotizacion = { subtotal: 10000, descuento_afiliado: 1500, total: 8500 };
+  rpc.mockResolvedValue({ data: [{ ...cotizacion, motivo: null }], error: null });
+
+  await request(app).post('/api/afiliados/cotizaciones')
+    .set('Authorization', 'Bearer sesion-estudiante')
+    .send({ cafeteria_id: 7, items, codigo: 'DIEGO-PROMO1' })
+    .expect(200, cotizacion);
+  expect(rpc).toHaveBeenCalledWith('cotizar_carrito_afiliado', {
+    p_cafeteria_id: 7, p_items: items, p_codigo: 'DIEGO-PROMO1',
+  });
+});
+
 test('devuelve el contrato oficial y consulta exclusivamente con cafetería y JWT del estudiante', async () => {
   const respuesta = await request(app).get(ruta).set('Authorization', 'Bearer sesion-estudiante');
   expect(respuesta.status).toBe(200);

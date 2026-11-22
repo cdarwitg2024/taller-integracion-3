@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-afiliados
+  namespace: student-cdarwitg
+  labels:
+    app: ms-afiliados
+    ms: afiliados
+spec:
+  # El HPA administra las réplicas tras el arranque.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-afiliados
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: ms-afiliados
+        ms: afiliados
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: ms-afiliados
+          # Sustituir por el digest de la publicación antes de aplicar.
+          image: cdarwitg2024/ms-afiliados:release
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3006
+          env:
+            - name: PORT
+              value: '3006'
+            - name: NODE_ENV
+              value: 'production'
+            - name: SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: coffeesecret-supabase
+                  key: SUPABASE_URL
+            - name: SUPABASE_PUBLISHABLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: coffeesecret-supabase
+                  key: SUPABASE_PUBLISHABLE_KEY
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 150m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ['ALL']
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      terminationGracePeriodSeconds: 15

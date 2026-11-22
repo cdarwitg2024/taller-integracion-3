@@ -41,7 +41,7 @@ Convención de evidencia: `S` = `Microservices/ms-pedidos/src/modules/pedidos/pe
 | `pagos` | INSERT | Registrar monto aprobado, referencia y método | P:177 | Sin CREATE TABLE; ALTER RLS no basta: EXTERNA |
 | `movimientos_wallet` | INSERT | Ledger negativo de compra y positivo de reembolso | P:185; X:128 | EXTERNA |
 | `cafeterias` | Referencia FK; id enviado a RPC | Contexto del pedido y FK de logs; no SELECT directo en el núcleo | S:218,267,282; Q:20 | PARCIAL: solo ALTER `direccion`/`rut` en `database/fixes/agregar_direccion_rut_cafeterias.sql`:13 |
-| `roles` (auxiliar) | SELECT auxiliar; valores de rol en Node | Autorización por `usuarios.rol_id`; helper `es_dueno` | H:66; S:440,441 | EXTERNA; seed de nombres no asegura ids 1/2/3 |
+| `roles` (auxiliar) | SELECT relacionado desde `usuarios` | Autorización por `roles.nombre` al resolver el perfil interno; helper `es_dueno` | H:66; S: `resolverUsuarioInterno` | EXTERNA; el vínculo usa `usuarios.rol_id` y los IDs dependen del entorno |
 | `logs_validacion_qr` (candidata QR) | INSERT esperado, SELECT de auditoría; no demostrados dentro de RPC | Registro de validación | Q:17; S:738 solo llama RPC | VERSIONADA como objeto; no prueba que `log_qr_validation` la escriba |
 | `logs_auditoria` (auxiliar) | SELECT por policy | Historial de perfil, no escritura probada por pago | H:92,111 | PARCIAL: RLS/policy, sin CREATE TABLE |
 | `anuncios_pedido` (auxiliar) | Sin operación desde ms-pedidos; soporte voz KDS | Avisos posteriores al pedido | `database/fixes/crear_anuncios_pedido.sql`:24 | VERSIONADA como objeto, FK externas |

@@ -72,7 +72,7 @@ data:
           proxy_set_header X-Forwarded-Proto $scheme;
         }
         location /api/afiliados {
-          set $up_afiliados http://ms-pedidos.student-cdarwitg.svc.cluster.local:3005;
+          set $up_afiliados http://ms-afiliados.student-cdarwitg.svc.cluster.local:3006;
           proxy_pass $up_afiliados$request_uri;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
