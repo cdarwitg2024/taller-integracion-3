@@ -1,6 +1,6 @@
 # D03 · Integrar cotización de carrito completo
 
-Base `7952432`, con D02 y C07 integradas.
+Base `1fccbd7`, con D02, C07 y D07 integradas.
 
 La pantalla consulta `POST /api/afiliados/cotizaciones` con el JWT del
 comprador. Envía cafetería, identificadores y cantidades, con el código solo
@@ -8,10 +8,15 @@ si se aplicó. Muestra los tres importes de C07 sin recalcularlos. Quitar el
 código vuelve a consultar el importe vigente y la revisión de D02 descarta
 respuestas atrasadas al editar o cambiar el carrito.
 
-D03 solo consume cotizaciones. El pago con código queda deshabilitado hasta
-integrar la confirmación móvil con total aceptado. La compra sin código sigue
-disponible. Si C07 no responde con una cotización válida, el resumen identifica
-la estimación local y permite quitar el código.
+Al confirmar una cotización sin código, el pedido lleva `total_aceptado` con
+el importe mostrado y la cabecera `Idempotency-Key` de D07. C07 revalida ese
+total antes del cobro. Ante `409 precio_actualizado`, el carrito se vuelve a
+cotizar y espera otra confirmación manual con una clave nueva.
+
+El pago con código sigue deshabilitado. Sin cotización válida, la compra sin
+código conserva el contrato anterior y el resumen identifica la estimación
+local. Una confirmación C07 rechazada por flag apagado no se vuelve a intentar
+por el flujo anterior.
 
 ## Evidencia
 
@@ -29,14 +34,20 @@ También se comprueba el JWT y el cuerpo de cada POST, que escribir sin
 aplicar no consulta el código, que cambiar de cafetería descarta una
 respuesta atrasada y que HTTP 422/503 retiran los importes cotizados.
 
-Validación local con Node 22.19.0: 270 pruebas móviles aprobadas (cuatro
+La prueba de pago monta App y CartScreen reales. Tras quitar el código, la
+pantalla muestra $11.000 con un precio local de $2.500. Al tocar el botón,
+el POST envía el total aceptado de $11.000 con clave y recibe una confirmación
+C07. Otro caso simula un 409: muestra $12.000 tras recotizar y solo envía ese
+importe cuando el comprador vuelve a confirmar.
+
+Validación local con Node 22.19.0: 309 pruebas móviles aprobadas (seis
 de D03), dos integraciones optativas omitidas, TypeScript y exportación
 Android correctos. No se realizaron compras reales ni pruebas en dispositivo.
 
 Desde la raíz:
 
 ```powershell
-npm test --prefix app-mobile -- --ci --runInBand --runTestsByPath src/screens/CotizacionCarrito.test.js
+npm test --prefix app-mobile -- --ci --runInBand --runTestsByPath src/screens/CotizacionCarrito.test.js __tests__/PagoCotizado.test.tsx
 ```
 
 Para comprobarlo en Android, apuntar la app a un gateway local con
@@ -44,3 +55,5 @@ Para comprobarlo en Android, apuntar la app a un gateway local con
 una sesión de comprador y un código elegible de la misma cafetería. Abrir
 el carrito, aplicar el código y quitarlo. Comparar los tres importes con cada
 respuesta. El flag viene apagado por defecto y devuelve HTTP 503.
+Para ensayar el pago cotizado en un entorno desechable, habilitar el mismo flag
+en `ms-pedidos` y usar la RPC de confirmación compatible con C07.

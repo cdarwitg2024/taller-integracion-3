@@ -36,6 +36,8 @@ import { useCicloIntentoCompra } from './src/hooks/useCicloIntentoCompra';
 import { verificarDisponibilidadCheckout } from './src/services/verificarDisponibilidadCheckout';
 import {
   clasificarResultadoPago,
+  clasificarPagoCotizado,
+  type PagoCotizado,
   type PagoResult,
 } from './src/utils/resultadoPago';
 import AppIcon from './src/components/AppIcon';
@@ -94,7 +96,7 @@ const TAB_ICONS: Record<AppTab, AppIconName> = {
  * recibía como `data`. Notar que `ok` del envoltorio siempre es `true` en un
  * 201; el resultado real del pago está en `pedido.ok`.
  */
-type RespuestaCrearPedido = {
+type RespuestaCrearPedido = PagoCotizado & {
   ok: boolean;
   pedido?: PagoResult | null;
 };
@@ -102,7 +104,7 @@ type RespuestaCrearPedido = {
 type PedidoConfirmado = {
   pedido_id: number;
   total: number;
-  saldo_restante: number;
+  saldo_restante?: number;
   franja_retiro?: string;
   estado?: string;
   pago_estado?: string;
@@ -528,9 +530,7 @@ function AppContent() {
 
       const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
 
-      // El total NO se manda. ms-pedidos lo cotiza contra ms-menus y la RPC
-      // `procesar_pago` lo recalcula desde productos.precio: si se enviara,
-      // un cliente podria pagar $100 un sándwich de $2.000.
+      // C07 revalida el total aceptado antes de cobrar. Sin cotización se usa la RPC anterior.
       const respuesta = await crearPedidoDesdeCarrito<RespuestaCrearPedido | null>(
         cafeteriaId, cart, franjaRetiro, TIMEOUT_CREAR_PEDIDO_MS, session.user.id
       );
@@ -540,7 +540,9 @@ function AppContent() {
       // `ok: false` (p. ej. saldo insuficiente), así que el chequeo real es
       // `pedido.ok` y no el código HTTP. La clasificación vive en
       // `utils/resultadoPago` para poder probarla sin montar la app entera.
-      const clasificacion = clasificarResultadoPago(respuesta?.pedido ?? null);
+      const clasificacion = franjaRetiro.totalAceptado === undefined
+        ? clasificarResultadoPago(respuesta?.pedido ?? null)
+        : clasificarPagoCotizado(respuesta, franjaRetiro.totalAceptado);
 
       // S2-T15: un 2xx sin `pedido` no confirma ni rechaza el pago; se trata
       // como resultado desconocido (carrito intacto, sin reintento automático).
@@ -604,11 +606,25 @@ function AppContent() {
       });
       Alert.alert(
         'Pago aprobado',
-        `Tu pedido fue pagado con Wallet.\n` +
-          `Saldo restante: ${formatCLP(resultado.saldo_restante)}.`
+        resultado.saldo_restante === undefined
+          ? `Total pagado: ${formatCLP(resultado.total)}.`
+          : `Tu pedido fue pagado con Wallet.\nSaldo restante: ${formatCLP(resultado.saldo_restante)}.`
       );
     } catch (e) {
       if (avisarErrorIntentoCompra(e, reiniciar, () => handleTabPress('pedidos'))) return;
+      if (e instanceof ApiError && e.status === 409 && e.message === 'precio_actualizado') {
+        setCart(actual => [...actual]);
+        Alert.alert('Cambió el total', 'No se realizó el cobro. Revisa la nueva cotización antes de confirmar.');
+        return;
+      }
+      if (e instanceof ApiError && e.status === 422 && e.message === 'saldo_insuficiente') {
+        Alert.alert('Saldo insuficiente en la Wallet', 'Recarga tu Wallet para confirmar el pedido.');
+        return;
+      }
+      if (e instanceof ApiError && e.status === 503 && e.message === 'confirmacion_afiliada_no_disponible') {
+        Alert.alert('Confirmación no disponible', 'No se realizó el cobro. Intenta más tarde.');
+        return;
+      }
       // S2-T15: timeout o pérdida de conexión DESPUÉS de enviar la solicitud.
       // El pago pudo procesarse, así que no se presenta como rechazo, no se
       // vacía el carrito y no se reintenta automáticamente.

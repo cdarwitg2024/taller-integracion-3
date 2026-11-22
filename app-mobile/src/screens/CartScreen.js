@@ -71,6 +71,7 @@ const CartScreen = ({
     return onCheckout({
       franja: franjaRetiroActual(getReferenciaHoraria()).id,
       ...(codigo ? { codigo } : {}),
+      ...(cotizacion ? { totalAceptado: cotizacion.total } : {}),
     });
   };
 

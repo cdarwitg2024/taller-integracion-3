@@ -589,12 +589,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                       ${pedidoConfirmado.total.toLocaleString('es-CL')}
                     </Text>
                   </View>
-                  <View style={styles.confirmacionFila}>
+                  {typeof pedidoConfirmado.saldo_restante === 'number' && <View style={styles.confirmacionFila}>
                     <Text style={styles.confirmacionLabel}>Saldo restante</Text>
                     <Text style={styles.confirmacionValor}>
                       ${pedidoConfirmado.saldo_restante.toLocaleString('es-CL')}
                     </Text>
-                  </View>
+                  </View>}
                   {pedidoConfirmado.franja_retiro && (
                     <View style={styles.confirmacionFila}>
                       <Text style={styles.confirmacionLabel}>Franja de retiro</Text>

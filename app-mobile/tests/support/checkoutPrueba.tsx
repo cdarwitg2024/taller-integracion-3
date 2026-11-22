@@ -29,6 +29,7 @@ export const retiro = { franja: '12:30-12:45' };
 const fetchAnterior = global.fetch;
 const urlAnterior = process.env.EXPO_PUBLIC_API_URL;
 export let tree: ReactTestRenderer, transporte: jest.Mock, disponibilidad: jest.Mock;
+export let cotizar: jest.Mock;
 export const confirmar = () => tree.root.findByType(CartScreen).props.onCheckout(retiro);
 export const claves = () => transporte.mock.calls.map(([, opciones]) => opciones.headers['Idempotency-Key']);
 export async function pagarDesdePantalla() {
@@ -68,7 +69,10 @@ beforeEach(async () => {
   jest.spyOn(console, 'warn').mockImplementation(() => {});
   process.env.EXPO_PUBLIC_API_URL = 'http://gateway-prueba';
   transporte = jest.fn(async () => ({ ok: true, status: 201, text: async () => JSON.stringify({ pedido: null }) }));
-  global.fetch = transporte;
+  cotizar = jest.fn(async () => ({ ok: false, status: 503,
+    text: async () => JSON.stringify({ error: 'cotizacion_afiliada_no_disponible' }) }));
+  global.fetch = (url, opciones) => String(url).endsWith('/api/afiliados/cotizaciones')
+    ? cotizar(url, opciones) : transporte(url, opciones);
   await act(async () => { tree = create(<App />); });
   await pestaña('Carrito');
 });
