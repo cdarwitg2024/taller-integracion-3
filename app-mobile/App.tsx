@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
@@ -30,10 +30,10 @@ import { CartProvider, useCart } from './src/context/CartContext';
 import { useCartTotals } from './src/hooks/useCartTotals';
 import { ApiError } from './src/services/backendClient';
 import { crearPedidoDesdeCarrito, RetiroCheckout } from './src/services/crearPedidoDesdeCarrito';
-import {
-  evaluarDisponibilidad,
-  mensajeProblemas,
-} from './src/utils/revalidacionCarrito';
+import { consultarIntentoPendiente } from './src/services/intentoCompra';
+import { avisarErrorIntentoCompra, ofrecerResolverIntento } from './src/services/avisarErrorIntentoCompra';
+import { useCicloIntentoCompra } from './src/hooks/useCicloIntentoCompra';
+import { verificarDisponibilidadCheckout } from './src/services/verificarDisponibilidadCheckout';
 import {
   clasificarResultadoPago,
   type PagoResult,
@@ -140,7 +140,7 @@ function AppContent() {
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
-  const { cart, setCart, clearCart, hydrated, codigo, setCodigo, idCarrito } = useCart() as {
+  const { cart, setCart, clearCart: vaciarCarrito, hydrated, codigo, setCodigo, idCarrito } = useCart() as {
     cart: CartItem[];
     setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
     clearCart: () => void;
@@ -150,6 +150,22 @@ function AppContent() {
     idCarrito: number;
   };
   const [paying, setPaying] = useState(false);
+  const checkoutEnCurso = useRef(false);
+  const finalizarPago = () => { checkoutEnCurso.current = false; setPaying(false); };
+  const { reiniciar, esperarReinicio } = useCicloIntentoCompra(
+    session?.user.id, hydrated, cart.length === 0,
+    error => avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos')),
+  );
+  const clearCart = async (conservarPendiente = true) => {
+    try {
+      await reiniciar(conservarPendiente);
+      vaciarCarrito();
+      return true;
+    } catch (error) {
+      avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos'));
+      return false;
+    }
+  };
   const [pedidoConfirmado, setPedidoConfirmado] = useState<PedidoConfirmado | null>(null);
 
   useEffect(() => {
@@ -306,7 +322,7 @@ function AppContent() {
           style: 'destructive',
           onPress: async () => {
             setSelectedCafeteria(null);
-            clearCart();
+            if (!await clearCart()) return;
             setActiveTab('cafeterias');
             if (isGuest) {
               setIsGuest(false);
@@ -407,9 +423,8 @@ function AppContent() {
             style: 'destructive',
             // Se vacía y se agrega en el mismo toque: si solo se vaciaba, el
             // botón prometía algo que no pasaba.
-            onPress: () => {
-              clearCart();
-              agregarProducto(product, cafeteria);
+            onPress: async () => {
+              if (await clearCart()) agregarProducto(product, cafeteria);
             },
           },
         ]
@@ -453,16 +468,11 @@ function AppContent() {
    * antes de volver a pagar para evitar un cobro duplicado.
    */
   const alertarResultadoIncierto = () => {
-    Alert.alert(
+    ofrecerResolverIntento(
       'No pudimos confirmar tu pago',
-      'La conexión se interrumpió o la respuesta tardó demasiado, así que no ' +
-        'podemos saber si el pedido alcanzó a registrarse.\n\n' +
-        'Tu carrito se mantiene. Revisa "Pedidos" antes de volver a pagar para ' +
-        'evitar un cobro duplicado.',
-      [
-        { text: 'Revisar pedidos', onPress: () => handleTabPress('pedidos') },
-        { text: 'Entendido', style: 'cancel' },
-      ]
+      'El pedido pudo registrarse. Revisa Pedidos antes de iniciar otra compra.',
+      reiniciar,
+      () => handleTabPress('pedidos'),
     );
   };
 
@@ -496,59 +506,33 @@ function AppContent() {
       return;
     }
 
-    // Guardia de reentrada: dos toques antes de que resuelva el `POST
-    // /api/pedidos` intentarian cobrar dos veces. El UNIQUE en pagos.pedido_id
-    // es la red real, pero esto evita siquiera intentarlo.
-    if (paying) return;
+    // La referencia bloquea otro toque incluso antes del siguiente render.
+    if (checkoutEnCurso.current) return;
+    checkoutEnCurso.current = true;
     setPaying(true);
 
-    // Revalidación no destructiva del carrito antes de pagar.
-    // Diferencia error de consulta vs producto no disponible/desactivado/sin stock.
-    // No reemplaza la validación transaccional del backend.
     try {
-      const ids = Array.from(new Set(cart.map((item) => item.id)));
-      if (ids.length > 0) {
-        const { data, error } = await supabase
-          .from('productos')
-          .select('id, cafeteria_id, nombre, activo, eliminado_en, stock')
-          .in('id', ids);
-
-        if (error) {
-          console.warn('[Carrito] Error al revalidar disponibilidad:', error);
-          Alert.alert(
-            'No se pudo verificar disponibilidad',
-            'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
-          );
-          setPaying(false);
-          return;
-        }
-
-        const issues = evaluarDisponibilidad(cart, data, cafeteriaId);
-
-        if (issues.length > 0) {
-          Alert.alert('Hay cambios en la disponibilidad', mensajeProblemas(issues));
-          setPaying(false);
-          return;
-        }
+      await esperarReinicio();
+      // Recuperar un pago incierto no es una compra nueva ni depende del stock actual.
+      // El backend aún no deduplica: no se reenvía el POST hasta poder resolverlo.
+      if (await consultarIntentoPendiente(session.user.id)) {
+        alertarResultadoIncierto();
+        return;
       }
-    } catch (e) {
-      console.warn('[Carrito] Excepción al revalidar disponibilidad:', e);
-      Alert.alert(
-        'No se pudo verificar disponibilidad',
-        'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
-      );
-      setPaying(false);
-      return;
-    }
 
-    const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
+      const problema = await verificarDisponibilidadCheckout(cart, cafeteriaId);
+      if (problema) {
+        Alert.alert(problema.titulo, problema.mensaje);
+        return;
+      }
 
-    try {
+      const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
+
       // El total NO se manda. ms-pedidos lo cotiza contra ms-menus y la RPC
       // `procesar_pago` lo recalcula desde productos.precio: si se enviara,
       // un cliente podria pagar $100 un sándwich de $2.000.
       const respuesta = await crearPedidoDesdeCarrito<RespuestaCrearPedido | null>(
-        cafeteriaId, cart, franjaRetiro, TIMEOUT_CREAR_PEDIDO_MS
+        cafeteriaId, cart, franjaRetiro, TIMEOUT_CREAR_PEDIDO_MS, session.user.id
       );
 
       // El backend responde HTTP 201 con `{ ok: true, pedido: <retorno de
@@ -607,7 +591,7 @@ function AppContent() {
       const resultado = clasificacion.resultado;
 
       // Solo un resultado confirmado y completo limpia el carrito:
-      clearCart();
+      if (!await clearCart(false)) return;
       setPedidoConfirmado({
         pedido_id: resultado.pedido_id,
         total: resultado.total,
@@ -624,6 +608,7 @@ function AppContent() {
           `Saldo restante: ${formatCLP(resultado.saldo_restante)}.`
       );
     } catch (e) {
+      if (avisarErrorIntentoCompra(e, reiniciar, () => handleTabPress('pedidos'))) return;
       // S2-T15: timeout o pérdida de conexión DESPUÉS de enviar la solicitud.
       // El pago pudo procesarse, así que no se presenta como rechazo, no se
       // vacía el carrito y no se reintenta automáticamente.
@@ -641,7 +626,7 @@ function AppContent() {
           : 'Ocurrio un error inesperado. Intentalo nuevamente.'
       );
     } finally {
-      setPaying(false);
+      finalizarPago();
     }
   };
 

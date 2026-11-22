@@ -1,16 +1,18 @@
-import { apiPost } from './backendClient';
+import { ApiError, apiPost } from './backendClient';
+import { obtenerIntentoCompra, marcarIntentoEnviado, reiniciarIntentoCompra } from './intentoCompra';
 
 export type RetiroCheckout = { franja: string; codigo?: string };
 type ProductoCarrito = { id: number; quantity: number; price: number };
 
-export function crearPedidoDesdeCarrito<T>(
+export async function crearPedidoDesdeCarrito<T>(
   cafeteriaId: number,
   productos: ProductoCarrito[],
   retiro: RetiroCheckout,
   timeoutMs: number,
+  usuarioId: string,
 ) {
   const codigo = retiro.codigo?.trim();
-  return apiPost<T>('/api/pedidos', {
+  const cuerpo = {
     cafeteria_id: cafeteriaId,
     items: productos.map(({ id, quantity, price }) => ({
       producto_id: id,
@@ -19,5 +21,25 @@ export function crearPedidoDesdeCarrito<T>(
     })),
     franja_retiro: retiro.franja,
     ...(codigo ? { codigo } : {}),
-  }, { timeoutMs });
+  };
+  const intento = await obtenerIntentoCompra(usuarioId, cuerpo);
+  let respuesta: T;
+  try {
+    respuesta = await apiPost<T>('/api/pedidos', intento.cuerpo, {
+      timeoutMs, claveIdempotencia: intento.clave,
+      antesDeEnviar: () => marcarIntentoEnviado(usuarioId, intento.clave),
+    });
+  } catch (error) {
+    // Los HTTP 400 y 401 de este endpoint ocurren antes del cobro.
+    // Red, timeout y respuestas inciertas conservan el registro original.
+    if (error instanceof ApiError && [400, 401].includes(error.status) && !error.resultadoIncierto) {
+      await reiniciarIntentoCompra(usuarioId);
+    }
+    throw error;
+  }
+  // Solo un rechazo explícito permite una nueva compra sin recuperar un cobro.
+  if ((respuesta as { pedido?: { ok?: boolean } } | null)?.pedido?.ok === false) {
+    await reiniciarIntentoCompra(usuarioId);
+  }
+  return respuesta;
 }
