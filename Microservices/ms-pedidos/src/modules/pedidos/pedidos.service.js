@@ -375,7 +375,7 @@ async function listarPedidos({ user, accessToken }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
   const cliente = crearClienteAutenticado(accessToken);
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
-  const rol = Number(usuarioInterno.rol_id);
+  const rol = usuarioInterno.roles?.nombre;
 
   if (rol !== ROL_ESTUDIANTE && rol !== ROL_EMPLEADO) {
     throw new HttpError(403, 'No autorizado para listar pedidos');
@@ -413,7 +413,7 @@ async function obtenerPedido({ user, id }) {
   const pedidoId = validarPedidoId(id);
   const cliente = supabase.obtenerCliente();
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
-  const rol = Number(usuarioInterno.rol_id);
+  const rol = usuarioInterno.roles?.nombre;
 
   if (rol !== ROL_ESTUDIANTE && rol !== ROL_EMPLEADO) {
     throw new HttpError(404, 'Pedido no encontrado');
@@ -454,7 +454,7 @@ async function obtenerPedidosPorCafeteria({ user, cafeteriaId }) {
   const cliente = supabase.obtenerCliente();
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
 
-  if (Number(usuarioInterno.rol_id) !== ROL_EMPLEADO) {
+  if (usuarioInterno.roles?.nombre !== ROL_EMPLEADO) {
     throw new HttpError(403, 'No autorizado para listar pedidos de esta cafeteria');
   }
 
@@ -485,7 +485,7 @@ async function obtenerPedidosPorUsuario({ user, usuarioId }) {
   const cliente = supabase.obtenerCliente();
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
 
-  if (Number(usuarioInterno.rol_id) !== ROL_ESTUDIANTE) {
+  if (usuarioInterno.roles?.nombre !== ROL_ESTUDIANTE) {
     throw new HttpError(403, 'No autorizado para listar pedidos de este usuario');
   }
   if (usuarioIdNum !== Number(usuarioInterno.id)) {
@@ -500,13 +500,12 @@ async function obtenerPedidosPorUsuario({ user, usuarioId }) {
   return data || [];
 }
 
-// Roles internos (public.usuarios.rol_id) confirmados contra la BD real:
-// 1 = estudiante, 2 = empleado, 3 = dueño.
-// D.3: SOLO el empleado (2) opera comandas; el dueño (3) NO recibe permisos.
+// Nombres del catalogo public.roles; los IDs dependen del entorno.
+// D.3: SOLO el empleado opera comandas; el dueño NO recibe permisos.
 // D.5-B: lecturas -> estudiante ve lo suyo; empleado ve sus cafeterias; el
 // dueño NO recibe permisos nuevos (403 en colecciones, 404 en individuales).
-const ROL_ESTUDIANTE = 1;
-const ROL_EMPLEADO = 2;
+const ROL_ESTUDIANTE = 'estudiante';
+const ROL_EMPLEADO = 'empleado';
 
 /**
  * Resuelve la fila interna de `public.usuarios` a partir del UUID de auth
@@ -519,7 +518,7 @@ const ROL_EMPLEADO = 2;
 async function resolverUsuarioInterno(cliente, authUserId) {
   const { data, error } = await cliente
     .from('usuarios')
-    .select('id, rol_id')
+    .select('id, roles(nombre)')
     .eq('auth_user_id', authUserId)
     .maybeSingle();
 
@@ -591,7 +590,7 @@ async function perteneceACafeteria(cliente, usuarioId, cafeteriaId, mensajeError
  *
  * Reglas:
  *  - El usuario autenticado debe tener cuenta interna (`usuarios`).
- *  - Debe ser EMPLEADO (rol_id = 2).
+ *  - Debe ser EMPLEADO.
  *  - Debe pertenecer a la cafeteria DEL PEDIDO (`cafeteria_usuarios`); el
  *    `cafeteria_id` autoritativo es `pedido.cafeteria_id`, nunca el del body.
  */
@@ -603,7 +602,7 @@ async function autorizarTransicionKds(cliente, authUserId, pedido) {
     throw new HttpError(404, 'Usuario no encontrado');
   }
 
-  if (Number(usuarioInterno.rol_id) !== ROL_EMPLEADO) {
+  if (usuarioInterno.roles?.nombre !== ROL_EMPLEADO) {
     throw new HttpError(403, 'Solo un empleado puede cambiar el estado del pedido');
   }
 
@@ -731,7 +730,7 @@ async function obtenerQr({ user, id }) {
 
   // Se comprueba el rol ANTES de leer el pedido: asi un empleado/dueño no puede
   // distinguir un pedido existente de uno inexistente (siempre 404).
-  if (Number(usuarioInterno.rol_id) !== ROL_ESTUDIANTE) {
+  if (usuarioInterno.roles?.nombre !== ROL_ESTUDIANTE) {
     throw new HttpError(404, 'Pedido no encontrado');
   }
 
