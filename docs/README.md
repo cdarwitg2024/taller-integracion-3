@@ -129,6 +129,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [C02 — Contratos de integración de afiliados](contratos-integracion-afiliados.md)
 - [C01 — Reglas del piloto de afiliados](reglas-piloto-afiliados.md)
 - [D.2.1 — Cancelación de pedido con reembolso a Wallet (traspaso a Base de Datos)](base-datos/D2.1_cancelacion_reembolso.md)
+- [V09 / CAM-177 — Reversión de comisión en cancelación](base-datos/validacion/V09-CAM-177-Reversion-cancelacion.md)
 - [D.4 — Validación QR y entrega de pedido (traspaso a Base de Datos)](base-datos/D4_validacion_qr_entrega.md)
 - [S2-T16 — Dependencias SQL del flujo de pedidos](base-datos/dependencias-sql-ms-pedidos.md)
 - [Promociones y configuración del dueño](base-datos/promociones-configuracion-dueno.md)
