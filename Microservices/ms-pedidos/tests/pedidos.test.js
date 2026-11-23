@@ -352,6 +352,28 @@ describe('ms-pedidos', () => {
     }
   });
 
+  test('V08 devuelve el mismo pedido pagado con la misma clave aunque el catálogo no responda', async () => {
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockRejectedValue(new Error('catálogo no disponible'));
+      mockRpc.mockResolvedValue({ error: null, data: {
+        ok: true, pedido_id: 501, estado: 'pendiente', pago_estado: 'pagado',
+        total_pagado: 2500, descuento_afiliado: 0,
+      } });
+      const confirmar = () => request(app).post('/api/pedidos').set('Idempotency-Key', 'v08-intento-original')
+        .send(bodyPedido({ total_aceptado: 2500 }));
+      const primero = await confirmar().expect(201);
+      const segundo = await confirmar().expect(201);
+      expect(primero.body).toEqual({ pedido_id: 501, estado: 'pagado', total_pagado: 2500, descuento_afiliado: 0 });
+      expect(segundo.body).toEqual(primero.body);
+      expect(mockRpc.mock.calls[0]).toEqual(mockRpc.mock.calls[1]);
+      expect(httpMock.post).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    }
+  });
+
   test('POST /api/pedidos permite varios productos de la misma cafeteria', async () => {
     httpMock.post.mockResolvedValue(respuestaPrecios([
       producto({ id: 1, cafeteria_id: 1 }),

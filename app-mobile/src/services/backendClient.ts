@@ -37,7 +37,8 @@ export class ApiError extends Error {
     mensaje: string,
     status = 0,
     detalle?: string,
-    resultadoIncierto = false
+    resultadoIncierto = false,
+    readonly cobrado?: boolean
   ) {
     super(mensaje);
     this.name = 'ApiError';
@@ -82,7 +83,7 @@ function normalizarRuta(ruta: string): string {
 }
 
 /** JWT de la sesión activa. Sin sesión no hay cabecera Authorization posible. */
-async function tokenActual(): Promise<string> {
+async function tokenActual(usuarioId?: string): Promise<string> {
   const { data, error } = await supabase.auth.getSession();
 
   if (error) {
@@ -90,6 +91,9 @@ async function tokenActual(): Promise<string> {
   }
 
   const token = data?.session?.access_token;
+  if (usuarioId && data?.session?.user?.id !== usuarioId) {
+    throw new ApiError('La sesión no corresponde al intento guardado.');
+  }
   if (!token) {
     throw new ApiError('No hay sesión activa: iniciá sesión para continuar.');
   }
@@ -151,10 +155,10 @@ function textoDe(e: unknown): string {
 export async function apiPost<T>(
   ruta: string,
   cuerpo: unknown,
-  opciones?: { timeoutMs?: number; claveIdempotencia?: string; antesDeEnviar?: () => Promise<void> }
+  opciones?: { timeoutMs?: number; claveIdempotencia?: string; antesDeEnviar?: () => Promise<void>; usuarioId?: string }
 ): Promise<T> {
   const url = `${urlBase()}${normalizarRuta(ruta)}`;
-  const token = await tokenActual();
+  const token = await tokenActual(opciones?.usuarioId);
   await opciones?.antesDeEnviar?.();
 
   // S2-T15: límite de espera explícito. Si se agota DESPUÉS de enviar la
@@ -205,7 +209,10 @@ export async function apiPost<T>(
     throw new ApiError(
       mensajeDeError(json) ?? `El backend respondió HTTP ${respuesta.status} en ${ruta}.`,
       respuesta.status,
-      detalleDeError(json)
+      detalleDeError(json),
+      false,
+      typeof (json as { cobrado?: unknown } | null)?.cobrado === 'boolean'
+        ? (json as { cobrado: boolean }).cobrado : undefined
     );
   }
 

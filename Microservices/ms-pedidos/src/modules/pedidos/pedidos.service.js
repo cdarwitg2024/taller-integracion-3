@@ -310,6 +310,10 @@ async function crearPedido({ user, accessToken, body, idempotencyKey }) {
     throw new HttpError(403, 'sin_acceso');
   }
 
+  // V08 recupera el intento original antes de validar el catálogo vigente.
+  // Las confirmaciones nuevas validan los productos dentro de la misma RPC.
+  if (confirmaCotizacion) return confirmarPago(cliente, cafeteriaId, body, idempotencyKey);
+
   let preciosResp;
   try {
   preciosResp = await httpClient.post(
@@ -347,10 +351,6 @@ async function crearPedido({ user, accessToken, body, idempotencyKey }) {
   );
   if (productoDeOtraCafeteria) {
     throw new HttpError(400, 'Uno o mas productos no pertenecen a la cafeteria indicada');
-  }
-
-  if (confirmaCotizacion) {
-    return confirmarPago(cliente, cafeteriaId, body, idempotencyKey);
   }
 
   // El calculo monetario NO se duplica aqui: `procesar_pago` sigue siendo la
