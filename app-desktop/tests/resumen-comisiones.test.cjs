@@ -31,18 +31,36 @@ const cargadores = cargar('cargadorDashboard.js', 'crearCargadorDashboard', {
   './resumenComisiones': { resumenComisiones: { obtener: async () => ({}) } },
 });
 
-function transporte(filas) {
-  let fallo = null;
+function transporte(filas, opciones = {}) {
+  const consultas = [];
+  let fallo = opciones.fallo || null;
+  let pagina = 0;
   const supabase = {
+    consultas,
     fallar(error) { fallo = error; },
     from(tabla) {
       assert.equal(tabla, 'movimientos_comision');
+      let desde = 0;
+      let hasta = null;
       const q = {
-        select() { return q; },
-        order() { return q; },
+        select(campos, opcionesSelect) {
+          consultas.push({ metodo: 'select', campos, opciones: opcionesSelect });
+          return q;
+        },
+        eq(columna, valor) { consultas.push({ metodo: 'eq', columna, valor }); return q; },
+        order(columna, opcionesOrden) {
+          consultas.push({ metodo: 'order', columna, opciones: opcionesOrden });
+          return q;
+        },
+        range(inicio, fin) { desde = inicio; hasta = fin; consultas.push({ metodo: 'range', inicio, fin }); return q; },
         then(resolve, reject) {
           if (fallo) return Promise.reject(fallo).then(resolve, reject);
-          return Promise.resolve({ data: filas.map(fila => ({ ...fila })), error: null }).then(resolve, reject);
+          const total = Array.isArray(opciones.conteo) ? opciones.conteo[pagina] : (opciones.conteo ?? filas.length);
+          pagina++;
+          const datos = filas.slice(desde, hasta === null ? undefined : hasta + 1);
+          return Promise.resolve({
+            data: datos.map(fila => ({ ...fila })), count: total, error: null,
+          }).then(resolve, reject);
         },
       };
       return q;
@@ -113,6 +131,41 @@ test('un error de Supabase se propaga como error de comisiones', async () => {
   await assert.rejects(() => obtenerResumen(1, supabase), /Permiso denegado/);
 });
 
+function filasGeneradas(cantidad) {
+  return Array.from({ length: cantidad }, (_, indice) => ({
+    id: indice + 1,
+    pedido_id: indice + 1,
+    tipo: 'comision',
+    estado: 'pendiente',
+    monto_clp: 100,
+    creado_en: `2026-11-23T${String(indice % 24).padStart(2, '0')}:00:00Z`,
+    pedidos: { cafeteria_id: 1, total: 1000 },
+  }));
+}
+
+test('la consulta filtra por cafetería en servidor y pagina el historial completo', async () => {
+  const supabase = transporte(filasGeneradas(450));
+  const resumen = await obtenerResumen('1', supabase);
+  assert.equal(resumen.ventasReferidas, 450);
+  assert.equal(resumen.totalCobrado, 450000);
+  assert.equal(resumen.comisiones.pendiente, 45000);
+  assert.deepEqual(supabase.consultas.find(c => c.metodo === 'eq'), {
+    metodo: 'eq', columna: 'pedidos.cafeteria_id', valor: '1',
+  });
+  assert.deepEqual(supabase.consultas.find(c => c.metodo === 'select').opciones, { count: 'exact' });
+  assert.equal(supabase.consultas.filter(c => c.metodo === 'range').length, 3);
+});
+
+test('un historial incompleto se rechaza en vez de mostrar cifras parciales', async () => {
+  const supabase = transporte(filasGeneradas(1), { conteo: 2 });
+  await assert.rejects(() => obtenerResumen(1, supabase), /historial completo/);
+});
+
+test('un cambio de total entre páginas se rechaza', async () => {
+  const supabase = transporte(filasGeneradas(250), { conteo: [250, 251] });
+  await assert.rejects(() => obtenerResumen(1, supabase), /historial completo/);
+});
+
 test('una cafetería ajena no aporta movimientos aunque RLS los devuelva', () => {
   const filas = [
     { id: 1, pedido_id: 10, tipo: 'comision', estado: 'pendiente', monto_clp: 500, pedidos: { cafeteria_id: 2, total: 5000 } },
@@ -146,6 +199,40 @@ test('un fallo de comisiones deja las ventas visibles y el reintento recupera el
   assert.equal(estado.comisionesError, null);
   assert.deepEqual(estado.resumenComisiones, resumen);
   assert.equal(estado.stats.totalVentas, 900);
+});
+
+test('un refresco fallido conserva aviso, resumen previo y ventas hasta el reintento', async () => {
+  const bueno = { ventasReferidas: 3, comisiones: { pendiente: 300 } };
+  const nuevo = { ventasReferidas: 4, comisiones: { pendiente: 400 } };
+  let llamadas = 0;
+  const { cargador, solicitudes } = prepararCargador(() => {
+    llamadas++;
+    if (llamadas === 2) return Promise.reject(new Error('Caída transitoria'));
+    return Promise.resolve(llamadas === 3 ? nuevo : bueno);
+  });
+
+  const inicial = cargador.cambiarCafeteria(1);
+  solicitudes[0].resolve([{ id: 10, total: 900 }]);
+  await inicial;
+  assert.deepEqual(cargador.obtenerEstado().resumenComisiones, bueno);
+
+  const refresco = cargador.refrescar(false);
+  solicitudes[1].resolve([{ id: 10, total: 900 }]);
+  await refresco;
+  const conAviso = cargador.obtenerEstado();
+  assert.equal(conAviso.comisionesError, 'Caída transitoria');
+  assert.equal(conAviso.dbError, null);
+  assert.equal(conAviso.stats.totalVentas, 900);
+  assert.deepEqual(conAviso.resumenComisiones, bueno);
+
+  const reintento = cargador.refrescar(true);
+  assert.equal(cargador.obtenerEstado().comisionesError, null);
+  solicitudes[2].resolve([{ id: 10, total: 900 }]);
+  await reintento;
+  const final = cargador.obtenerEstado();
+  assert.equal(final.comisionesError, null);
+  assert.deepEqual(final.resumenComisiones, nuevo);
+  assert.equal(final.stats.totalVentas, 900);
 });
 
 test('el reintento visible limpia el aviso anterior antes de volver a consultar', async () => {

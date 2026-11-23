@@ -8,10 +8,14 @@ cobrado y las comisiones por estado (`pendiente`, `disponible`, `revertida`).
 Sus dependencias E04, V08 y V12 figuran `Done` en Linear. El resumen se calcula
 en `app-desktop/src/services/resumenComisiones.js` leyendo
 `movimientos_comision` con el JWT del dueño y el pedido embebido; no hay RPC
-nueva ni `service_role`. `cargadorDashboard.js` lo consulta junto con las
-demandas del panel y mantiene su aviso propio: un fallo de comisiones no borra
-las ventas ya obtenidas. El aviso aparece en `Dashboard.jsx` junto al resumen y
-al historial de movimientos.
+nueva ni `service_role`. La consulta filtra por cafetería en servidor, pide
+`count` y pagina de 200 en 200: si el historial no se confirma completo, falla
+en vez de mostrar cifras parciales. `cargadorDashboard.js` lo consulta junto con
+las demandas del panel y mantiene su aviso propio: un fallo de comisiones no
+borra las ventas ni el último resumen bueno de esa cafetería. El aviso aparece
+en `Dashboard.jsx` junto al resumen y al historial de movimientos.
+`movimientos_comision` no está publicado en `supabase_realtime`, así que la
+frescura del resumen depende del respaldo existente de 10 s.
 
 **Procedencia del SQL (importante para la revisión):** las migraciones V08, V09,
 V11, V12, V13 y V14 viven en `Diego24Vas/db_CoffeeFaster`, **no en este
@@ -42,14 +46,17 @@ SQL.
 | Movimientos `pendiente`, `disponible` y `revertida`, más una reversión | Totales por estado, cada pedido contado una vez y la reversión sin restarse dos veces | Aprobado |
 | Movimiento de otra cafetería devuelto por RLS | Se descarta; no aporta ventas ni comisiones | Aprobado |
 | Error de Supabase | Se propaga como error de comisiones | Aprobado |
-| Falla de comisiones con pedidos cargados | Ventas visibles, `dbError` nulo, aviso de comisiones y resumen nulo | Aprobado |
+| Historial de 450 movimientos | Filtro por cafetería en servidor, 3 páginas y totales completos | Aprobado |
+| Conteo incompleto o cambiante entre páginas | Se rechaza sin mostrar cifras parciales | Aprobado |
+| Falla inicial de comisiones con pedidos cargados | Ventas visibles, `dbError` nulo, aviso de comisiones y resumen nulo | Aprobado |
+| Falla de comisiones tras un éxito | Aviso, ventas y último resumen bueno visibles; el reintento lo reemplaza | Aprobado |
 | Reintento visible | Limpia el aviso anterior, vuelve a consultar y muestra el resumen | Aprobado |
 | Cambio de cafetería con respuesta tardía | Se descarta el resumen de la cafetería anterior | Aprobado |
 | Render del panel con aviso y datos | El aviso, las ventas, el resumen y `Reintentar` aparecen juntos | Aprobado |
 
 ## Resultado
 
-- Escritorio: 151/151 pruebas aprobadas sobre `develop` con E13 integrado (8 nuevas de E11: 7 del resumen y 1 de render).
+- Escritorio: 155/155 pruebas aprobadas sobre `develop` con E13 integrado (12 nuevas de E11: 11 del resumen/cargador y 1 de render).
 - `npm run build --prefix app-desktop`: código de salida 0.
 - `git diff --check`: sin errores.
 

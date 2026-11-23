@@ -1,6 +1,9 @@
 // Resumen de ventas referidas y comisiones del dueño, leído con RLS desde Supabase.
 import { supabase as supabaseOriginal } from './supabaseClient';
 
+const TAMANO_PAGINA = 200;
+const MAXIMO_PAGINAS = 50;
+
 // Devuelve el resumen vacío usado cuando no hay movimientos o no hay cafetería.
 export function resumenVacio() {
   return {
@@ -59,14 +62,36 @@ export async function obtenerResumenComisiones(cafeteriaId, supabase = supabaseO
   if (cafeteriaId === null || cafeteriaId === undefined || String(cafeteriaId).trim() === '') {
     return resumenVacio();
   }
+  const cafeteria = String(cafeteriaId).trim();
+  const filas = [];
+  const vistos = new Set();
+  let total = null;
 
-  const { data, error } = await supabase
-    .from('movimientos_comision')
-    .select('id, pedido_id, tipo, estado, monto_clp, creado_en, pedidos!inner(cafeteria_id, total)')
-    .order('creado_en', { ascending: false });
+  for (let pagina = 0; pagina < MAXIMO_PAGINAS; pagina++) {
+    const { data, count, error } = await supabase
+      .from('movimientos_comision')
+      .select('id, pedido_id, tipo, estado, monto_clp, creado_en, pedidos!inner(cafeteria_id, total)', { count: 'exact' })
+      .eq('pedidos.cafeteria_id', cafeteria)
+      .order('id', { ascending: true })
+      .range(filas.length, filas.length + TAMANO_PAGINA - 1);
 
-  if (error) throw new Error(error.message || 'No se pudieron consultar las comisiones.');
-  return construirResumen(data || [], cafeteriaId);
+    if (error) throw new Error(error.message || 'No se pudieron consultar las comisiones.');
+    if (!Array.isArray(data) || typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0 ||
+        (total !== null && count !== total) || filas.length + data.length > count ||
+        (!data.length && filas.length < count)) {
+      throw new Error('No se pudo confirmar el historial completo de comisiones. Actualiza la consulta.');
+    }
+    total = count;
+    for (const fila of data) {
+      if (!fila || !Number.isSafeInteger(fila.id) || vistos.has(fila.id)) {
+        throw new Error('La respuesta de comisiones no es válida.');
+      }
+      vistos.add(fila.id);
+      filas.push(fila);
+    }
+    if (filas.length === total) return construirResumen(filas, cafeteria);
+  }
+  throw new Error('El historial de comisiones es demasiado extenso. No se muestra un resumen parcial.');
 }
 
 export const resumenComisiones = {

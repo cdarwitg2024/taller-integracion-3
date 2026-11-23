@@ -73,7 +73,8 @@ export function crearCargadorDashboard({
       estado.pedidos = pedidosRes;
       estado.salesData = resSales;
       estado.topProducts = resTop;
-      estado.resumenComisiones = resumen.datos || null;
+      // Un refresco fallido conserva el último resumen bueno de esta cafetería.
+      if (resumen.datos) estado.resumenComisiones = resumen.datos;
       estado.comisionesError = resumen.error || null;
       estado.ultimaActualizacionExitosa = obtenerFechaActual();
       estado.dbError = null;

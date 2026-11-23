@@ -64,13 +64,6 @@ function Dashboard({ currentUser }) {
             cargador.refrescar(false);
           }
         )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'movimientos_comision' },
-          () => {
-            cargador.refrescar(false);
-          }
-        )
         .subscribe();
     }
 
