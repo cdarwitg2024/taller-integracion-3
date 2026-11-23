@@ -6,7 +6,7 @@ const path = require('node:path');
 const { transformSync } = require('esbuild');
 const React = require('react');
 const { create, act } = require('react-test-renderer');
-const { MemoryRouter, useLocation } = require('react-router-dom');
+const { MemoryRouter, useLocation, useNavigate } = require('react-router-dom');
 
 const src = path.resolve(__dirname, '../src');
 const dueno = cafeteria_id => ({ id: 9, nombre: 'Dueño de prueba', roles: { nombre: 'dueño' }, cafeteria_id });
@@ -53,10 +53,30 @@ function cargarApp(servicios) {
   return cargar(path.join(src, 'app.jsx')).default;
 }
 
+// Reproduce la conversión local del componente para no fijar la zona horaria del corredor.
+const inputLocal = iso => {
+  const fecha = new Date(iso);
+  return new Date(fecha.getTime() - fecha.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
+
 const servicio = (listar, extra = {}) => ({
   campanasAfiliados: { listar, crear: async () => ({}), actualizar: async () => ({}), cambiarEstado: async () => ({}), ...extra },
   validarFormularioCampana: cargarServicioCampanas().modulo.validarFormularioCampana,
 });
+
+// Promesa controlada para observar el estado de carga antes de resolver la consulta.
+function diferido() {
+  let resolver;
+  const promesa = new Promise(resolve => { resolver = resolve; });
+  return { promesa, resolver };
+}
+
+// Promesa controlada para interrumpir un guardado o una recarga en plena navegación.
+const diferir = () => {
+  let resolver;
+  const promesa = new Promise(resuelve => { resolver = resuelve; });
+  return { promesa, resolver };
+};
 
 // Completa los campos obligatorios para que el envío pase la validación de E05.
 async function llenarFormularioValido(h) {
@@ -110,7 +130,12 @@ async function montar(t, { usuario = dueno(7), ruta = '/dueno/afiliados/campanas
     usuarios: { getPerfilSesion: async () => perfil ?? ({ success: true, user: usuario, rol: usuario?.roles?.nombre }) },
     campanas: campanas ?? servicio(async () => []),
   });
-  function Ubicacion() { return React.createElement('ruta', { path: useLocation().pathname }); }
+  let navegar;
+  function Ubicacion() {
+    const navigate = useNavigate();
+    navegar = destino => act(async () => navigate(destino));
+    return React.createElement('ruta', { path: useLocation().pathname });
+  }
   let tree;
   t.after(() => { if (tree) act(() => tree.unmount()); global.localStorage = anterior; });
   await act(async () => {
@@ -124,6 +149,7 @@ async function montar(t, { usuario = dueno(7), ruta = '/dueno/afiliados/campanas
     texto: () => textoRenderizado(tree.toJSON()),
     ruta: () => tree.root.findByType('ruta').props.path,
     boton,
+    navegar,
     chips: () => tree.root.findAllByType('Chip').map(c => c.props.label),
   };
 }
@@ -174,6 +200,19 @@ test('el contexto usa la cafetería del perfil e ignora el query param', async t
 test('sin campañas aparece el estado vacío', async t => {
   const h = await montar(t);
   assert.match(h.texto(), /Aún no hay campañas/);
+  assert.ok(h.boton('Crear la primera campaña'));
+});
+
+// Comprueba que la primera carga muestra el indicador y no un vacío prematuro.
+test('el primer render muestra carga mientras llega la respuesta', async t => {
+  const { promesa, resolver } = diferido();
+  const h = await montar(t, { campanas: servicio(() => promesa) });
+  assert.ok(h.tree.root.findAllByType('CircularProgress').length > 0);
+  assert.doesNotMatch(h.texto(), /Aún no hay campañas/);
+  assert.doesNotMatch(h.texto(), /No se pudieron cargar/);
+  await act(async () => resolver([campana(31, 'Semana del café')]));
+  assert.match(h.texto(), /Semana del café/);
+  assert.equal(h.tree.root.findAllByType('CircularProgress').length, 0);
 });
 
 test('un error de carga muestra alerta y permite reintentar', async t => {
@@ -187,6 +226,29 @@ test('un error de carga muestra alerta y permite reintentar', async t => {
   await act(async () => h.boton('Reintentar').props.onClick());
   assert.match(h.texto(), /Campaña reintentada/);
   assert.equal(intentos, 2);
+});
+
+// Comprueba que un fallo al recargar descarta las filas ya visibles.
+test('un fallo al recargar retira las tarjetas anteriores y permite reintentar en la misma ruta', async t => {
+  let intentos = 0;
+  const h = await montar(t, { campanas: servicio(async () => {
+    intentos += 1;
+    if (intentos === 1) return [campana(31, 'Semana del café')];
+    if (intentos === 2) throw new Error('sin_acceso_cafeteria');
+    return [campana(32, 'Campaña recuperada')];
+  }) });
+  assert.match(h.texto(), /Semana del café/);
+  await act(async () => {
+    h.tree.root.findAll(n => typeof n.props?.onReintentar === 'function')[0].props.onReintentar();
+  });
+  assert.match(h.texto(), /sin_acceso_cafeteria/);
+  assert.doesNotMatch(h.texto(), /Semana del café/);
+  assert.ok(h.boton('Reintentar'));
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas');
+  await act(async () => h.boton('Reintentar').props.onClick());
+  assert.match(h.texto(), /Campaña recuperada/);
+  assert.doesNotMatch(h.texto(), /sin_acceso_cafeteria/);
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas');
 });
 
 test('abrir el formulario y volver conserva el contexto del listado sin recargar', async t => {
@@ -586,6 +648,141 @@ test('la edición normaliza tasas nulas y conserva los valores existentes', asyn
   assert.equal(campo('Descuento en oferta').props.value, '5');
 });
 
+test('reabrir otra campaña de la misma cafetería precarga sus datos y guarda solo esa campaña', async t => {
+  const actualizados = [];
+  const segunda = {
+    ...campana(32, 'Campaña B'),
+    descuento_normal_pct: 20, descuento_oferta_pct: 8, comision_pct: 4,
+    inicio: '2027-01-10T09:00:00.000Z', fin: '2027-01-20T19:00:00.000Z',
+  };
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => [campana(31, 'Campaña A'), segunda], {
+      actualizar: async (cafeteria, id, form) => { actualizados.push({ cafeteria, id, form }); return {}; },
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña A');
+
+  await h.navegar('/dueno/afiliados/campanas/32/editar');
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña B');
+  assert.equal(campo('Descuento a precio normal').props.value, 20);
+  assert.equal(campo('Descuento en oferta').props.value, 8);
+  assert.equal(campo('Comisión').props.value, 4);
+  assert.equal(campo('Inicio').props.value, inputLocal(segunda.inicio));
+  assert.equal(campo('Término').props.value, inputLocal(segunda.fin));
+
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  assert.equal(actualizados.length, 1);
+  assert.deepEqual({ cafeteria: actualizados[0].cafeteria, id: actualizados[0].id }, { cafeteria: 7, id: 32 });
+  assert.equal(actualizados[0].form.nombre, 'Campaña B');
+  assert.equal(actualizados[0].form.comision_pct, 4);
+});
+
+test('guardar y reabrir conserva tasas, vigencia y estado persistidos', async t => {
+  let visibles = [campana(31, 'Semana del café')];
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => visibles, {
+      actualizar: async (_cafeteria, id, form) => {
+        visibles = [{
+          ...visibles.find(c => c.id === id),
+          comision_pct: Number(form.comision_pct),
+          inicio: form.inicio, fin: form.fin,
+          estado: 'activa', estado_db: 'activa',
+        }];
+        return {};
+      },
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  await act(async () => campo('Comisión').props.onChange({ target: { value: '12' } }));
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas');
+  assert.ok(h.chips().includes('activa'));
+
+  await h.navegar('/dueno/afiliados/campanas/31/editar');
+  assert.equal(campo('Comisión').props.value, 12);
+  assert.ok(campo('Inicio').props.value);
+  assert.ok(campo('Término').props.value);
+
+  await h.navegar('/dueno/afiliados/campanas/31');
+  assert.match(h.texto(), /Comisión del afiliado:\s*12%/);
+  assert.ok(h.chips().includes('activa'));
+});
+
+test('un guardado pendiente no saca de la edición abierta después de cambiar de campaña', async t => {
+  const guardado = diferir();
+  const actualizados = [];
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => [campana(31, 'Campaña A'), campana(32, 'Campaña B')], {
+      actualizar: (_cafeteria, id, form) => { actualizados.push({ id, form }); return guardado.promesa; },
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  await h.navegar('/dueno/afiliados/campanas/32/editar');
+  await act(async () => campo('Nombre de la campaña').props.onChange({ target: { value: 'Campaña B editada' } }));
+  await act(async () => { guardado.resolver({}); });
+
+  assert.equal(actualizados.length, 1);
+  assert.equal(actualizados[0].id, 31);
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas/32/editar');
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña B editada');
+});
+
+test('una recarga pendiente no saca de la edición abierta después de cambiar de campaña', async t => {
+  let cargas = 0;
+  const recarga = diferir();
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => {
+      cargas++;
+      return cargas === 1 ? [campana(31, 'Campaña A'), campana(32, 'Campaña B')] : recarga.promesa;
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  assert.equal(cargas, 2);
+  await h.navegar('/dueno/afiliados/campanas/32/editar');
+  await act(async () => campo('Nombre de la campaña').props.onChange({ target: { value: 'Campaña B editada' } }));
+  await act(async () => { recarga.resolver([campana(31, 'Campaña A'), campana(32, 'Campaña B')]); });
+
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas/32/editar');
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña B editada');
+});
+
+test('reabrir la campaña original durante la recarga no descarta los cambios sin guardar', async t => {
+  let cargas = 0;
+  const recarga = diferir();
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => {
+      cargas++;
+      return cargas === 1 ? [campana(31, 'Campaña A'), campana(32, 'Campaña B')] : recarga.promesa;
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  assert.equal(cargas, 2);
+  await h.navegar('/dueno/afiliados/campanas/32/editar');
+  await h.navegar('/dueno/afiliados/campanas/31/editar');
+  await act(async () => campo('Nombre de la campaña').props.onChange({ target: { value: 'Campaña A reabierta' } }));
+  await act(async () => { recarga.resolver([campana(31, 'Campaña A'), campana(32, 'Campaña B')]); });
+
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas/31/editar');
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña A reabierta');
+});
+
 // Pruebas de condiciones y aceptación de campañas del dueño.
 function cargarCond(file, imports) {
   const filename = path.resolve(__dirname, '../src', file);
@@ -604,10 +801,12 @@ function cargarCond(file, imports) {
   return module.exports;
 }
 
+const ahoraCondiciones = Date.now();
 const campanaCond = (extra = {}) => ({
-  id: 1, cafeteria_id: 1, nombre: 'Campaña A', version_condiciones: '1.0',
+  id: 1, cafeteria_id: 1, nombre: 'Campaña A', version_condiciones: '1.0', estado: 'pendiente_aceptacion',
   tasa_descuento: 10.25, tasa_descuento_oferta: 4.5, tasa_comision: 2.75, confirmada_por_dueno: false,
-  vigencia_desde: '2026-01-01', vigencia_hasta: '2027-01-01', ...extra,
+  vigencia_desde: new Date(ahoraCondiciones - 86400000).toISOString(),
+  vigencia_hasta: new Date(ahoraCondiciones + 86400000).toISOString(), ...extra,
 });
 const aceptadaCond = row => ({ ...row, confirmada_por_dueno: true, version_confirmada: row.version_condiciones });
 function diferida() {
@@ -622,6 +821,7 @@ const muiCond = Object.fromEntries(('Box Typography Paper Button Alert Skeleton 
 async function montarCond(t, promociones = false) {
   const channels = [];
   const service = { obtenerCampanaVigente: async id => campanaCond({ cafeteria_id: Number(id) }) };
+  service.listar = async id => [await service.obtenerCampanaVigente(id)];
   const supabase = {
     channel() {
       const channel = { on(_event, _filter, callback) { this.callback = callback; return this; }, subscribe() { return this; } };
@@ -653,6 +853,32 @@ async function montarCond(t, promociones = false) {
     cambiar: id => act(async () => { tree.update(React.createElement(Component, props(id))); }),
   };
 }
+
+test('permite seleccionar y confirmar una segunda campaña sin reutilizar el consentimiento', async t => {
+  const h = await montarCond(t);
+  const primera = campanaCond();
+  const segunda = campanaCond({ id: 2, nombre: 'Campaña B' });
+  const futura = campanaCond({ id: 3, nombre: 'Campaña C', vigencia_desde: '2098-01-01', vigencia_hasta: '2099-01-01' });
+  h.service.listar = async () => [primera, segunda, futura];
+  h.service.confirmarCondiciones = async params => {
+    assert.deepEqual(params, { campanaId: 2, cafeteriaId: '1', version: '1.0' });
+    return aceptadaCond(segunda);
+  };
+  await h.emitir();
+  const selector = () => h.tree.root.findByType('TextField');
+  h.marcar();
+  act(() => selector().props.onChange({ target: { value: '3' } }));
+  assert.equal(h.boton(), undefined);
+  assert.match(h.texto(), /Podrás confirmar las condiciones cuando comience la vigencia/);
+  act(() => selector().props.onChange({ target: { value: '2' } }));
+  assert.equal(h.checkbox().props.checked, false);
+  await h.emitir();
+  assert.equal(selector().props.value, '2');
+  h.marcar();
+  await act(async () => { await h.boton().props.onClick(); });
+  assert.equal(selector().props.value, '2');
+  assert.match(h.texto(), /aceptadas exitosamente/);
+});
 
 test('muestra tasas exactas y un doble clic solo envía una confirmación', async t => {
   const h = await montarCond(t);

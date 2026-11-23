@@ -217,45 +217,72 @@ async function confirmarPago(cliente, cafeteriaId, body, clave) {
     throw new HttpError(503, 'No se pudo confirmar el pago');
   }
 
-  const errorPago = data?.error ?? (data?.ok === false ? data.motivo : undefined);
-  switch (errorPago) {
-    case 'precio_actualizado':
-      if (typeof data.motivo !== 'string' ||
+  // V08 responde los rechazos de negocio como `{ ok:false, motivo, cobrado }`,
+  // mientras que las variantes anteriores usaban `error`. Se aceptan ambas
+  // formas sin relajar la validacion del pago confirmado.
+  const motivoRechazo = typeof data?.error === 'string'
+    ? data.error
+    : data?.ok === false
+      ? data.motivo
+      : undefined;
+  const rechazoSinCobro = data?.ok === false && data.cobrado === false;
+  const rechazoAnterior = typeof data?.error === 'string' && data.ok === undefined &&
+    (data.cobrado === undefined || data.cobrado === false);
+
+  switch (motivoRechazo) {
+    case 'precio_actualizado': {
+      // V08 omite el descuento al rechazar un precio esperado por línea.
+      const precioPorLinea = rechazoSinCobro &&
+        data.error === undefined && data.descuento_afiliado === undefined;
+      if ((!rechazoSinCobro && !rechazoAnterior) || typeof data.motivo !== 'string' ||
           !Number.isSafeInteger(data.total_actualizado) || data.total_actualizado < 0 ||
-          !Number.isSafeInteger(data.descuento_afiliado) || data.descuento_afiliado < 0) {
+          (!precioPorLinea && (!Number.isSafeInteger(data.descuento_afiliado) || data.descuento_afiliado < 0))) {
         break;
       }
       return {
         status: 409,
         body: {
-          error: data.error,
+          error: motivoRechazo,
           motivo: data.motivo,
           total_aceptado,
           total_actualizado: data.total_actualizado,
-          descuento_afiliado: data.descuento_afiliado,
+          ...(!precioPorLinea && { descuento_afiliado: data.descuento_afiliado }),
           cobrado: false
         }
       };
+    }
+    case 'stock_insuficiente':
+    case 'sin_wallet':
+      if (!rechazoSinCobro) break;
+      return {
+        status: motivoRechazo === 'stock_insuficiente' ? 409 : 422,
+        body: { error: motivoRechazo, cobrado: false }
+      };
     case 'clave_reintento_en_conflicto':
-      return { status: 409, body: { error: errorPago } };
+      return { status: 409, body: { error: motivoRechazo } };
     case 'saldo_insuficiente':
-      return { status: 422, body: { error: errorPago, cobrado: false } };
-    case undefined:
-      if (data?.ok === true && data.pago_estado === 'pagado' &&
-          Number.isSafeInteger(data.pedido_id) && data.pedido_id > 0 &&
-          data.total_pagado === total_aceptado &&
+      if (!rechazoSinCobro && !rechazoAnterior) break;
+      return { status: 422, body: { error: motivoRechazo, cobrado: false } };
+    case undefined: {
+      // V08 separa el estado operativo del pedido del estado del pago.
+      const pagoConfirmado = data?.pago_estado === undefined
+        ? data?.estado === 'pagado' && data.ok !== false
+        : data.ok === true && data.pago_estado === 'pagado';
+      if (Number.isSafeInteger(data?.pedido_id) && data.pedido_id > 0 &&
+          pagoConfirmado && data.total_pagado === total_aceptado &&
           Number.isSafeInteger(data.descuento_afiliado) && data.descuento_afiliado >= 0) {
         return {
           status: 201,
           body: {
             pedido_id: data.pedido_id,
-            estado: data.pago_estado,
+            estado: 'pagado',
             total_pagado: data.total_pagado,
             descuento_afiliado: data.descuento_afiliado
           }
         };
       }
       break;
+    }
   }
   throw new HttpError(503, 'Respuesta inválida de procesar_pago');
 }
@@ -298,6 +325,10 @@ async function crearPedido({ user, accessToken, body, idempotencyKey }) {
     throw new HttpError(403, 'sin_acceso');
   }
 
+  // V08 recupera el intento original antes de validar el catálogo vigente.
+  // Las confirmaciones nuevas validan los productos dentro de la misma RPC.
+  if (confirmaCotizacion) return confirmarPago(cliente, cafeteriaId, body, idempotencyKey);
+
   let preciosResp;
   try {
   preciosResp = await httpClient.post(
@@ -335,10 +366,6 @@ async function crearPedido({ user, accessToken, body, idempotencyKey }) {
   );
   if (productoDeOtraCafeteria) {
     throw new HttpError(400, 'Uno o mas productos no pertenecen a la cafeteria indicada');
-  }
-
-  if (confirmaCotizacion) {
-    return confirmarPago(cliente, cafeteriaId, body, idempotencyKey);
   }
 
   // El calculo monetario NO se duplica aqui: `procesar_pago` sigue siendo la
@@ -976,18 +1003,13 @@ async function validarQr({ user, body }) {
     return rechazoEntrega('no_listo', razon, pedido);
   }
 
-  // Transicion atomica. Se conserva el valor persistido de `estado` para
-  // tolerar filas historicas con alias ('Listo') sin reescribir el slug.
+  // La RPC confirma la entrega y habilita la comisión en la misma transacción.
   const { data: actualizado, error: errUpdate } = await cliente
-    .from('pedidos')
-    .update({
-      estado: 'entregado',
-      entregado_en: new Date().toISOString(),
-      qr_usado: true
+    .rpc('confirmar_entrega_pedido', {
+      p_pedido_id: pedido.id,
+      p_cafeteria_id: pedido.cafeteria_id,
+      p_credencial: credencial
     })
-    .eq('id', pedido.id)
-    .eq('estado', pedido.estado)
-    .or('qr_usado.eq.false,qr_usado.is.null')
     .select(CAMPOS_PEDIDO_PUBLICOS)
     .maybeSingle();
 
@@ -1000,6 +1022,7 @@ async function validarQr({ user, body }) {
       .from('pedidos')
       .select('id, cafeteria_id, estado, qr_usado, entregado_en')
       .eq('id', pedido.id)
+      .eq('cafeteria_id', pedido.cafeteria_id)
       .maybeSingle();
     if (errVigente) throw new HttpError(503, errVigente.message);
 

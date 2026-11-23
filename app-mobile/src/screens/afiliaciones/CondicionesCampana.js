@@ -18,7 +18,7 @@ export default function CondicionesCampana({ campana }) {
       <View style={styles.bloque}>
         <Text accessibilityRole="header" style={styles.subtitulo}>Beneficio de tu referido</Text>
         <Text style={styles.texto}>{`Descuento para quien compra con tu código: ${porcentaje(campana.tasa_descuento)} en productos a precio normal.`}</Text>
-        <Text style={styles.texto}>Cada usuario puede recibir el descuento de afiliado una sola vez en todo CoffeeFast, aunque ya haya comprado antes. Debe tener ese beneficio disponible.</Text>
+        <Text style={styles.texto}>Aplica el código en el carrito para comprobar si el descuento está disponible para tu cuenta.</Text>
       </View>
       <View style={styles.bloque}>
         <Text accessibilityRole="header" style={styles.subtitulo}>Tu ganancia como afiliado</Text>

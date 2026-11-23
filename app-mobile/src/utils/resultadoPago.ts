@@ -1,3 +1,5 @@
+import type { ApiError } from '../services/backendClient';
+
 /**
  * Clasificación del resultado de la RPC `procesar_pago` (lo que viene dentro
  * del 201 de `POST /api/pedidos`).
@@ -7,6 +9,7 @@
  * completos para poder limpiar el carrito sin mentirle al usuario.
  */
 export type PagoResult = {
+  descuento?: number;
   ok: boolean;
   motivo?: string;
   mensaje?: string;
@@ -33,7 +36,6 @@ export type ClasificacionPago =
       resultado: PagoResult & {
         pedido_id: number;
         total: number;
-        saldo_restante: number;
       };
     };
 
@@ -77,3 +79,33 @@ export const clasificarResultadoPago = (
     },
   };
 };
+
+export type PagoCotizado = { pedido_id?: number; estado?: string; total_pagado?: number; descuento_afiliado?: number };
+
+export function clasificarRechazoPagoCotizado(error: ApiError) {
+  if (error.resultadoIncierto || error.cobrado !== false) return null;
+  if (error.status === 409) {
+    if (error.message === 'precio_actualizado') return 'recotizar';
+    if (error.message === 'stock_insuficiente') return 'stock_insuficiente';
+  }
+  if (error.status === 422) {
+    if (error.message === 'saldo_insuficiente') return 'saldo_insuficiente';
+    if (error.message === 'sin_wallet') return 'sin_wallet';
+  }
+  return null;
+}
+
+export type RechazoPagoCotizado = NonNullable<ReturnType<typeof clasificarRechazoPagoCotizado>>;
+
+export function clasificarPagoCotizado(
+  respuesta: PagoCotizado | null, totalAceptado: number,
+): ClasificacionPago {
+  if (!respuesta || respuesta.estado !== 'pagado' || respuesta.total_pagado !== totalAceptado ||
+      !Number.isSafeInteger(respuesta.pedido_id) || !respuesta.pedido_id || respuesta.pedido_id < 0) {
+    return { tipo: 'incierto' };
+  }
+  return { tipo: 'confirmado', resultado: {
+    ok: true, pedido_id: respuesta.pedido_id, estado: respuesta.estado, total: totalAceptado,
+    descuento: respuesta.descuento_afiliado,
+  } };
+}

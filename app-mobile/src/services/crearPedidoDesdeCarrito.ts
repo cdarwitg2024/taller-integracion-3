@@ -1,7 +1,8 @@
 import { ApiError, apiPost } from './backendClient';
 import { obtenerIntentoCompra, marcarIntentoEnviado, reiniciarIntentoCompra } from './intentoCompra';
+import { clasificarRechazoPagoCotizado } from '../utils/resultadoPago';
 
-export type RetiroCheckout = { franja: string; codigo?: string };
+export type RetiroCheckout = { franja: string; codigo?: string; totalAceptado?: number };
 type ProductoCarrito = { id: number; quantity: number; price: number };
 
 export async function crearPedidoDesdeCarrito<T>(
@@ -17,10 +18,11 @@ export async function crearPedidoDesdeCarrito<T>(
     items: productos.map(({ id, quantity, price }) => ({
       producto_id: id,
       cantidad: quantity,
-      precio_esperado: price,
+      ...(retiro.totalAceptado === undefined ? { precio_esperado: price } : {}),
     })),
     franja_retiro: retiro.franja,
     ...(codigo ? { codigo } : {}),
+    ...(retiro.totalAceptado !== undefined ? { total_aceptado: retiro.totalAceptado } : {}),
   };
   const intento = await obtenerIntentoCompra(usuarioId, cuerpo);
   let respuesta: T;
@@ -32,7 +34,10 @@ export async function crearPedidoDesdeCarrito<T>(
   } catch (error) {
     // Los HTTP 400 y 401 de este endpoint ocurren antes del cobro.
     // Red, timeout y respuestas inciertas conservan el registro original.
-    if (error instanceof ApiError && [400, 401].includes(error.status) && !error.resultadoIncierto) {
+    if (error instanceof ApiError && !error.resultadoIncierto && (
+      [400, 401].includes(error.status) ||
+      (retiro.totalAceptado !== undefined && esRechazoCotizacion(error))
+    )) {
       await reiniciarIntentoCompra(usuarioId);
     }
     throw error;
@@ -42,4 +47,11 @@ export async function crearPedidoDesdeCarrito<T>(
     await reiniciarIntentoCompra(usuarioId);
   }
   return respuesta;
+}
+
+function esRechazoCotizacion(error: ApiError) {
+  const rechazo = clasificarRechazoPagoCotizado(error);
+  // La recotización guarda primero su estado para poder retomarla si se interrumpe.
+  return (rechazo !== null && rechazo !== 'recotizar') ||
+    (error.status === 503 && error.message === 'confirmacion_afiliada_no_disponible');
 }

@@ -8,7 +8,7 @@ La cotización también está deshabilitada por defecto y devuelve `503 cotizaci
 
 ## Contrato provisional de Supabase
 
-C07 espera una sobrecarga de `procesar_pago` con `p_cafeteria_id`, `p_items`, `p_franja_retiro`, `p_codigo` (nullable), `p_total_aceptado` y `p_clave_idempotencia`. El objeto JSON de éxito contiene `pedido_id`, `estado: "pagado"`, `total_pagado` y `descuento_afiliado`. Para reconfirmar, la RPC devuelve `error: "precio_actualizado"` con `motivo`, `total_actualizado` y `descuento_afiliado`. También admite los errores de negocio `clave_reintento_en_conflicto` y `saldo_insuficiente`.
+C07 llama a la sobrecarga de `procesar_pago` con `p_cafeteria_id`, `p_items`, `p_franja_retiro`, `p_codigo` (nullable), `p_total_aceptado` y `p_clave_idempotencia`. V08 devuelve `ok: true`, `pago_estado: "pagado"` y el estado operativo del pedido, que al comprar es `pendiente`. El gateway valida el pago y devuelve HTTP 201 con `pedido_id`, `estado: "pagado"`, `total_pagado` y `descuento_afiliado`. Para reconfirmar, la RPC devuelve `error: "precio_actualizado"` con `motivo`, `total_actualizado` y `descuento_afiliado`. Los rechazos de negocio de V08 usan `{ ok:false, motivo, cobrado:false }`: `clave_reintento_en_conflicto` responde 409 y `saldo_insuficiente` responde HTTP 422 con `{ error:"saldo_insuficiente", cobrado:false }`. El gateway conserva la forma anterior basada en `error` para las variantes ya desplegadas.
 
 [V08](https://linear.app/camilodarwitg/issue/CAM-176/v08-registrar-afiliacion-dentro-del-pago) y [V15](https://linear.app/camilodarwitg/issue/CAM-264/v15-verificar-reversion-de-la-compra-afiliada-ante-un-fallo) figuran pendientes en Linear. La firma nueva se simuló en la prueba HTTP. La compatibilidad con la firma definitiva y la reversión en PostgreSQL quedan pendientes de esas tareas. La app móvil que confirme con código debe enviar también el total aceptado y la clave.
 
@@ -25,6 +25,7 @@ El escenario usa Node 22 y el Nginx del repositorio. Las solicitudes entran por 
 
 - La cotización de $10.000 aplica $1.500 de descuento y el pedido cobra $8.500.
 - Al pausar la campaña entre la cotización y la confirmación, el gateway devuelve `409` con $10.000 para reconfirmar. El escenario compara saldo, pedidos y comisiones antes y después.
+- El escenario verifica los rechazos sin cobro por falta de stock (`409`), Wallet inexistente (`422`) y precio por línea desactualizado (`409`). Este último conserva el total informado por V08 y omite el descuento si la RPC no lo entrega.
 - El fallo de V15 se simula después de preparar el pedido y el débito. El gateway devuelve `503` y el estado del doble conserva su saldo de $50.000 y sus colecciones vacías. Al quitar la falla, el siguiente intento registra el pedido y una comisión de $850.
 - Los reintentos afiliado y sin código devuelven cada uno su pedido original. Reutilizar una clave con un total distinto devuelve `409`. El escenario también comprueba que la compra legacy sigue llegando a la RPC de tres parámetros.
 
@@ -54,3 +55,10 @@ conflicto y el HTTP 422 por saldo insuficiente.
 La prueba SQL permanente se ejecuta desde `db_CoffeeFaster` con
 `npm run test:pago-afiliado`. La regresión HTTP del adaptador está en
 [`pedidos.test.js`](../../../Microservices/ms-pedidos/tests/pedidos.test.js).
+
+El 23 de noviembre, tras integrar `develop` en V10, pasaron C07 con su
+fixture y las doce suites SQL de `db_CoffeeFaster` en PostgreSQL 17.12.
+Un ensayo local de `ms-pedidos` con Auth simulado, PostgREST 12.2.3 y
+la RPC real comprobó que los tres rechazos preservan saldo, stock,
+pedidos, pagos y movimientos. Repetir un pago confirmado con la misma
+clave devolvió el mismo pedido y conservó el débito original.

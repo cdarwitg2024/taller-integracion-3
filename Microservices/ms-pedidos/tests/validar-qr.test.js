@@ -2,17 +2,15 @@
 
 const request = require('supertest');
 
-// El servicio usa `supabase.obtenerCliente()` (service_role) para la entrega.
-// Se sustituye por una base en memoria que respeta las condiciones atomicas
-// (`estado = listo` y `qr_usado = false`) y registra que tablas consulta.
-// No existe ninguna tabla/columna de comisiones en este mock: la entrega no
-// debe depender de ellas.
+// El mock reproduce el contrato de la RPC de entrega. PostgreSQL verifica la comisión.
 const mockEstado = {
   pedidos: new Map(),
   usuarios: new Map(),
   cafeteriaUsuarios: [],
   logs: [],
   consultas: [],
+  entregas: [],
+  errorEntrega: null,
   qrEsUuid: false
 };
 
@@ -22,6 +20,8 @@ const resetMockEstado = () => {
   mockEstado.cafeteriaUsuarios.length = 0;
   mockEstado.logs.length = 0;
   mockEstado.consultas.length = 0;
+  mockEstado.entregas.length = 0;
+  mockEstado.errorEntrega = null;
   mockEstado.qrEsUuid = false;
 };
 
@@ -34,7 +34,6 @@ jest.mock('@coffeefaster/shared', () => {
     if (f.tipo === 'is') return valor === null || valor === undefined;
     if (f.tipo === 'in') return f.valores.includes(valor);
     if (f.tipo === 'orQr') return fila.qr_token === f.valor || fila.codigo_retiro_diario === f.valor;
-    if (f.tipo === 'orQrUsado') return valor === false || valor === null || valor === undefined;
     return true;
   }));
 
@@ -66,8 +65,6 @@ jest.mock('@coffeefaster/shared', () => {
             tipo: 'orQr',
             valor: expresion.split(',')[0].replace('qr_token.eq.', '')
           });
-        } else if (expresion === 'qr_usado.eq.false,qr_usado.is.null') {
-          filtros.push({ tipo: 'orQrUsado' });
         }
         return q;
       },
@@ -84,13 +81,6 @@ jest.mock('@coffeefaster/shared', () => {
       if (tabla === 'logs_validacion_qr' && operacion === 'insert') {
         mockEstado.logs.push({ ...datos });
         return { data: null, error: null };
-      }
-
-      if (tabla === 'pedidos' && operacion === 'update') {
-        const [fila] = resolver(tabla, [...mockEstado.pedidos.values()], filtros);
-        if (!fila) return { data: null, error: null };
-        Object.assign(fila, datos);
-        return { data: { ...fila }, error: null };
       }
 
       if (tabla === 'pedidos') {
@@ -121,11 +111,32 @@ jest.mock('@coffeefaster/shared', () => {
   };
 
   const supabaseFalso = {
+    rpc: jest.fn((nombre, parametros) => {
+      if (nombre !== 'confirmar_entrega_pedido') throw new Error(`RPC inesperada: ${nombre}`);
+      mockEstado.entregas.push(parametros);
+      return {
+        select: () => ({
+          maybeSingle: async () => {
+            if (mockEstado.errorEntrega) return { data: null, error: mockEstado.errorEntrega };
+            const { p_pedido_id, p_cafeteria_id, p_credencial } = parametros;
+            const pedido = mockEstado.pedidos.get(String(p_pedido_id));
+            if (!pedido || pedido.cafeteria_id !== p_cafeteria_id ||
+                pedido.estado.trim().toLowerCase() !== 'listo' || pedido.qr_usado === true ||
+                ![pedido.qr_token, pedido.codigo_retiro_diario].includes(p_credencial)) {
+              return { data: null, error: null };
+            }
+            pedido.estado = 'entregado';
+            pedido.qr_usado = true;
+            pedido.entregado_en = new Date().toISOString();
+            return { data: { ...pedido }, error: null };
+          }
+        })
+      };
+    }),
     from: jest.fn((tabla) => {
       mockEstado.consultas.push(tabla);
       return {
         select: (campos) => builder(tabla, 'select', null).select(campos),
-        update: (datos) => builder(tabla, 'update', datos),
         insert: (datos) => builder(tabla, 'insert', datos)
       };
     })
@@ -201,8 +212,24 @@ describe('POST /api/pedidos/validar-qr', () => {
     expect(pedido.qr_usado).toBe(true);
     expect(pedido.entregado_en).toBeTruthy();
     expect(mockEstado.logs.filter((l) => l.resultado === 'entregado')).toHaveLength(1);
+    expect(mockEstado.entregas).toEqual([{
+      p_pedido_id: 100,
+      p_cafeteria_id: CAFETERIA_A,
+      p_credencial: 'S3T6-QR-100'
+    }]);
     expect(res.body.comision).toBeUndefined();
     expect(mockEstado.consultas).not.toContain('movimientos_comision');
+  });
+
+  test('un error de la RPC no confirma el retiro ni registra éxito', async () => {
+    sembrar();
+    mockEstado.errorEntrega = { message: 'Error al habilitar comisión' };
+
+    const res = await entregar('S3T6-QR-100');
+
+    expect(res.status).toBe(503);
+    expect(pedido100()).toMatchObject({ estado: 'listo', qr_usado: false, entregado_en: null });
+    expect(mockEstado.logs).toHaveLength(0);
   });
 
   test('token de contingencia persistido ejecuta la misma operacion de entrega', async () => {
@@ -325,6 +352,8 @@ describe('POST /api/pedidos/validar-qr', () => {
   test('rol no empleado se rechaza ANTES de buscar el pedido y sin datos del pedido', async () => {
     sembrar();
     mockEstado.consultas.length = 0;
+  mockEstado.entregas.length = 0;
+  mockEstado.errorEntrega = null;
 
     const res = await entregar('S3T6-QR-100', 'uuid-estudiante');
 
@@ -336,11 +365,14 @@ describe('POST /api/pedidos/validar-qr', () => {
     expect(mockEstado.consultas).not.toContain('pedidos');
     expect(mockEstado.consultas).not.toContain('cafeteria_usuarios');
     expect(pedido100()).toMatchObject({ estado: 'listo', qr_usado: false });
+    expect(mockEstado.entregas).toHaveLength(0);
   });
 
   test('empleado inactivo se rechaza antes de buscar el pedido', async () => {
     sembrar();
     mockEstado.consultas.length = 0;
+  mockEstado.entregas.length = 0;
+  mockEstado.errorEntrega = null;
 
     const res = await entregar('S3T6-QR-100', 'uuid-inactivo');
 
@@ -348,6 +380,7 @@ describe('POST /api/pedidos/validar-qr', () => {
     expect(res.body.pedido).toBeUndefined();
     expect(mockEstado.consultas).not.toContain('pedidos');
     expect(pedido100()).toMatchObject({ estado: 'listo', qr_usado: false });
+    expect(mockEstado.entregas).toHaveLength(0);
   });
 
   test('la entrega valida no consulta comisiones ni columnas de atribucion hipoteticas', async () => {
@@ -356,6 +389,11 @@ describe('POST /api/pedidos/validar-qr', () => {
     const res = await entregar('S3T6-QR-100');
 
     expect(res.body).toMatchObject({ valido: true, motivo: 'entregado' });
+    expect(mockEstado.entregas).toEqual([{
+      p_pedido_id: 100,
+      p_cafeteria_id: CAFETERIA_A,
+      p_credencial: 'S3T6-QR-100'
+    }]);
     expect(res.body.comision).toBeUndefined();
     expect(mockEstado.consultas).not.toContain('movimientos_comision');
     expect(mockEstado.consultas).toContain('pedidos');

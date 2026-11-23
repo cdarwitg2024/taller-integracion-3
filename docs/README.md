@@ -24,6 +24,9 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [E04 / CAM-225 — Listado de campañas por cafetería del dueño](desktop/validacion/E04-CAM-225-Cambio-Cafeteria-Campanas.md)
 - [E06 — Conexión de alta y edición de campañas con el gateway](desktop/validacion/E06-Conexion-alta-y-edicion-campanas.md)
 - [E07 — Conexión de activación y pausa de campañas](desktop/validacion/E07-Conexion-activacion-y-pausa-campanas.md)
+- [E08 / CAM-294 — Corregir fallos de guardado y activación de campañas](desktop/validacion/E08-CAM-294-Correccion-guardado-y-activacion.md)
+- [E11 / CAM-233 — Conectar resumen de ventas y comisiones](desktop/validacion/E11-CAM-233-Resumen-ventas-y-comisiones.md)
+- [E13 — Estados de carga, vacío y error de campañas](desktop/validacion/E13-Estados-carga-vacio-y-error-campanas.md)
 - [E14 — Probar tasas y vigencia](desktop/validacion/E14-Probar-tasas-y-vigencia.md)
 - [E10 / CAM-232 — Aprobar afiliados y gestionar códigos](desktop/validacion/E10-Aprobar-afiliados-y-gestionar-codigos.md)
 - [S2-T15 - Validación flujo integrado y recuperación del KDS](desktop/validacion/S2-T15-Validacion-Flujo-Integrado-KDS.md)
@@ -71,7 +74,15 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [A11 — Formulario de monto y destino ficticio para retiro simulado](mobile/validacion/A11-Solicitud-retiro-simulado.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 - [D02 - Estado del código asociado al carrito](mobile/validacion/D02-Estado-codigo-carrito.md)
+- [D03 - Cotización de carrito completo](mobile/validacion/D03-Cotizacion-carrito-completo.md)
+- [D04 - Motivos de código no aplicable](mobile/validacion/D04-Motivos-codigo-no-aplicable.md)
+- [D05 - Recotización al editar el carrito](mobile/validacion/D05-Recotizar-al-editar-carrito.md)
+- [D06 - Confirmar de nuevo cuando cambie el total](mobile/validacion/D06-Reconfirmar-total.md)
+- [D11 - Cotizaciones fuera de orden en el carrito](mobile/validacion/D11-Cotizaciones-fuera-de-orden.md)
 - [D07 - Clave persistida del intento de compra](mobile/validacion/D07-Clave-intento-compra.md)
+- [D08 - Recuperar una compra con respuesta interrumpida](mobile/validacion/D08-Recuperar-compra-interrumpida.md)
+- [D09 - Total cobrado en historial](mobile/validacion/D09-Total-cobrado-en-historial.md)
+- [D13 - Compra sin código o con código retirado](mobile/validacion/D13-Verificar-compra-sin-codigo.md)
 
 ## Backend Node
 
@@ -100,6 +111,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [Prueba del flujo de catálogo — T11](microservicios/validacion/pruebas_flujo_catalogo.md)
 - [S3-T3 — Administración de campañas de afiliados](microservicios/validacion/S3-T3-administracion-campanas-afiliados.md)
 - [S3-T4 / C04 — Consulta de campañas vigentes](microservicios/validacion/S3-T4-consulta-campanas-vigentes.md)
+- [C12 / CAM-262 — Cancelación y reembolso integrados en Cloud](microservicios/validacion/C12-CAM-262-cancelacion-reembolso.md)
 - [C05 — Solicitud y resolución de afiliación](microservicios/validacion/C05-solicitudes-afiliacion.md)
 - [C07 — Cotización y confirmación por el gateway](microservicios/validacion/C07-cotizacion-compra-gateway.md)
 

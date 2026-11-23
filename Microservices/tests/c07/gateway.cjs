@@ -69,6 +69,19 @@ async function main() {
   assert.deepEqual(await post(pedidos, compra, 422, 'c07-saldo-insuficiente'), {
     error: 'saldo_insuficiente', cobrado: false
   });
+  assert.deepEqual(await post(pedidos, compra, 409, 'c07-stock-insuficiente'), {
+    error: 'stock_insuficiente', cobrado: false
+  });
+  assert.deepEqual(await post(pedidos, compra, 422, 'c07-sin-wallet'), {
+    error: 'sin_wallet', cobrado: false
+  });
+  const compraConPrecioPorLinea = {
+    ...compra, items: [{ ...compra.items[0], precio_esperado: 9000 }]
+  };
+  assert.deepEqual(await post(pedidos, compraConPrecioPorLinea, 409, 'c07-precio-linea'), {
+    error: 'precio_actualizado', motivo: 'precio_actualizado', total_aceptado: 8500,
+    total_actualizado: 8500, cobrado: false
+  });
   await post(pedidos, compra, 503, 'c07-rpc-malformada');
   assert.deepEqual(await leerFixture('/estado'), inicial);
   await leerFixture('/pausar', 'POST');
@@ -113,10 +126,27 @@ async function main() {
   ]);
   assert.deepEqual(trasNormal.comisiones, trasAfiliada.comisiones);
 
+  // La cotización afiliada se obtuvo antes de consumir el beneficio en C07.
+  assert.equal(cotizacion.descuento_afiliado, 1500);
+  const sinCodigo = await post(cotizaciones, carrito, 200);
+  const quitado = await post(pedidos, { ...normal, total_aceptado: sinCodigo.total }, 201, 'd13-codigo-quitado');
+  assert.equal(quitado.total_pagado, sinCodigo.total);
+  assert.equal(quitado.descuento_afiliado, 0);
+  assert.equal(original.descuento_afiliado, 0);
+  assert.notEqual(quitado.pedido_id, original.pedido_id);
+  const trasQuitar = await leerFixture('/estado');
+  assert.equal(trasQuitar.saldo, trasNormal.saldo - sinCodigo.total);
+  assert.deepEqual(trasQuitar.pedidos, [
+    ...trasNormal.pedidos,
+    { ...quitado, ok: true, estado: 'pendiente', pago_estado: 'pagado' }
+  ]);
+  assert.deepEqual(trasQuitar.comisiones, trasNormal.comisiones);
+  console.log(`D13 OK: pedidos ${original.pedido_id} y ${quitado.pedido_id} sin comisión, total ${sinCodigo.total} cada uno.`);
+
   const legacy = await post(pedidos, { ...afiliado, franja_retiro: compra.franja_retiro }, 201);
   assert.equal(legacy.ok, true);
   assert.equal(legacy.pedido.total, 10000);
-  assert.equal((await leerFixture('/estado')).saldo, 21500);
+  assert.equal((await leerFixture('/estado')).saldo, 11500);
   console.log(`C07 OK: pedidos ${pagada.pedido_id} y ${original.pedido_id} conservados al reintentar.`);
   console.log('Reconfirmación y fallo simulado: saldo, pedidos y comisiones sin cambios.');
 }

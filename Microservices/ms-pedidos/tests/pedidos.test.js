@@ -255,48 +255,185 @@ describe('ms-pedidos', () => {
     expect(httpMock.post).not.toHaveBeenCalled();
   });
 
-  describe('confirmación con la RPC de V08', () => {
-    const clave = 'v10-carrito-mixto';
-    const confirmar = () => request(app).post('/api/pedidos')
-      .set('Idempotency-Key', clave)
-      .send(bodyPedido({ codigo: 'CAFE-11', total_aceptado: 2845 }));
+  test.each([['pagado', 201], ['pendiente', 503]])(
+    'POST /api/pedidos con pedido pendiente y pago %s responde %s', async (pagoEstado, estadoHttp) => {
+      const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+      try {
+        fijarLecturas({ usuario: { id: 10, activo: true } });
+        httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+        mockRpc.mockResolvedValue({ data: {
+          ok: true, pedido_id: 49, estado: 'pendiente', pago_estado: pagoEstado,
+          total_pagado: 2845, descuento_afiliado: 361, comision: 285
+        }, error: null });
 
+        const res = await request(app).post('/api/pedidos')
+          .set('Idempotency-Key', 'c07-estado-pago')
+          .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 2845 }));
+
+        expect(res.status).toBe(estadoHttp);
+        if (estadoHttp === 201) expect(res.body).toEqual({
+          pedido_id: 49, estado: 'pagado', total_pagado: 2845, descuento_afiliado: 361
+        });
+      } finally {
+        if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+        else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+      }
+    }
+  );
+
+  test.each([['saldo_insuficiente', 422], ['stock_insuficiente', 409], ['sin_wallet', 422]])(
+    'POST /api/pedidos traduce el rechazo de V08 %s a HTTP %s', async (motivo, status) => {
+      const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+      try {
+        fijarLecturas({ usuario: { id: 10, activo: true } });
+        mockRpc.mockResolvedValue({
+          data: { ok: false, motivo, cobrado: false },
+          error: null
+        });
+
+        const res = await request(app).post('/api/pedidos')
+          .set('Idempotency-Key', 'v10-rechazo')
+          .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+        expect(res.status).toBe(status);
+        expect(res.body).toEqual({ error: motivo, cobrado: false });
+      } finally {
+        if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+        else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+      }
+    }
+  );
+
+  describe('rechazo de precio por línea de V08', () => {
     beforeEach(() => {
       process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
       fijarLecturas({ usuario: { id: 10, activo: true } });
-      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
     });
 
     afterEach(() => {
       delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
     });
 
-    test('un pedido pendiente de preparación con pago aprobado devuelve 201', async () => {
-      mockRpc.mockResolvedValue({ error: null, data: {
-        ok: true, pedido_id: 501, estado: 'pendiente', pago_estado: 'pagado',
-        total_pagado: 2845, descuento_afiliado: 361, comision: 285
-      } });
+    test.each([
+      ['total válido y sin cobro', 6100, false, 409],
+      ['total inválido', null, false, 503],
+      ['sin certeza de cobro', 6100, undefined, 503]
+    ])('valida la respuesta con %s', async (_caso, total, cobrado, status) => {
+      mockRpc.mockResolvedValue({
+        data: { ok: false, motivo: 'precio_actualizado', total_actualizado: total, cobrado },
+        error: null
+      });
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'v10-precio-linea')
+        .send(bodyPedido({
+          items: [{ producto_id: 1, cantidad: 1, precio_esperado: 5000 }],
+          codigo: 'NORTE', total_aceptado: 6100
+        }));
 
-      const res = await confirmar();
-
-      expect(res.status).toBe(201);
-      expect(res.body).toEqual({ pedido_id: 501, estado: 'pagado', total_pagado: 2845, descuento_afiliado: 361 });
-      expect(mockRpc).toHaveBeenCalledWith('procesar_pago', {
-        p_cafeteria_id: 1, p_items: [{ producto_id: 1, cantidad: 1 }],
-        p_franja_retiro: '9-10', p_codigo: 'CAFE-11',
-        p_total_aceptado: 2845, p_clave_idempotencia: clave
+      expect(res.status).toBe(status);
+      if (status === 409) expect(res.body).toEqual({
+        error: 'precio_actualizado', motivo: 'precio_actualizado',
+        total_aceptado: 6100, total_actualizado: 6100, cobrado: false
       });
     });
+  });
 
-    test.each([
-      ['saldo_insuficiente', 422, { error: 'saldo_insuficiente', cobrado: false }],
-      ['clave_reintento_en_conflicto', 409, { error: 'clave_reintento_en_conflicto' }]
-    ])('mapea el motivo SQL %s', async (motivo, status, body) => {
-      mockRpc.mockResolvedValue({ error: null, data: { ok: false, motivo, cobrado: false } });
-      const res = await confirmar();
-      expect(res.status).toBe(status);
-      expect(res.body).toEqual(body);
-    });
+  test.each([
+    ['precio actualizado sin confirmación de cobro', {
+      ok: false, error: 'precio_actualizado', motivo: 'campana_pausada',
+      total_actualizado: 7000, descuento_afiliado: 0
+    }],
+    ['saldo insuficiente con cobro contradictorio', {
+      ok: false, motivo: 'saldo_insuficiente', cobrado: true
+    }],
+    ['falta de stock sin confirmación de cobro', { ok: false, motivo: 'stock_insuficiente' }],
+    ['falta de Wallet con cobro contradictorio', { ok: false, motivo: 'sin_wallet', cobrado: true }]
+  ])('POST /api/pedidos mantiene como incierto %s', async (_caso, data) => {
+    const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      mockRpc.mockResolvedValue({ data, error: null });
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'v10-resultado-incierto')
+        .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+      expect(res.status).toBe(503);
+      expect(res.body).not.toHaveProperty('cobrado');
+    } finally {
+      if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+    }
+  });
+
+  test('POST /api/pedidos conserva el rechazo de saldo con la forma anterior', async () => {
+    const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+      mockRpc.mockResolvedValue({
+        data: { error: 'saldo_insuficiente' },
+        error: null
+      });
+
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'c12-saldo-forma-anterior')
+        .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+      expect(res.status).toBe(422);
+      expect(res.body).toEqual({ error: 'saldo_insuficiente', cobrado: false });
+    } finally {
+      if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+    }
+  });
+
+  test('POST /api/pedidos responde 409 al conflicto de clave real de V08', async () => {
+    const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+      mockRpc.mockResolvedValue({
+        data: { ok: false, motivo: 'clave_reintento_en_conflicto', cobrado: false },
+        error: null
+      });
+
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'c12-clave-conflicto')
+        .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: 'clave_reintento_en_conflicto' });
+    } finally {
+      if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+    }
+  });
+
+  test('V08 devuelve el mismo pedido pagado con la misma clave aunque el catálogo no responda', async () => {
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockRejectedValue(new Error('catálogo no disponible'));
+      mockRpc.mockResolvedValue({ error: null, data: {
+        ok: true, pedido_id: 501, estado: 'pendiente', pago_estado: 'pagado',
+        total_pagado: 2500, descuento_afiliado: 0,
+      } });
+      const confirmar = () => request(app).post('/api/pedidos').set('Idempotency-Key', 'v08-intento-original')
+        .send(bodyPedido({ total_aceptado: 2500 }));
+      const primero = await confirmar().expect(201);
+      const segundo = await confirmar().expect(201);
+      expect(primero.body).toEqual({ pedido_id: 501, estado: 'pagado', total_pagado: 2500, descuento_afiliado: 0 });
+      expect(segundo.body).toEqual(primero.body);
+      expect(mockRpc.mock.calls[0]).toEqual(mockRpc.mock.calls[1]);
+      expect(httpMock.post).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    }
   });
 
   test('POST /api/pedidos permite varios productos de la misma cafeteria', async () => {
