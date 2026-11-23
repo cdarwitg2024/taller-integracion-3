@@ -2,7 +2,7 @@ import Input from '../src/components/Input';
 import Button from '../src/components/Button';
 import CartItem from '../src/components/CartItem';
 import { act, Alert, CartScreen, cotizar, disponibilidad, pagarDesdePantalla, pestaña, producto,
-  Text, transporte, tree } from '../tests/support/checkoutPrueba';
+  responderNuevoTotal, Text, transporte, tree } from '../tests/support/checkoutPrueba';
 
 const json = (status: number, body: object) => ({
   ok: status < 300, status, text: async () => JSON.stringify(body),
@@ -115,7 +115,13 @@ test.each([false, true])('un 409 exige una cotización válida antes de confirma
     expect(transporte).toHaveBeenCalledTimes(1);
   }
   expect(textos()).toContain(importe(12000));
-  await pagarDesdePantalla();
+  await pagarDesdePantalla(false);
+  expect(transporte).toHaveBeenCalledTimes(1);
+  expect(await responderNuevoTotal('Rechazar')).toContain(importe(12000));
+  expect(transporte).toHaveBeenCalledTimes(1);
+  expect(tree.root.findByType(CartScreen).props.cart).toEqual([producto]);
+  await pagarDesdePantalla(false);
+  expect(await responderNuevoTotal('Aceptar y pagar')).toContain(importe(12000));
   expect(transporte).toHaveBeenCalledTimes(2);
   const [primero, segundo] = transporte.mock.calls.map(([, opciones]) => opciones);
   expect(JSON.parse(segundo.body).total_aceptado).toBe(12000);

@@ -144,7 +144,7 @@ function AppContent() {
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
-  const { cart, setCart, clearCart: vaciarCarrito, hydrated, codigo, setCodigo, idCarrito, requiereCotizacion } = useCart() as {
+  const { cart, setCart, clearCart: vaciarCarrito, hydrated, codigo, setCodigo, idCarrito, requiereCotizacion, revision } = useCart() as {
     cart: CartItem[];
     setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
     clearCart: () => void;
@@ -153,10 +153,13 @@ function AppContent() {
     setCodigo: (codigo: string) => void;
     idCarrito: number;
     requiereCotizacion: boolean;
+    revision: number;
   };
   const [paying, setPaying] = useState(false);
   const usuarioActual = useRef(session?.user.id);
   usuarioActual.current = session?.user.id;
+  const revisionActual = useRef(revision);
+  revisionActual.current = revision;
   const [requiereRecotizar, setRequiereRecotizar] = useState(false);
   const recotizar = () => setCart(actual => [...actual]);
   const solicitarNuevoTotal = () => {
@@ -610,6 +613,17 @@ function AppContent() {
         return;
       }
 
+      if (requiereRecotizar) {
+        const importe = franjaRetiro.totalAceptado!.toLocaleString('es-CL');
+        const aceptado = await new Promise<boolean>(resolver => {
+          Alert.alert('Confirma el nuevo total', `El total actualizado es de $${importe}. ¿Quieres pagar ese importe?`, [
+            { text: 'Rechazar', style: 'cancel', onPress: () => resolver(false) },
+            { text: 'Aceptar y pagar', onPress: () => resolver(true) },
+          ], { cancelable: true, onDismiss: () => resolver(false) });
+        });
+        if (!aceptado || revisionActual.current !== revision || usuarioActual.current !== session.user.id) return;
+      }
+
       const problema = await verificarDisponibilidadCheckout(cart, cafeteriaId);
       if (problema) {
         Alert.alert(problema.titulo, problema.mensaje);
@@ -617,6 +631,7 @@ function AppContent() {
       }
 
       const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
+      if (revisionActual.current !== revision || usuarioActual.current !== session.user.id) return;
 
       // C07 revalida el total aceptado antes de cobrar. Sin cotización se usa la RPC anterior.
       const respuesta = await crearPedidoDesdeCarrito<RespuestaCrearPedido | null>(
