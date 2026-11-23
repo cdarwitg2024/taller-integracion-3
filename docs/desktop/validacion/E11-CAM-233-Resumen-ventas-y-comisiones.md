@@ -19,11 +19,8 @@ frescura del resumen depende del respaldo existente de 10 s.
 
 **Procedencia del SQL (importante para la revisión):** las migraciones V08, V09,
 V11, V12, V13 y V14 viven en `Diego24Vas/db_CoffeeFaster`, **no en este
-repositorio**. Este cambio no copia, reaplica ni modifica ese SQL. Diego confirma
-que todo el SQL que sube en sus PRs ya está aplicado en Supabase Cloud. Tras la
-revisión de este PR se comprobó que `develop` de ese repo incorporó los PRs #5 y
-#6 (`8b80271`, `c595ecc`) con la reconciliación de migraciones y la restricción
-única de `usuarios.auth_user_id`; no exigen cambios en E11.
+repositorio**. Este cambio no copia, reaplica ni modifica ese SQL; el registro
+del estado de esas migraciones vive en la tarea de documentación separada.
 
 ## Registro reproducible
 
@@ -48,6 +45,9 @@ SQL.
 | Error de Supabase | Se propaga como error de comisiones | Aprobado |
 | Historial de 450 movimientos | Filtro por cafetería en servidor, 3 páginas y totales completos | Aprobado |
 | Conteo incompleto o cambiante entre páginas | Se rechaza sin mostrar cifras parciales | Aprobado |
+| Historial mayor que 50 páginas | Se rechaza después de 50 consultas sin cifras parciales | Aprobado |
+| IDs duplicados o no enteros | Se rechaza la respuesta como inválida | Aprobado |
+| Historial vacío con cafetería válida | Resumen en cero tras una sola consulta | Aprobado |
 | Falla inicial de comisiones con pedidos cargados | Ventas visibles, `dbError` nulo, aviso de comisiones y resumen nulo | Aprobado |
 | Falla de comisiones tras un éxito | Aviso, ventas y último resumen bueno visibles; el reintento lo reemplaza | Aprobado |
 | Reintento visible | Limpia el aviso anterior, vuelve a consultar y muestra el resumen | Aprobado |
@@ -56,7 +56,7 @@ SQL.
 
 ## Resultado
 
-- Escritorio: 155/155 pruebas aprobadas sobre `develop` con E13 integrado (12 nuevas de E11: 11 del resumen/cargador y 1 de render).
+- Escritorio: 158/158 pruebas aprobadas sobre `develop` con E13 integrado (15 nuevas de E11: 14 del resumen/cargador y 1 de render).
 - `npm run build --prefix app-desktop`: código de salida 0.
 - `git diff --check`: sin errores.
 

@@ -166,6 +166,34 @@ test('un cambio de total entre páginas se rechaza', async () => {
   await assert.rejects(() => obtenerResumen(1, supabase), /historial completo/);
 });
 
+test('un historial mayor que 50 páginas se rechaza sin cifras parciales', async () => {
+  const supabase = transporte(filasGeneradas(200 * 50 + 1));
+  await assert.rejects(() => obtenerResumen(1, supabase), /demasiado extenso/);
+  assert.equal(supabase.consultas.filter(c => c.metodo === 'range').length, 50);
+});
+
+test('ids duplicados o no enteros se rechazan', async () => {
+  const duplicados = filasGeneradas(2);
+  duplicados[1].id = duplicados[0].id;
+  await assert.rejects(() => obtenerResumen(1, transporte(duplicados)), /no es válida/);
+  const noEntero = filasGeneradas(1);
+  noEntero[0].id = '1';
+  await assert.rejects(() => obtenerResumen(1, transporte(noEntero)), /no es válida/);
+});
+
+test('un historial vacío con cafetería válida devuelve el resumen vacío', async () => {
+  const supabase = transporte([]);
+  const resumen = await obtenerResumen(7, supabase);
+  assert.deepEqual(resumen, {
+    ventasReferidas: 0,
+    totalCobrado: 0,
+    comisiones: { pendiente: 0, disponible: 0, revertida: 0 },
+    reversiones: 0,
+    movimientos: [],
+  });
+  assert.equal(supabase.consultas.filter(c => c.metodo === 'range').length, 1);
+});
+
 test('una cafetería ajena no aporta movimientos aunque RLS los devuelva', () => {
   const filas = [
     { id: 1, pedido_id: 10, tipo: 'comision', estado: 'pendiente', monto_clp: 500, pedidos: { cafeteria_id: 2, total: 5000 } },
