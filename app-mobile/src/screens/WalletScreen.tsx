@@ -86,9 +86,12 @@ const getTipoLabel = (tipo: string): string => {
 // ─── Componente Principal ────────────────────────────────────────
 interface WalletScreenProps {
   userId: string | null;
+  saldoConfirmado?: number;
+  onSaldoConfirmado?: (dato: { usuarioId: string; saldo: number }) => void;
 }
 
-const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
+const WalletScreen: React.FC<WalletScreenProps> = ({ userId, saldoConfirmado, onSaldoConfirmado }) => {
+  const montada = useRef(false);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [loading, setLoading] = useState(true);
@@ -226,6 +229,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
       }
 
       setWallet(walletData as Wallet | null);
+      if (montada.current && Number.isSafeInteger(walletData?.saldo_actual) && walletData.saldo_actual >= 0) {
+        onSaldoConfirmado?.({ usuarioId: userId, saldo: walletData.saldo_actual });
+      }
 
       // Cargar movimientos pertenecientes de forma estricta a la wallet del usuario
       if (walletData) {
@@ -258,10 +264,12 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [userId, obtenerUsuarioId]);
+  }, [userId, obtenerUsuarioId, onSaldoConfirmado]);
 
   useEffect(() => {
+    montada.current = true;
     cargarSaldo();
+    return () => { montada.current = false; };
   }, [cargarSaldo]);
 
   // S2-T16: el contador del saldo sigue el valor interpolado de la animación.
@@ -462,7 +470,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
   }
 
   // ─── Render: Loading ──────────────────────────────────────────
-  if (loading) {
+  if (loading && saldoConfirmado === undefined) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -485,7 +493,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
 
   // El saldo en pantalla es el animado; su valor final sale del estado
   // confirmado (wallet recargada desde la base).
-  const saldo = saldoMostrado;
+  const saldo = wallet ? saldoMostrado : saldoConfirmado ?? 0;
   const esSaldoCero = saldo === 0;
   const esSaldoBajo = saldo > 0 && saldo < 1000;
 
@@ -547,7 +555,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
                   },
                 ]}
               >
-                {`$${saldoMostrado.toLocaleString('es-CL')}`}
+                {`$${saldo.toLocaleString('es-CL')}`}
               </Animated.Text>
               <Text style={styles.balanceHint}>
                 {esSaldoCero

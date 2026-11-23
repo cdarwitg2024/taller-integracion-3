@@ -131,7 +131,7 @@ function descuentoHistorico({ total, detalles_pedido = [] }) {
   return diferencia >= 0 ? Math.round(diferencia * 100) / 100 : null;
 }
 
-const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista }) => {
+const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista, onSaldoConfirmado }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -230,6 +230,9 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
               if (exito) {
                 const monto = resultado?.monto_reembolsado ?? pedido.total;
                 const nuevoSaldo = resultado?.saldo_nuevo;
+                if (userId && Number.isSafeInteger(nuevoSaldo) && nuevoSaldo >= 0) {
+                  onSaldoConfirmado?.({ usuarioId: userId, saldo: nuevoSaldo });
+                }
 
                 const pedidoActualizado = {
                   ...pedido,
@@ -262,7 +265,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
         },
       ]
     );
-  }, []);
+  }, [userId, onSaldoConfirmado]);
 
   // La lista se consulta con la sesión Supabase y el usuario interno del titular.
   // Sus credenciales persistidas se muestran de inmediato, sin una segunda
