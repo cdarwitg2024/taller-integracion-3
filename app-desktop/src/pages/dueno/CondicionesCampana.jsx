@@ -5,14 +5,14 @@
  *
  * Funciones y utilidades principales:
  *  - formatearFecha(iso): Transforma fechas ISO a formato legible local (es-CL) para vigencias y auditoría de confirmación.
- *  - cargar(mostrarEsqueleto): Consulta la campaña de carrito completo activa para la cafetería y sincroniza en tiempo real con Supabase.
+ *  - cargar(mostrarEsqueleto): Consulta las campañas de la cafetería y sincroniza el selector con Supabase.
  *  - handleConfirmar(): Gestiona la adhesión del dueño implementando:
  *      * Bloqueo síncrono mediante `confirmandoRef` e `isSubmitting` para evitar que un doble clic duplique la aceptación.
  *      * Validación estricta de la respuesta del servidor para garantizar que ningún error se presente falsamente como éxito.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Typography, Paper, Button, Alert, Skeleton, Stack, Chip, Divider, FormControlLabel, Checkbox, CircularProgress } from '@mui/material';
+import { Box, Typography, Paper, Button, Alert, Skeleton, Stack, Chip, Divider, FormControlLabel, Checkbox, CircularProgress, TextField, MenuItem } from '@mui/material';
 
 import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurnedInOutlined';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
@@ -44,6 +44,15 @@ function formatearFecha(iso) {
   }
 }
 
+function estadoParaConfirmar(campana, ahora) {
+  if (campanaAceptada(campana)) return 'Condiciones aceptadas';
+  if (campana.estado === 'pausada') return 'Pausada';
+  if (campana.estado === 'finalizada' || Date.parse(campana.vigencia_hasta) <= ahora) return 'Finalizada';
+  if (Date.parse(campana.vigencia_desde) > ahora) return 'Programada';
+  if (['pendiente_aceptacion', 'activa'].includes(campana.estado)) return 'Pendiente de Aceptación';
+  return 'Sin confirmación disponible';
+}
+
 export default function CondicionesCampana({ currentUser, onConfirmada }) {
   const cafeteriaId = String(currentUser?.cafeteria_id ?? currentUser?.cafeteriaId ?? '');
   return <CondicionesDeCafeteria key={`${currentUser?.id}:${cafeteriaId}`} cafeteriaId={cafeteriaId} onConfirmada={onConfirmada} />;
@@ -52,6 +61,8 @@ export default function CondicionesCampana({ currentUser, onConfirmada }) {
 function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
 
   const [campana, setCampana] = useState(null);
+  const [campanas, setCampanas] = useState([]);
+  const [ahora, setAhora] = useState(Date.now);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -60,13 +71,17 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
   const clave = claveCondiciones(campana);
   const aceptoTerminos = clave !== null && consentimiento === clave;
   const aceptada = campanaAceptada(campana);
+  const estadoConfirmacion = campana && estadoParaConfirmar(campana, ahora);
+  const puedeConfirmar = estadoConfirmacion === 'Pendiente de Aceptación';
 
   // Protección síncrona contra doble clic
   const confirmandoRef = useRef(false);
   const solicitudIdRef = useRef(0);
   const activoRef = useRef(false);
   const claveRef = useRef(null);
+  const seleccionRef = useRef(null);
   const publicarCampana = useCallback(data => {
+    seleccionRef.current = data?.id ?? null;
     claveRef.current = claveCondiciones(data);
     setCampana(data);
   }, []);
@@ -75,6 +90,15 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
     setConsentimiento(null);
     setNotice('');
   }, [clave]);
+
+  useEffect(() => {
+    const proximoCambio = Math.min(...campanas.flatMap(item => [
+      Date.parse(item.vigencia_desde), Date.parse(item.vigencia_hasta),
+    ]).filter(fecha => fecha > ahora));
+    if (!Number.isFinite(proximoCambio)) return;
+    const timer = setTimeout(() => setAhora(Date.now()), Math.min(proximoCambio - Date.now() + 1, 2147483647));
+    return () => clearTimeout(timer);
+  }, [ahora, campanas]);
 
   const cargar = useCallback(async (mostrarEsqueleto = false) => {
     if (!activoRef.current) return;
@@ -86,13 +110,18 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
       if (!cafeteriaId) {
         throw new Error('No tienes una cafetería asociada a tu cuenta.');
       }
-      const data = await campanasService.obtenerCampanaVigente(cafeteriaId);
+      const data = await campanasService.listar(cafeteriaId);
       if (reqId === solicitudIdRef.current) {
-        publicarCampana(data);
+        const fechaConsulta = Date.now();
+        setAhora(fechaConsulta);
+        setCampanas(data);
+        publicarCampana(data.find(item => item.id === seleccionRef.current) ??
+          data.find(item => estadoParaConfirmar(item, fechaConsulta) === 'Pendiente de Aceptación') ?? data[0] ?? null);
       }
     } catch (err) {
       if (reqId === solicitudIdRef.current) {
         setError(err.message || 'Error al cargar las condiciones de campaña.');
+        setCampanas([]);
         publicarCampana(null);
       }
     } finally {
@@ -134,7 +163,7 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
   const handleConfirmar = async () => {
     // 1. Doble clic no duplica aceptación: bloqueo sincrónico
     if (confirmandoRef.current) return;
-    if (!campana || !aceptoTerminos || aceptada) return;
+    if (!campana || !aceptoTerminos || estadoParaConfirmar(campana, Date.now()) !== 'Pendiente de Aceptación') return;
     const claveEnviada = clave;
     const sigueVigente = () => activoRef.current && claveRef.current === claveEnviada;
 
@@ -152,6 +181,7 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
       if (!sigueVigente()) return;
       solicitudIdRef.current++;
       setLoading(false);
+      setCampanas(lista => lista.map(item => item.id === res.id ? res : item));
       publicarCampana(res);
       setNotice('Condiciones de la campaña aceptadas exitosamente.');
       onConfirmada?.(res);
@@ -213,7 +243,7 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
         >
           <GavelOutlinedIcon sx={{ fontSize: 56, color: '#AB8563', mb: 2 }} />
           <Typography variant="h6" fontWeight={800} gutterBottom>
-            No hay campañas de carrito completo activas para tu cafetería
+            No hay campañas de carrito completo para tu cafetería
           </Typography>
           <Typography color="text.secondary" sx={{ maxWidth: 500, mx: 'auto', mb: 3 }}>
             Cuando el equipo de administración configure una nueva campaña de carrito completo con
@@ -230,6 +260,26 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
         </Paper>
       ) : (
         <Stack spacing={3}>
+          <TextField
+            select
+            label="Campaña"
+            value={String(campana.id)}
+            disabled={isSubmitting}
+            fullWidth
+            onChange={event => {
+              const seleccion = campanas.find(item => String(item.id) === event.target.value);
+              if (seleccion) {
+                setError('');
+                publicarCampana(seleccion);
+              }
+            }}
+          >
+            {campanas.map(item => (
+              <MenuItem key={item.id} value={String(item.id)}>
+                {item.nombre} (#{item.id}) · {estadoParaConfirmar(item, ahora)}
+              </MenuItem>
+            ))}
+          </TextField>
           {/* Ficha resumen con Versión / Tasa / Vigencia */}
           <Paper
             elevation={0}
@@ -262,7 +312,7 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
               </Box>
 
               <Chip
-                label={aceptada ? 'Condiciones Aceptadas' : 'Pendiente de Aceptación'}
+                label={estadoConfirmacion}
                 color={aceptada ? 'success' : 'warning'}
                 icon={aceptada ? <CheckCircleOutlinedIcon /> : undefined}
                 sx={{ fontWeight: 700, px: 1 }}
@@ -444,7 +494,7 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
                   )}
                 </Box>
               </Box>
-            ) : (
+            ) : puedeConfirmar ? (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                   Al confirmar, manifiestas la voluntad de aplicar el porcentaje de descuento indicado sobre
@@ -502,6 +552,12 @@ function CondicionesDeCafeteria({ cafeteriaId, onConfirmada }) {
                   </Button>
                 </Stack>
               </Box>
+            ) : (
+              <Alert severity="info">
+                {estadoConfirmacion === 'Programada'
+                  ? 'Podrás confirmar las condiciones cuando comience la vigencia.'
+                  : 'Esta campaña no admite confirmación en su estado actual.'}
+              </Alert>
             )}
           </Paper>
         </Stack>

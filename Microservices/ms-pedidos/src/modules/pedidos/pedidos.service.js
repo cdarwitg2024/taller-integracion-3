@@ -239,21 +239,26 @@ async function confirmarPago(cliente, cafeteriaId, body, clave) {
       return { status: 409, body: { error: data.error } };
     case 'saldo_insuficiente':
       return { status: 422, body: { error: data.error, cobrado: false } };
-    case undefined:
+    case undefined: {
+      // V08 separa el estado operativo del pedido del estado del pago.
+      const pagoConfirmado = data?.pago_estado === undefined
+        ? data?.estado === 'pagado' && data.ok !== false
+        : data.ok === true && data.pago_estado === 'pagado';
       if (Number.isSafeInteger(data?.pedido_id) && data.pedido_id > 0 &&
-          data.estado === 'pagado' && data.total_pagado === total_aceptado &&
+          pagoConfirmado && data.total_pagado === total_aceptado &&
           Number.isSafeInteger(data.descuento_afiliado) && data.descuento_afiliado >= 0) {
         return {
           status: 201,
           body: {
             pedido_id: data.pedido_id,
-            estado: data.estado,
+            estado: 'pagado',
             total_pagado: data.total_pagado,
             descuento_afiliado: data.descuento_afiliado
           }
         };
       }
       break;
+    }
   }
   throw new HttpError(503, 'Respuesta inválida de procesar_pago');
 }

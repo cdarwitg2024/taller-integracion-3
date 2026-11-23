@@ -8,7 +8,7 @@ La cotización también está deshabilitada por defecto y devuelve `503 cotizaci
 
 ## Contrato provisional de Supabase
 
-C07 espera una sobrecarga de `procesar_pago` con `p_cafeteria_id`, `p_items`, `p_franja_retiro`, `p_codigo` (nullable), `p_total_aceptado` y `p_clave_idempotencia`. El objeto JSON de éxito contiene `pedido_id`, `estado: "pagado"`, `total_pagado` y `descuento_afiliado`. Para reconfirmar, la RPC devuelve `error: "precio_actualizado"` con `motivo`, `total_actualizado` y `descuento_afiliado`. También admite los errores de negocio `clave_reintento_en_conflicto` y `saldo_insuficiente`.
+C07 llama a la sobrecarga de `procesar_pago` con `p_cafeteria_id`, `p_items`, `p_franja_retiro`, `p_codigo` (nullable), `p_total_aceptado` y `p_clave_idempotencia`. V08 devuelve `ok: true`, `pago_estado: "pagado"` y el estado operativo del pedido, que al comprar es `pendiente`. El gateway valida el pago y devuelve HTTP 201 con `pedido_id`, `estado: "pagado"`, `total_pagado` y `descuento_afiliado`. Para reconfirmar, la RPC devuelve `error: "precio_actualizado"` con `motivo`, `total_actualizado` y `descuento_afiliado`. También admite los errores de negocio `clave_reintento_en_conflicto` y `saldo_insuficiente`.
 
 [V08](https://linear.app/camilodarwitg/issue/CAM-176/v08-registrar-afiliacion-dentro-del-pago) y [V15](https://linear.app/camilodarwitg/issue/CAM-264/v15-verificar-reversion-de-la-compra-afiliada-ante-un-fallo) figuran pendientes en Linear. La firma nueva se simuló en la prueba HTTP. La compatibilidad con la firma definitiva y la reversión en PostgreSQL quedan pendientes de esas tareas. La app móvil que confirme con código debe enviar también el total aceptado y la clave.
 

@@ -255,6 +255,33 @@ describe('ms-pedidos', () => {
     expect(httpMock.post).not.toHaveBeenCalled();
   });
 
+  test.each([['pagado', 201], ['pendiente', 503]])(
+    'POST /api/pedidos con pedido pendiente y pago %s responde %s', async (pagoEstado, estadoHttp) => {
+      const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+      try {
+        fijarLecturas({ usuario: { id: 10, activo: true } });
+        httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+        mockRpc.mockResolvedValue({ data: {
+          ok: true, pedido_id: 49, estado: 'pendiente', pago_estado: pagoEstado,
+          total_pagado: 6100, descuento_afiliado: 900
+        }, error: null });
+
+        const res = await request(app).post('/api/pedidos')
+          .set('Idempotency-Key', 'c07-estado-pago')
+          .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+        expect(res.status).toBe(estadoHttp);
+        if (estadoHttp === 201) expect(res.body).toEqual({
+          pedido_id: 49, estado: 'pagado', total_pagado: 6100, descuento_afiliado: 900
+        });
+      } finally {
+        if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+        else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+      }
+    }
+  );
+
   test('POST /api/pedidos permite varios productos de la misma cafeteria', async () => {
     httpMock.post.mockResolvedValue(respuestaPrecios([
       producto({ id: 1, cafeteria_id: 1 }),
