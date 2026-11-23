@@ -159,6 +159,7 @@ const CartScreen = ({
           renderItem={({ item }) => (
             <CartItem
               item={item}
+              disabled={paying}
               onIncrease={onIncrease}
               onDecrease={onDecrease}
               onRemove={onRemove}

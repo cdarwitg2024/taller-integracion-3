@@ -1,6 +1,7 @@
 import Input from '../src/components/Input';
 import Button from '../src/components/Button';
-import { act, Alert, CartScreen, cotizar, pagarDesdePantalla, pestaña, producto,
+import CartItem from '../src/components/CartItem';
+import { act, Alert, CartScreen, cotizar, disponibilidad, pagarDesdePantalla, pestaña, producto,
   Text, transporte, tree } from '../tests/support/checkoutPrueba';
 
 const json = (status: number, body: object) => ({
@@ -12,6 +13,49 @@ const pulsar = (title: string) => act(async () =>
   tree.root.findAllByType(Button).find(n => n.props.title === title)!.props.onPress());
 const textos = () => tree.root.findAllByType(Text).map(n => [].concat(n.props.children).join('')).join(' | ');
 const importe = (total: number) => `$${total.toLocaleString('es-CL')}`;
+
+test('dos cambios rápidos conservan la última cotización y el pago usa sus cantidades e importe', async () => {
+  let responderDos!: (valor: ReturnType<typeof cotizacion>) => void;
+  let responderTres!: typeof responderDos;
+  cotizar.mockResolvedValueOnce(cotizacion(5000))
+    .mockImplementationOnce(() => new Promise(resolve => { responderDos = resolve; }))
+    .mockImplementationOnce(() => new Promise(resolve => { responderTres = resolve; }));
+  await pestaña('Cafeterías');
+  await pestaña('Carrito');
+  const aumentar = () => act(async () => tree.root.findByType(CartItem).props.onIncrease(producto.id));
+  await aumentar();
+  await aumentar();
+  expect(cotizar.mock.calls.slice(-2).map(([, opciones]) => JSON.parse(opciones.body).items[0].cantidad))
+    .toEqual([2, 3]);
+  expect(textos()).not.toContain(importe(5000));
+  await pagarDesdePantalla();
+  expect(transporte).not.toHaveBeenCalled();
+
+  await act(async () => responderTres(cotizacion(15000)));
+  await act(async () => responderDos(cotizacion(10000)));
+  expect(textos()).toContain(importe(15000));
+  expect(textos()).not.toContain(importe(10000));
+
+  let terminarStock!: () => void;
+  disponibilidad.mockImplementationOnce(() => new Promise(resolve => {
+    terminarStock = () => resolve({ error: null, data: [{ id: producto.id,
+      cafeteria_id: 7, activo: true, eliminado_en: null, stock: 20 }] });
+  }));
+  await act(async () => {
+    void tree.root.findAllByType(Button).find(n => n.props.title === 'Proceder al Pago')!.props.onPress();
+  });
+  expect(tree.root.findByType(CartItem).props.disabled).toBe(true);
+  await aumentar();
+  expect(cotizar).toHaveBeenCalledTimes(4);
+  transporte.mockResolvedValueOnce(json(201, {
+    pedido_id: 503, estado: 'pagado', total_pagado: 15000, descuento_afiliado: 0,
+  }));
+  await act(async () => terminarStock());
+  expect(transporte).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(transporte.mock.calls[0][1].body)).toMatchObject({
+    items: [{ producto_id: producto.id, cantidad: 3 }], total_aceptado: 15000,
+  });
+});
 
 test('tras quitar el código, el toque de pago acepta el total cotizado aunque el precio local sea distinto', async () => {
   cotizar.mockResolvedValueOnce(cotizacion(10000))
@@ -37,6 +81,17 @@ test('tras quitar el código, el toque de pago acepta el total cotizado aunque e
   expect(opciones.headers['Idempotency-Key']).toBeTruthy();
   expect(tree.root.findByType(CartScreen).props.cart).toHaveLength(0);
   expect(Alert.alert).toHaveBeenCalledWith('Pago aprobado', `Total pagado: ${importe(11000)}.`);
+});
+
+test('si falla la cotización tras editar la cantidad, el pago no vuelve al flujo sin cotización', async () => {
+  cotizar.mockResolvedValueOnce(cotizacion(5000))
+    .mockResolvedValueOnce(json(503, { error: 'No se pudo cotizar' }));
+  await pestaña('Cafeterías');
+  await pestaña('Carrito');
+  await act(async () => tree.root.findByType(CartItem).props.onIncrease(producto.id));
+  expect(textos()).toContain('No se pudo obtener la cotización.');
+  await pagarDesdePantalla();
+  expect(transporte).not.toHaveBeenCalled();
 });
 
 test.each([false, true])('un 409 exige una cotización válida antes de confirmar (fallo inicial: %s)', async falla => {
