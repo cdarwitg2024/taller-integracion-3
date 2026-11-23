@@ -976,18 +976,13 @@ async function validarQr({ user, body }) {
     return rechazoEntrega('no_listo', razon, pedido);
   }
 
-  // Transicion atomica. Se conserva el valor persistido de `estado` para
-  // tolerar filas historicas con alias ('Listo') sin reescribir el slug.
+  // La RPC confirma la entrega y habilita la comisión en la misma transacción.
   const { data: actualizado, error: errUpdate } = await cliente
-    .from('pedidos')
-    .update({
-      estado: 'entregado',
-      entregado_en: new Date().toISOString(),
-      qr_usado: true
+    .rpc('confirmar_entrega_pedido', {
+      p_pedido_id: pedido.id,
+      p_cafeteria_id: pedido.cafeteria_id,
+      p_credencial: credencial
     })
-    .eq('id', pedido.id)
-    .eq('estado', pedido.estado)
-    .or('qr_usado.eq.false,qr_usado.is.null')
     .select(CAMPOS_PEDIDO_PUBLICOS)
     .maybeSingle();
 
@@ -1000,6 +995,7 @@ async function validarQr({ user, body }) {
       .from('pedidos')
       .select('id, cafeteria_id, estado, qr_usado, entregado_en')
       .eq('id', pedido.id)
+      .eq('cafeteria_id', pedido.cafeteria_id)
       .maybeSingle();
     if (errVigente) throw new HttpError(503, errVigente.message);
 
