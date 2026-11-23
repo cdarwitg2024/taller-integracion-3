@@ -14,6 +14,7 @@ const CartContext = createContext({
   ...crearEstadoCarrito(),
   setCart: () => {},
   setCodigo: () => {},
+  setRequiereRecotizar: async () => {},
   guardarCotizacion: () => {},
   clearCart: () => {},
   hydrated: false,
