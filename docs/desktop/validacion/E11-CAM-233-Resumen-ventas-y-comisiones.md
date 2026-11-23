@@ -49,7 +49,7 @@ SQL.
 
 ## Resultado
 
-- Escritorio: 149/149 pruebas aprobadas (8 nuevas: 7 del resumen y 1 de render).
+- Escritorio: 151/151 pruebas aprobadas sobre `develop` con E13 integrado (8 nuevas de E11: 7 del resumen y 1 de render).
 - `npm run build --prefix app-desktop`: código de salida 0.
 - `git diff --check`: sin errores.
 

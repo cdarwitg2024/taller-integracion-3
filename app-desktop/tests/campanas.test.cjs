@@ -64,6 +64,13 @@ const servicio = (listar, extra = {}) => ({
   validarFormularioCampana: cargarServicioCampanas().modulo.validarFormularioCampana,
 });
 
+// Promesa controlada para observar el estado de carga antes de resolver la consulta.
+function diferido() {
+  let resolver;
+  const promesa = new Promise(resolve => { resolver = resolve; });
+  return { promesa, resolver };
+}
+
 // Promesa controlada para interrumpir un guardado o una recarga en plena navegación.
 const diferir = () => {
   let resolver;
@@ -193,6 +200,19 @@ test('el contexto usa la cafetería del perfil e ignora el query param', async t
 test('sin campañas aparece el estado vacío', async t => {
   const h = await montar(t);
   assert.match(h.texto(), /Aún no hay campañas/);
+  assert.ok(h.boton('Crear la primera campaña'));
+});
+
+// Comprueba que la primera carga muestra el indicador y no un vacío prematuro.
+test('el primer render muestra carga mientras llega la respuesta', async t => {
+  const { promesa, resolver } = diferido();
+  const h = await montar(t, { campanas: servicio(() => promesa) });
+  assert.ok(h.tree.root.findAllByType('CircularProgress').length > 0);
+  assert.doesNotMatch(h.texto(), /Aún no hay campañas/);
+  assert.doesNotMatch(h.texto(), /No se pudieron cargar/);
+  await act(async () => resolver([campana(31, 'Semana del café')]));
+  assert.match(h.texto(), /Semana del café/);
+  assert.equal(h.tree.root.findAllByType('CircularProgress').length, 0);
 });
 
 test('un error de carga muestra alerta y permite reintentar', async t => {
@@ -206,6 +226,29 @@ test('un error de carga muestra alerta y permite reintentar', async t => {
   await act(async () => h.boton('Reintentar').props.onClick());
   assert.match(h.texto(), /Campaña reintentada/);
   assert.equal(intentos, 2);
+});
+
+// Comprueba que un fallo al recargar descarta las filas ya visibles.
+test('un fallo al recargar retira las tarjetas anteriores y permite reintentar en la misma ruta', async t => {
+  let intentos = 0;
+  const h = await montar(t, { campanas: servicio(async () => {
+    intentos += 1;
+    if (intentos === 1) return [campana(31, 'Semana del café')];
+    if (intentos === 2) throw new Error('sin_acceso_cafeteria');
+    return [campana(32, 'Campaña recuperada')];
+  }) });
+  assert.match(h.texto(), /Semana del café/);
+  await act(async () => {
+    h.tree.root.findAll(n => typeof n.props?.onReintentar === 'function')[0].props.onReintentar();
+  });
+  assert.match(h.texto(), /sin_acceso_cafeteria/);
+  assert.doesNotMatch(h.texto(), /Semana del café/);
+  assert.ok(h.boton('Reintentar'));
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas');
+  await act(async () => h.boton('Reintentar').props.onClick());
+  assert.match(h.texto(), /Campaña recuperada/);
+  assert.doesNotMatch(h.texto(), /sin_acceso_cafeteria/);
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas');
 });
 
 test('abrir el formulario y volver conserva el contexto del listado sin recargar', async t => {
