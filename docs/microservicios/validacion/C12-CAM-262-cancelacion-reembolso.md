@@ -10,3 +10,11 @@ Validación del 23 de noviembre de 2026, hora de Santiago. Se usó la app móvil
 | Repetir `cancelar_pedido(49)` con el contexto del comprador | Rechazar el segundo intento. | SQL Editor devolvió `{"ok":false,"motivo":"ya_cancelado","estado_actual":"cancelado"}`. La prueba se hizo dentro de una transacción con `ROLLBACK`. Una consulta posterior confirmó saldo de $132.100 CLP, un reembolso y una reversión persistidos. |
 
 El segundo intento en Cloud se comprobó a nivel RPC. El HTTP 409 equivalente se verificó previamente en el gateway local con datos desechables. [C12 en Linear](https://linear.app/camilodarwitg/issue/CAM-262)
+
+## Comprobaciones locales posteriores
+
+El 23 de noviembre de 2026, con Node.js 22.23.5 y PostgreSQL 15 desechable:
+
+- `ms-pedidos` aprobó 155 pruebas. La regresión nueva usa la respuesta real de V08 `{"ok":false,"motivo":"saldo_insuficiente","cobrado":false}` y comprueba HTTP 422 con `{"error":"saldo_insuficiente","cobrado":false}`; también se conserva la forma anterior `{"error":"saldo_insuficiente"}`.
+- La migración de [límite por comprador y código](../../../database/fixes/limitar_beneficio_por_comprador_y_codigo.sql) se aplicó sobre V07, V08 y V09 reales de `db_CoffeeFaster` en una base temporal. Se comprobaron la compra previa sin código, dos códigos distintos de la misma cafetería, dos compras simultáneas con claves distintas y un solo débito, y la recompra tras un reembolso total.
+- No se aplicó SQL en Supabase Cloud. La evidencia de Cloud anterior se conserva sin cambios.

@@ -282,6 +282,76 @@ describe('ms-pedidos', () => {
     }
   );
 
+  test('POST /api/pedidos rechaza el saldo insuficiente real de V08 con HTTP 422', async () => {
+    const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+      // Respuesta real de V08: no trae `error`, sino `ok:false` y `motivo`.
+      mockRpc.mockResolvedValue({
+        data: { ok: false, motivo: 'saldo_insuficiente', cobrado: false },
+        error: null
+      });
+
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'c12-saldo-insuficiente')
+        .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+      expect(res.status).toBe(422);
+      expect(res.body).toEqual({ error: 'saldo_insuficiente', cobrado: false });
+    } finally {
+      if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+    }
+  });
+
+  test('POST /api/pedidos conserva el rechazo de saldo con la forma anterior', async () => {
+    const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+      mockRpc.mockResolvedValue({
+        data: { error: 'saldo_insuficiente' },
+        error: null
+      });
+
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'c12-saldo-forma-anterior')
+        .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+      expect(res.status).toBe(422);
+      expect(res.body).toEqual({ error: 'saldo_insuficiente', cobrado: false });
+    } finally {
+      if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+    }
+  });
+
+  test('POST /api/pedidos responde 409 al conflicto de clave real de V08', async () => {
+    const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+      mockRpc.mockResolvedValue({
+        data: { ok: false, motivo: 'clave_reintento_en_conflicto', cobrado: false },
+        error: null
+      });
+
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'c12-clave-conflicto')
+        .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: 'clave_reintento_en_conflicto' });
+    } finally {
+      if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+    }
+  });
+
   test('POST /api/pedidos permite varios productos de la misma cafeteria', async () => {
     httpMock.post.mockResolvedValue(respuestaPrecios([
       producto({ id: 1, cafeteria_id: 1 }),

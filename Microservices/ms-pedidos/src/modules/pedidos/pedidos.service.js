@@ -217,7 +217,16 @@ async function confirmarPago(cliente, cafeteriaId, body, clave) {
     throw new HttpError(503, 'No se pudo confirmar el pago');
   }
 
-  switch (data?.error) {
+  // V08 responde los rechazos de negocio como `{ ok:false, motivo, cobrado }`,
+  // mientras que las variantes anteriores usaban `error`. Se aceptan ambas
+  // formas sin relajar la validacion del pago confirmado.
+  const motivoRechazo = typeof data?.error === 'string'
+    ? data.error
+    : data?.ok === false
+      ? data.motivo
+      : undefined;
+
+  switch (motivoRechazo) {
     case 'precio_actualizado':
       if (typeof data.motivo !== 'string' ||
           !Number.isSafeInteger(data.total_actualizado) || data.total_actualizado < 0 ||
@@ -227,7 +236,7 @@ async function confirmarPago(cliente, cafeteriaId, body, clave) {
       return {
         status: 409,
         body: {
-          error: data.error,
+          error: motivoRechazo,
           motivo: data.motivo,
           total_aceptado,
           total_actualizado: data.total_actualizado,
@@ -236,9 +245,9 @@ async function confirmarPago(cliente, cafeteriaId, body, clave) {
         }
       };
     case 'clave_reintento_en_conflicto':
-      return { status: 409, body: { error: data.error } };
+      return { status: 409, body: { error: motivoRechazo } };
     case 'saldo_insuficiente':
-      return { status: 422, body: { error: data.error, cobrado: false } };
+      return { status: 422, body: { error: motivoRechazo, cobrado: false } };
     case undefined: {
       // V08 separa el estado operativo del pedido del estado del pago.
       const pagoConfirmado = data?.pago_estado === undefined
