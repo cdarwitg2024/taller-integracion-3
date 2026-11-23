@@ -2,7 +2,7 @@
 // Navega entre listado, formulario y resumen reutilizando el layout y PageHeader.
 // El contexto de cafetería proviene siempre del perfil autorizado, nunca de la URL.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert, Box, Button, Chip, CircularProgress, Paper, Stack, TextField, Typography,
 } from '@mui/material';
@@ -65,6 +65,7 @@ const paraInput = (iso) => {
 // Vista principal: mantiene el listado y resuelve las rutas de listado, formulario y resumen.
 function Campanas({ currentUser }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const cafeteriaId = cafeteriaAutorizada(currentUser);
   // El listado guarda a qué cafetería pertenece. Así el primer render tras un
   // cambio de cafetería no puede mostrar filas, error ni carga de la anterior.
@@ -79,6 +80,9 @@ function Campanas({ currentUser }) {
   // un cambio de perfil, aunque su callback se dispare más tarde.
   const cafeteriaActual = useRef(cafeteriaId);
   cafeteriaActual.current = cafeteriaId;
+  // Ruta vigente del render: un guardado que termine después de navegar no debe volver al listado.
+  const rutaActual = useRef(location.pathname);
+  rutaActual.current = location.pathname;
 
   // Carga el listado de la cafetería activa y descarta respuestas atrasadas.
   const cargar = useCallback(async () => {
@@ -114,11 +118,11 @@ function Campanas({ currentUser }) {
   // Regresa al listado conservando el estado ya cargado.
   const volverAlListado = () => navigate(LISTADO);
 
-  // Recarga y vuelve al listado solo si el guardado sigue perteneciendo a la cafetería activa.
-  const guardarYVolver = async (origen) => {
-    if (origen !== cafeteriaActual.current) return;
+  // Recarga y vuelve al listado solo si el guardado sigue en su cafetería y ruta.
+  const guardarYVolver = async (origen, rutaGuardada) => {
+    if (origen !== cafeteriaActual.current || rutaGuardada !== rutaActual.current) return;
     await cargar();
-    if (origen !== cafeteriaActual.current) return;
+    if (origen !== cafeteriaActual.current || rutaGuardada !== rutaActual.current) return;
     volverAlListado();
   };
 
@@ -256,6 +260,7 @@ function FormularioEdicion(props) {
 // Formulario de creación y edición de una campaña.
 function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
   const { id } = useParams();
+  const location = useLocation();
   const existente = id ? campanas.find(c => String(c.id) === String(id)) : null;
   const [form, setForm] = useState(() => (existente
     ? {
@@ -295,12 +300,13 @@ function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
       return;
     }
     const origen = cafeteriaId;
+    const rutaGuardada = location.pathname;
     setBusy(true);
     setFormError('');
     try {
       if (existente) await campanasAfiliados.actualizar(origen, existente.id, form);
       else await campanasAfiliados.crear(origen, form);
-      await onGuardado(origen);
+      if (montado.current) await onGuardado(origen, rutaGuardada);
     } catch (err) {
       if (montado.current) setFormError(err.message || 'No se pudo guardar la campaña.');
     } finally {

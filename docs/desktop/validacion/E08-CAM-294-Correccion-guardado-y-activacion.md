@@ -16,7 +16,10 @@ campaña 31; guardar desde esa vista enviaba esas tasas y esa vigencia a la
 campaña 32.
 
 La corrección remonta el formulario con una clave que incluye la cafetería y el
-id de la campaña. No cambia el contrato C02, la validación ni la RPC.
+id de la campaña. Además, el guardado solo vuelve al listado si su ruta sigue
+vigente antes y después de recargar, para que un PATCH o una recarga atrasados
+no descarten los cambios de otra campaña abierta. No cambia el contrato C02, la
+validación ni la RPC.
 
 Archivos modificados:
 
@@ -52,8 +55,10 @@ seguía mostrando la campaña 31. Sin la corrección, el envío habría llamado 
 | Consultar oportunidades móviles con la campaña aceptada | La RPC devuelve la campaña | Aprobado con Auth, JWT, PostgREST y RLS reales |
 | Pausar la campaña desde el escritorio | La RPC ya no devuelve la campaña | Aprobado con Auth, JWT, PostgREST y RLS reales |
 | Activarla de nuevo | La RPC vuelve a devolver la campaña | Aprobado con Auth, JWT, PostgREST y RLS reales |
+| Guardar A, navegar a editar B y terminar el PATCH de A | Se conserva la edición de B y sus cambios sin guardar | Aprobado |
+| Guardar A, navegar a editar B durante la recarga | Se conserva la edición de B y sus cambios sin guardar | Aprobado |
 
-La última columna se obtuvo con
+Las tres filas de oportunidades móviles se obtuvieron con
 `.github/scripts/test-afiliados-auth-integration.cjs --c05`, que levanta
 PostgreSQL, Auth, PostgREST, `ms-pedidos` y nginx en contenedores desechables.
 El escenario E08 usa la cafetería 8 para no topar con el límite de dos filas que
@@ -76,7 +81,7 @@ COFFEEFAST_DB_MIGRATIONS=<directorio-con-migraciones-0020-0021-0023-0024> \
 git diff --check
 ~~~
 
-- Escritorio: 138/138 pruebas aprobadas (136 antes de E08).
+- Escritorio: 140/140 pruebas aprobadas (136 antes de E08).
 - Compilación de producción de escritorio: código de salida 0.
 - `ms-pedidos`: 191/191 pruebas aprobadas.
 - Integración desechable C05/E08: 7/7 escenarios aprobados, incluido el de

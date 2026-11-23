@@ -64,6 +64,13 @@ const servicio = (listar, extra = {}) => ({
   validarFormularioCampana: cargarServicioCampanas().modulo.validarFormularioCampana,
 });
 
+// Promesa controlada para interrumpir un guardado o una recarga en plena navegación.
+const diferir = () => {
+  let resolver;
+  const promesa = new Promise(resuelve => { resolver = resuelve; });
+  return { promesa, resolver };
+};
+
 // Completa los campos obligatorios para que el envío pase la validación de E05.
 async function llenarFormularioValido(h) {
   const valores = {
@@ -661,6 +668,52 @@ test('guardar y reabrir conserva tasas, vigencia y estado persistidos', async t 
   await h.navegar('/dueno/afiliados/campanas/31');
   assert.match(h.texto(), /Comisión del afiliado:\s*12%/);
   assert.ok(h.chips().includes('activa'));
+});
+
+test('un guardado pendiente no saca de la edición abierta después de cambiar de campaña', async t => {
+  const guardado = diferir();
+  const actualizados = [];
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => [campana(31, 'Campaña A'), campana(32, 'Campaña B')], {
+      actualizar: (_cafeteria, id, form) => { actualizados.push({ id, form }); return guardado.promesa; },
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  await h.navegar('/dueno/afiliados/campanas/32/editar');
+  await act(async () => campo('Nombre de la campaña').props.onChange({ target: { value: 'Campaña B editada' } }));
+  await act(async () => { guardado.resolver({}); });
+
+  assert.equal(actualizados.length, 1);
+  assert.equal(actualizados[0].id, 31);
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas/32/editar');
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña B editada');
+});
+
+test('una recarga pendiente no saca de la edición abierta después de cambiar de campaña', async t => {
+  let cargas = 0;
+  const recarga = diferir();
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => {
+      cargas++;
+      return cargas === 1 ? [campana(31, 'Campaña A'), campana(32, 'Campaña B')] : recarga.promesa;
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  assert.equal(cargas, 2);
+  await h.navegar('/dueno/afiliados/campanas/32/editar');
+  await act(async () => campo('Nombre de la campaña').props.onChange({ target: { value: 'Campaña B editada' } }));
+  await act(async () => { recarga.resolver([campana(31, 'Campaña A'), campana(32, 'Campaña B')]); });
+
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas/32/editar');
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña B editada');
 });
 
 // Pruebas de condiciones y aceptación de campañas del dueño.
