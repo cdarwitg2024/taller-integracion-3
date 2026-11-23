@@ -20,13 +20,14 @@ const importe = monto => `$${monto.toLocaleString('es-CL')}`;
 let tree;
 let cartera;
 let transporte;
+let confirmarCompra;
 const fetchAnterior = global.fetch;
 const urlAnterior = process.env.EXPO_PUBLIC_API_URL;
 
 function Carrito({ usuarioId }) {
   cartera = useCart();
   return <CartScreen usuarioId={usuarioId} cart={cartera.cart} idCarrito={cartera.idCarrito}
-    codigo={cartera.codigo} onCodigoChange={cartera.setCodigo} onCheckout={jest.fn()} />;
+    codigo={cartera.codigo} onCodigoChange={cartera.setCodigo} onCheckout={confirmarCompra} />;
 }
 
 async function montar(usuarioId = 'comprador') {
@@ -46,6 +47,7 @@ beforeEach(async () => {
   process.env.EXPO_PUBLIC_API_URL = gateway;
   supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'jwt-prueba' } } });
   transporte = jest.fn();
+  confirmarCompra = jest.fn();
   global.fetch = transporte;
 });
 
@@ -70,12 +72,17 @@ test('cotiza sin código, muestra los tres importes exactos al aplicar y recotiz
   expect(texto()).toContain(`Total cotizado | IVA incluido | ${importe(8500)}`);
   expect(texto()).toContain(importe(10000));
   await act(async () => tree.root.findByProps({ accessibilityLabel: 'Retirar lo antes posible' }).props.onPress());
-  expect(boton('Proceder al Pago').props.disabled).toBe(true);
+  expect(boton('Proceder al Pago').props.disabled).toBe(false);
+  await pulsar('Proceder al Pago');
+  expect(confirmarCompra).toHaveBeenLastCalledWith(expect.objectContaining({ codigo: 'NORTE', totalAceptado: 8500 }));
   await pulsar('Quitar');
   expect(texto()).toContain(`Descuento de afiliado | ${importe(0)}`);
   expect(texto()).toContain(`Total cotizado | IVA incluido | ${importe(11000)}`);
   expect(texto()).not.toContain(importe(8500));
   expect(boton('Proceder al Pago').props.disabled).toBe(false);
+  await pulsar('Proceder al Pago');
+  expect(confirmarCompra.mock.lastCall[0]).not.toHaveProperty('codigo');
+  expect(confirmarCompra.mock.lastCall[0].totalAceptado).toBe(11000);
   const base = { cafeteria_id: 7, items: [{ producto_id: 41, cantidad: 1 }] };
   expect(solicitudes()).toEqual([base, { ...base, codigo: 'NORTE' }, base]);
   expect(transporte.mock.calls[0][0]).toBe(`${gateway}/api/afiliados/cotizaciones`);
@@ -102,7 +109,7 @@ test.each([
   [422, 'codigo_invalido', 'El código no es válido para esta cafetería.'],
   [422, 'codigo_desactivado', 'El código está inactivo o su campaña no está disponible.'],
   [422, 'campana_pausada', 'El código está inactivo o su campaña no está disponible.'],
-  [422, 'beneficio_usado', 'Ya usaste este beneficio y no puedes aplicarlo otra vez.'],
+  [422, 'beneficio_usado', 'Este descuento de afiliado ya no está disponible para tu cuenta.'],
   [422, 'motivo_nuevo', 'Este código no se puede aplicar a tu carrito.'],
   [503, 'cotizacion_afiliada_no_disponible', 'No se pudo obtener la cotización.'],
 ])('HTTP %s con %s muestra su mensaje y permite seguir sin código', async (status, motivo, mensaje) => {

@@ -53,7 +53,7 @@ test('explica aprobación, beneficio único, código propio, cancelación y vige
   await pulsar('Ver condiciones de Campaña Norte');
   expect(texto()).toContain('aprobar tu afiliación y asignarte un código');
   expect(texto()).toContain('Ver esta campaña no significa que ya estés aprobado');
-  expect(texto()).toContain('una sola vez en todo CoffeeFast, aunque ya haya comprado antes');
+  expect(texto()).toContain('Aplica el código en el carrito para comprobar si el descuento está disponible para tu cuenta.');
   expect(texto()).toContain('en esa compra tu comisión es $0');
   expect(texto()).toContain('el comprador recupera su beneficio y la comisión queda en $0');
   expect(texto()).toContain('activa y vigente al confirmar el pago');
