@@ -72,6 +72,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 - [D02 - Estado del código asociado al carrito](mobile/validacion/D02-Estado-codigo-carrito.md)
 - [D03 - Cotización de carrito completo](mobile/validacion/D03-Cotizacion-carrito-completo.md)
+- [D05 - Recotización al editar el carrito](mobile/validacion/D05-Recotizar-al-editar-carrito.md)
 - [D07 - Clave persistida del intento de compra](mobile/validacion/D07-Clave-intento-compra.md)
 
 ## Backend Node

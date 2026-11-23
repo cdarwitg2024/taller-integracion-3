@@ -142,7 +142,7 @@ function AppContent() {
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
-  const { cart, setCart, clearCart: vaciarCarrito, hydrated, codigo, setCodigo, idCarrito } = useCart() as {
+  const { cart, setCart, clearCart: vaciarCarrito, hydrated, codigo, setCodigo, idCarrito, requiereCotizacion } = useCart() as {
     cart: CartItem[];
     setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
     clearCart: () => void;
@@ -150,6 +150,7 @@ function AppContent() {
     codigo: string;
     setCodigo: (codigo: string) => void;
     idCarrito: number;
+    requiereCotizacion: boolean;
   };
   const [paying, setPaying] = useState(false);
   const [requiereRecotizar, setRequiereRecotizar] = useState(false);
@@ -325,6 +326,7 @@ function AppContent() {
           text: 'Salir',
           style: 'destructive',
           onPress: async () => {
+            if (checkoutEnCurso.current) return;
             setSelectedCafeteria(null);
             if (!await clearCart()) return;
             setActiveTab('cafeterias');
@@ -405,7 +407,7 @@ function AppContent() {
   };
 
   const addToCart = (product: Product, cafeteria: Cafeteria) => {
-    if (!product.available) {
+    if (checkoutEnCurso.current || !product.available) {
       return;
     }
 
@@ -428,7 +430,7 @@ function AppContent() {
             // Se vacía y se agrega en el mismo toque: si solo se vaciaba, el
             // botón prometía algo que no pasaba.
             onPress: async () => {
-              if (await clearCart()) agregarProducto(product, cafeteria);
+              if (!checkoutEnCurso.current && await clearCart()) agregarProducto(product, cafeteria);
             },
           },
         ]
@@ -440,6 +442,7 @@ function AppContent() {
   };
 
   const increaseQuantity = (id: number) => {
+    if (checkoutEnCurso.current) return;
     setCart((currentCart: CartItem[]) =>
       currentCart.map((item) =>
         item.id === id ? { ...item, quantity: item.quantity + 1 } : item
@@ -448,6 +451,7 @@ function AppContent() {
   };
 
   const decreaseQuantity = (id: number) => {
+    if (checkoutEnCurso.current) return;
     setCart((currentCart: CartItem[]) =>
       currentCart
         .map((item) =>
@@ -458,6 +462,7 @@ function AppContent() {
   };
 
   const removeFromCart = (id: number) => {
+    if (checkoutEnCurso.current) return;
     setCart((currentCart: CartItem[]) =>
       currentCart.filter((item) => item.id !== id)
     );
@@ -510,7 +515,7 @@ function AppContent() {
       return;
     }
 
-    if (requiereRecotizar && franjaRetiro.totalAceptado === undefined) return;
+    if ((requiereRecotizar || requiereCotizacion) && franjaRetiro.totalAceptado === undefined) return;
 
     // La referencia bloquea otro toque incluso antes del siguiente render.
     if (checkoutEnCurso.current) return;
@@ -763,7 +768,7 @@ function AppContent() {
               onCheckout={handleCheckout}
               onBack={() => handleTabPress('cafeterias')}
               paying={paying}
-              requiereRecotizar={requiereRecotizar}
+              requiereRecotizar={requiereRecotizar || requiereCotizacion}
               onRecotizar={recotizar}
             />
           )}
