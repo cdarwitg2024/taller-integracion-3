@@ -181,6 +181,7 @@ test('el contexto usa la cafetería del perfil e ignora el query param', async t
 test('sin campañas aparece el estado vacío', async t => {
   const h = await montar(t);
   assert.match(h.texto(), /Aún no hay campañas/);
+  assert.ok(h.boton('Crear la primera campaña'));
 });
 
 // Comprueba que la primera carga muestra el indicador y no un vacío prematuro.
