@@ -5,6 +5,7 @@ import {
   FlatList,
   StyleSheet,
   TouchableOpacity,
+  BackHandler,
   ActivityIndicator,
   Modal,
   ScrollView,
@@ -142,6 +143,16 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
   const [tab, setTab] = useState('activos');
   const [cancelando, setCancelando] = useState(false);
   const cerrarPedido = useCallback(() => setSelected(null), []);
+  const detalleAbierto = Boolean(selected && !pedidoConfirmado);
+
+  useEffect(() => {
+    if (!detalleAbierto) return undefined;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      cerrarPedido();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [detalleAbierto, cerrarPedido]);
 
   // S2-T17: Cancelación autónoma de pedidos con reembolso automático a Wallet
   const solicitarCancelacion = useCallback((pedido) => {
@@ -564,14 +575,9 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
         </>
       )}
 
-      {/* Un solo modal nativo para confirmación y detalle del pedido. */}
-      <Modal
-        visible={Boolean(pedidoConfirmado || selected)}
-        animationType="slide"
-        transparent
-        onRequestClose={pedidoConfirmado ? onConfirmacionVista : cerrarPedido}
-      >
-        {pedidoConfirmado ? (
+      <Modal visible={Boolean(pedidoConfirmado)} animationType="slide" transparent
+        onRequestClose={onConfirmacionVista}>
+        {pedidoConfirmado && (
         <View style={styles.modalBackdrop}>
           <Card variant="elevated" padding="lg" style={styles.modalCard}>
             <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
@@ -662,8 +668,10 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
             </ScrollView>
           </Card>
         </View>
-        ) : (
-        <View style={styles.modalBackdrop}>
+        )}
+      </Modal>
+      {detalleAbierto && (
+        <View testID="detalle-pedido" accessibilityViewIsModal style={[styles.modalBackdrop, styles.detalleOverlay]}>
           <Card variant="elevated" padding="lg" style={styles.modalCard}>
             <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
             {selected && (
@@ -682,6 +690,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                   </View>
                   <TouchableOpacity
                     style={styles.modalClose}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cerrar detalle del pedido"
                     onPress={cerrarPedido}
                   >
                     <AppIcon name="close" style={styles.modalCloseText} />
@@ -847,8 +857,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
             </ScrollView>
           </Card>
         </View>
-        )}
-      </Modal>
+      )}
     </View>
   );
 };
@@ -949,6 +958,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     padding: spacing.xl,
+  },
+  detalleOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
   },
   modalCard: {
     maxHeight: '90%',

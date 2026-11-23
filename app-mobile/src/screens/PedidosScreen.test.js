@@ -80,20 +80,23 @@ test('abre inmediatamente QR completo y token persistidos sin consultar otro ser
   expect(textos()).toContain('842517');
 });
 
-test('permite abrir y cerrar repetidamente usando un único modal nativo', async () => {
+test('abre y cierra repetidamente el detalle de un pedido listo sin activar el modal nativo', async () => {
+  rows = [{ ...pedido, estado: 'listo' }];
   await montar();
   expect(tree.root.findAllByType(Modal)).toHaveLength(1);
   for (let i = 0; i < 5; i++) {
     await abrir();
-    expect(tree.root.findByType(Modal).props.visible).toBe(true);
+    expect(tree.root.findByType(Modal).props.visible).toBe(false);
     expect(tree.root.findByType(QrCode).props.value).toBe(pedido.qr_token);
     expect(textos()).toContain('842517');
-    await flush(() => tree.root.findByType(Modal).props.onRequestClose());
-    expect(tree.root.findByType(Modal).props.visible).toBe(false);
+    const cerrar = tree.root.findAllByType(TouchableOpacity)
+      .find(n => n.props.accessibilityLabel === 'Cerrar detalle del pedido');
+    await flush(() => cerrar.props.onPress());
+    expect(tree.root.findAllByType(QrCode)).toHaveLength(0);
   }
 });
 
-test('cerrar confirmación permite abrir el detalle en el mismo modal', async () => {
+test('cerrar confirmación permite abrir el detalle sin reactivar el modal nativo', async () => {
   const confirmado = { pedido_id: 52, total: 6000, saldo_restante: 4000,
     estado: 'pendiente', qr_token: pedido.qr_token, codigo_retiro: '842517' };
   const cerrarConfirmacion = jest.fn(() => tree.update(<PedidosScreen userId="uuid-auth" />));
@@ -104,7 +107,7 @@ test('cerrar confirmación permite abrir el detalle en el mismo modal', async ()
   expect(cerrarConfirmacion).toHaveBeenCalledTimes(1);
   expect(tree.root.findByType(Modal).props.visible).toBe(false);
   await abrir();
-  expect(tree.root.findByType(Modal).props.visible).toBe(true);
+  expect(tree.root.findByType(Modal).props.visible).toBe(false);
   expect(tree.root.findByType(QrCode).props.value).toBe(pedido.qr_token);
 });
 
