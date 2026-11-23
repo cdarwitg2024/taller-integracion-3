@@ -1,5 +1,5 @@
 export const crearEstadoCarrito = () => ({
-  cart: [], cafeteriaId: null, codigo: '', cotizacion: null, requiereCotizacion: false, revision: 0, idCarrito: 0,
+  cart: [], cafeteriaId: null, codigo: '', cotizacion: null, requiereCotizacion: false, requiereRecotizar: false, revision: 0, idCarrito: 0,
 });
 
 function cafeteriaDelCarrito(cart) {
@@ -18,10 +18,13 @@ export function actualizarEstadoCarrito(estado, accion) {
       return { ...estado, cart, cafeteriaId,
         codigo: cafeteriaId && !cambiaCarrito ? estado.codigo : '',
         cotizacion: null, requiereCotizacion: !cambiaCarrito && estado.requiereCotizacion,
+        requiereRecotizar: Boolean(cafeteriaId && (accion.requiereRecotizar || (!cambiaCarrito && estado.requiereRecotizar))),
         revision: estado.revision + 1,
         idCarrito: estado.idCarrito + Number(cambiaCarrito),
       };
     }
+    case 'reconfirmar':
+      return { ...estado, requiereRecotizar: accion.valor, cotizacion: null, revision: estado.revision + 1 };
     case 'codigo': {
       const codigo = estado.cafeteriaId ? accion.valor.trim() : '';
       if (codigo === estado.codigo) return estado;

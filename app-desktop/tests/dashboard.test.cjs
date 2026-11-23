@@ -21,7 +21,10 @@ function cargar(ruta, dependencias) {
   return modulo.exports;
 }
 
-const cargadores = cargar('services/cargadorDashboard.js', { './pedidosService': {} });
+const cargadores = cargar('services/cargadorDashboard.js', {
+  './pedidosService': {},
+  './resumenComisiones': { resumenComisiones: { obtener: async () => ({}) } },
+});
 
 function diferida() {
   let resolve, reject;
@@ -56,7 +59,7 @@ for (const falla of [false, true]) {
     test(`carga inicial + refresco ${falla ? 'fallido' : 'exitoso'}; respuesta antigua ${antiguaPrimero ? 'primero' : 'después'}`, async () => {
       const { cargador, solicitudes, estados } = preparar();
       const inicial = cargador.cambiarCafeteria(1);
-      const refresco = cargador.refrescar(false);
+      const refresco = cargador.refrescar(true);
       assert.equal(cargador.obtenerEstado().loading, true);
       if (antiguaPrimero) {
         const antes = estados.length;
@@ -97,6 +100,22 @@ test('un refresco silencioso conserva los datos visibles y no abre el indicador'
   await refresco;
   assert.equal(cargador.obtenerEstado().stats.totalVentas, 200);
   assert.equal(cargador.obtenerEstado().loading, false);
+});
+
+test('un refresco silencioso tras reactivar cierra el indicador que dejó el desmontaje', async () => {
+  const { cargador, solicitudes } = preparar();
+  const inicial = cargador.cambiarCafeteria(1);
+  cargador.desmontar();
+  solicitudes[0].resolve([{ id: 101 }]);
+  await inicial;
+  assert.equal(cargador.obtenerEstado().loading, true);
+
+  cargador.activar();
+  const refresco = cargador.refrescar(false);
+  solicitudes[1].resolve([{ id: 102, total: 200 }]);
+  await refresco;
+  assert.equal(cargador.obtenerEstado().loading, false);
+  assert.equal(cargador.obtenerEstado().pedidos[0].id, 102);
 });
 
 test('el reintento visible abre la carga y elimina el error anterior', async () => {
@@ -184,14 +203,17 @@ const bloque = etiqueta => ({ children }) => React.createElement(etiqueta, null,
 const indicador = nombre => props => React.createElement('pre', { 'data-indicador': nombre }, JSON.stringify(props));
 const { VistaDashboard } = cargar('pages/dueno/Dashboard.jsx', {
   '@mui/material': {
-    Box: bloque('div'), Grid: bloque('div'), Alert: bloque('aside'),
+    Box: bloque('div'), Grid: bloque('div'),
+    Alert: props => React.createElement('aside', null, props.children, props.action),
     Button: bloque('button'), Typography: bloque('span'),
     LinearProgress: () => React.createElement('progress'),
   },
   '../../services/supabaseClient': { isSupabaseConfigured: false },
   '../../services/pedidosService': {},
+  '../../services/resumenComisiones': { obtener: async () => ({}) },
   '../../services/cargadorDashboard': cargadores,
   '../../components/dashboard/KpiCards': indicador('kpi'),
+  '../../components/dashboard/ResumenComisiones': indicador('comisiones'),
   '../../components/dashboard/SalesChart': indicador('ventas'),
   '../../components/dashboard/OrdersDistributionChart': indicador('distribucion'),
   '../../components/dashboard/TopProductsChart': indicador('productos'),
@@ -237,3 +259,61 @@ for (const destino of [2, null]) {
     }
   });
 }
+
+test('el aviso de comisiones no oculta las ventas ni el resumen ya obtenido', () => {
+  const estado = {
+    cafeteriaId: '1',
+    stats: { totalVentas: 900, totalPedidos: 1 },
+    pedidos: [{ id: 'PEDIDO_E11' }],
+    salesData: [],
+    topProducts: [],
+    resumenComisiones: { ventasReferidas: 1, totalCobrado: 900,
+      comisiones: { pendiente: 90, disponible: 0, revertida: 0 }, movimientos: [] },
+    loading: false,
+    dbError: null,
+    comisionesError: 'No se pudieron consultar las comisiones.',
+    ultimaActualizacionExitosa: '2026-11-23T04:00:00.000Z',
+  };
+  const html = renderizar(1, estado);
+  assert.match(html, /No se pudieron consultar las comisiones/);
+  assert.match(html, /Reintentar/);
+  assert.match(html, /PEDIDO_E11/);
+  assert.match(html, /data-indicador="comisiones"/);
+  assert.match(html, /900/);
+  assert.doesNotMatch(html, /progress/);
+});
+
+test('el componente real muestra el cotejo de ventas, cobro y comisiones con los datos de prueba', () => {
+  const ResumenComisiones = cargar('components/dashboard/ResumenComisiones.jsx', {
+    '@mui/material': { Grid: bloque('div'), Typography: bloque('span') },
+    '../ui/BaseCard': { __esModule: true, default: bloque('section') },
+    '../ui/BaseTable': {
+      BaseTableContainer: bloque('div'), BaseTable: bloque('table'),
+      BaseTableHead: bloque('thead'), BaseTableBody: bloque('tbody'),
+      BaseTableRow: bloque('tr'), BaseTableCell: bloque('td'),
+    },
+    '../../design/tokens': {
+      COLORS: { textPrimary: '#000', textMuted: '#666' },
+      SPACING: { xxl: 24, md: 8, lg: 16 },
+      TYPOGRAPHY: { fontWeightBold: 700, fontWeightExtraBold: 800 },
+    },
+  }).default;
+  const resumen = {
+    ventasReferidas: 3,
+    totalCobrado: 37000,
+    comisiones: { pendiente: 0, disponible: 2000, revertida: 2500 },
+    reversiones: -2500,
+    movimientos: [
+      { id: 6, pedidoId: 12, tipo: 'reversion', estado: 'revertida', montoClp: -1500, creadoEn: '2026-11-23T04:30:00Z' },
+      { id: 2, pedidoId: 10, tipo: 'reversion', estado: 'revertida', montoClp: -1000, creadoEn: '2026-11-23T02:00:00Z' },
+    ],
+  };
+  const html = renderToStaticMarkup(React.createElement(ResumenComisiones, { resumen }));
+  for (const texto of [
+    'Ventas referidas', '3', 'Total cobrado', '$37.000',
+    'Comisión pendiente', '$0', 'Comisión disponible', '$2.000',
+    'Comisión revertida', '$2.500', 'Reversiones', '$-2.500', '#10', '#12',
+  ]) {
+    assert.ok(html.includes(texto), `Falta ${texto} en el resumen renderizado`);
+  }
+});

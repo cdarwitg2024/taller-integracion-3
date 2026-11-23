@@ -49,7 +49,6 @@ export async function crearPedidoDesdeCarrito<T>(
 }
 
 function esRechazoCotizacion(error: ApiError) {
-  return (error.status === 409 && error.message === 'precio_actualizado') ||
-    (error.status === 422 && error.message === 'saldo_insuficiente') ||
+  return (error.status === 422 && error.message === 'saldo_insuficiente') ||
     (error.status === 503 && error.message === 'confirmacion_afiliada_no_disponible');
 }
