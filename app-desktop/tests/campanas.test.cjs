@@ -716,6 +716,30 @@ test('una recarga pendiente no saca de la edición abierta después de cambiar d
   assert.equal(campo('Nombre de la campaña').props.value, 'Campaña B editada');
 });
 
+test('reabrir la campaña original durante la recarga no descarta los cambios sin guardar', async t => {
+  let cargas = 0;
+  const recarga = diferir();
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => {
+      cargas++;
+      return cargas === 1 ? [campana(31, 'Campaña A'), campana(32, 'Campaña B')] : recarga.promesa;
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  assert.equal(cargas, 2);
+  await h.navegar('/dueno/afiliados/campanas/32/editar');
+  await h.navegar('/dueno/afiliados/campanas/31/editar');
+  await act(async () => campo('Nombre de la campaña').props.onChange({ target: { value: 'Campaña A reabierta' } }));
+  await act(async () => { recarga.resolver([campana(31, 'Campaña A'), campana(32, 'Campaña B')]); });
+
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas/31/editar');
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña A reabierta');
+});
+
 // Pruebas de condiciones y aceptación de campañas del dueño.
 function cargarCond(file, imports) {
   const filename = path.resolve(__dirname, '../src', file);

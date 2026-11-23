@@ -118,11 +118,11 @@ function Campanas({ currentUser }) {
   // Regresa al listado conservando el estado ya cargado.
   const volverAlListado = () => navigate(LISTADO);
 
-  // Recarga y vuelve al listado solo si el guardado sigue en su cafetería y ruta.
-  const guardarYVolver = async (origen, rutaGuardada) => {
-    if (origen !== cafeteriaActual.current || rutaGuardada !== rutaActual.current) return;
+  // Recarga y vuelve al listado solo si el guardado sigue en su cafetería, ruta e instancia.
+  const guardarYVolver = async (origen, rutaGuardada, instancia) => {
+    if (origen !== cafeteriaActual.current || rutaGuardada !== rutaActual.current || !instancia.current) return;
     await cargar();
-    if (origen !== cafeteriaActual.current || rutaGuardada !== rutaActual.current) return;
+    if (origen !== cafeteriaActual.current || rutaGuardada !== rutaActual.current || !instancia.current) return;
     volverAlListado();
   };
 
@@ -306,7 +306,7 @@ function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
     try {
       if (existente) await campanasAfiliados.actualizar(origen, existente.id, form);
       else await campanasAfiliados.crear(origen, form);
-      if (montado.current) await onGuardado(origen, rutaGuardada);
+      if (montado.current) await onGuardado(origen, rutaGuardada, montado);
     } catch (err) {
       if (montado.current) setFormError(err.message || 'No se pudo guardar la campaña.');
     } finally {
