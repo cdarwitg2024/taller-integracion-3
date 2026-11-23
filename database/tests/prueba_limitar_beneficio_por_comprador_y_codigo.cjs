@@ -53,8 +53,8 @@ temporal('v07', async ({ sql, sqlAsync }) => {
     sql(leerMigracion(nombre));
   }
 
-  // Datos de la prueba: dos códigos válidos de la misma cafetería para el mismo
-  // comprador y un comprador adicional para la carrera de idempotencia.
+  // Segundo código válido para el mismo comprador. La carrera usa CAFE-11
+  // con el estudiante 13, que no es el titular del código.
   sql(`
     INSERT INTO public.campanas(
       id, cafeteria_id, nombre, estado, version_condiciones, tasa_comision,
@@ -66,8 +66,7 @@ temporal('v07', async ({ sql, sqlAsync }) => {
       id, estudiante_id, campana_id, plan_promocion, estado, codigo,
       codigo_activo, resuelta_por, resuelta_en)
     OVERRIDING SYSTEM VALUE VALUES
-      (106, 11, 3, 'Plan aprobado C', 'aprobada', 'ALTER-11', true, 1, now()),
-      (107, 13, 1, 'Plan concurrencia', 'aprobada', 'CONC-13', true, 1, now());
+      (106, 11, 3, 'Plan aprobado C', 'aprobada', 'ALTER-11', true, 1, now());
     UPDATE public.campanas SET tasa_descuento=15, tasa_descuento_oferta=5,
       version_condiciones='v07';
     UPDATE public.campanas SET confirmada_por_dueno=true, fecha_confirmacion=now(),
@@ -129,15 +128,17 @@ temporal('v07', async ({ sql, sqlAsync }) => {
 
   // 3. Dos compras simultáneas del mismo comprador y código, con claves de
   // idempotencia distintas, dejan un solo débito y una sola comisión.
+  assert.equal(sql('SELECT count(*) FROM pedidos WHERE usuario_id=13 AND cafeteria_id=1'), '0');
   const primeraTransaccion = sqlAsync(
-    `BEGIN; ${sesion(13)} ${pagar('c12-concurrente-a', 850, "'CONC-13'")}
-     SELECT pg_sleep(1); COMMIT;`
+    `SET application_name='c11_primera';
+     BEGIN; ${sesion(13)} ${pagar('c11-concurrente-a')}
+     SELECT pg_sleep(8); COMMIT;`
   );
   const finPrimera = primeraTransaccion.then((valor) => ({ valor }), (error) => ({ error }));
   let primeraEnCurso = false;
   for (let intento = 0; intento < 150; intento += 1) {
     if (sql(`SELECT EXISTS(SELECT FROM pg_stat_activity
-        WHERE wait_event='PgSleep' AND query LIKE '%SELECT pg_sleep(1)%')`) === 't') {
+        WHERE application_name='c11_primera' AND wait_event='PgSleep')`) === 't') {
       primeraEnCurso = true;
       break;
     }
@@ -146,14 +147,15 @@ temporal('v07', async ({ sql, sqlAsync }) => {
   assert.ok(primeraEnCurso, 'La primera compra debe mantener el bloqueo mientras duerme');
 
   const segundaTransaccion = sqlAsync(
-    `SET application_name='c12_limite_segunda'; ${sesion(13)}
-     ${pagar('c12-concurrente-b', 850, "'CONC-13'")}`
+    `SET application_name='c11_segunda'; ${sesion(13)}
+     ${pagar('c11-concurrente-b')}`
   );
   const finSegunda = segundaTransaccion.then((valor) => ({ valor }), (error) => ({ error }));
   let segundaEsperando = false;
   for (let intento = 0; intento < 150; intento += 1) {
-    if (sql(`SELECT EXISTS(SELECT FROM pg_stat_activity
-        WHERE application_name='c12_limite_segunda' AND wait_event_type='Lock')`) === 't') {
+    if (sql(`SELECT EXISTS(SELECT FROM pg_stat_activity a, pg_stat_activity b
+        WHERE a.application_name='c11_primera' AND b.application_name='c11_segunda'
+          AND a.pid = ANY(pg_blocking_pids(b.pid)))`) === 't') {
       segundaEsperando = true;
       break;
     }
@@ -168,22 +170,32 @@ temporal('v07', async ({ sql, sqlAsync }) => {
   const concurrenteB = JSON.parse(resultadoB.valor);
   assert.equal(concurrenteA.ok, true);
   assert.equal(concurrenteA.total_pagado, 850);
+  assert.equal(concurrenteA.descuento_afiliado, 150);
   assert.equal(concurrenteB.error, 'precio_actualizado');
   assert.equal(concurrenteB.motivo, 'beneficio_usado');
   assert.equal(concurrenteB.cobrado, false);
+  assert.equal(concurrenteB.total_actualizado, 1000);
+  assert.equal(concurrenteB.descuento_afiliado, 0);
   assert.equal(sql('SELECT count(*) FROM pedidos WHERE usuario_id=13'), '1');
   assert.equal(
     sql(`SELECT count(*) FROM movimientos_wallet w
       JOIN pedidos p ON p.id=w.pedido_id
-      WHERE p.usuario_id=13 AND w.tipo='compra' AND w.monto=-850`),
+      WHERE p.usuario_id=13 AND w.tipo='compra'`),
     '1'
   );
+  assert.equal(sql(`SELECT monto FROM movimientos_wallet
+    WHERE pedido_id=${concurrenteA.pedido_id} AND tipo='compra'`), '-850');
   assert.equal(
     sql(`SELECT count(*) FROM movimientos_comision m
       JOIN pedidos p ON p.id=m.pedido_id
-      WHERE p.usuario_id=13 AND m.tipo='comision' AND m.estado <> 'revertida'`),
+      WHERE p.usuario_id=13 AND p.cafeteria_id=1 AND m.pedido_id=${concurrenteA.pedido_id}
+        AND m.afiliacion_id=104 AND m.tipo='comision' AND m.estado='pendiente' AND m.monto_clp=85`),
     '1'
   );
+  assert.equal(sql(`SELECT count(*) FROM movimientos_comision m
+    JOIN pedidos p ON p.id=m.pedido_id WHERE p.usuario_id=13`), '1');
+  console.log(`C11: c11-concurrente-a pagó 850 CLP (descuento 150, comisión pendiente 85, pedido ${concurrenteA.pedido_id}).`);
+  console.log('C11: c11-concurrente-b esperó el bloqueo y recibió beneficio_usado, total 1000 CLP, sin cobro.');
 
   // 4. Un reembolso completo antes de la entrega vuelve a habilitar el código
   // mientras siga vigente. V09 revierte la comisión y el pedido queda cancelado.
