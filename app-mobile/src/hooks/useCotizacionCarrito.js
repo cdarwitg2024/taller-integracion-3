@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useCart } from '../context/CartContext';
 import { cotizarCarritoAfiliado } from '../services/cotizarCarritoAfiliado';
+import { mensajeCodigoNoAplicable } from '../utils/mensajeCodigoNoAplicable';
 
 export function useCotizacionCarrito(usuarioId) {
   const { cart, cafeteriaId, codigo, revision, cotizacion, guardarCotizacion, hydrated } = useCart();
@@ -22,7 +23,8 @@ export function useCotizacionCarrito(usuarioId) {
       error => {
         if (!activa) return;
         const estado = error.status === 422 ? 'inelegible' : 'no_disponible';
-        setRespuesta({ solicitud, estado });
+        const mensaje = estado === 'inelegible' ? mensajeCodigoNoAplicable(error.message) : null;
+        setRespuesta({ solicitud, estado, mensaje });
       },
     );
     return () => { activa = false; };
@@ -30,5 +32,6 @@ export function useCotizacionCarrito(usuarioId) {
 
   if (!solicitud) return { estado: 'inactiva' };
   if (respuesta?.solicitud !== solicitud) return { estado: 'cargando' };
-  return { estado: respuesta.estado, cotizacion: respuesta.estado === 'lista' ? cotizacion : null };
+  return { estado: respuesta.estado, mensaje: respuesta.mensaje,
+    cotizacion: respuesta.estado === 'lista' ? cotizacion : null };
 }

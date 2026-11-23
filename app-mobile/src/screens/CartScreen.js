@@ -49,7 +49,7 @@ const CartScreen = ({
   const [franjaSeleccionada, setFranjaSeleccionada] = useState(false);
   const [ahora, setAhora] = useState(() => getReferenciaHoraria());
   const { totalProducts, subtotal, total } = useCartTotals(cart);
-  const { estado, cotizacion } = useCotizacionCarrito(usuarioId);
+  const { estado, cotizacion, mensaje } = useCotizacionCarrito(usuarioId);
   const requiereQuitarCodigo = Boolean(usuarioId && codigo);
   const faltaCotizacion = requiereRecotizar && !cotizacion;
   const bloqueaPago = estado === 'cargando' || requiereQuitarCodigo || faltaCotizacion;
@@ -221,12 +221,16 @@ const CartScreen = ({
               </Card>
 
               {estado === 'cargando' && <Text accessibilityLiveRegion="polite">Consultando cotización…</Text>}
-              {estado === 'inelegible' && <Text accessibilityLiveRegion="polite">Este código no se puede aplicar a tu carrito.</Text>}
+              {estado === 'inelegible' && (
+                <Text accessibilityLiveRegion="polite">{mensaje} Corrige el código o quítalo para seguir con el precio vigente.</Text>
+              )}
               {estado === 'no_disponible' && <Text accessibilityLiveRegion="polite">No se pudo obtener la cotización.</Text>}
               {faltaCotizacion && estado !== 'cargando' && (
                 <Button title="Reintentar cotización" onPress={onRecotizar} disabled={paying} />
               )}
-              {requiereQuitarCodigo && <Text>El pago con código todavía no está disponible. Quita el código para continuar.</Text>}
+              {requiereQuitarCodigo && estado !== 'inelegible' && (
+                <Text>El pago con código todavía no está disponible. Quita el código para continuar.</Text>
+              )}
 
               <Button
                 title={paying ? 'Procesando pago...' : 'Proceder al Pago'}
