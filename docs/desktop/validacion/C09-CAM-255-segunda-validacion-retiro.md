@@ -24,6 +24,8 @@ La evidencia combina la observación manual de KDS y ambas cuentas móviles con 
 
 ## Por comandos
 
+El job `mobile-afiliaciones` de CI funcional ejecuta el runner C09 con PostgreSQL 17 desechable y las migraciones fijadas de `db_CoffeeFaster`.
+
 Desde la raíz de CoffeeFast, con dependencias instaladas, Node.js 22 recomendado, Docker iniciado y `db_CoffeeFaster` clonado al lado. Si está en otra ubicación, definir `COFFEEFAST_DB_REPO` con su ruta. El runner crea su base temporal y comprueba las cuatro lecturas, sin imprimir credenciales.
 
 ```powershell
@@ -51,6 +53,8 @@ try {
 ```
 
 ## Desde KDS
+
+Para verificar el detalle móvil en Android con TalkBack, abrir un pedido activo, intentar tocar una pestaña inferior y recorrer los controles con el lector de pantalla. La pestaña debe quedar bloqueada y el foco debe entrar por el botón de cierre. Al presionar Atrás, el detalle debe cerrarse y el foco volver a la tarjeta del pedido.
 
 1. Levantar Supabase local con V11 y V12 y el gateway de Compose siguiendo la [guía del flujo de pedidos](../../microservicios/operacion/puesta_en_marcha_flujo_pedidos.md). Configurar `VITE_BACKEND` con el gateway local, habitualmente `http://localhost:8080`, y `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` con el Supabase local. Iniciar Desktop con `npm run electron:dev --prefix app-desktop`.
 2. En el entorno de prueba, confirmar una compra con código afiliado. Con el empleado de esa cafetería, llevar el pedido a **Listo** en **Comandas**. Registrar la comisión del pedido y el saldo disponible del afiliado en **Perfil → Mis afiliaciones → Ganancias**.

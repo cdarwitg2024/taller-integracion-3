@@ -146,7 +146,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - name: Run database migration and regression suites
+      - name: Run database migration and regression suites, including C09
         working-directory: .test-bd
         env:
           TEST_POSTGRES_CONTAINER: cf-db-suite-pg
@@ -157,7 +157,7 @@ jobs:
 
           for attempt in $(seq 1 30); do
             if docker exec "$TEST_POSTGRES_CONTAINER" pg_isready -h 127.0.0.1 -U postgres; then
-              npm test
+              npm test && COFFEEFAST_DB_REPO="$PWD" node ../.github/scripts/test-segunda-validacion-retiro-c09.cjs
               exit $?
             fi
             sleep 1

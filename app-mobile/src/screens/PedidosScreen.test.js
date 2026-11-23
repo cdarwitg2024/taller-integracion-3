@@ -1,6 +1,6 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Alert, FlatList, Modal, Text, TouchableOpacity } from 'react-native';
+import { Alert, BackHandler, FlatList, Modal, Text, TouchableOpacity } from 'react-native';
 import PedidosScreen from './PedidosScreen';
 import Button from '../components/Button';
 import QrCode from '../lib/QrCode';
@@ -115,6 +115,23 @@ test('cerrar confirmación permite abrir el detalle sin reactivar el modal nativ
   await abrir();
   expect(tree.root.findByType(Modal).props.visible).toBe(false);
   expect(tree.root.findByType(QrCode).props.value).toBe(pedido.qr_token);
+});
+
+test('Atrás cierra el detalle, desbloquea la navegación y elimina su suscripción', async () => {
+  const remove = jest.fn();
+  const registro = jest.spyOn(BackHandler, 'addEventListener').mockReturnValue({ remove });
+  const cambiarBloqueo = jest.fn();
+  await flush(() => {
+    tree = TestRenderer.create(<PedidosScreen userId="uuid-auth" onDetalleAbiertoChange={cambiarBloqueo} />);
+  });
+  await abrir();
+  expect(cambiarBloqueo).toHaveBeenLastCalledWith(true);
+  const [evento, atras] = registro.mock.calls[0];
+  expect(evento).toBe('hardwareBackPress');
+  await flush(() => expect(atras()).toBe(true));
+  expect(tree.root.findAllByType(QrCode)).toHaveLength(0);
+  expect(cambiarBloqueo.mock.calls).toEqual([[true], [false]]);
+  expect(remove).toHaveBeenCalledTimes(1);
 });
 
 test('muestra contingencia aunque el QR no esté disponible', async () => {

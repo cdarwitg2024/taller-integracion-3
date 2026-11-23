@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   BackHandler,
+  AccessibilityInfo,
+  findNodeHandle,
   ActivityIndicator,
   Modal,
   ScrollView,
@@ -132,7 +134,7 @@ function descuentoHistorico({ total, detalles_pedido = [] }) {
   return diferencia >= 0 ? Math.round(diferencia * 100) / 100 : null;
 }
 
-const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista }) => {
+const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista, onDetalleAbiertoChange }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -144,6 +146,26 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
   const [cancelando, setCancelando] = useState(false);
   const cerrarPedido = useCallback(() => setSelected(null), []);
   const detalleAbierto = Boolean(selected && !pedidoConfirmado);
+  const botonCerrar = useRef(null);
+  const tarjetas = useRef(new Map());
+  const pedidoParaRestaurarFoco = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!detalleAbierto) return undefined;
+    onDetalleAbiertoChange?.(true);
+    return () => onDetalleAbiertoChange?.(false);
+  }, [detalleAbierto, onDetalleAbiertoChange]);
+
+  useEffect(() => {
+    if (!detalleAbierto && pedidoParaRestaurarFoco.current === null) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const destino = detalleAbierto ? botonCerrar.current : tarjetas.current.get(pedidoParaRestaurarFoco.current);
+      if (!detalleAbierto) pedidoParaRestaurarFoco.current = null;
+      const tag = destino && findNodeHandle(destino);
+      if (tag != null) AccessibilityInfo.setAccessibilityFocus(tag);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [detalleAbierto]);
 
   useEffect(() => {
     if (!detalleAbierto) return undefined;
@@ -278,7 +300,10 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
   // La lista se consulta con la sesión Supabase y el usuario interno del titular.
   // Sus credenciales persistidas se muestran de inmediato, sin una segunda
   // autorización del backend que pueda ocultar un pedido ya accesible al titular.
-  const abrirPedido = useCallback((item) => setSelected(item), []);
+  const abrirPedido = useCallback((item) => {
+    pedidoParaRestaurarFoco.current = item.id;
+    setSelected(item);
+  }, []);
 
   const aplicarOrden = useCallback((nuevos) => {
     setOrders(nuevos.sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en)));
@@ -448,6 +473,10 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
     const detalles = item.detalles || [];
     return (
       <TouchableOpacity
+        ref={(tarjeta) => {
+          if (tarjeta) tarjetas.current.set(item.id, tarjeta);
+          else tarjetas.current.delete(item.id);
+        }}
         activeOpacity={0.85}
         style={styles.cardWrapper}
         accessibilityRole="button"
@@ -700,6 +729,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                     style={styles.modalClose}
                     accessibilityRole="button"
                     accessibilityLabel="Cerrar detalle del pedido"
+                    ref={botonCerrar}
                     onPress={cerrarPedido}
                   >
                     <AppIcon name="close" style={styles.modalCloseText} />

@@ -145,6 +145,7 @@ function AppContent() {
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
+  const [detallePedidoAbierto, setDetallePedidoAbierto] = useState(false);
   const { cart, setCart, clearCart: vaciarCarrito, hydrated, codigo, setCodigo, idCarrito, requiereCotizacion, revision, requiereRecotizar, setRequiereRecotizar } = useCart() as {
     cart: CartItem[];
     setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
@@ -818,7 +819,10 @@ function AppContent() {
     <SafeAreaProvider>
       <View style={styles.container}>
         {/* Barra superior con opción de salir */}
-        <SafeAreaView edges={['top']} style={styles.topBar}>
+        <SafeAreaView edges={['top']} style={styles.topBar}
+          pointerEvents={detallePedidoAbierto ? 'none' : 'auto'}
+          importantForAccessibility={detallePedidoAbierto ? 'no-hide-descendants' : 'auto'}
+          accessibilityElementsHidden={detallePedidoAbierto}>
           <View style={styles.topBarBrand}>
             <View style={styles.topBarLogoRow}>
               <Image source={logo} style={styles.topBarLogo} accessibilityIgnoresInvertColors />
@@ -855,6 +859,7 @@ function AppContent() {
               onGoToCafeterias={() => handleTabPress('cafeterias')}
               pedidoConfirmado={pedidoConfirmado?.usuarioId === session?.user.id ? pedidoConfirmado : null}
               onConfirmacionVista={() => setPedidoConfirmado(null)}
+              onDetalleAbiertoChange={setDetallePedidoAbierto}
             />
           )}
 
@@ -892,7 +897,10 @@ function AppContent() {
         </View>
 
         {/* Barra de navegación inferior (única) */}
-        <View style={styles.bottomNavigation}>
+        <View style={styles.bottomNavigation}
+          pointerEvents={detallePedidoAbierto ? 'none' : 'auto'}
+          importantForAccessibility={detallePedidoAbierto ? 'no-hide-descendants' : 'auto'}
+          accessibilityElementsHidden={detallePedidoAbierto}>
           {TABS.map((tab) => {
             const isActive = activeTab === tab.key;
             return (
