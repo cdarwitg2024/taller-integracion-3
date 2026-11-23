@@ -6,7 +6,7 @@ const path = require('node:path');
 const { transformSync } = require('esbuild');
 const React = require('react');
 const { create, act } = require('react-test-renderer');
-const { MemoryRouter, useLocation } = require('react-router-dom');
+const { MemoryRouter, useLocation, useNavigate } = require('react-router-dom');
 
 const src = path.resolve(__dirname, '../src');
 const dueno = cafeteria_id => ({ id: 9, nombre: 'Dueño de prueba', roles: { nombre: 'dueño' }, cafeteria_id });
@@ -53,6 +53,12 @@ function cargarApp(servicios) {
   return cargar(path.join(src, 'app.jsx')).default;
 }
 
+// Reproduce la conversión local del componente para no fijar la zona horaria del corredor.
+const inputLocal = iso => {
+  const fecha = new Date(iso);
+  return new Date(fecha.getTime() - fecha.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
+
 const servicio = (listar, extra = {}) => ({
   campanasAfiliados: { listar, crear: async () => ({}), actualizar: async () => ({}), cambiarEstado: async () => ({}), ...extra },
   validarFormularioCampana: cargarServicioCampanas().modulo.validarFormularioCampana,
@@ -64,6 +70,13 @@ function diferido() {
   const promesa = new Promise(resolve => { resolver = resolve; });
   return { promesa, resolver };
 }
+
+// Promesa controlada para interrumpir un guardado o una recarga en plena navegación.
+const diferir = () => {
+  let resolver;
+  const promesa = new Promise(resuelve => { resolver = resuelve; });
+  return { promesa, resolver };
+};
 
 // Completa los campos obligatorios para que el envío pase la validación de E05.
 async function llenarFormularioValido(h) {
@@ -117,7 +130,12 @@ async function montar(t, { usuario = dueno(7), ruta = '/dueno/afiliados/campanas
     usuarios: { getPerfilSesion: async () => perfil ?? ({ success: true, user: usuario, rol: usuario?.roles?.nombre }) },
     campanas: campanas ?? servicio(async () => []),
   });
-  function Ubicacion() { return React.createElement('ruta', { path: useLocation().pathname }); }
+  let navegar;
+  function Ubicacion() {
+    const navigate = useNavigate();
+    navegar = destino => act(async () => navigate(destino));
+    return React.createElement('ruta', { path: useLocation().pathname });
+  }
   let tree;
   t.after(() => { if (tree) act(() => tree.unmount()); global.localStorage = anterior; });
   await act(async () => {
@@ -131,6 +149,7 @@ async function montar(t, { usuario = dueno(7), ruta = '/dueno/afiliados/campanas
     texto: () => textoRenderizado(tree.toJSON()),
     ruta: () => tree.root.findByType('ruta').props.path,
     boton,
+    navegar,
     chips: () => tree.root.findAllByType('Chip').map(c => c.props.label),
   };
 }
@@ -627,6 +646,141 @@ test('la edición normaliza tasas nulas y conserva los valores existentes', asyn
   assert.equal(campo('Descuento en oferta').props.error, false);
   await act(async () => campo('Descuento en oferta').props.onChange({ target: { value: '5' } }));
   assert.equal(campo('Descuento en oferta').props.value, '5');
+});
+
+test('reabrir otra campaña de la misma cafetería precarga sus datos y guarda solo esa campaña', async t => {
+  const actualizados = [];
+  const segunda = {
+    ...campana(32, 'Campaña B'),
+    descuento_normal_pct: 20, descuento_oferta_pct: 8, comision_pct: 4,
+    inicio: '2027-01-10T09:00:00.000Z', fin: '2027-01-20T19:00:00.000Z',
+  };
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => [campana(31, 'Campaña A'), segunda], {
+      actualizar: async (cafeteria, id, form) => { actualizados.push({ cafeteria, id, form }); return {}; },
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña A');
+
+  await h.navegar('/dueno/afiliados/campanas/32/editar');
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña B');
+  assert.equal(campo('Descuento a precio normal').props.value, 20);
+  assert.equal(campo('Descuento en oferta').props.value, 8);
+  assert.equal(campo('Comisión').props.value, 4);
+  assert.equal(campo('Inicio').props.value, inputLocal(segunda.inicio));
+  assert.equal(campo('Término').props.value, inputLocal(segunda.fin));
+
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  assert.equal(actualizados.length, 1);
+  assert.deepEqual({ cafeteria: actualizados[0].cafeteria, id: actualizados[0].id }, { cafeteria: 7, id: 32 });
+  assert.equal(actualizados[0].form.nombre, 'Campaña B');
+  assert.equal(actualizados[0].form.comision_pct, 4);
+});
+
+test('guardar y reabrir conserva tasas, vigencia y estado persistidos', async t => {
+  let visibles = [campana(31, 'Semana del café')];
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => visibles, {
+      actualizar: async (_cafeteria, id, form) => {
+        visibles = [{
+          ...visibles.find(c => c.id === id),
+          comision_pct: Number(form.comision_pct),
+          inicio: form.inicio, fin: form.fin,
+          estado: 'activa', estado_db: 'activa',
+        }];
+        return {};
+      },
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  await act(async () => campo('Comisión').props.onChange({ target: { value: '12' } }));
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas');
+  assert.ok(h.chips().includes('activa'));
+
+  await h.navegar('/dueno/afiliados/campanas/31/editar');
+  assert.equal(campo('Comisión').props.value, 12);
+  assert.ok(campo('Inicio').props.value);
+  assert.ok(campo('Término').props.value);
+
+  await h.navegar('/dueno/afiliados/campanas/31');
+  assert.match(h.texto(), /Comisión del afiliado:\s*12%/);
+  assert.ok(h.chips().includes('activa'));
+});
+
+test('un guardado pendiente no saca de la edición abierta después de cambiar de campaña', async t => {
+  const guardado = diferir();
+  const actualizados = [];
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => [campana(31, 'Campaña A'), campana(32, 'Campaña B')], {
+      actualizar: (_cafeteria, id, form) => { actualizados.push({ id, form }); return guardado.promesa; },
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  await h.navegar('/dueno/afiliados/campanas/32/editar');
+  await act(async () => campo('Nombre de la campaña').props.onChange({ target: { value: 'Campaña B editada' } }));
+  await act(async () => { guardado.resolver({}); });
+
+  assert.equal(actualizados.length, 1);
+  assert.equal(actualizados[0].id, 31);
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas/32/editar');
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña B editada');
+});
+
+test('una recarga pendiente no saca de la edición abierta después de cambiar de campaña', async t => {
+  let cargas = 0;
+  const recarga = diferir();
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => {
+      cargas++;
+      return cargas === 1 ? [campana(31, 'Campaña A'), campana(32, 'Campaña B')] : recarga.promesa;
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  assert.equal(cargas, 2);
+  await h.navegar('/dueno/afiliados/campanas/32/editar');
+  await act(async () => campo('Nombre de la campaña').props.onChange({ target: { value: 'Campaña B editada' } }));
+  await act(async () => { recarga.resolver([campana(31, 'Campaña A'), campana(32, 'Campaña B')]); });
+
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas/32/editar');
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña B editada');
+});
+
+test('reabrir la campaña original durante la recarga no descarta los cambios sin guardar', async t => {
+  let cargas = 0;
+  const recarga = diferir();
+  const h = await montar(t, {
+    ruta: '/dueno/afiliados/campanas/31/editar',
+    campanas: servicio(async () => {
+      cargas++;
+      return cargas === 1 ? [campana(31, 'Campaña A'), campana(32, 'Campaña B')] : recarga.promesa;
+    }),
+  });
+  const campo = etiqueta => h.tree.root.findAllByType('TextField').find(c => c.props.label === etiqueta);
+  const formulario = () => h.tree.root.findAllByType('Paper').find(p => typeof p.props.onSubmit === 'function');
+
+  await act(async () => { formulario().props.onSubmit({ preventDefault() {} }); });
+  assert.equal(cargas, 2);
+  await h.navegar('/dueno/afiliados/campanas/32/editar');
+  await h.navegar('/dueno/afiliados/campanas/31/editar');
+  await act(async () => campo('Nombre de la campaña').props.onChange({ target: { value: 'Campaña A reabierta' } }));
+  await act(async () => { recarga.resolver([campana(31, 'Campaña A'), campana(32, 'Campaña B')]); });
+
+  assert.equal(h.ruta(), '/dueno/afiliados/campanas/31/editar');
+  assert.equal(campo('Nombre de la campaña').props.value, 'Campaña A reabierta');
 });
 
 // Pruebas de condiciones y aceptación de campañas del dueño.

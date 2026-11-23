@@ -13,11 +13,11 @@ E13 pedía estados de carga, vacío y error con recuperación en la pantalla de 
 3. Tras cargar `Semana del café`, se invoca el callback interno de recarga del listado y esa segunda consulta falla con `sin_acceso_cafeteria`: la alerta y el botón `Reintentar` aparecen, la tarjeta anterior desaparece y la ruta no cambia. La recuperación visible para el usuario se comprueba en el paso siguiente con el botón `Reintentar` de la alerta.
 4. Al pulsar `Reintentar`, aparece `Campaña recuperada`, desaparece la alerta y la ruta sigue siendo `/dueno/afiliados/campanas`.
 
-Los pasos 1, 3 y 4 corresponden a `app-desktop/tests/campanas.test.cjs`; el paso 2 ya estaba cubierto por la prueba `sin campañas aparece el estado vacío`.
+Los pasos 1, 3 y 4 corresponden a `app-desktop/tests/campanas.test.cjs`; el paso 2 lo cubre la prueba `sin campañas aparece el estado vacío`, que comprueba el texto y el botón `Crear la primera campaña`.
 
 ## Resultado
 
-- Escritorio: 138/138 pruebas aprobadas en la rama de E13 tras integrar `develop` con E10 y E14, incluidas 46 de campañas (7 nuevas de E07, 1 de E14 y 2 de E13).
+- Escritorio: 143/143 pruebas aprobadas tras integrar `develop` con E08, V11 y E13, incluidas 51 de campañas (7 nuevas de E07, 1 de E14, 5 de E08 y 2 de E13).
 - `npm run build --prefix app-desktop`: código de salida 0.
 - `git diff --check`: sin errores.
 

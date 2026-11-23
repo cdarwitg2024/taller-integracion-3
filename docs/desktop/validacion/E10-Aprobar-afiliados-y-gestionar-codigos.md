@@ -59,7 +59,7 @@ git diff --check
 
 Resultados:
 
-- Escritorio: 138/138 pruebas aprobadas en la rama de E13 tras integrar `develop` con E10 y E14; incluye dieciséis escenarios nuevos de
+- Escritorio: 129/129 pruebas aprobadas tras integrar E07; incluye dieciséis escenarios nuevos de
   carga por campaña, filtro local, aprobación con código en uso, rechazo,
   desactivación, descarte de respuesta atrasada, cambio de cafetería, reintentos,
   paginación, cuerpos PATCH, errores C05 y respuestas tardías de decisión,
