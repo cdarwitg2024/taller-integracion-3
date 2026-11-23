@@ -74,6 +74,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [D03 - Cotización de carrito completo](mobile/validacion/D03-Cotizacion-carrito-completo.md)
 - [D04 - Motivos de código no aplicable](mobile/validacion/D04-Motivos-codigo-no-aplicable.md)
 - [D07 - Clave persistida del intento de compra](mobile/validacion/D07-Clave-intento-compra.md)
+- [D08 - Recuperar una compra con respuesta interrumpida](mobile/validacion/D08-Recuperar-compra-interrumpida.md)
 
 ## Backend Node
 

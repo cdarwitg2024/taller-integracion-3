@@ -30,7 +30,8 @@ import { CartProvider, useCart } from './src/context/CartContext';
 import { useCartTotals } from './src/hooks/useCartTotals';
 import { ApiError } from './src/services/backendClient';
 import { crearPedidoDesdeCarrito, RetiroCheckout } from './src/services/crearPedidoDesdeCarrito';
-import { consultarIntentoPendiente } from './src/services/intentoCompra';
+import { consultarIntentoPendiente, leerCompraCotizadaPendiente } from './src/services/intentoCompra';
+import { recuperarCompraCotizada } from './src/services/recuperarCompraCotizada';
 import { avisarErrorIntentoCompra, ofrecerResolverIntento } from './src/services/avisarErrorIntentoCompra';
 import { useCicloIntentoCompra } from './src/hooks/useCicloIntentoCompra';
 import { verificarDisponibilidadCheckout } from './src/services/verificarDisponibilidadCheckout';
@@ -152,6 +153,8 @@ function AppContent() {
     idCarrito: number;
   };
   const [paying, setPaying] = useState(false);
+  const usuarioActual = useRef(session?.user.id);
+  usuarioActual.current = session?.user.id;
   const [requiereRecotizar, setRequiereRecotizar] = useState(false);
   const recotizar = () => setCart(actual => [...actual]);
   const checkoutEnCurso = useRef(false);
@@ -471,13 +474,62 @@ function AppContent() {
    * y NO se reintenta la compra automáticamente; se invita a revisar "Pedidos"
    * antes de volver a pagar para evitar un cobro duplicado.
    */
-  const alertarResultadoIncierto = () => {
+  const alertarResultadoIncierto = async () => {
+    const usuarioId = session?.user.id;
+    let recuperable = false;
+    try {
+      recuperable = Boolean(usuarioId && await leerCompraCotizadaPendiente(usuarioId));
+    } catch (error) {
+      if (avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos'))) return;
+      throw error;
+    }
+    if (usuarioId && recuperable) {
+      Alert.alert('No pudimos confirmar tu pago',
+        'Si el pedido ya existe, se mostrará el mismo pedido. Si todavía no se procesó, se intentará confirmar con el importe original.', [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Revisar pedidos', onPress: () => handleTabPress('pedidos') },
+          { text: 'Recuperar compra', onPress: () => recuperarCompra(usuarioId) },
+        ]);
+      return;
+    }
     ofrecerResolverIntento(
       'No pudimos confirmar tu pago',
       'El pedido pudo registrarse. Revisa Pedidos antes de iniciar otra compra.',
       reiniciar,
       () => handleTabPress('pedidos'),
     );
+  };
+
+  const recuperarCompra = async (usuarioId: string) => {
+    if (checkoutEnCurso.current || usuarioActual.current !== usuarioId) return;
+    checkoutEnCurso.current = true;
+    setPaying(true);
+    try {
+      const pago = await recuperarCompraCotizada(usuarioId, TIMEOUT_CREAR_PEDIDO_MS);
+      if (usuarioActual.current !== usuarioId) return;
+      if (!pago) {
+        await alertarResultadoIncierto();
+        return;
+      }
+      await reiniciar();
+      if (usuarioActual.current !== usuarioId) return;
+      if ((pago.cuerpo.codigo ?? '') === codigo) {
+        setCart(actual => {
+          const items = actual.map(({ id, quantity }) => ({ producto_id: id, cantidad: quantity }));
+          return actual[0]?.cafeteriaId === pago.cuerpo.cafeteria_id &&
+            JSON.stringify(items) === JSON.stringify(pago.cuerpo.items) ? [] : actual;
+        });
+      }
+      setRequiereRecotizar(false);
+      setPedidoConfirmado(pago.resultado);
+      setActiveTab('pedidos');
+    } catch (error) {
+      if (!avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos'))) {
+        Alert.alert('No se pudo recuperar la compra', 'El intento sigue guardado. Revisa Pedidos o intenta recuperarlo más tarde.');
+      }
+    } finally {
+      finalizarPago();
+    }
   };
 
   const handleCheckout = async (franjaRetiro?: RetiroCheckout) => {
@@ -522,7 +574,7 @@ function AppContent() {
       // Recuperar un pago incierto no es una compra nueva ni depende del stock actual.
       // El backend aún no deduplica: no se reenvía el POST hasta poder resolverlo.
       if (await consultarIntentoPendiente(session.user.id)) {
-        alertarResultadoIncierto();
+        await alertarResultadoIncierto();
         return;
       }
 
@@ -551,7 +603,7 @@ function AppContent() {
       // S2-T15: un 2xx sin `pedido` no confirma ni rechaza el pago; se trata
       // como resultado desconocido (carrito intacto, sin reintento automático).
       if (clasificacion.tipo === 'incierto') {
-        alertarResultadoIncierto();
+        await alertarResultadoIncierto();
         return;
       }
 
@@ -635,7 +687,7 @@ function AppContent() {
       // El pago pudo procesarse, así que no se presenta como rechazo, no se
       // vacía el carrito y no se reintenta automáticamente.
       if (e instanceof ApiError && e.resultadoIncierto) {
-        alertarResultadoIncierto();
+        await alertarResultadoIncierto();
         return;
       }
 
