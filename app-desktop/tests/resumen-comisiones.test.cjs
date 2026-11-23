@@ -40,6 +40,7 @@ function transporte(filas, opciones = {}) {
     fallar(error) { fallo = error; },
     from(tabla) {
       assert.equal(tabla, 'movimientos_comision');
+      let cafeteria;
       let desde = 0;
       let hasta = null;
       const q = {
@@ -47,7 +48,11 @@ function transporte(filas, opciones = {}) {
           consultas.push({ metodo: 'select', campos, opciones: opcionesSelect });
           return q;
         },
-        eq(columna, valor) { consultas.push({ metodo: 'eq', columna, valor }); return q; },
+        eq(columna, valor) {
+          cafeteria = valor;
+          consultas.push({ metodo: 'eq', columna, valor });
+          return q;
+        },
         order(columna, opcionesOrden) {
           consultas.push({ metodo: 'order', columna, opciones: opcionesOrden });
           return q;
@@ -55,9 +60,11 @@ function transporte(filas, opciones = {}) {
         range(inicio, fin) { desde = inicio; hasta = fin; consultas.push({ metodo: 'range', inicio, fin }); return q; },
         then(resolve, reject) {
           if (fallo) return Promise.reject(fallo).then(resolve, reject);
-          const total = Array.isArray(opciones.conteo) ? opciones.conteo[pagina] : (opciones.conteo ?? filas.length);
+          const visibles = opciones.cafeteriaAutorizada !== undefined && cafeteria !== opciones.cafeteriaAutorizada
+            ? [] : filas;
+          const total = Array.isArray(opciones.conteo) ? opciones.conteo[pagina] : (opciones.conteo ?? visibles.length);
           pagina++;
-          const datos = filas.slice(desde, hasta === null ? undefined : hasta + 1);
+          const datos = visibles.slice(desde, hasta === null ? undefined : hasta + 1);
           return Promise.resolve({
             data: datos.map(fila => ({ ...fila })), count: total, error: null,
           }).then(resolve, reject);
@@ -155,6 +162,25 @@ test('la consulta filtra por cafetería en servidor y pagina el historial comple
   });
   assert.deepEqual(supabase.consultas.find(c => c.metodo === 'select').opciones, { count: 'exact' });
   assert.equal(supabase.consultas.filter(c => c.metodo === 'range').length, 3);
+});
+
+test('V02: una respuesta sin comisiones ajenas conserva el resumen propio de cada dueño', async () => {
+  for (const [propia, ajena, id, monto] of [[1, 2, 301, 1000], [2, 1, 302, 500]]) {
+    const [fila] = filasGeneradas(1);
+    const supabase = transporte([{
+      ...fila, id, monto_clp: monto, pedidos: { cafeteria_id: propia, total: 10000 },
+    }], { cafeteriaAutorizada: String(propia) });
+
+    const antes = await obtenerResumen(propia, supabase);
+    assert.deepEqual(antes.movimientos.map(movimiento => movimiento.id), [id]);
+    assert.equal(antes.comisiones.pendiente, monto);
+    const ajeno = await obtenerResumen(ajena, supabase);
+    assert.deepEqual(ajeno.movimientos, []);
+    assert.deepEqual(ajeno.comisiones, { pendiente: 0, disponible: 0, revertida: 0 });
+    assert.deepEqual(await obtenerResumen(propia, supabase), antes);
+    assert.deepEqual(supabase.consultas.filter(consulta => consulta.metodo === 'eq').map(consulta => consulta.valor),
+      [propia, ajena, propia].map(String));
+  }
 });
 
 test('un historial incompleto se rechaza en vez de mostrar cifras parciales', async () => {
