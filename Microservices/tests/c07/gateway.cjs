@@ -94,7 +94,8 @@ async function main() {
   assert.deepEqual(await post(pedidos, compra, 201, 'c07-afiliada'), pagada);
   const trasAfiliada = await leerFixture('/estado');
   assert.equal(trasAfiliada.saldo, 41500);
-  assert.deepEqual(trasAfiliada.pedidos, [pagada]);
+  const pedidoPagado = { ...pagada, ok: true, estado: 'pendiente', pago_estado: 'pagado' };
+  assert.deepEqual(trasAfiliada.pedidos, [pedidoPagado]);
   assert.deepEqual(trasAfiliada.comisiones, [{ pedido_id: pagada.pedido_id, monto: 850 }]);
 
   const normal = { ...carrito, franja_retiro: compra.franja_retiro, total_aceptado: 10000 };
@@ -106,7 +107,10 @@ async function main() {
   });
   const trasNormal = await leerFixture('/estado');
   assert.equal(trasNormal.saldo, 31500);
-  assert.deepEqual(trasNormal.pedidos, [pagada, original]);
+  assert.deepEqual(trasNormal.pedidos, [
+    pedidoPagado,
+    { ...original, ok: true, estado: 'pendiente', pago_estado: 'pagado' }
+  ]);
   assert.deepEqual(trasNormal.comisiones, trasAfiliada.comisiones);
 
   const legacy = await post(pedidos, { ...afiliado, franja_retiro: compra.franja_retiro }, 201);

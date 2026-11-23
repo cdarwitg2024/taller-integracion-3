@@ -255,6 +255,50 @@ describe('ms-pedidos', () => {
     expect(httpMock.post).not.toHaveBeenCalled();
   });
 
+  describe('confirmación con la RPC de V08', () => {
+    const clave = 'v10-carrito-mixto';
+    const confirmar = () => request(app).post('/api/pedidos')
+      .set('Idempotency-Key', clave)
+      .send(bodyPedido({ codigo: 'CAFE-11', total_aceptado: 2845 }));
+
+    beforeEach(() => {
+      process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+    });
+
+    afterEach(() => {
+      delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    });
+
+    test('un pedido pendiente de preparación con pago aprobado devuelve 201', async () => {
+      mockRpc.mockResolvedValue({ error: null, data: {
+        ok: true, pedido_id: 501, estado: 'pendiente', pago_estado: 'pagado',
+        total_pagado: 2845, descuento_afiliado: 361, comision: 285
+      } });
+
+      const res = await confirmar();
+
+      expect(res.status).toBe(201);
+      expect(res.body).toEqual({ pedido_id: 501, estado: 'pagado', total_pagado: 2845, descuento_afiliado: 361 });
+      expect(mockRpc).toHaveBeenCalledWith('procesar_pago', {
+        p_cafeteria_id: 1, p_items: [{ producto_id: 1, cantidad: 1 }],
+        p_franja_retiro: '9-10', p_codigo: 'CAFE-11',
+        p_total_aceptado: 2845, p_clave_idempotencia: clave
+      });
+    });
+
+    test.each([
+      ['saldo_insuficiente', 422, { error: 'saldo_insuficiente', cobrado: false }],
+      ['clave_reintento_en_conflicto', 409, { error: 'clave_reintento_en_conflicto' }]
+    ])('mapea el motivo SQL %s', async (motivo, status, body) => {
+      mockRpc.mockResolvedValue({ error: null, data: { ok: false, motivo, cobrado: false } });
+      const res = await confirmar();
+      expect(res.status).toBe(status);
+      expect(res.body).toEqual(body);
+    });
+  });
+
   test('POST /api/pedidos permite varios productos de la misma cafeteria', async () => {
     httpMock.post.mockResolvedValue(respuestaPrecios([
       producto({ id: 1, cafeteria_id: 1 }),

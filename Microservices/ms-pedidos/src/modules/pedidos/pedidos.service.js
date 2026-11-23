@@ -217,7 +217,8 @@ async function confirmarPago(cliente, cafeteriaId, body, clave) {
     throw new HttpError(503, 'No se pudo confirmar el pago');
   }
 
-  switch (data?.error) {
+  const errorPago = data?.error ?? (data?.ok === false ? data.motivo : undefined);
+  switch (errorPago) {
     case 'precio_actualizado':
       if (typeof data.motivo !== 'string' ||
           !Number.isSafeInteger(data.total_actualizado) || data.total_actualizado < 0 ||
@@ -236,18 +237,19 @@ async function confirmarPago(cliente, cafeteriaId, body, clave) {
         }
       };
     case 'clave_reintento_en_conflicto':
-      return { status: 409, body: { error: data.error } };
+      return { status: 409, body: { error: errorPago } };
     case 'saldo_insuficiente':
-      return { status: 422, body: { error: data.error, cobrado: false } };
+      return { status: 422, body: { error: errorPago, cobrado: false } };
     case undefined:
-      if (Number.isSafeInteger(data?.pedido_id) && data.pedido_id > 0 &&
-          data.estado === 'pagado' && data.total_pagado === total_aceptado &&
+      if (data?.ok === true && data.pago_estado === 'pagado' &&
+          Number.isSafeInteger(data.pedido_id) && data.pedido_id > 0 &&
+          data.total_pagado === total_aceptado &&
           Number.isSafeInteger(data.descuento_afiliado) && data.descuento_afiliado >= 0) {
         return {
           status: 201,
           body: {
             pedido_id: data.pedido_id,
-            estado: data.estado,
+            estado: data.pago_estado,
             total_pagado: data.total_pagado,
             descuento_afiliado: data.descuento_afiliado
           }
