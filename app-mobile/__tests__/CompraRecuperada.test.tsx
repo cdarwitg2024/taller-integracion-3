@@ -2,10 +2,11 @@ import { act, Alert, AsyncStorage, Text, cotizar, disponibilidad, pagarDesdePant
   pestaña, transporte, tree } from '../tests/support/checkoutPrueba';
 import PedidosScreen from '../src/screens/PedidosScreen';
 import { supabase } from '../src/lib/supabase';
+import * as intentos from '../src/services/intentoCompra';
 
 const respuesta = (body: object) => ({ ok: true, status: 201, text: async () => JSON.stringify(body) });
 
-test('el servidor cobra, se pierde la respuesta y Pedidos muestra el mismo ID al recuperar', async () => {
+test.each([false, true])('Pedidos muestra el ID recuperado incluso si falla la limpieza (%s)', async fallaLimpieza => {
   cotizar.mockResolvedValueOnce(respuesta({ subtotal: 2500, descuento_afiliado: 0, total: 2500 }));
   await pestaña('Cafeterías');
   await pestaña('Carrito');
@@ -36,6 +37,9 @@ test('el servidor cobra, se pierde la respuesta y Pedidos muestra el mismo ID al
   desde.mockImplementation(() => ({ select: () => ({
     eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
   }) }));
+  if (fallaLimpieza) {
+    (AsyncStorage.setItem as jest.Mock).mockRejectedValueOnce(new Error('disco no disponible'));
+  }
   await act(async () => { await recuperar.onPress(); });
   expect(disponibilidad).toHaveBeenCalledTimes(1);
   expect(transporte).toHaveBeenCalledTimes(2);
@@ -44,5 +48,20 @@ test('el servidor cobra, se pierde la respuesta y Pedidos muestra el mismo ID al
   expect(tree.root.findByType(PedidosScreen).props.pedidoConfirmado.pedido_id).toBe(501);
   expect(tree.root.findAllByType(Text).flatMap(nodo => nodo.props.children).join('')).toContain('#501');
   const guardado = await AsyncStorage.getItem('@coffeefast/intento-compra/comprador-app');
-  expect(JSON.parse(guardado!).invalidado).toBe(true);
+  if (fallaLimpieza) {
+    expect(JSON.parse(guardado!).pendiente).toBe(true);
+    expect(Alert.alert).toHaveBeenCalledWith('Pago confirmado', expect.stringContaining('No se pudo limpiar'));
+  } else {
+    expect(JSON.parse(guardado!).invalidado).toBe(true);
+  }
+});
+
+test('si falla el diagnóstico después de perder la respuesta, ofrece revisar Pedidos sin rechazar el manejador', async () => {
+  jest.spyOn(intentos, 'leerCompraCotizadaPendiente').mockRejectedValueOnce(new Error('fallo inesperado'));
+  transporte.mockRejectedValueOnce(new Error('respuesta perdida'));
+  await expect(pagarDesdePantalla()).resolves.toBeUndefined();
+  expect(Alert.alert).toHaveBeenCalledWith('No pudimos confirmar tu pago',
+    expect.stringContaining('No se pudo consultar el intento guardado'),
+    expect.arrayContaining([expect.objectContaining({ text: 'Revisar pedidos' })]));
+  expect(transporte).toHaveBeenCalledTimes(1);
 });

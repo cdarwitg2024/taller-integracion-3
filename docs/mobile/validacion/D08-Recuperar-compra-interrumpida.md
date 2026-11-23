@@ -7,7 +7,9 @@ confirmación idempotente de C07 y la sobrecarga de V08 en PostgreSQL.
 la misma cuenta. Si V08 ya confirmó, devuelve el resultado guardado. Si el
 intento no llegó, puede confirmar con el importe que el comprador aceptó.
 La acción es manual. Solo un resultado confirmado muestra el comprobante en
-Pedidos y cierra el intento. El flujo anterior conserva la revisión manual
+Pedidos. El comprobante se publica para la cuenta compradora antes de
+limpiar el intento. Si falla esa escritura, el comprobante sigue visible y
+se mantiene la protección local. El flujo anterior conserva la revisión manual
 porque su RPC no interpreta la clave.
 
 En `ms-pedidos`, V08 recibe la confirmación antes de consultar catálogo,
@@ -22,6 +24,8 @@ de preparación. Esta adaptación coincide con parte del cambio de V10.
 | Confirmar $2.500 | El servidor simulado guarda el pedido #501 y deja $7.500 de saldo. Se pierde la respuesta. |
 | Pulsar Recuperar compra | Repite exactamente la clave y el cuerpo. El servidor devuelve #501. |
 | Abrir el comprobante | Pedidos muestra #501. Quedan un pedido, un débito y el intento local invalidado. |
+| Fallar la invalidación local después de recuperar | Pedidos sigue mostrando #501 y el intento queda pendiente. |
+| Fallar el diagnóstico del intento después de perder la respuesta | El aviso permite revisar Pedidos y el manejador termina sin propagar la excepción. |
 
 Desde la raíz:
 
@@ -30,6 +34,7 @@ npm test --prefix app-mobile -- --ci --runInBand --runTestsByPath __tests__/Comp
 npm test --prefix Microservices/ms-pedidos -- --ci
 ```
 
-Pasaron 316 pruebas móviles, 150 de ms-pedidos, TypeScript y el escenario
-C07 de Compose. La prueba móvil simula el servidor, y Compose usa un doble
-de Supabase. No hubo compras reales ni despliegues.
+En la revisión de D08 pasaron 318 pruebas móviles y TypeScript. La validación
+original de esta rama incluyó 150 pruebas de ms-pedidos y C07 en Compose.
+La prueba móvil simula el servidor y Compose usa un doble de Supabase.
+Queda pendiente probar en dispositivo con V08 aplicada a PostgreSQL.

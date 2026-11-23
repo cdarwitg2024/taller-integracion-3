@@ -103,6 +103,7 @@ type RespuestaCrearPedido = PagoCotizado & {
 };
 
 type PedidoConfirmado = {
+  usuarioId: string;
   pedido_id: number;
   total: number;
   saldo_restante?: number;
@@ -481,7 +482,12 @@ function AppContent() {
       recuperable = Boolean(usuarioId && await leerCompraCotizadaPendiente(usuarioId));
     } catch (error) {
       if (avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos'))) return;
-      throw error;
+      Alert.alert('No pudimos confirmar tu pago',
+        'No se pudo consultar el intento guardado. Revisa Pedidos antes de volver a pagar.', [
+          { text: 'Cerrar', style: 'cancel' },
+          { text: 'Revisar pedidos', onPress: () => handleTabPress('pedidos') },
+        ]);
+      return;
     }
     if (usuarioId && recuperable) {
       Alert.alert('No pudimos confirmar tu pago',
@@ -511,7 +517,16 @@ function AppContent() {
         await alertarResultadoIncierto();
         return;
       }
-      await reiniciar();
+      setPedidoConfirmado({ ...pago.resultado, usuarioId });
+      setActiveTab('pedidos');
+      try {
+        await reiniciar();
+      } catch {
+        if (usuarioActual.current === usuarioId) {
+          Alert.alert('Pago confirmado', 'El comprobante está en Pedidos. No se pudo limpiar el intento guardado.');
+        }
+        return;
+      }
       if (usuarioActual.current !== usuarioId) return;
       if ((pago.cuerpo.codigo ?? '') === codigo) {
         setCart(actual => {
@@ -521,8 +536,6 @@ function AppContent() {
         });
       }
       setRequiereRecotizar(false);
-      setPedidoConfirmado(pago.resultado);
-      setActiveTab('pedidos');
     } catch (error) {
       if (!avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos'))) {
         Alert.alert('No se pudo recuperar la compra', 'El intento sigue guardado. Revisa Pedidos o intenta recuperarlo más tarde.');
@@ -652,6 +665,7 @@ function AppContent() {
       if (!await clearCart(false)) return;
       setRequiereRecotizar(false);
       setPedidoConfirmado({
+        usuarioId: session.user.id,
         pedido_id: resultado.pedido_id,
         total: resultado.total,
         saldo_restante: resultado.saldo_restante,
@@ -796,7 +810,7 @@ function AppContent() {
             <PedidosScreen
               userId={isGuest ? null : session?.user?.id}
               onGoToCafeterias={() => handleTabPress('cafeterias')}
-              pedidoConfirmado={pedidoConfirmado}
+              pedidoConfirmado={pedidoConfirmado?.usuarioId === session?.user.id ? pedidoConfirmado : null}
               onConfirmacionVista={() => setPedidoConfirmado(null)}
             />
           )}
