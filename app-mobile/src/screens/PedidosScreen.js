@@ -490,6 +490,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
 
   return (
     <View style={styles.container}>
+      <View
+        testID="lista-pedidos"
+        style={styles.contenido}
+        importantForAccessibility={detalleAbierto ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={detalleAbierto}
+      >
       <Header
         title="Mis Pedidos"
         rightElement={
@@ -574,6 +580,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
           />
         </>
       )}
+
+      </View>
 
       <Modal visible={Boolean(pedidoConfirmado)} animationType="slide" transparent
         onRequestClose={onConfirmacionVista}>
@@ -864,6 +872,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.fondo },
+  contenido: { flex: 1 },
   cardWrapper: { marginBottom: spacing.md },
   headerIcon: {
     width: 35,

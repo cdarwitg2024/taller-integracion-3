@@ -84,15 +84,21 @@ test('abre y cierra repetidamente el detalle de un pedido listo sin activar el m
   rows = [{ ...pedido, estado: 'listo' }];
   await montar();
   expect(tree.root.findAllByType(Modal)).toHaveLength(1);
+  const lista = () => tree.root.findByProps({ testID: 'lista-pedidos' });
+  expect(lista().props.importantForAccessibility).toBe('auto');
   for (let i = 0; i < 5; i++) {
     await abrir();
     expect(tree.root.findByType(Modal).props.visible).toBe(false);
+    expect(lista().props.importantForAccessibility).toBe('no-hide-descendants');
+    expect(lista().props.accessibilityElementsHidden).toBe(true);
     expect(tree.root.findByType(QrCode).props.value).toBe(pedido.qr_token);
     expect(textos()).toContain('842517');
     const cerrar = tree.root.findAllByType(TouchableOpacity)
       .find(n => n.props.accessibilityLabel === 'Cerrar detalle del pedido');
     await flush(() => cerrar.props.onPress());
     expect(tree.root.findAllByType(QrCode)).toHaveLength(0);
+    expect(lista().props.importantForAccessibility).toBe('auto');
+    expect(lista().props.accessibilityElementsHidden).toBe(false);
   }
 });
 
