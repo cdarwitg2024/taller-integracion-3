@@ -525,7 +525,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId, saldoConfirmado, on
         <Animated.View
           style={[
             {
-              opacity: fadeAnim,
+              opacity: saldoConfirmado === undefined ? fadeAnim : 1,
               transform: [
                 { translateY: slideAnim },
                 { scale: scaleAnim },
@@ -543,7 +543,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId, saldoConfirmado, on
                 style={[
                   styles.balanceValue,
                   {
-                    opacity: saldoAnim,
+                    opacity: saldoConfirmado === undefined ? saldoAnim : 1,
                     transform: [
                       {
                         scale: saldoAnim.interpolate({

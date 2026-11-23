@@ -1,9 +1,10 @@
 import { act, Alert, Text, pestaña, transporte, tree } from '../tests/support/checkoutPrueba';
-import { TouchableOpacity } from 'react-native';
+import { StyleSheet, TouchableOpacity } from 'react-native';
 import Button from '../src/components/Button';
 import { supabase } from '../src/lib/supabase';
 
-test.each([true, false])('Wallet conserva el saldo confirmado tras cancelar (éxito: %s)', async exito => {
+test.each([[true, false], [false, false], [true, true]])(
+  'Wallet conserva el saldo confirmado (éxito: %s, lectura pendiente: %s)', async (exito, pendiente) => {
   const pedido = { id: 52, estado: 'pendiente', total: 5100, codigo_pedido: 'REAL-52',
     creado_en: '2026-11-20T12:00:00Z', cafeterias: { nombre: 'Norte' },
     detalles_pedido: [{ cantidad: 3, subtotal: 6000, precio_unitario: 2000 }] };
@@ -17,7 +18,7 @@ test.each([true, false])('Wallet conserva el saldo confirmado tras cancelar (éx
       maybeSingle: async () => ({ data: { id: 17 }, error: null }),
       single: async () => walletDisponible
         ? { data: { id: 9, usuario_id: 17, saldo_actual: 4900 }, error: null }
-        : { data: null, error: new Error('Lectura interrumpida') },
+        : pendiente ? new Promise(() => {}) : { data: null, error: new Error('Lectura interrumpida') },
       limit: async () => ({ data: [], error: null }),
       then: (resolver: (resultado: object) => void) =>
         resolver({ data: tabla === 'pedidos' ? [pedido] : [], error: null }),
@@ -44,4 +45,17 @@ test.each([true, false])('Wallet conserva el saldo confirmado tras cancelar (éx
   walletDisponible = false;
   await pestaña('Wallet');
   saldoVisible(exito ? 10000 : 4900);
+  if (pendiente) {
+    act(() => jest.advanceTimersByTime(3000));
+    let nodo = tree.root.findAllByType(Text).find(n => n.props.children === `$${(10000).toLocaleString('es-CL')}`);
+    expect(nodo).toBeDefined();
+    const opacidades = [];
+    while (nodo) {
+      const opacidad = StyleSheet.flatten(nodo.props.style as any)?.opacity;
+      if (opacidad !== undefined) opacidades.push(opacidad);
+      nodo = nodo.parent ?? undefined;
+    }
+    expect(opacidades.length).toBeGreaterThanOrEqual(2);
+    expect(opacidades.every(opacidad => opacidad === 1)).toBe(true);
+  }
 });
