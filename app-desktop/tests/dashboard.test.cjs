@@ -21,7 +21,10 @@ function cargar(ruta, dependencias) {
   return modulo.exports;
 }
 
-const cargadores = cargar('services/cargadorDashboard.js', { './pedidosService': {} });
+const cargadores = cargar('services/cargadorDashboard.js', {
+  './pedidosService': {},
+  './resumenComisiones': { resumenComisiones: { obtener: async () => ({}) } },
+});
 
 function diferida() {
   let resolve, reject;
@@ -184,14 +187,17 @@ const bloque = etiqueta => ({ children }) => React.createElement(etiqueta, null,
 const indicador = nombre => props => React.createElement('pre', { 'data-indicador': nombre }, JSON.stringify(props));
 const { VistaDashboard } = cargar('pages/dueno/Dashboard.jsx', {
   '@mui/material': {
-    Box: bloque('div'), Grid: bloque('div'), Alert: bloque('aside'),
+    Box: bloque('div'), Grid: bloque('div'),
+    Alert: props => React.createElement('aside', null, props.children, props.action),
     Button: bloque('button'), Typography: bloque('span'),
     LinearProgress: () => React.createElement('progress'),
   },
   '../../services/supabaseClient': { isSupabaseConfigured: false },
   '../../services/pedidosService': {},
+  '../../services/resumenComisiones': { obtener: async () => ({}) },
   '../../services/cargadorDashboard': cargadores,
   '../../components/dashboard/KpiCards': indicador('kpi'),
+  '../../components/dashboard/ResumenComisiones': indicador('comisiones'),
   '../../components/dashboard/SalesChart': indicador('ventas'),
   '../../components/dashboard/OrdersDistributionChart': indicador('distribucion'),
   '../../components/dashboard/TopProductsChart': indicador('productos'),
@@ -237,3 +243,26 @@ for (const destino of [2, null]) {
     }
   });
 }
+
+test('el aviso de comisiones no oculta las ventas ni el resumen ya obtenido', () => {
+  const estado = {
+    cafeteriaId: '1',
+    stats: { totalVentas: 900, totalPedidos: 1 },
+    pedidos: [{ id: 'PEDIDO_E11' }],
+    salesData: [],
+    topProducts: [],
+    resumenComisiones: { ventasReferidas: 1, totalCobrado: 900,
+      comisiones: { pendiente: 90, disponible: 0, revertida: 0 }, movimientos: [] },
+    loading: false,
+    dbError: null,
+    comisionesError: 'No se pudieron consultar las comisiones.',
+    ultimaActualizacionExitosa: '2026-11-23T04:00:00.000Z',
+  };
+  const html = renderizar(1, estado);
+  assert.match(html, /No se pudieron consultar las comisiones/);
+  assert.match(html, /Reintentar/);
+  assert.match(html, /PEDIDO_E11/);
+  assert.match(html, /data-indicador="comisiones"/);
+  assert.match(html, /900/);
+  assert.doesNotMatch(html, /progress/);
+});

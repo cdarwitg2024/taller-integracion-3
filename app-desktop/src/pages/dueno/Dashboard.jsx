@@ -3,12 +3,14 @@ import { Box, Grid, Alert, Button, LinearProgress, Typography } from '@mui/mater
 
 import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 import pedidosService from '../../services/pedidosService';
+import resumenComisiones from '../../services/resumenComisiones';
 import {
   crearCargadorDashboard,
   crearEstadoInicialDashboard,
   normalizarCafeteriaId,
 } from '../../services/cargadorDashboard';
 import KpiCards from '../../components/dashboard/KpiCards';
+import ResumenComisiones from '../../components/dashboard/ResumenComisiones';
 import SalesChart from '../../components/dashboard/SalesChart';
 import OrdersDistributionChart from '../../components/dashboard/OrdersDistributionChart';
 import TopProductsChart from '../../components/dashboard/TopProductsChart';
@@ -26,6 +28,7 @@ function Dashboard({ currentUser }) {
   if (!cargadorRef.current) {
     cargadorRef.current = crearCargadorDashboard({
       pedidosService,
+      resumenComisiones,
       onEstadoCambiado: (nuevoEstado) => setEstado(nuevoEstado),
     });
   }
@@ -57,6 +60,13 @@ function Dashboard({ currentUser }) {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'detalles_pedido' },
+          () => {
+            cargador.refrescar(false);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'movimientos_comision' },
           () => {
             cargador.refrescar(false);
           }
@@ -94,8 +104,10 @@ export function VistaDashboard({ cafeteriaId, estado, onReintentar }) {
     pedidos,
     salesData,
     topProducts,
+    resumenComisiones: resumen,
     loading,
     dbError,
+    comisionesError,
     ultimaActualizacionExitosa,
   } = estadoVisible;
 
@@ -134,6 +146,20 @@ export function VistaDashboard({ cafeteriaId, estado, onReintentar }) {
         </Alert>
       )}
 
+      {!loading && !dbError && comisionesError && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 3, borderRadius: '12px', fontWeight: 500 }}
+          action={
+            <Button color="inherit" size="small" onClick={onReintentar}>
+              Reintentar
+            </Button>
+          }
+        >
+          {comisionesError}
+        </Alert>
+      )}
+
       {!loading && !dbError && stats?.totalPedidos === 0 && (
         <Alert severity="info" sx={{ mb: 2 }}>
           No hay pedidos registrados para esta cafetería.
@@ -142,6 +168,9 @@ export function VistaDashboard({ cafeteriaId, estado, onReintentar }) {
       {!loading && !dbError && <>
       {/* 2. Tarjetas de Indicadores Principales (KPIs) */}
       <KpiCards stats={stats} />
+
+      {/* Resumen de ventas referidas y comisiones por estado (E11) */}
+      {resumen && <ResumenComisiones resumen={resumen} />}
 
       {/* 3. Gráficos de Ventas y Distribución */}
       <Grid container spacing={3} sx={{ width: '100%', mb: 4 }}>

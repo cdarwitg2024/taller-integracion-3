@@ -1,4 +1,5 @@
 import { pedidosService as pedidosServiceOriginal } from './pedidosService';
+import { resumenComisiones as resumenComisionesOriginal } from './resumenComisiones';
 
 export function normalizarCafeteriaId(id) {
   return id === null || id === undefined ? null : String(id).trim() || null;
@@ -11,8 +12,10 @@ export function crearEstadoInicialDashboard(cafeteriaId = null) {
     pedidos: [],
     salesData: [],
     topProducts: [],
+    resumenComisiones: null,
     loading: true,
     dbError: null,
+    comisionesError: null,
     ultimaActualizacionExitosa: null,
   };
 }
@@ -27,6 +30,7 @@ export function crearEstadoInicialDashboard(cafeteriaId = null) {
  */
 export function crearCargadorDashboard({
   pedidosService = pedidosServiceOriginal,
+  resumenComisiones = resumenComisionesOriginal,
   onEstadoCambiado = () => {},
   obtenerFechaActual = () => new Date().toISOString(),
 } = {}) {
@@ -46,6 +50,7 @@ export function crearCargadorDashboard({
     if (showLoading) {
       estado.loading = true;
       estado.dbError = null;
+      estado.comisionesError = null;
       notificar();
     }
 
@@ -53,10 +58,14 @@ export function crearCargadorDashboard({
       const pedidosRes = await pedidosService.getAll({ cafeteriaId: cafeteria });
       if (!activo || currentRequestId !== requestId) return;
 
-      const [resStats, resSales, resTop] = await Promise.all([
+      const [resStats, resSales, resTop, resumen] = await Promise.all([
         pedidosService.getEstadisticas(pedidosRes),
         pedidosService.getVentasPorHora(pedidosRes),
         pedidosService.getTopProductos(pedidosRes),
+        resumenComisiones.obtener(cafeteria).then(
+          (datos) => ({ datos }),
+          (err) => ({ error: err.message || 'No se pudieron consultar las comisiones.' })
+        ),
       ]);
       if (!activo || currentRequestId !== requestId) return;
 
@@ -64,6 +73,8 @@ export function crearCargadorDashboard({
       estado.pedidos = pedidosRes;
       estado.salesData = resSales;
       estado.topProducts = resTop;
+      estado.resumenComisiones = resumen.datos || null;
+      estado.comisionesError = resumen.error || null;
       estado.ultimaActualizacionExitosa = obtenerFechaActual();
       estado.dbError = null;
     } catch (err) {
@@ -74,6 +85,8 @@ export function crearCargadorDashboard({
       estado.pedidos = [];
       estado.salesData = [];
       estado.topProducts = [];
+      estado.resumenComisiones = null;
+      estado.comisionesError = null;
     } finally {
       if (activo && currentRequestId === requestId) {
         // La carga vigente cierra también un indicador abierto por una
