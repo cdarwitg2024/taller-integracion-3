@@ -158,6 +158,11 @@ function AppContent() {
   usuarioActual.current = session?.user.id;
   const [requiereRecotizar, setRequiereRecotizar] = useState(false);
   const recotizar = () => setCart(actual => [...actual]);
+  const solicitarNuevoTotal = () => {
+    setRequiereRecotizar(true);
+    recotizar();
+    Alert.alert('Cambió el total', 'No se realizó el cobro. Revisa la nueva cotización antes de confirmar.');
+  };
   const checkoutEnCurso = useRef(false);
   const finalizarPago = () => { checkoutEnCurso.current = false; setPaying(false); };
   const { reiniciar, esperarReinicio } = useCicloIntentoCompra(
@@ -517,6 +522,11 @@ function AppContent() {
         await alertarResultadoIncierto();
         return;
       }
+      if (pago.tipo === 'recotizar') {
+        await reiniciar();
+        if (usuarioActual.current === usuarioId) solicitarNuevoTotal();
+        return;
+      }
       setPedidoConfirmado({ ...pago.resultado, usuarioId });
       setActiveTab('pedidos');
       try {
@@ -684,9 +694,7 @@ function AppContent() {
     } catch (e) {
       if (avisarErrorIntentoCompra(e, reiniciar, () => handleTabPress('pedidos'))) return;
       if (e instanceof ApiError && e.status === 409 && e.message === 'precio_actualizado') {
-        setRequiereRecotizar(true);
-        recotizar();
-        Alert.alert('Cambió el total', 'No se realizó el cobro. Revisa la nueva cotización antes de confirmar.');
+        solicitarNuevoTotal();
         return;
       }
       if (e instanceof ApiError && e.status === 422 && e.message === 'saldo_insuficiente') {

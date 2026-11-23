@@ -1,6 +1,6 @@
 # D08 · Recuperar compra con respuesta interrumpida
 
-Base develop `af80803`, con D07 y D04 integradas. La recuperación requiere la
+Base develop `6ed64ca`, con D07 y D04 integradas. La recuperación requiere la
 confirmación idempotente de C07 y la sobrecarga de V08 en PostgreSQL.
 
 **Recuperar compra** reenvía la clave y el cuerpo originales con la sesión de
@@ -26,6 +26,8 @@ de preparación. Esta adaptación coincide con parte del cambio de V10.
 | Abrir el comprobante | Pedidos muestra #501. Quedan un pedido, un débito y el intento local invalidado. |
 | Fallar la invalidación local después de recuperar | Pedidos sigue mostrando #501 y el intento queda pendiente. |
 | Fallar el diagnóstico del intento después de perder la respuesta | El aviso permite revisar Pedidos y el manejador termina sin propagar la excepción. |
+| Recuperar un envío que se perdió y recibir `409 precio_actualizado` con `cobrado: false` | Invalida el intento y muestra $3.000 tras recotizar. Solo un nuevo toque envía ese total con otra clave. |
+| Perder la respuesta durante la recuperación o recibir un 409 sin confirmación del cobro | La clave y el cuerpo originales quedan guardados. |
 
 Desde la raíz:
 
@@ -34,7 +36,7 @@ npm test --prefix app-mobile -- --ci --runInBand --runTestsByPath __tests__/Comp
 npm test --prefix Microservices/ms-pedidos -- --ci
 ```
 
-En la revisión de D08 pasaron 318 pruebas móviles y TypeScript. La validación
-original de esta rama incluyó 150 pruebas de ms-pedidos y C07 en Compose.
+En la revisión de D08 pasaron 321 pruebas móviles, 151 de ms-pedidos y
+TypeScript. La validación original de esta rama incluyó C07 en Compose.
 La prueba móvil simula el servidor y Compose usa un doble de Supabase.
 Queda pendiente probar en dispositivo con V08 aplicada a PostgreSQL.

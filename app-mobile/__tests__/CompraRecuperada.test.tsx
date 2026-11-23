@@ -65,3 +65,43 @@ test('si falla el diagnóstico después de perder la respuesta, ofrece revisar P
     expect.arrayContaining([expect.objectContaining({ text: 'Revisar pedidos' })]));
   expect(transporte).toHaveBeenCalledTimes(1);
 });
+
+test.each(['sin cobro', 'sin confirmación de cobro', 'red'])(
+  'recuperación con %s decide si puede recotizar y renovar la clave', async escenario => {
+    const cotizacion = (total: number) => respuesta({ subtotal: total, descuento_afiliado: 0, total });
+    cotizar.mockResolvedValueOnce(cotizacion(2500)).mockResolvedValueOnce(cotizacion(3000));
+    await pestaña('Cafeterías');
+    await pestaña('Carrito');
+    transporte.mockRejectedValueOnce(new Error('respuesta perdida'));
+    if (escenario === 'red') transporte.mockRejectedValueOnce(new Error('sin conexión'));
+    else transporte.mockResolvedValueOnce({
+      ok: false, status: 409, text: async () => JSON.stringify({
+        error: 'precio_actualizado', total_actualizado: 3000,
+        cobrado: escenario === 'sin cobro' ? false : undefined,
+      }),
+    });
+    await pagarDesdePantalla();
+    const registro = '@coffeefast/intento-compra/comprador-app';
+    const original = await AsyncStorage.getItem(registro);
+    const recuperar = (Alert.alert as jest.Mock).mock.calls.at(-1)[2]
+      .find((accion: { text: string }) => accion.text === 'Recuperar compra');
+    await act(async () => { await recuperar.onPress(); });
+    expect(transporte).toHaveBeenCalledTimes(2);
+    const [, originalPost] = transporte.mock.calls[0];
+    expect(transporte.mock.calls[1][1].body).toBe(originalPost.body);
+    expect(transporte.mock.calls[1][1].headers['Idempotency-Key']).toBe(originalPost.headers['Idempotency-Key']);
+    if (escenario !== 'sin cobro') {
+      expect(await AsyncStorage.getItem(registro)).toBe(original);
+      expect(cotizar).toHaveBeenCalledTimes(2);
+      return;
+    }
+    expect(JSON.parse((await AsyncStorage.getItem(registro))!).invalidado).toBe(true);
+    expect(tree.root.findAllByType(Text).flatMap(nodo => nodo.props.children).join(''))
+      .toContain(`$${(3000).toLocaleString('es-CL')}`);
+    await pagarDesdePantalla();
+    expect(transporte).toHaveBeenCalledTimes(3);
+    const [, nuevoPost] = transporte.mock.calls[2];
+    expect(JSON.parse(nuevoPost.body).total_aceptado).toBe(3000);
+    expect(nuevoPost.headers['Idempotency-Key']).not.toBe(originalPost.headers['Idempotency-Key']);
+  },
+);

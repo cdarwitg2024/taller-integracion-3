@@ -37,7 +37,8 @@ export class ApiError extends Error {
     mensaje: string,
     status = 0,
     detalle?: string,
-    resultadoIncierto = false
+    resultadoIncierto = false,
+    readonly cobrado?: boolean
   ) {
     super(mensaje);
     this.name = 'ApiError';
@@ -208,7 +209,10 @@ export async function apiPost<T>(
     throw new ApiError(
       mensajeDeError(json) ?? `El backend respondió HTTP ${respuesta.status} en ${ruta}.`,
       respuesta.status,
-      detalleDeError(json)
+      detalleDeError(json),
+      false,
+      typeof (json as { cobrado?: unknown } | null)?.cobrado === 'boolean'
+        ? (json as { cobrado: boolean }).cobrado : undefined
     );
   }
 
