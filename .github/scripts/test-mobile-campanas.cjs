@@ -16,8 +16,8 @@ const password = crypto.randomBytes(24).toString('hex');
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
 const claims = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ role: 'anon', exp: Math.floor(Date.now() / 1000) + 3600 })}`;
 const anon = `${claims}.${crypto.createHmac('sha256', secret).update(claims).digest('base64url')}`;
-const bdCommit = '07b5a6aaad2a1ea8eb73ae5dbce5af9db02d16f2';
-const rpcUrl = `https://raw.githubusercontent.com/Diego24Vas/db_CoffeeFaster/${bdCommit}/supabase/migrations/0024_s3_t4_rpc_campanas_vigentes.sql`;
+const migrations = process.env.COFFEEFAST_DB_MIGRATIONS ||
+  path.resolve(root, '../db_CoffeeFaster/supabase/migrations');
 const quote = value => `'${String(value).replaceAll("'", "''")}'`;
 function docker(args, input) {
   try { return execFileSync('docker', args, { input, encoding: 'utf8', timeout: 180000, stdio: ['pipe', 'pipe', 'pipe'] }).trim(); }
@@ -36,10 +36,8 @@ async function main() {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'cf-a03-'));
   let proxy, server, network = false;
   try {
-    // Se ejecuta la migración oficial fijada por SHA, sin copiar otro contrato SQL.
-    const rpcResponse = await fetch(rpcUrl, { signal: AbortSignal.timeout(15000) });
-    assert.equal(rpcResponse.status, 200, 'No se pudo leer la migración oficial de C04');
-    const rpcSql = await rpcResponse.text();
+    const rpcPath = path.join(migrations, '0024_s3_t4_rpc_campanas_vigentes.sql');
+    const rpcSql = fs.readFileSync(rpcPath, 'utf8');
     assert.match(rpcSql, /CREATE OR REPLACE FUNCTION public\.listar_oportunidades_campana/);
     docker(['network', 'create', id]); network = true;
     docker(['run', '-d', '--name', names.db, '--network', id,
