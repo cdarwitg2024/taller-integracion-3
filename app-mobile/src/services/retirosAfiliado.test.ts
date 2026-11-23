@@ -58,3 +58,13 @@ test('renueva una sesión vencida una vez y recupera las filas mediante el SDK',
   expect(await consultarRetirosAfiliado()).toEqual([retiro]);
   expect(supabase.auth.refreshSession).toHaveBeenCalledTimes(1);
 });
+
+test.each([401, 403, 503])('conserva HTTP %s cuando el rechazo no incluye código PostgREST', async status => {
+  range.mockResolvedValue({ status, data: null, count: null, error: { message: 'Rechazo sin código' } });
+  await expect(consultarRetirosAfiliado()).rejects.toMatchObject({ status });
+});
+
+test.each([401, 403])('HTTP %s impide publicar filas incluso si la respuesta no incluye error', async status => {
+  range.mockResolvedValue({ status, data: [retiro], count: 1, error: null });
+  await expect(consultarRetirosAfiliado()).rejects.toMatchObject({ status });
+});

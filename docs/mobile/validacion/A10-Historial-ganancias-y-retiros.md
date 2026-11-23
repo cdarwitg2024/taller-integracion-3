@@ -118,7 +118,7 @@ cancelación real ni entrega desde KDS. Los retiros del fixture son simulados,
 con destino ficticio; no hay transferencias ni pagos reales. No se aplicó SQL
 ni se modificaron datos de Cloud. La prueba visual del APK queda pendiente.
 
-## Resultados locales
+## Resultados locales de la entrega inicial (`8afd8b7`)
 
 Windows, Node.js 22.19.0:
 
@@ -136,4 +136,52 @@ Windows, Node.js 22.19.0:
   contenedor propio se eliminó al terminar.
 - Enlaces relativos de los tres documentos: **136/136**; `git diff --check` limpio.
 
-La ejecución remota de CI corresponde al futuro PR; estos resultados son locales.
+Estos resultados corresponden a la entrega inicial; la corrección posterior
+se registra a continuación.
+
+## Corrección P2: rechazos HTTP sin código PostgREST
+
+Se incorporó `develop` en `48e3af9` sin conflictos. La revisión detectó que
+el SDK conserva el HTTP en `respuesta.status`, también cuando el cuerpo del
+rechazo no incluye `error.code`. La clasificación anterior solo miraba ese
+código y podía tratar un 401/403 como indisponibilidad transitoria, dejando
+visible el último historial.
+
+El servicio ahora da prioridad al HTTP 401/403, mantiene el respaldo por código
+PostgREST y rechaza cualquier respuesta HTTP de error antes de publicar filas.
+No cambia la política de la pantalla: sesión o permisos inválidos retiran las
+filas y sus referencias, mientras que el 503 conserva la consulta anterior con
+aviso y actualización disponible.
+
+La [regresión de acceso](../../../app-mobile/src/screens/afiliaciones/RetirosAfiliadoAcceso.test.js)
+monta la vista con el servicio y la renovación reales; sustituye únicamente
+la respuesta del SDK. Primero carga un retiro de $300 con comprobante; después
+pulsa «Actualizar retiros» y devuelve `{ status, error: { message }, data: null,
+count: null }`, sin código de PostgREST:
+
+| Estado HTTP de la actualización | Resultado esperado y comprobado |
+|---|---|
+| 401 | Mensaje de sesión vencida; sin filas, comprobante, buscador ni reintento |
+| 403 | Mensaje de falta de permisos; sin filas, comprobante, buscador ni reintento |
+| 503 | Se conserva el retiro y su referencia, con aviso de consulta anterior y actualización disponible |
+
+Las pruebas del servicio también cubren 401/403 sin objeto `error`: el HTTP
+impide publicar los datos aunque el cuerpo sea inconsistente. Se conservan
+las regresiones de códigos SQL y de renovación de JWT. No se ejecutaron
+operaciones en Cloud para esta corrección.
+
+Para repetir la regresión desde la raíz:
+
+```powershell
+npm.cmd test --prefix app-mobile -- --ci --runInBand --testTimeout=20000 --runTestsByPath src/services/retirosAfiliado.test.ts src/screens/afiliaciones/RetirosAfiliado.test.js src/screens/afiliaciones/RetirosAfiliadoAcceso.test.js
+```
+
+Resultados locales de esta corrección, con Node.js 22.19.0:
+
+- **37/37** pruebas focalizadas en tres suites.
+- Suite móvil completa: **365 aprobadas**, dos integraciones opt-in omitidas,
+  35 suites aprobadas; límite de 20 segundos por prueba para este equipo.
+- TypeScript, **138 enlaces relativos** y `git diff --check`: **PASS**.
+- No se repitieron la integración SQL/HTTP ni la exportación Android de la
+  entrega inicial; este ajuste valida respuestas HTTP simuladas del SDK en la
+  vista y el servicio reales. No acredita ejecución del APK ni cambios en Cloud.

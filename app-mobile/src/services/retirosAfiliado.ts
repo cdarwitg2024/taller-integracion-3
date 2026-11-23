@@ -12,12 +12,13 @@ export async function consultarRetirosAfiliado(): Promise<RetiroAfiliado[]> {
   const filas: RetiroAfiliado[] = [];
   let total: number | undefined;
   for (let pagina = 0; pagina < 50; pagina++) {
-    const { data, count, error } = await leerConRenovacion(() => supabase.from('retiros_afiliado')
+    const { data, count, error, status: estadoHttp } = await leerConRenovacion(() => supabase.from('retiros_afiliado')
       .select('id,monto_clp,creado_en,referencia', { count: 'exact' })
       .order('id', { ascending: true }).range(filas.length, filas.length + 199));
-    if (error) {
-      const status = error.code === '42501' ? 403
-        : ['PGRST301', 'PGRST303', '28000'].includes(error.code) ? 401 : 503;
+    if (error || estadoHttp >= 400) {
+      const status = estadoHttp === 401 || estadoHttp === 403 ? estadoHttp
+        : error?.code === '42501' ? 403
+          : ['PGRST301', 'PGRST303', '28000'].includes(error?.code) ? 401 : 503;
       throw Object.assign(new Error(status === 403 ? 'Tu cuenta no tiene permisos para consultar retiros.'
         : status === 401 ? 'Tu sesión venció. Vuelve a iniciar sesión.'
           : 'No pudimos consultar los retiros. Intenta nuevamente.'), { status });
