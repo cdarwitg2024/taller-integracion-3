@@ -78,10 +78,12 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [D04 - Motivos de código no aplicable](mobile/validacion/D04-Motivos-codigo-no-aplicable.md)
 - [D05 - Recotización al editar el carrito](mobile/validacion/D05-Recotizar-al-editar-carrito.md)
 - [D06 - Confirmar de nuevo cuando cambie el total](mobile/validacion/D06-Reconfirmar-total.md)
+- [D11 - Cotizaciones fuera de orden en el carrito](mobile/validacion/D11-Cotizaciones-fuera-de-orden.md)
 - [D07 - Clave persistida del intento de compra](mobile/validacion/D07-Clave-intento-compra.md)
 - [D08 - Recuperar una compra con respuesta interrumpida](mobile/validacion/D08-Recuperar-compra-interrumpida.md)
 - [D09 - Total cobrado en historial](mobile/validacion/D09-Total-cobrado-en-historial.md)
 - [D14 - Primera compra y compra recurrente](mobile/validacion/D14-Primera-compra-y-recurrente.md)
+- [D13 - Compra sin código o con código retirado](mobile/validacion/D13-Verificar-compra-sin-codigo.md)
 
 ## Backend Node
 
