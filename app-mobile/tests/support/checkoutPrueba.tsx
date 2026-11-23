@@ -32,10 +32,24 @@ export let tree: ReactTestRenderer, transporte: jest.Mock, disponibilidad: jest.
 export let cotizar: jest.Mock;
 export const confirmar = () => tree.root.findByType(CartScreen).props.onCheckout(retiro);
 export const claves = () => transporte.mock.calls.map(([, opciones]) => opciones.headers['Idempotency-Key']);
-export async function pagarDesdePantalla() {
+export async function pagarDesdePantalla(esperar = true) {
   await act(async () => tree.root.findByProps({ accessibilityLabel: 'Retirar lo antes posible' }).props.onPress());
-  await act(async () => { await tree.root.findAllByType(Button)
-    .find(nodo => nodo.props.title === 'Proceder al Pago')!.props.onPress(); });
+  await act(async () => {
+    const pago = tree.root.findAllByType(Button)
+      .find(nodo => nodo.props.title === 'Proceder al Pago')!.props.onPress();
+    if (esperar) await pago;
+  });
+}
+export async function responderNuevoTotal(texto: 'Aceptar y pagar' | 'Rechazar') {
+  const [titulo, mensaje, botones] = (Alert.alert as jest.Mock).mock.calls.at(-1);
+  expect(titulo).toBe('Confirma el nuevo total');
+  await act(async () => botones.find((boton: { text: string }) => boton.text === texto).onPress());
+  return mensaje;
+}
+export async function reiniciarApp() {
+  await act(async () => tree.unmount());
+  await act(async () => { tree = create(<App />); });
+  await pestaña('Carrito');
 }
 export async function pestaña(nombre: string) {
   await act(async () => tree.root.findAllByType(TouchableOpacity).find(nodo =>

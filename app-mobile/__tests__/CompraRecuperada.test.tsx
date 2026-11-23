@@ -1,5 +1,5 @@
 import { act, Alert, AsyncStorage, Text, cotizar, disponibilidad, pagarDesdePantalla,
-  pestaña, transporte, tree } from '../tests/support/checkoutPrueba';
+  pestaña, responderNuevoTotal, transporte, tree } from '../tests/support/checkoutPrueba';
 import PedidosScreen from '../src/screens/PedidosScreen';
 import { supabase } from '../src/lib/supabase';
 import * as intentos from '../src/services/intentoCompra';
@@ -104,7 +104,8 @@ test.each(['sin cobro', 'sin confirmación de cobro', 'saldo sin cobro', 'saldo 
     }
     expect(tree.root.findAllByType(Text).flatMap(nodo => nodo.props.children).join(''))
       .toContain(`$${total.toLocaleString('es-CL')}`);
-    await pagarDesdePantalla();
+    await pagarDesdePantalla(escenario !== 'sin cobro');
+    if (escenario === 'sin cobro') await responderNuevoTotal('Aceptar y pagar');
     expect(transporte).toHaveBeenCalledTimes(3);
     const [, nuevoPost] = transporte.mock.calls[2];
     expect(JSON.parse(nuevoPost.body).total_aceptado).toBe(total);

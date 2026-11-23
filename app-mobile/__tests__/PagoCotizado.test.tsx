@@ -2,7 +2,7 @@ import Input from '../src/components/Input';
 import Button from '../src/components/Button';
 import CartItem from '../src/components/CartItem';
 import { act, Alert, CartScreen, cotizar, disponibilidad, pagarDesdePantalla, pestaña, producto,
-  Text, transporte, tree } from '../tests/support/checkoutPrueba';
+  reiniciarApp, responderNuevoTotal, Text, transporte, tree } from '../tests/support/checkoutPrueba';
 
 const json = (status: number, body: object) => ({
   ok: status < 300, status, text: async () => JSON.stringify(body),
@@ -94,7 +94,8 @@ test('si falla la cotización tras editar la cantidad, el pago no vuelve al fluj
   expect(transporte).not.toHaveBeenCalled();
 });
 
-test.each([false, true])('un 409 exige una cotización válida antes de confirmar (fallo inicial: %s)', async falla => {
+test.each([[false, false], [true, false], [false, true]])(
+  'un 409 exige confirmar de nuevo (fallo de cotización: %s, reinicio: %s)', async (falla, reiniciar) => {
   cotizar.mockResolvedValueOnce(cotizacion(11000));
   if (falla) cotizar.mockResolvedValueOnce(json(503, { error: 'No se pudo cotizar' }));
   cotizar.mockResolvedValueOnce(cotizacion(12000));
@@ -115,7 +116,18 @@ test.each([false, true])('un 409 exige una cotización válida antes de confirma
     expect(transporte).toHaveBeenCalledTimes(1);
   }
   expect(textos()).toContain(importe(12000));
-  await pagarDesdePantalla();
+  if (reiniciar) {
+    cotizar.mockResolvedValueOnce(cotizacion(12000));
+    await reiniciarApp();
+    expect(textos()).toContain(importe(12000));
+  }
+  await pagarDesdePantalla(false);
+  expect(transporte).toHaveBeenCalledTimes(1);
+  expect(await responderNuevoTotal('Rechazar')).toContain(importe(12000));
+  expect(transporte).toHaveBeenCalledTimes(1);
+  expect(tree.root.findByType(CartScreen).props.cart).toEqual([producto]);
+  await pagarDesdePantalla(false);
+  expect(await responderNuevoTotal('Aceptar y pagar')).toContain(importe(12000));
   expect(transporte).toHaveBeenCalledTimes(2);
   const [primero, segundo] = transporte.mock.calls.map(([, opciones]) => opciones);
   expect(JSON.parse(segundo.body).total_aceptado).toBe(12000);
