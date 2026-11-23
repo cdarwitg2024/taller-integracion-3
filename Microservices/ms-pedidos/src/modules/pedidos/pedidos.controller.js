@@ -1,16 +1,16 @@
 'use strict';
 
 const PedidosService = require('./pedidos.service');
-const { HttpError } = require('@coffeefaster/shared');
 
 async function crearPedido(req, res, next) {
   try {
     const resultado = await PedidosService.crearPedido({
       user: req.user,
       accessToken: req.accessToken,
-      body: req.body
+      body: req.body,
+      idempotencyKey: req.get('Idempotency-Key')
     });
-    res.status(201).json(resultado);
+    res.status(resultado.status).json(resultado.body);
   } catch (e) {
     next(e);
   }

@@ -151,10 +151,10 @@ const CAFETERIA_B = 2;
 function sembrar({ estadoPedido = 'listo', qrUsado = false } = {}) {
   resetMockEstado();
 
-  mockEstado.usuarios.set('uuid-empleado-a', { id: 20, rol_id: 2, activo: true, auth_user_id: 'uuid-empleado-a' });
-  mockEstado.usuarios.set('uuid-empleado-b', { id: 21, rol_id: 2, activo: true, auth_user_id: 'uuid-empleado-b' });
-  mockEstado.usuarios.set('uuid-estudiante', { id: 30, rol_id: 1, activo: true, auth_user_id: 'uuid-estudiante' });
-  mockEstado.usuarios.set('uuid-inactivo', { id: 22, rol_id: 2, activo: false, auth_user_id: 'uuid-inactivo' });
+  mockEstado.usuarios.set('uuid-empleado-a', { id: 20, roles: { nombre: 'empleado' }, activo: true, auth_user_id: 'uuid-empleado-a' });
+  mockEstado.usuarios.set('uuid-empleado-b', { id: 21, roles: { nombre: 'empleado' }, activo: true, auth_user_id: 'uuid-empleado-b' });
+  mockEstado.usuarios.set('uuid-estudiante', { id: 30, roles: { nombre: 'estudiante' }, activo: true, auth_user_id: 'uuid-estudiante' });
+  mockEstado.usuarios.set('uuid-inactivo', { id: 22, roles: { nombre: 'empleado' }, activo: false, auth_user_id: 'uuid-inactivo' });
 
   mockEstado.cafeteriaUsuarios.push(
     { id: 1, usuario_id: 20, cafeteria_id: CAFETERIA_A },

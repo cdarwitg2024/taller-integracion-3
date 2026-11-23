@@ -6,6 +6,8 @@ const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '../..');
 const cases = [
+  ['ms-afiliados', 'Microservices/ms-afiliados', 'src/app.js',
+    "status: 'healthy'", "status: 'unhealthy'", 'tests/health.test.js'],
   ['ms-cafeterias', 'Microservices/ms-cafeterias', 'src/modules/cafeterias/cafeterias.service.js',
     "consulta.eq('activa', true)", "consulta.eq('activa', false)", 'tests/cafeterias.test.js'],
   ['ms-menus', 'Microservices/ms-menus', 'src/modules/menus/menus.service.js',

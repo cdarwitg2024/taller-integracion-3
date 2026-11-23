@@ -15,7 +15,7 @@ const pg = `${id}-db`, rest = `${id}-rest`;
 const docker = (args, input) => execFileSync('docker', args,
   { input, encoding: 'utf8', timeout: 180000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const sql = input => docker(['exec', '-i', pg, 'psql', '-U', 'postgres', '-d', 'catalog', '-v', 'ON_ERROR_STOP=1'], input);
+const sql = input => docker(['exec', '-i', pg, 'psql', '-h', '127.0.0.1', '-U', 'postgres', '-d', 'catalog', '-v', 'ON_ERROR_STOP=1'], input);
 async function main() {
   let network = false;
   let proxy;

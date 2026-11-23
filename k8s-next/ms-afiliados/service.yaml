@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-afiliados
+  namespace: student-cdarwitg
+  labels:
+    app: ms-afiliados
+    ms: afiliados
+spec:
+  type: ClusterIP
+  selector:
+    app: ms-afiliados
+  ports:
+    - name: http
+      port: 3006
+      targetPort: http
+      protocol: TCP

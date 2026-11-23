@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
@@ -30,12 +30,14 @@ import { CartProvider, useCart } from './src/context/CartContext';
 import { useCartTotals } from './src/hooks/useCartTotals';
 import { ApiError } from './src/services/backendClient';
 import { crearPedidoDesdeCarrito, RetiroCheckout } from './src/services/crearPedidoDesdeCarrito';
-import {
-  evaluarDisponibilidad,
-  mensajeProblemas,
-} from './src/utils/revalidacionCarrito';
+import { consultarIntentoPendiente } from './src/services/intentoCompra';
+import { avisarErrorIntentoCompra, ofrecerResolverIntento } from './src/services/avisarErrorIntentoCompra';
+import { useCicloIntentoCompra } from './src/hooks/useCicloIntentoCompra';
+import { verificarDisponibilidadCheckout } from './src/services/verificarDisponibilidadCheckout';
 import {
   clasificarResultadoPago,
+  clasificarPagoCotizado,
+  type PagoCotizado,
   type PagoResult,
 } from './src/utils/resultadoPago';
 import AppIcon from './src/components/AppIcon';
@@ -94,7 +96,7 @@ const TAB_ICONS: Record<AppTab, AppIconName> = {
  * recibía como `data`. Notar que `ok` del envoltorio siempre es `true` en un
  * 201; el resultado real del pago está en `pedido.ok`.
  */
-type RespuestaCrearPedido = {
+type RespuestaCrearPedido = PagoCotizado & {
   ok: boolean;
   pedido?: PagoResult | null;
 };
@@ -102,7 +104,7 @@ type RespuestaCrearPedido = {
 type PedidoConfirmado = {
   pedido_id: number;
   total: number;
-  saldo_restante: number;
+  saldo_restante?: number;
   franja_retiro?: string;
   estado?: string;
   pago_estado?: string;
@@ -140,7 +142,7 @@ function AppContent() {
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
-  const { cart, setCart, clearCart, hydrated, codigo, setCodigo, idCarrito } = useCart() as {
+  const { cart, setCart, clearCart: vaciarCarrito, hydrated, codigo, setCodigo, idCarrito } = useCart() as {
     cart: CartItem[];
     setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
     clearCart: () => void;
@@ -150,6 +152,24 @@ function AppContent() {
     idCarrito: number;
   };
   const [paying, setPaying] = useState(false);
+  const [requiereRecotizar, setRequiereRecotizar] = useState(false);
+  const recotizar = () => setCart(actual => [...actual]);
+  const checkoutEnCurso = useRef(false);
+  const finalizarPago = () => { checkoutEnCurso.current = false; setPaying(false); };
+  const { reiniciar, esperarReinicio } = useCicloIntentoCompra(
+    session?.user.id, hydrated, cart.length === 0,
+    error => avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos')),
+  );
+  const clearCart = async (conservarPendiente = true) => {
+    try {
+      await reiniciar(conservarPendiente);
+      vaciarCarrito();
+      return true;
+    } catch (error) {
+      avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos'));
+      return false;
+    }
+  };
   const [pedidoConfirmado, setPedidoConfirmado] = useState<PedidoConfirmado | null>(null);
 
   useEffect(() => {
@@ -306,7 +326,7 @@ function AppContent() {
           style: 'destructive',
           onPress: async () => {
             setSelectedCafeteria(null);
-            clearCart();
+            if (!await clearCart()) return;
             setActiveTab('cafeterias');
             if (isGuest) {
               setIsGuest(false);
@@ -407,9 +427,8 @@ function AppContent() {
             style: 'destructive',
             // Se vacía y se agrega en el mismo toque: si solo se vaciaba, el
             // botón prometía algo que no pasaba.
-            onPress: () => {
-              clearCart();
-              agregarProducto(product, cafeteria);
+            onPress: async () => {
+              if (await clearCart()) agregarProducto(product, cafeteria);
             },
           },
         ]
@@ -453,16 +472,11 @@ function AppContent() {
    * antes de volver a pagar para evitar un cobro duplicado.
    */
   const alertarResultadoIncierto = () => {
-    Alert.alert(
+    ofrecerResolverIntento(
       'No pudimos confirmar tu pago',
-      'La conexión se interrumpió o la respuesta tardó demasiado, así que no ' +
-        'podemos saber si el pedido alcanzó a registrarse.\n\n' +
-        'Tu carrito se mantiene. Revisa "Pedidos" antes de volver a pagar para ' +
-        'evitar un cobro duplicado.',
-      [
-        { text: 'Revisar pedidos', onPress: () => handleTabPress('pedidos') },
-        { text: 'Entendido', style: 'cancel' },
-      ]
+      'El pedido pudo registrarse. Revisa Pedidos antes de iniciar otra compra.',
+      reiniciar,
+      () => handleTabPress('pedidos'),
     );
   };
 
@@ -496,59 +510,33 @@ function AppContent() {
       return;
     }
 
-    // Guardia de reentrada: dos toques antes de que resuelva el `POST
-    // /api/pedidos` intentarian cobrar dos veces. El UNIQUE en pagos.pedido_id
-    // es la red real, pero esto evita siquiera intentarlo.
-    if (paying) return;
+    if (requiereRecotizar && franjaRetiro.totalAceptado === undefined) return;
+
+    // La referencia bloquea otro toque incluso antes del siguiente render.
+    if (checkoutEnCurso.current) return;
+    checkoutEnCurso.current = true;
     setPaying(true);
 
-    // Revalidación no destructiva del carrito antes de pagar.
-    // Diferencia error de consulta vs producto no disponible/desactivado/sin stock.
-    // No reemplaza la validación transaccional del backend.
     try {
-      const ids = Array.from(new Set(cart.map((item) => item.id)));
-      if (ids.length > 0) {
-        const { data, error } = await supabase
-          .from('productos')
-          .select('id, cafeteria_id, nombre, activo, eliminado_en, stock')
-          .in('id', ids);
-
-        if (error) {
-          console.warn('[Carrito] Error al revalidar disponibilidad:', error);
-          Alert.alert(
-            'No se pudo verificar disponibilidad',
-            'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
-          );
-          setPaying(false);
-          return;
-        }
-
-        const issues = evaluarDisponibilidad(cart, data, cafeteriaId);
-
-        if (issues.length > 0) {
-          Alert.alert('Hay cambios en la disponibilidad', mensajeProblemas(issues));
-          setPaying(false);
-          return;
-        }
+      await esperarReinicio();
+      // Recuperar un pago incierto no es una compra nueva ni depende del stock actual.
+      // El backend aún no deduplica: no se reenvía el POST hasta poder resolverlo.
+      if (await consultarIntentoPendiente(session.user.id)) {
+        alertarResultadoIncierto();
+        return;
       }
-    } catch (e) {
-      console.warn('[Carrito] Excepción al revalidar disponibilidad:', e);
-      Alert.alert(
-        'No se pudo verificar disponibilidad',
-        'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
-      );
-      setPaying(false);
-      return;
-    }
 
-    const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
+      const problema = await verificarDisponibilidadCheckout(cart, cafeteriaId);
+      if (problema) {
+        Alert.alert(problema.titulo, problema.mensaje);
+        return;
+      }
 
-    try {
-      // El total NO se manda. ms-pedidos lo cotiza contra ms-menus y la RPC
-      // `procesar_pago` lo recalcula desde productos.precio: si se enviara,
-      // un cliente podria pagar $100 un sándwich de $2.000.
+      const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
+
+      // C07 revalida el total aceptado antes de cobrar. Sin cotización se usa la RPC anterior.
       const respuesta = await crearPedidoDesdeCarrito<RespuestaCrearPedido | null>(
-        cafeteriaId, cart, franjaRetiro, TIMEOUT_CREAR_PEDIDO_MS
+        cafeteriaId, cart, franjaRetiro, TIMEOUT_CREAR_PEDIDO_MS, session.user.id
       );
 
       // El backend responde HTTP 201 con `{ ok: true, pedido: <retorno de
@@ -556,7 +544,9 @@ function AppContent() {
       // `ok: false` (p. ej. saldo insuficiente), así que el chequeo real es
       // `pedido.ok` y no el código HTTP. La clasificación vive en
       // `utils/resultadoPago` para poder probarla sin montar la app entera.
-      const clasificacion = clasificarResultadoPago(respuesta?.pedido ?? null);
+      const clasificacion = franjaRetiro.totalAceptado === undefined
+        ? clasificarResultadoPago(respuesta?.pedido ?? null)
+        : clasificarPagoCotizado(respuesta, franjaRetiro.totalAceptado);
 
       // S2-T15: un 2xx sin `pedido` no confirma ni rechaza el pago; se trata
       // como resultado desconocido (carrito intacto, sin reintento automático).
@@ -607,7 +597,8 @@ function AppContent() {
       const resultado = clasificacion.resultado;
 
       // Solo un resultado confirmado y completo limpia el carrito:
-      clearCart();
+      if (!await clearCart(false)) return;
+      setRequiereRecotizar(false);
       setPedidoConfirmado({
         pedido_id: resultado.pedido_id,
         total: resultado.total,
@@ -620,10 +611,26 @@ function AppContent() {
       });
       Alert.alert(
         'Pago aprobado',
-        `Tu pedido fue pagado con Wallet.\n` +
-          `Saldo restante: ${formatCLP(resultado.saldo_restante)}.`
+        resultado.saldo_restante === undefined
+          ? `Total pagado: ${formatCLP(resultado.total)}.`
+          : `Tu pedido fue pagado con Wallet.\nSaldo restante: ${formatCLP(resultado.saldo_restante)}.`
       );
     } catch (e) {
+      if (avisarErrorIntentoCompra(e, reiniciar, () => handleTabPress('pedidos'))) return;
+      if (e instanceof ApiError && e.status === 409 && e.message === 'precio_actualizado') {
+        setRequiereRecotizar(true);
+        recotizar();
+        Alert.alert('Cambió el total', 'No se realizó el cobro. Revisa la nueva cotización antes de confirmar.');
+        return;
+      }
+      if (e instanceof ApiError && e.status === 422 && e.message === 'saldo_insuficiente') {
+        Alert.alert('Saldo insuficiente en la Wallet', 'Recarga tu Wallet para confirmar el pedido.');
+        return;
+      }
+      if (e instanceof ApiError && e.status === 503 && e.message === 'confirmacion_afiliada_no_disponible') {
+        Alert.alert('Confirmación no disponible', 'No se realizó el cobro. Intenta más tarde.');
+        return;
+      }
       // S2-T15: timeout o pérdida de conexión DESPUÉS de enviar la solicitud.
       // El pago pudo procesarse, así que no se presenta como rechazo, no se
       // vacía el carrito y no se reintenta automáticamente.
@@ -641,7 +648,7 @@ function AppContent() {
           : 'Ocurrio un error inesperado. Intentalo nuevamente.'
       );
     } finally {
-      setPaying(false);
+      finalizarPago();
     }
   };
 
@@ -748,14 +755,17 @@ function AppContent() {
               codigo={codigo}
               onCodigoChange={setCodigo}
               idCarrito={idCarrito}
+              usuarioId={isGuest ? null : session?.user?.id}
               cafeteriaName={cartCafeteria?.nombre}
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
-            onRemove={removeFromCart}
-            onCheckout={handleCheckout}
-            onBack={() => handleTabPress('cafeterias')}
-            paying={paying}
-          />
+              onRemove={removeFromCart}
+              onCheckout={handleCheckout}
+              onBack={() => handleTabPress('cafeterias')}
+              paying={paying}
+              requiereRecotizar={requiereRecotizar}
+              onRecotizar={recotizar}
+            />
           )}
 
 {activeTab === 'wallet' && (

@@ -117,8 +117,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - run: npm ci --prefix Microservices/ms-pedidos
-      - run: ln -sfn ../ms-pedidos/node_modules Microservices/shared/node_modules
+      - run: npm ci --prefix Microservices/ms-afiliados
+      - run: ln -sfn ../ms-afiliados/node_modules Microservices/shared/node_modules
       - name: C03 through gateway, real Auth JWTs, PostgREST, RPC and RLS
         run: node .github/scripts/test-afiliados-auth-integration.cjs
   mobile-afiliaciones:
@@ -137,6 +137,7 @@ jobs:
           node-version: '22'
       - run: npm ci --prefix Microservices/ms-pedidos
       - run: npm ci --prefix Microservices/ms-cafeterias
+      - run: npm ci --prefix Microservices/ms-afiliados
       - run: ln -sfn ../ms-pedidos/node_modules Microservices/shared/node_modules
       - run: npm ci --prefix app-mobile
       - name: A06 and C05 through gateway, real Auth JWTs, PostgreSQL and RLS

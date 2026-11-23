@@ -67,10 +67,14 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [A04 — Condiciones de campaña: beneficio del referido, comisión y elegibilidad](mobile/validacion/A04-Condiciones-campana-carrito.md)
 - [A06 — Solicitud, aprobación, código desactivado y panel de comisiones](mobile/validacion/A06-Solicitudes-aprobacion.md)
 - [A07 — Copiar y compartir el código de una campaña](mobile/validacion/A07-Compartir-codigo-personal.md)
+- [A08 — Carga, vacío, errores y reintentos de afiliación](mobile/validacion/A08-Carga-vacio-error-afiliaciones.md)
 - [A09 — Comisiones pendientes, disponibles y retiradas con V12](mobile/validacion/A09-Comisiones-saldo-disponible.md)
 - [A11 — Formulario de monto y destino ficticio para retiro simulado](mobile/validacion/A11-Solicitud-retiro-simulado.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 - [D02 - Estado del código asociado al carrito](mobile/validacion/D02-Estado-codigo-carrito.md)
+- [D03 - Cotización de carrito completo](mobile/validacion/D03-Cotizacion-carrito-completo.md)
+- [D04 - Motivos de código no aplicable](mobile/validacion/D04-Motivos-codigo-no-aplicable.md)
+- [D07 - Clave persistida del intento de compra](mobile/validacion/D07-Clave-intento-compra.md)
 
 ## Backend Node
 
@@ -100,6 +104,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [S3-T3 — Administración de campañas de afiliados](microservicios/validacion/S3-T3-administracion-campanas-afiliados.md)
 - [S3-T4 / C04 — Consulta de campañas vigentes](microservicios/validacion/S3-T4-consulta-campanas-vigentes.md)
 - [C05 — Solicitud y resolución de afiliación](microservicios/validacion/C05-solicitudes-afiliacion.md)
+- [C07 — Cotización y confirmación por el gateway](microservicios/validacion/C07-cotizacion-compra-gateway.md)
 
 ## Bot de Telegram
 
@@ -130,6 +135,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [C02 — Contratos de integración de afiliados](contratos-integracion-afiliados.md)
 - [C01 — Reglas del piloto de afiliados](reglas-piloto-afiliados.md)
 - [D.2.1 — Cancelación de pedido con reembolso a Wallet (traspaso a Base de Datos)](base-datos/D2.1_cancelacion_reembolso.md)
+- [V09 / CAM-177 — Reversión de comisión en cancelación](base-datos/validacion/V09-CAM-177-Reversion-cancelacion.md)
 - [D.4 — Validación QR y entrega de pedido (traspaso a Base de Datos)](base-datos/D4_validacion_qr_entrega.md)
 - [S2-T16 — Dependencias SQL del flujo de pedidos](base-datos/dependencias-sql-ms-pedidos.md)
 - [Promociones y configuración del dueño](base-datos/promociones-configuracion-dueno.md)
