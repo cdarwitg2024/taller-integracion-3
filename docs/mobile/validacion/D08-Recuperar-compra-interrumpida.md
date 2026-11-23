@@ -28,6 +28,8 @@ de preparación. Esta adaptación coincide con parte del cambio de V10.
 | Fallar el diagnóstico del intento después de perder la respuesta | El aviso permite revisar Pedidos y el manejador termina sin propagar la excepción. |
 | Recuperar un envío que se perdió y recibir `409 precio_actualizado` con `cobrado: false` | Invalida el intento y muestra $3.000 tras recotizar. Solo un nuevo toque envía ese total con otra clave. |
 | Perder la respuesta durante la recuperación o recibir un 409 sin confirmación del cobro | La clave y el cuerpo originales quedan guardados. |
+| Recuperar y recibir `422 saldo_insuficiente` con `cobrado: false` | Invalida el rechazo guardado y avisa que se debe recargar la Wallet. Solo otro toque manual envía la compra con una clave nueva. |
+| Recibir saldo insuficiente sin confirmación de que no hubo cobro | Conserva el intento y la clave originales. |
 
 Desde la raíz:
 
@@ -36,7 +38,7 @@ npm test --prefix app-mobile -- --ci --runInBand --runTestsByPath __tests__/Comp
 npm test --prefix Microservices/ms-pedidos -- --ci
 ```
 
-En la revisión de D08 pasaron 321 pruebas móviles, 151 de ms-pedidos y
+En la revisión de D08 pasaron 323 pruebas móviles, 151 de ms-pedidos y
 TypeScript. La validación original de esta rama incluyó C07 en Compose.
 La prueba móvil simula el servidor y Compose usa un doble de Supabase.
 Queda pendiente probar en dispositivo con V08 aplicada a PostgreSQL.

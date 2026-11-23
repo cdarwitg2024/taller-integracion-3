@@ -522,9 +522,13 @@ function AppContent() {
         await alertarResultadoIncierto();
         return;
       }
-      if (pago.tipo === 'recotizar') {
+      if (pago.tipo === 'recotizar' || pago.tipo === 'saldo_insuficiente') {
         await reiniciar();
-        if (usuarioActual.current === usuarioId) solicitarNuevoTotal();
+        if (usuarioActual.current === usuarioId) {
+          if (pago.tipo === 'recotizar') solicitarNuevoTotal();
+          else Alert.alert('Saldo insuficiente en la Wallet',
+            'No se realizó el cobro. Recarga tu Wallet y confirma el pedido de nuevo.');
+        }
         return;
       }
       setPedidoConfirmado({ ...pago.resultado, usuarioId });

@@ -66,7 +66,7 @@ test('si falla el diagnóstico después de perder la respuesta, ofrece revisar P
   expect(transporte).toHaveBeenCalledTimes(1);
 });
 
-test.each(['sin cobro', 'sin confirmación de cobro', 'red'])(
+test.each(['sin cobro', 'sin confirmación de cobro', 'saldo sin cobro', 'saldo incierto', 'red'])(
   'recuperación con %s decide si puede recotizar y renovar la clave', async escenario => {
     const cotizacion = (total: number) => respuesta({ subtotal: total, descuento_afiliado: 0, total });
     cotizar.mockResolvedValueOnce(cotizacion(2500)).mockResolvedValueOnce(cotizacion(3000));
@@ -75,9 +75,9 @@ test.each(['sin cobro', 'sin confirmación de cobro', 'red'])(
     transporte.mockRejectedValueOnce(new Error('respuesta perdida'));
     if (escenario === 'red') transporte.mockRejectedValueOnce(new Error('sin conexión'));
     else transporte.mockResolvedValueOnce({
-      ok: false, status: 409, text: async () => JSON.stringify({
-        error: 'precio_actualizado', total_actualizado: 3000,
-        cobrado: escenario === 'sin cobro' ? false : undefined,
+      ok: false, status: escenario.startsWith('saldo') ? 422 : 409, text: async () => JSON.stringify({
+        error: escenario.startsWith('saldo') ? 'saldo_insuficiente' : 'precio_actualizado', total_actualizado: 3000,
+        cobrado: escenario.endsWith('sin cobro') ? false : undefined,
       }),
     });
     await pagarDesdePantalla();
@@ -90,18 +90,24 @@ test.each(['sin cobro', 'sin confirmación de cobro', 'red'])(
     const [, originalPost] = transporte.mock.calls[0];
     expect(transporte.mock.calls[1][1].body).toBe(originalPost.body);
     expect(transporte.mock.calls[1][1].headers['Idempotency-Key']).toBe(originalPost.headers['Idempotency-Key']);
-    if (escenario !== 'sin cobro') {
+    if (escenario !== 'sin cobro' && escenario !== 'saldo sin cobro') {
       expect(await AsyncStorage.getItem(registro)).toBe(original);
       expect(cotizar).toHaveBeenCalledTimes(2);
       return;
     }
     expect(JSON.parse((await AsyncStorage.getItem(registro))!).invalidado).toBe(true);
+    const total = escenario === 'saldo sin cobro' ? 2500 : 3000;
+    if (escenario === 'saldo sin cobro') {
+      expect(Alert.alert).toHaveBeenCalledWith('Saldo insuficiente en la Wallet',
+        expect.stringContaining('No se realizó el cobro'));
+      expect(cotizar).toHaveBeenCalledTimes(2);
+    }
     expect(tree.root.findAllByType(Text).flatMap(nodo => nodo.props.children).join(''))
-      .toContain(`$${(3000).toLocaleString('es-CL')}`);
+      .toContain(`$${total.toLocaleString('es-CL')}`);
     await pagarDesdePantalla();
     expect(transporte).toHaveBeenCalledTimes(3);
     const [, nuevoPost] = transporte.mock.calls[2];
-    expect(JSON.parse(nuevoPost.body).total_aceptado).toBe(3000);
+    expect(JSON.parse(nuevoPost.body).total_aceptado).toBe(total);
     expect(nuevoPost.headers['Idempotency-Key']).not.toBe(originalPost.headers['Idempotency-Key']);
   },
 );

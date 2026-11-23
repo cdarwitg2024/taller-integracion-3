@@ -15,6 +15,8 @@ export async function recuperarCompraCotizada(usuarioId: string, timeoutMs: numb
   } catch (error) {
     if (error instanceof ApiError && error.status === 409 && error.message === 'precio_actualizado' &&
         error.cobrado === false && !error.resultadoIncierto) return { tipo: 'recotizar' as const };
+    if (error instanceof ApiError && error.status === 422 && error.message === 'saldo_insuficiente' &&
+        error.cobrado === false && !error.resultadoIncierto) return { tipo: 'saldo_insuficiente' as const };
     throw error;
   }
 }
