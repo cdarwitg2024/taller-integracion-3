@@ -241,13 +241,15 @@ async function confirmarPago(cliente, cafeteriaId, body, clave) {
       return { status: 422, body: { error: data.error, cobrado: false } };
     case undefined:
       if (Number.isSafeInteger(data?.pedido_id) && data.pedido_id > 0 &&
-          data.estado === 'pagado' && data.total_pagado === total_aceptado &&
+          ((data.ok === true && data.pago_estado === 'pagado') ||
+            (data.ok === undefined && data.estado === 'pagado')) &&
+          data.total_pagado === total_aceptado &&
           Number.isSafeInteger(data.descuento_afiliado) && data.descuento_afiliado >= 0) {
         return {
           status: 201,
           body: {
             pedido_id: data.pedido_id,
-            estado: data.estado,
+            estado: 'pagado',
             total_pagado: data.total_pagado,
             descuento_afiliado: data.descuento_afiliado
           }
@@ -296,6 +298,10 @@ async function crearPedido({ user, accessToken, body, idempotencyKey }) {
     throw new HttpError(403, 'sin_acceso');
   }
 
+  // V08 recupera el intento original antes de validar el catálogo vigente.
+  // Las confirmaciones nuevas validan los productos dentro de la misma RPC.
+  if (confirmaCotizacion) return confirmarPago(cliente, cafeteriaId, body, idempotencyKey);
+
   let preciosResp;
   try {
   preciosResp = await httpClient.post(
@@ -333,10 +339,6 @@ async function crearPedido({ user, accessToken, body, idempotencyKey }) {
   );
   if (productoDeOtraCafeteria) {
     throw new HttpError(400, 'Uno o mas productos no pertenecen a la cafeteria indicada');
-  }
-
-  if (confirmaCotizacion) {
-    return confirmarPago(cliente, cafeteriaId, body, idempotencyKey);
   }
 
   // El calculo monetario NO se duplica aqui: `procesar_pago` sigue siendo la

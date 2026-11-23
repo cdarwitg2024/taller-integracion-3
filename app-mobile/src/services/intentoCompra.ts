@@ -56,6 +56,16 @@ export function consultarIntentoPendiente(usuarioId: string): Promise<boolean> {
   });
 }
 
+export function leerCompraCotizadaPendiente(usuarioId: string) {
+  return enOrden(usuarioId, async () => {
+    const intento = await leerIntento(usuarioId);
+    if (!intento || intento.pendiente === false) return null;
+    const cuerpo = JSON.parse(intento.firma);
+    return Number.isSafeInteger(cuerpo.total_aceptado) && cuerpo.total_aceptado >= 0
+      ? { clave: intento.clave, cuerpo } : null;
+  });
+}
+
 export function obtenerIntentoCompra<T extends CuerpoCompra>(usuarioId: string, cuerpo: T): Promise<IntentoCompra<T>> {
   if (!usuarioId) return Promise.reject(new Error('La compra requiere una cuenta activa.'));
   const firma = JSON.stringify(cuerpo);
