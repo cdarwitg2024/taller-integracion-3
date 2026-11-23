@@ -801,10 +801,12 @@ function cargarCond(file, imports) {
   return module.exports;
 }
 
+const ahoraCondiciones = Date.now();
 const campanaCond = (extra = {}) => ({
-  id: 1, cafeteria_id: 1, nombre: 'Campaña A', version_condiciones: '1.0',
+  id: 1, cafeteria_id: 1, nombre: 'Campaña A', version_condiciones: '1.0', estado: 'pendiente_aceptacion',
   tasa_descuento: 10.25, tasa_descuento_oferta: 4.5, tasa_comision: 2.75, confirmada_por_dueno: false,
-  vigencia_desde: '2026-01-01', vigencia_hasta: '2027-01-01', ...extra,
+  vigencia_desde: new Date(ahoraCondiciones - 86400000).toISOString(),
+  vigencia_hasta: new Date(ahoraCondiciones + 86400000).toISOString(), ...extra,
 });
 const aceptadaCond = row => ({ ...row, confirmada_por_dueno: true, version_confirmada: row.version_condiciones });
 function diferida() {
@@ -819,6 +821,7 @@ const muiCond = Object.fromEntries(('Box Typography Paper Button Alert Skeleton 
 async function montarCond(t, promociones = false) {
   const channels = [];
   const service = { obtenerCampanaVigente: async id => campanaCond({ cafeteria_id: Number(id) }) };
+  service.listar = async id => [await service.obtenerCampanaVigente(id)];
   const supabase = {
     channel() {
       const channel = { on(_event, _filter, callback) { this.callback = callback; return this; }, subscribe() { return this; } };
@@ -850,6 +853,32 @@ async function montarCond(t, promociones = false) {
     cambiar: id => act(async () => { tree.update(React.createElement(Component, props(id))); }),
   };
 }
+
+test('permite seleccionar y confirmar una segunda campaña sin reutilizar el consentimiento', async t => {
+  const h = await montarCond(t);
+  const primera = campanaCond();
+  const segunda = campanaCond({ id: 2, nombre: 'Campaña B' });
+  const futura = campanaCond({ id: 3, nombre: 'Campaña C', vigencia_desde: '2098-01-01', vigencia_hasta: '2099-01-01' });
+  h.service.listar = async () => [primera, segunda, futura];
+  h.service.confirmarCondiciones = async params => {
+    assert.deepEqual(params, { campanaId: 2, cafeteriaId: '1', version: '1.0' });
+    return aceptadaCond(segunda);
+  };
+  await h.emitir();
+  const selector = () => h.tree.root.findByType('TextField');
+  h.marcar();
+  act(() => selector().props.onChange({ target: { value: '3' } }));
+  assert.equal(h.boton(), undefined);
+  assert.match(h.texto(), /Podrás confirmar las condiciones cuando comience la vigencia/);
+  act(() => selector().props.onChange({ target: { value: '2' } }));
+  assert.equal(h.checkbox().props.checked, false);
+  await h.emitir();
+  assert.equal(selector().props.value, '2');
+  h.marcar();
+  await act(async () => { await h.boton().props.onClick(); });
+  assert.equal(selector().props.value, '2');
+  assert.match(h.texto(), /aceptadas exitosamente/);
+});
 
 test('muestra tasas exactas y un doble clic solo envía una confirmación', async t => {
   const h = await montarCond(t);

@@ -11,7 +11,7 @@ export function mensajeCodigoNoAplicable(motivo) {
     case 'condiciones_incompletas':
       return 'El código está inactivo o su campaña no está disponible.';
     case 'beneficio_usado':
-      return 'Ya usaste este beneficio y no puedes aplicarlo otra vez.';
+      return 'Este descuento de afiliado ya no está disponible para tu cuenta.';
     default:
       return 'Este código no se puede aplicar a tu carrito.';
   }
