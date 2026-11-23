@@ -50,9 +50,9 @@ const CartScreen = ({
   const [ahora, setAhora] = useState(() => getReferenciaHoraria());
   const { totalProducts, subtotal, total } = useCartTotals(cart);
   const { estado, cotizacion, mensaje } = useCotizacionCarrito(usuarioId);
-  const requiereQuitarCodigo = Boolean(usuarioId && codigo);
-  const faltaCotizacion = requiereRecotizar && !cotizacion;
-  const bloqueaPago = estado === 'cargando' || requiereQuitarCodigo || faltaCotizacion;
+  const requiereCotizacion = requiereRecotizar || Boolean(usuarioId && codigo);
+  const faltaCotizacion = requiereCotizacion && !cotizacion;
+  const bloqueaPago = estado === 'cargando' || faltaCotizacion;
 
   // Actualizar referencia horaria mientras la pantalla esté visible
   useEffect(() => {
@@ -225,11 +225,13 @@ const CartScreen = ({
                 <Text accessibilityLiveRegion="polite">{mensaje} Corrige el código o quítalo para seguir con el precio vigente.</Text>
               )}
               {estado === 'no_disponible' && <Text accessibilityLiveRegion="polite">No se pudo obtener la cotización.</Text>}
-              {faltaCotizacion && estado !== 'cargando' && (
+              {requiereRecotizar && faltaCotizacion && estado !== 'cargando' && (
                 <Button title="Reintentar cotización" onPress={onRecotizar} disabled={paying} />
               )}
-              {requiereQuitarCodigo && estado !== 'inelegible' && (
-                <Text>El pago con código todavía no está disponible. Quita el código para continuar.</Text>
+              {!franjaSeleccionada && !bloqueaPago && (
+                <Text accessibilityLiveRegion="polite">
+                  Selecciona «Retirar lo antes posible» para habilitar el pago.
+                </Text>
               )}
 
               <Button

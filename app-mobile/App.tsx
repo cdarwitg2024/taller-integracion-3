@@ -740,10 +740,10 @@ function AppContent() {
         Alert.alert('Confirmación no disponible', 'No se realizó el cobro. Intenta más tarde.');
         return;
       }
-      // S2-T15: timeout o pérdida de conexión DESPUÉS de enviar la solicitud.
+      // Un error de transporte o de servidor puede ocurrir después del cobro.
       // El pago pudo procesarse, así que no se presenta como rechazo, no se
       // vacía el carrito y no se reintenta automáticamente.
-      if (e instanceof ApiError && e.resultadoIncierto) {
+      if (e instanceof ApiError && (e.resultadoIncierto || e.status >= 500)) {
         await alertarResultadoIncierto();
         return;
       }

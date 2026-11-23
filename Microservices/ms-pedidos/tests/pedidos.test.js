@@ -255,6 +255,103 @@ describe('ms-pedidos', () => {
     expect(httpMock.post).not.toHaveBeenCalled();
   });
 
+  test.each([['pagado', 201], ['pendiente', 503]])(
+    'POST /api/pedidos con pedido pendiente y pago %s responde %s', async (pagoEstado, estadoHttp) => {
+      const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+      try {
+        fijarLecturas({ usuario: { id: 10, activo: true } });
+        httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+        mockRpc.mockResolvedValue({ data: {
+          ok: true, pedido_id: 49, estado: 'pendiente', pago_estado: pagoEstado,
+          total_pagado: 6100, descuento_afiliado: 900
+        }, error: null });
+
+        const res = await request(app).post('/api/pedidos')
+          .set('Idempotency-Key', 'c07-estado-pago')
+          .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+        expect(res.status).toBe(estadoHttp);
+        if (estadoHttp === 201) expect(res.body).toEqual({
+          pedido_id: 49, estado: 'pagado', total_pagado: 6100, descuento_afiliado: 900
+        });
+      } finally {
+        if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+        else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+      }
+    }
+  );
+
+  test('POST /api/pedidos rechaza el saldo insuficiente real de V08 con HTTP 422', async () => {
+    const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+      // Respuesta real de V08: no trae `error`, sino `ok:false` y `motivo`.
+      mockRpc.mockResolvedValue({
+        data: { ok: false, motivo: 'saldo_insuficiente', cobrado: false },
+        error: null
+      });
+
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'c12-saldo-insuficiente')
+        .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+      expect(res.status).toBe(422);
+      expect(res.body).toEqual({ error: 'saldo_insuficiente', cobrado: false });
+    } finally {
+      if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+    }
+  });
+
+  test('POST /api/pedidos conserva el rechazo de saldo con la forma anterior', async () => {
+    const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+      mockRpc.mockResolvedValue({
+        data: { error: 'saldo_insuficiente' },
+        error: null
+      });
+
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'c12-saldo-forma-anterior')
+        .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+      expect(res.status).toBe(422);
+      expect(res.body).toEqual({ error: 'saldo_insuficiente', cobrado: false });
+    } finally {
+      if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+    }
+  });
+
+  test('POST /api/pedidos responde 409 al conflicto de clave real de V08', async () => {
+    const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+      mockRpc.mockResolvedValue({
+        data: { ok: false, motivo: 'clave_reintento_en_conflicto', cobrado: false },
+        error: null
+      });
+
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'c12-clave-conflicto')
+        .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: 'clave_reintento_en_conflicto' });
+    } finally {
+      if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+    }
+  });
+
   test('V08 devuelve el mismo pedido pagado con la misma clave aunque el catálogo no responda', async () => {
     process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
     try {
