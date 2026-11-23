@@ -144,7 +144,7 @@ function AppContent() {
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
-  const { cart, setCart, clearCart: vaciarCarrito, hydrated, codigo, setCodigo, idCarrito, requiereCotizacion, revision } = useCart() as {
+  const { cart, setCart, clearCart: vaciarCarrito, hydrated, codigo, setCodigo, idCarrito, requiereCotizacion, revision, requiereRecotizar, setRequiereRecotizar } = useCart() as {
     cart: CartItem[];
     setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
     clearCart: () => void;
@@ -154,17 +154,18 @@ function AppContent() {
     idCarrito: number;
     requiereCotizacion: boolean;
     revision: number;
+    requiereRecotizar: boolean;
+    setRequiereRecotizar: (valor: boolean) => Promise<void>;
   };
   const [paying, setPaying] = useState(false);
   const usuarioActual = useRef(session?.user.id);
   usuarioActual.current = session?.user.id;
   const revisionActual = useRef(revision);
   revisionActual.current = revision;
-  const [requiereRecotizar, setRequiereRecotizar] = useState(false);
   const recotizar = () => setCart(actual => [...actual]);
-  const solicitarNuevoTotal = () => {
-    setRequiereRecotizar(true);
-    recotizar();
+  const solicitarNuevoTotal = async () => {
+    await setRequiereRecotizar(true);
+    await reiniciar();
     Alert.alert('Cambió el total', 'No se realizó el cobro. Revisa la nueva cotización antes de confirmar.');
   };
   const checkoutEnCurso = useRef(false);
@@ -531,11 +532,13 @@ function AppContent() {
         return;
       }
       if (pago.tipo === 'recotizar' || pago.tipo === 'saldo_insuficiente') {
-        await reiniciar();
         if (usuarioActual.current === usuarioId) {
-          if (pago.tipo === 'recotizar') solicitarNuevoTotal();
-          else Alert.alert('Saldo insuficiente en la Wallet',
+          if (pago.tipo === 'recotizar') await solicitarNuevoTotal();
+          else {
+            await reiniciar();
+            Alert.alert('Saldo insuficiente en la Wallet',
             'No se realizó el cobro. Recarga tu Wallet y confirma el pedido de nuevo.');
+          }
         }
         return;
       }
@@ -718,7 +721,13 @@ function AppContent() {
     } catch (e) {
       if (avisarErrorIntentoCompra(e, reiniciar, () => handleTabPress('pedidos'))) return;
       if (e instanceof ApiError && e.status === 409 && e.message === 'precio_actualizado') {
-        solicitarNuevoTotal();
+        try {
+          await solicitarNuevoTotal();
+        } catch (error) {
+          if (!avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos'))) {
+            Alert.alert('No se pudo guardar el nuevo total', 'El intento sigue guardado. Vuelve a consultar tu compra.');
+          }
+        }
         return;
       }
       if (e instanceof ApiError && e.status === 422 && e.message === 'saldo_insuficiente') {

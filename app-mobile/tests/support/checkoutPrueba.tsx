@@ -46,6 +46,11 @@ export async function responderNuevoTotal(texto: 'Aceptar y pagar' | 'Rechazar')
   await act(async () => botones.find((boton: { text: string }) => boton.text === texto).onPress());
   return mensaje;
 }
+export async function reiniciarApp() {
+  await act(async () => tree.unmount());
+  await act(async () => { tree = create(<App />); });
+  await pestaña('Carrito');
+}
 export async function pestaña(nombre: string) {
   await act(async () => tree.root.findAllByType(TouchableOpacity).find(nodo =>
     nodo.props.accessibilityRole === 'tab' && nodo.props.accessibilityLabel.startsWith(nombre))!.props.onPress());

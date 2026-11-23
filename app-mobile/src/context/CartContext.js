@@ -3,6 +3,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { crearEstadoCarrito, actualizarEstadoCarrito } from './estadoCodigoCarrito';
 
 const CART_STORAGE_KEY = '@coffeefast/cart';
+let escritura = Promise.resolve();
+const guardarCarrito = (cart, requiereRecotizar) => {
+  const datos = JSON.stringify(requiereRecotizar ? { cart, requiereRecotizar: true } : cart);
+  escritura = escritura.catch(() => {}).then(() => AsyncStorage.setItem(CART_STORAGE_KEY, datos));
+  return escritura;
+};
 
 const CartContext = createContext({
   ...crearEstadoCarrito(),
@@ -15,7 +21,11 @@ const CartContext = createContext({
 
 export const CartProvider = ({ children }) => {
   const [estado, dispatch] = useReducer(actualizarEstadoCarrito, undefined, crearEstadoCarrito);
-  const { cart } = estado;
+  const { cart, requiereRecotizar } = estado;
+  const setRequiereRecotizar = async (valor) => {
+    dispatch({ tipo: 'reconfirmar', valor });
+    if (valor) await guardarCarrito(cart, true);
+  };
   const setCart = useCallback((valor) => dispatch({ tipo: 'carrito', valor }), []);
   const setCodigo = useCallback((valor) => dispatch({ tipo: 'codigo', valor }), []);
   const guardarCotizacion = useCallback((valor, revision) =>
@@ -33,8 +43,9 @@ export const CartProvider = ({ children }) => {
         const crudo = await AsyncStorage.getItem(CART_STORAGE_KEY);
         if (!cancelado && crudo) {
           const guardado = JSON.parse(crudo);
-          if (Array.isArray(guardado)) {
-            setCart(guardado);
+          const productos = Array.isArray(guardado) ? guardado : guardado?.cart;
+          if (Array.isArray(productos)) {
+            dispatch({ tipo: 'carrito', valor: productos, requiereRecotizar: guardado?.requiereRecotizar === true });
           }
         }
       } catch (err) {
@@ -52,15 +63,15 @@ export const CartProvider = ({ children }) => {
   // guardado con el estado inicial vacío.
   useEffect(() => {
     if (!hydrated) return;
-    AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart)).catch((err) =>
+    guardarCarrito(cart, requiereRecotizar).catch((err) =>
       console.warn('[CartContext] No se pudo guardar el carrito:', err)
     );
-  }, [cart, hydrated]);
+  }, [cart, requiereRecotizar, hydrated]);
 
   const clearCart = useCallback(() => setCart([]), []);
 
   return (
-    <CartContext.Provider value={{ ...estado, setCart, setCodigo, guardarCotizacion, clearCart, hydrated }}>
+    <CartContext.Provider value={{ ...estado, setCart, setCodigo, guardarCotizacion, clearCart, hydrated, setRequiereRecotizar }}>
       {children}
     </CartContext.Provider>
   );
