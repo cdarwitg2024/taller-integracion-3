@@ -15,7 +15,7 @@ const gateway = 'http://gateway-prueba';
 const respuesta = (subtotal, descuento_afiliado, total) => ({
   ok: true, status: 200, text: async () => JSON.stringify({ subtotal, descuento_afiliado, total }),
 });
-const fallo = status => ({ ok: false, status, text: async () => '{"error":"cotizacion_no_disponible"}' });
+const fallo = (status, error) => ({ ok: false, status, text: async () => JSON.stringify({ error }) });
 const importe = monto => `$${monto.toLocaleString('es-CL')}`;
 let tree;
 let cartera;
@@ -98,16 +98,44 @@ test('cambiar de cafetería descarta la cotización y el código aunque la respu
   expect(texto()).toContain('Sin código seleccionado');
 });
 
-test.each([422, 503])('HTTP %s retira importes cotizados y deja quitar el código', async status => {
+test.each([
+  [422, 'codigo_invalido', 'El código no es válido para esta cafetería.'],
+  [422, 'codigo_desactivado', 'El código está inactivo o su campaña no está disponible.'],
+  [422, 'campana_pausada', 'El código está inactivo o su campaña no está disponible.'],
+  [422, 'beneficio_usado', 'Ya usaste este beneficio y no puedes aplicarlo otra vez.'],
+  [422, 'motivo_nuevo', 'Este código no se puede aplicar a tu carrito.'],
+  [503, 'cotizacion_afiliada_no_disponible', 'No se pudo obtener la cotización.'],
+])('HTTP %s con %s muestra su mensaje y permite seguir sin código', async (status, motivo, mensaje) => {
   transporte.mockResolvedValueOnce(respuesta(10000, 0, 10000))
-    .mockResolvedValueOnce(fallo(status)).mockResolvedValueOnce(respuesta(11000, 0, 11000));
+    .mockResolvedValueOnce(fallo(status, motivo)).mockResolvedValueOnce(respuesta(11000, 0, 11000));
   await montar();
   await escribir('NORTE');
   await pulsar('Aplicar');
   expect(texto()).toContain('Total estimado');
   expect(texto()).not.toContain('Total cotizado');
-  expect(texto()).toContain(status === 422
-    ? 'Este código no se puede aplicar a tu carrito.' : 'No se pudo obtener la cotización.');
+  expect(texto()).toContain(mensaje);
+  await act(async () => tree.root.findByProps({ accessibilityLabel: 'Retirar lo antes posible' }).props.onPress());
+  expect(boton('Proceder al Pago').props.disabled).toBe(true);
   await pulsar('Quitar');
   expect(texto()).toContain(importe(11000));
+  expect(texto()).toContain(`Descuento de afiliado | ${importe(0)}`);
+  expect(texto()).not.toContain(mensaje);
+  expect(boton('Proceder al Pago').props.disabled).toBe(false);
+  expect(solicitudes().at(-1)).not.toHaveProperty('codigo');
+});
+
+test('corregir un código rechazado retira el aviso y permite cotizar el nuevo código', async () => {
+  transporte.mockResolvedValueOnce(respuesta(10000, 0, 10000))
+    .mockResolvedValueOnce(fallo(422, 'codigo_invalido'))
+    .mockResolvedValueOnce(respuesta(10000, 0, 10000))
+    .mockResolvedValueOnce(respuesta(10000, 1500, 8500));
+  await montar();
+  await escribir('NORET');
+  await pulsar('Aplicar');
+  expect(texto()).toContain('El código no es válido');
+  await escribir('NORTE');
+  expect(texto()).not.toContain('El código no es válido');
+  await pulsar('Aplicar');
+  expect(solicitudes().at(-1).codigo).toBe('NORTE');
+  expect(texto()).toContain(importe(8500));
 });
