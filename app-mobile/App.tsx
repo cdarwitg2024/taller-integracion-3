@@ -159,6 +159,7 @@ function AppContent() {
     setRequiereRecotizar: (valor: boolean) => Promise<void>;
   };
   const [paying, setPaying] = useState(false);
+  const [saldoWallet, setSaldoWallet] = useState<{ usuarioId: string; saldo: number } | null>(null);
   const usuarioActual = useRef(session?.user.id);
   usuarioActual.current = session?.user.id;
   const revisionActual = useRef(revision);
@@ -851,6 +852,7 @@ function AppContent() {
 
           {activeTab === 'pedidos' && (
             <PedidosScreen
+              onSaldoConfirmado={setSaldoWallet}
               userId={isGuest ? null : session?.user?.id}
               onGoToCafeterias={() => handleTabPress('cafeterias')}
               pedidoConfirmado={pedidoConfirmado?.usuarioId === session?.user.id ? pedidoConfirmado : null}
@@ -878,7 +880,9 @@ function AppContent() {
           )}
 
 {activeTab === 'wallet' && (
-            <WalletScreen userId={isGuest ? null : session?.user?.id || null} />
+            <WalletScreen key={session?.user?.id} userId={isGuest ? null : session?.user?.id || null}
+              saldoConfirmado={saldoWallet?.usuarioId === session?.user?.id ? saldoWallet?.saldo : undefined}
+              onSaldoConfirmado={setSaldoWallet} />
           )}
 
           {activeTab === 'perfil' && (
