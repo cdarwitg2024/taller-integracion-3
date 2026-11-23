@@ -1,4 +1,5 @@
 import { pedidosService as pedidosServiceOriginal } from './pedidosService';
+import { resumenComisiones as resumenComisionesOriginal } from './resumenComisiones';
 
 export function normalizarCafeteriaId(id) {
   return id === null || id === undefined ? null : String(id).trim() || null;
@@ -11,8 +12,10 @@ export function crearEstadoInicialDashboard(cafeteriaId = null) {
     pedidos: [],
     salesData: [],
     topProducts: [],
+    resumenComisiones: null,
     loading: true,
     dbError: null,
+    comisionesError: null,
     ultimaActualizacionExitosa: null,
   };
 }
@@ -27,11 +30,13 @@ export function crearEstadoInicialDashboard(cafeteriaId = null) {
  */
 export function crearCargadorDashboard({
   pedidosService = pedidosServiceOriginal,
+  resumenComisiones = resumenComisionesOriginal,
   onEstadoCambiado = () => {},
   obtenerFechaActual = () => new Date().toISOString(),
 } = {}) {
   let requestId = 0;
   let activo = true;
+  let cargando = false;
   let cafeteriaActual = null;
 
   let estado = crearEstadoInicialDashboard();
@@ -43,9 +48,11 @@ export function crearCargadorDashboard({
   };
 
   const ejecutarCarga = async (cafeteria, currentRequestId, showLoading) => {
+    cargando = true;
     if (showLoading) {
       estado.loading = true;
       estado.dbError = null;
+      estado.comisionesError = null;
       notificar();
     }
 
@@ -53,10 +60,14 @@ export function crearCargadorDashboard({
       const pedidosRes = await pedidosService.getAll({ cafeteriaId: cafeteria });
       if (!activo || currentRequestId !== requestId) return;
 
-      const [resStats, resSales, resTop] = await Promise.all([
+      const [resStats, resSales, resTop, resumen] = await Promise.all([
         pedidosService.getEstadisticas(pedidosRes),
         pedidosService.getVentasPorHora(pedidosRes),
         pedidosService.getTopProductos(pedidosRes),
+        resumenComisiones.obtener(cafeteria).then(
+          (datos) => ({ datos }),
+          (err) => ({ error: err.message || 'No se pudieron consultar las comisiones.' })
+        ),
       ]);
       if (!activo || currentRequestId !== requestId) return;
 
@@ -64,6 +75,9 @@ export function crearCargadorDashboard({
       estado.pedidos = pedidosRes;
       estado.salesData = resSales;
       estado.topProducts = resTop;
+      // Un refresco fallido conserva el último resumen bueno de esta cafetería.
+      if (resumen.datos) estado.resumenComisiones = resumen.datos;
+      estado.comisionesError = resumen.error || null;
       estado.ultimaActualizacionExitosa = obtenerFechaActual();
       estado.dbError = null;
     } catch (err) {
@@ -74,10 +88,13 @@ export function crearCargadorDashboard({
       estado.pedidos = [];
       estado.salesData = [];
       estado.topProducts = [];
+      estado.resumenComisiones = null;
+      estado.comisionesError = null;
     } finally {
       if (activo && currentRequestId === requestId) {
         // La carga vigente cierra también un indicador abierto por una
         // solicitud anterior, aunque este refresco haya sido silencioso.
+        cargando = false;
         estado.loading = false;
         notificar();
       }
@@ -101,6 +118,7 @@ export function crearCargadorDashboard({
       if (cafeteriaActual === null) {
         estado.dbError =
           'Tu usuario no tiene una cafetería autorizada asociada. No es posible calcular los indicadores.';
+        cargando = false;
         estado.loading = false;
         notificar();
         return;
@@ -119,6 +137,8 @@ export function crearCargadorDashboard({
       ) {
         return;
       }
+      // El respaldo periódico no debe invalidar una consulta más lenta que él.
+      if (cargando && !showLoading) return;
       requestId++;
       const currentRequestId = requestId;
       return ejecutarCarga(cafeteriaActual, currentRequestId, showLoading);
@@ -126,6 +146,7 @@ export function crearCargadorDashboard({
 
     desmontar() {
       activo = false;
+      cargando = false;
       requestId++;
     },
 
