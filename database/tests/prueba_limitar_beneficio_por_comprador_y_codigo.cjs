@@ -107,6 +107,31 @@ temporal('v07', async ({ sql, sqlAsync }) => {
     '1'
   );
 
+  // D14: la segunda compra del mismo usuario y cafetería se confirma a precio completo.
+  const compraD14 = compra(10, 'd14-primera', "'CAFE-11'");
+  assert.equal(compraD14.ok, true);
+  assert.equal(compraD14.total_pagado, 850);
+  assert.equal(compraD14.descuento_afiliado, 150);
+  assert.equal(sql(`SELECT monto FROM movimientos_wallet
+    WHERE pedido_id=${compraD14.pedido_id} AND tipo='compra'`), '-850');
+  const recurrente = JSON.parse(sql(sesion(10) + cotizar("'CAFE-11'")));
+  assert.equal(recurrente.motivo, 'beneficio_usado');
+  assert.equal(recurrente.total, 1000);
+  const compraRecurrente = compra(10, 'd14-recurrente', 'NULL', recurrente.total);
+  assert.equal(compraRecurrente.ok, true);
+  assert.notEqual(compraRecurrente.pedido_id, compraD14.pedido_id);
+  assert.equal(compraRecurrente.total_pagado, 1000);
+  assert.equal(compraRecurrente.descuento_afiliado, 0);
+  assert.equal(sql(`SELECT count(*) FROM pedidos
+    WHERE usuario_id=10 AND cafeteria_id=1 AND id IN (${compraD14.pedido_id},${compraRecurrente.pedido_id})`), '2');
+  assert.equal(sql(`SELECT monto FROM movimientos_wallet
+    WHERE pedido_id=${compraRecurrente.pedido_id} AND tipo='compra'`), '-1000');
+  assert.equal(sql(`SELECT monto_clp FROM movimientos_comision
+    WHERE pedido_id=${compraD14.pedido_id} AND tipo='comision'`), '85');
+  assert.equal(sql(`SELECT count(*) FROM movimientos_comision
+    WHERE pedido_id=${compraRecurrente.pedido_id}`), '0');
+  console.log(`D14 OK: estudiante 10, cafetería 1. Pedido #${compraD14.pedido_id}: total 850, descuento 150, comisión 85. Pedido #${compraRecurrente.pedido_id}: total 1000, descuento 0, comisión 0.`);
+
   // 2. El mismo comprador puede usar otro código de la misma cafetería.
   const segundaCotizacion = cotizacion("'ALTER-11'");
   assert.equal(segundaCotizacion.motivo, null);
