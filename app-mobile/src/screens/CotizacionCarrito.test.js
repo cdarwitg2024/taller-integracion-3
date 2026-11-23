@@ -82,7 +82,7 @@ test('cotiza sin código, muestra los tres importes exactos al aplicar y recotiz
   expect(transporte.mock.calls[0][1].headers.Authorization).toBe('Bearer jwt-prueba');
 });
 
-test('cambiar de cafetería descarta la cotización y el código aunque la respuesta llegue tarde', async () => {
+test.each([7, 8])('cambiar productos a cafetería %s descarta la cotización anterior', async cafeteriaId => {
   let terminar;
   transporte.mockResolvedValueOnce(respuesta(10000, 0, 10000))
     .mockImplementationOnce(() => new Promise(resolve => { terminar = resolve; }))
@@ -90,12 +90,15 @@ test('cambiar de cafetería descarta la cotización y el código aunque la respu
   await montar();
   await escribir('NORTE');
   await pulsar('Aplicar');
-  await act(async () => cartera.setCart([{ ...producto, id: 42, cafeteriaId: 8 }]));
+  await act(async () => cartera.setCart([{ ...producto, id: 42, cafeteriaId }]));
   await act(async () => terminar(respuesta(10000, 1500, 8500)));
-  expect(solicitudes().at(-1)).toEqual({ cafeteria_id: 8, items: [{ producto_id: 42, cantidad: 1 }] });
+  expect(solicitudes().at(-1)).toEqual({
+    cafeteria_id: cafeteriaId, items: [{ producto_id: 42, cantidad: 1 }],
+    ...(cafeteriaId === 7 ? { codigo: 'NORTE' } : {}),
+  });
   expect(texto()).toContain(importe(12000));
   expect(texto()).not.toContain(importe(8500));
-  expect(texto()).toContain('Sin código seleccionado');
+  expect(texto()).toContain(cafeteriaId === 7 ? 'Código seleccionado: NORTE' : 'Sin código seleccionado');
 });
 
 test.each([
