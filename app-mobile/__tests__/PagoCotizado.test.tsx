@@ -14,6 +14,32 @@ const pulsar = (title: string) => act(async () =>
 const textos = () => tree.root.findAllByType(Text).map(n => [].concat(n.props.children).join('')).join(' | ');
 const importe = (total: number) => `$${total.toLocaleString('es-CL')}`;
 
+test('D11: quitar el código antes de su respuesta protege el total y el POST vigentes', async () => {
+  let resolverConCodigo!: (valor: ReturnType<typeof cotizacion>) => void;
+  let resolverSinCodigo!: typeof resolverConCodigo;
+  cotizar.mockResolvedValueOnce(cotizacion(10000))
+    .mockImplementationOnce(() => new Promise(resolve => { resolverConCodigo = resolve; }))
+    .mockImplementationOnce(() => new Promise(resolve => { resolverSinCodigo = resolve; }));
+  await pestaña('Cafeterías');
+  await pestaña('Carrito');
+  await act(async () => tree.root.findByType(Input).props.onChangeText('NORTE'));
+  await pulsar('Aplicar');
+  await pulsar('Quitar');
+  expect(cotizar.mock.calls.slice(-2).map(([, opciones]) => JSON.parse(opciones.body).codigo))
+    .toEqual(['NORTE', undefined]);
+  await pagarDesdePantalla();
+  expect(transporte).not.toHaveBeenCalled();
+  await act(async () => resolverSinCodigo(cotizacion(12000)));
+  await act(async () => resolverConCodigo(cotizacion(10000, 1500)));
+  expect(textos()).toContain(`Total cotizado | IVA incluido | ${importe(12000)}`);
+  expect(textos()).not.toContain(importe(8500));
+  await pagarDesdePantalla();
+  expect(transporte).toHaveBeenCalledTimes(1);
+  const pedido = JSON.parse(transporte.mock.calls[0][1].body);
+  expect(pedido.total_aceptado).toBe(12000);
+  expect(pedido).not.toHaveProperty('codigo');
+});
+
 test('dos cambios rápidos conservan la última cotización y el pago usa sus cantidades e importe', async () => {
   let responderDos!: (valor: ReturnType<typeof cotizacion>) => void;
   let responderTres!: typeof responderDos;
