@@ -123,18 +123,37 @@ jobs:
         run: node .github/scripts/test-afiliados-auth-integration.cjs
   mobile-afiliaciones:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: Diego24Vas/db_CoffeeFaster
-          ref: 07b5a6aaad2a1ea8eb73ae5dbce5af9db02d16f2
+          ref: d074ed56aaf3e9c3992b8852a052f9f76d86f5cc
           path: .test-bd
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
+      - name: Run database migration and regression suites
+        working-directory: .test-bd
+        env:
+          TEST_POSTGRES_CONTAINER: cf-db-suite-pg
+        run: |
+          docker run --rm -d --name "$TEST_POSTGRES_CONTAINER" \
+            -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17
+          trap 'docker stop "$TEST_POSTGRES_CONTAINER" >/dev/null 2>&1 || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if docker exec "$TEST_POSTGRES_CONTAINER" pg_isready -h 127.0.0.1 -U postgres; then
+              npm test
+              exit $?
+            fi
+            sleep 1
+          done
+
+          docker logs "$TEST_POSTGRES_CONTAINER"
+          exit 1
       - run: npm ci --prefix Microservices/ms-pedidos
       - run: npm ci --prefix Microservices/ms-cafeterias
       - run: npm ci --prefix Microservices/ms-afiliados

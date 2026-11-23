@@ -136,10 +136,8 @@ async function main() {
         GRANT SELECT ON public.cafeterias TO anon, authenticated;
         CREATE POLICY cafeteria_publica ON public.cafeterias FOR SELECT TO anon, authenticated USING (activa);
         ALTER TABLE public.pedidos ADD COLUMN estado text NOT NULL DEFAULT 'listo';`);
-        const v12 = await fetch('https://raw.githubusercontent.com/Diego24Vas/db_CoffeeFaster/884f25698e76df7d50a08b8a0d0a81a1059733e9/supabase/migrations/20261118211348_consulta_saldo_afiliado.sql',
-          { signal: AbortSignal.timeout(15000) });
-        assert.equal(v12.status, 200, 'No se pudo leer la migración oficial fijada de V12');
-        sql(await v12.text());
+        const v12Path = path.join(migrations, '20261118211348_consulta_saldo_afiliado.sql');
+        sql(fs.readFileSync(v12Path, 'utf8'));
       }
     }
 
