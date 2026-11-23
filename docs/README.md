@@ -26,6 +26,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [E07 — Conexión de activación y pausa de campañas](desktop/validacion/E07-Conexion-activacion-y-pausa-campanas.md)
 - [E08 / CAM-294 — Corregir fallos de guardado y activación de campañas](desktop/validacion/E08-CAM-294-Correccion-guardado-y-activacion.md)
 - [E11 / CAM-233 — Conectar resumen de ventas y comisiones](desktop/validacion/E11-CAM-233-Resumen-ventas-y-comisiones.md)
+- [E12 / CAM-235 — Actualizar resumen tras entregar o cancelar](desktop/validacion/E12-CAM-235-Actualizar-resumen-entrega-y-cancelacion.md)
 - [E13 — Estados de carga, vacío y error de campañas](desktop/validacion/E13-Estados-carga-vacio-y-error-campanas.md)
 - [E14 — Probar tasas y vigencia](desktop/validacion/E14-Probar-tasas-y-vigencia.md)
 - [E10 / CAM-232 — Aprobar afiliados y gestionar códigos](desktop/validacion/E10-Aprobar-afiliados-y-gestionar-codigos.md)
