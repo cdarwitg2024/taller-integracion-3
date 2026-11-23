@@ -1,8 +1,10 @@
 import Input from '../src/components/Input';
 import Button from '../src/components/Button';
 import CartItem from '../src/components/CartItem';
+import { TouchableOpacity } from 'react-native';
 import { act, Alert, CartScreen, cotizar, disponibilidad, pagarDesdePantalla, pestaña, producto,
   reiniciarApp, responderNuevoTotal, Text, transporte, tree } from '../tests/support/checkoutPrueba';
+import { supabase } from '../src/lib/supabase';
 
 const json = (status: number, body: object) => ({
   ok: status < 300, status, text: async () => JSON.stringify(body),
@@ -57,18 +59,21 @@ test('dos cambios rápidos conservan la última cotización y el pago usa sus ca
   });
 });
 
-test('tras quitar el código, el toque de pago acepta el total cotizado aunque el precio local sea distinto', async () => {
-  cotizar.mockResolvedValueOnce(cotizacion(10000))
-    .mockResolvedValueOnce(cotizacion(10000, 1500)).mockResolvedValueOnce(cotizacion(11000));
+test.each([false, true])('D13: compra sin atribución y consulta en Pedidos (quitó código: %s)', async quitarCodigo => {
+  const idPedido = quitarCodigo ? 502 : 501;
+  cotizar.mockResolvedValueOnce(cotizacion(quitarCodigo ? 10000 : 11000));
+  if (quitarCodigo) cotizar.mockResolvedValueOnce(cotizacion(10000, 1500)).mockResolvedValueOnce(cotizacion(11000));
   await pestaña('Cafeterías');
   await pestaña('Carrito');
-  await act(async () => tree.root.findByType(Input).props.onChangeText('NORTE'));
-  await pulsar('Aplicar');
-  expect(textos()).toContain(importe(8500));
-  await pulsar('Quitar');
+  if (quitarCodigo) {
+    await act(async () => tree.root.findByType(Input).props.onChangeText('NORTE'));
+    await pulsar('Aplicar');
+    expect(textos()).toContain(importe(8500));
+    await pulsar('Quitar');
+  }
   expect(textos()).toContain(importe(11000));
   transporte.mockResolvedValueOnce(json(201, {
-    pedido_id: 501, estado: 'pagado', total_pagado: 11000, descuento_afiliado: 0,
+    pedido_id: idPedido, estado: 'pagado', total_pagado: 11000, descuento_afiliado: 0,
   }));
   await pagarDesdePantalla();
   expect(transporte).toHaveBeenCalledTimes(1);
@@ -81,6 +86,24 @@ test('tras quitar el código, el toque de pago acepta el total cotizado aunque e
   expect(opciones.headers['Idempotency-Key']).toBeTruthy();
   expect(tree.root.findByType(CartScreen).props.cart).toHaveLength(0);
   expect(Alert.alert).toHaveBeenCalledWith('Pago aprobado', `Total pagado: ${importe(11000)}.`);
+  const fila = { id: idPedido, estado: 'pendiente', total: 11000,
+    codigo_pedido: `D13-${idPedido}`, creado_en: '2026-11-23T12:00:00Z',
+    detalles_pedido: [{ cantidad: 1, subtotal: 11000, precio_unitario: 11000 }] };
+  const canal = { on: jest.fn().mockReturnThis(), subscribe: jest.fn().mockReturnThis() };
+  Object.assign(supabase, { channel: () => canal, removeChannel: jest.fn() });
+  (supabase.from as jest.Mock).mockImplementation(() => {
+    const consulta = { select: jest.fn().mockReturnThis(), eq: jest.fn().mockReturnThis(),
+      maybeSingle: async () => ({ data: { id: 17 }, error: null }),
+      order: async () => ({ data: [fila], error: null }) };
+    return consulta;
+  });
+  await pestaña('Pedidos');
+  await pulsar('Ver mis pedidos');
+  await act(async () => tree.root.findAllByType(TouchableOpacity)
+    .find(n => n.props.accessibilityLabel?.startsWith('Ver pedido '))!.props.onPress());
+  expect(textos()).toContain(`D13-${idPedido}`);
+  expect(textos()).toContain(`Total cobrado | ${importe(11000)}`);
+  expect(textos()).toContain(`Descuento aplicado | ${importe(0)}`);
 });
 
 test('si falla la cotización tras editar la cantidad, el pago no vuelve al flujo sin cotización', async () => {
