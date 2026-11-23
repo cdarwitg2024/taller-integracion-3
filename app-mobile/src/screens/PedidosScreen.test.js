@@ -28,6 +28,28 @@ const abrir = async () => {
 };
 const montar = async () => { await flush(() => { tree = TestRenderer.create(<PedidosScreen userId="uuid-auth" />); }); };
 
+test('el historial conserva el cobro y descuento al volver a consultar tras cambiar el catálogo', async () => {
+  const debitoGuardado = -5100;
+  const comprobante = { pedido_id: 52, total: 5100, descuento: 900 };
+  const consultar = precio => [{ ...pedido, total: 5100, detalles_pedido: [
+    { ...pedido.detalles_pedido[0], productos: { nombre: 'Café', precio } },
+  ] }];
+  rows = consultar(2000);
+  await flush(() => { tree = TestRenderer.create(<PedidosScreen userId="uuid-auth" pedidoConfirmado={comprobante} />); });
+  const clp = monto => `$${monto.toLocaleString('es-CL')}`;
+  expect(textos()).toContain(`Total pagado | ${clp(-debitoGuardado)}`);
+  expect(textos()).toContain(`Descuento aplicado | ${clp(900)}`);
+  await flush(() => tree.unmount());
+  rows = consultar(9900);
+  await montar();
+  await abrir();
+  expect(textos()).toContain(`Total cobrado | ${clp(-debitoGuardado)}`);
+  expect(textos()).toContain(`Descuento aplicado | ${clp(900)}`);
+  expect(textos()).not.toContain(clp(29700));
+  await flush(() => events.UPDATE({ new: { id: 52, estado: 'Listo', total: 5100 } }));
+  expect(textos()).toContain(`Descuento aplicado | ${clp(900)}`);
+});
+
 beforeEach(() => {
   jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] }); rows = [pedido]; queryError = null; events = {}; filters = [];
   jest.spyOn(console, 'warn').mockImplementation(() => {});

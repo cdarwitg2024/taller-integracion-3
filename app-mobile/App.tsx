@@ -103,6 +103,7 @@ type RespuestaCrearPedido = PagoCotizado & {
 };
 
 type PedidoConfirmado = {
+  descuento?: number;
   usuarioId: string;
   pedido_id: number;
   total: number;
@@ -687,6 +688,7 @@ function AppContent() {
         usuarioId: session.user.id,
         pedido_id: resultado.pedido_id,
         total: resultado.total,
+        descuento: resultado.descuento,
         saldo_restante: resultado.saldo_restante,
         franja_retiro: resultado.franja_retiro,
         estado: resultado.estado,
