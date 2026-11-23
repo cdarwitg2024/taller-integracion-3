@@ -5,6 +5,8 @@ import MisAfiliacionesScreen from '../MisAfiliacionesScreen';
 import { consultarAfiliaciones, solicitarAfiliacion, consultarMovimientosComision } from '../../services/afiliaciones';
 import { listarCampanasActivas } from '../../services/campanasAfiliados';
 import { consultarSaldoAfiliado } from '../../services/saldoAfiliado';
+import { consultarRetirosAfiliado } from '../../services/retirosAfiliado';
+jest.mock('../../services/retirosAfiliado', () => ({ consultarRetirosAfiliado: jest.fn() }));
 jest.mock('../../services/saldoAfiliado', () => ({ consultarSaldoAfiliado: jest.fn() }));
 
 jest.mock('../../lib/supabase', () => ({ supabase: { auth: {}, from: jest.fn() } }));
@@ -27,6 +29,7 @@ beforeEach(() => {
   perfil = [];
   consultarAfiliaciones.mockImplementation(async () => perfil);
   consultarMovimientosComision.mockResolvedValue(movimientos);
+  consultarRetirosAfiliado.mockResolvedValue([]);
   consultarSaldoAfiliado.mockResolvedValue({ pendiente_clp: 0, disponible_clp: 850, retirado_clp: 0 });
 });
 afterEach(() => {
@@ -77,6 +80,30 @@ test('con dos afiliaciones muestra un solo saldo global y no suma los movimiento
   expect(tree.root.findAllByType(Text).filter(n => String(n.props.children).startsWith('Saldo disponible para retirar:'))).toHaveLength(1);
   expect(texto()).toContain('Saldo disponible para retirar: $700');
   expect(consultarMovimientosComision).not.toHaveBeenCalled();
+});
+
+test('A10 reúne comisiones, reversión y un solo historial de retiros de la cuenta, localizable por comprobante', async () => {
+  perfil = [aprobada, { ...aprobada, id: 83, cafeteria_id: 8, campana_id: 41 }];
+  consultarMovimientosComision.mockImplementation(async id => id === 82 ? [
+    { ...movimientos[0], estado: 'revertida' },
+    { ...movimientos[0], id: 2, tipo: 'reversion', estado: 'revertida', monto_clp: -850 },
+  ] : []);
+  const referencia = 'f876c63c-83b4-4705-9046-c11122223333';
+  consultarRetirosAfiliado.mockResolvedValue([{ id: 1, monto_clp: 300, referencia, creado_en: '2026-11-23T12:00:00Z' }]);
+  await montar(); await pulsar('Historial');
+  expect(texto()).toContain('Historial de ganancias y retiros');
+  expect(texto()).toContain('Comisión · Pedido #501');
+  expect(texto()).toContain('$850 · revertida');
+  expect(texto()).toContain('Reversión · Pedido #501');
+  expect(texto()).toContain('-$850 · revertida');
+  expect(tree.root.findAllByType(Text).filter(n => n.props.children === 'Retiro simulado')).toHaveLength(1);
+  expect(texto()).toContain('-$300 · confirmado');
+  expect(texto()).toContain(new Date('2026-11-23T12:00:00Z').toLocaleString('es-CL'));
+  const buscador = tree.root.findAllByType(TextInput).find(n => n.props.accessibilityLabel === 'Buscar retiro por referencia de comprobante');
+  await act(async () => buscador.props.onChangeText(referencia));
+  expect(texto()).toContain(`Comprobante: ${referencia}`);
+  await pulsar('Volver a Mis afiliaciones');
+  expect(boton('Historial')).toBeDefined();
 });
 
 test('pendiente pasa a aprobada al volver al foreground, sin volver a enviar la solicitud', async () => {
