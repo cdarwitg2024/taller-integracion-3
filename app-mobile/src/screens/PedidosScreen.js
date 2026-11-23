@@ -101,6 +101,7 @@ const mapPedido = (p) => ({
   cafeteria_rut: p.cafeterias?.rut || null,
   metodo_pago: p.metodo_pago || null,
   total: Number(p.total) || 0,
+  descuento: descuentoHistorico(p),
   estado: normalizarEstado(p.estado),
   creado_en: p.creado_en,
   // Se usa para el recibo: si el pedido ya fue retirado, el QR deja de tener
@@ -109,9 +110,9 @@ const mapPedido = (p) => ({
   detalles: (p.detalles_pedido || []).map((d) => {
     const cantidad = Number(d.cantidad) || 1;
     // S2-T13: Priorizar el precio histórico persistido al momento de la compra
-    const precio = Number(d.precio_unitario ?? d.productos?.precio ?? 0);
+    const precio = d.precio_unitario == null ? null : Number(d.precio_unitario);
     // S2-T13: Priorizar el subtotal histórico del pedido
-    const subtotal = d.subtotal != null ? Number(d.subtotal) : cantidad * precio;
+    const subtotal = d.subtotal != null ? Number(d.subtotal) : precio == null ? null : cantidad * precio;
     return {
       nombre: d.productos?.nombre || 'Producto',
       cantidad,
@@ -120,6 +121,15 @@ const mapPedido = (p) => ({
     };
   }),
 });
+
+function descuentoHistorico({ total, detalles_pedido = [] }) {
+  const subtotales = detalles_pedido?.map(d => d.subtotal == null ? NaN : Number(d.subtotal));
+  const cobrado = total == null ? NaN : Number(total);
+  if (!subtotales?.length || !subtotales.every(n => Number.isFinite(n) && n >= 0) ||
+      !Number.isFinite(cobrado) || cobrado < 0) return null;
+  const diferencia = subtotales.reduce((suma, monto) => suma + monto, 0) - cobrado;
+  return diferencia >= 0 ? Math.round(diferencia * 100) / 100 : null;
+}
 
 const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista }) => {
   const [orders, setOrders] = useState([]);
@@ -296,7 +306,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
 
       const { data, error } = await leerConRenovacion(() => supabase
         .from('pedidos')
-        .select('*, cafeterias(nombre, telefono, campus_sedes(direccion)), detalles_pedido(cantidad, precio_unitario, subtotal, productos(nombre, precio))')
+        .select('*, cafeterias(nombre, telefono, campus_sedes(direccion)), detalles_pedido(cantidad, precio_unitario, subtotal, productos(nombre))')
         .eq('usuario_id', usuarioId)
         .order('creado_en', { ascending: false }));
 
@@ -363,6 +373,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 siguiente[idx] = {
                   ...prev[idx],
                   ...mapeado,
+                  total: nuevo.total == null ? prev[idx].total : mapeado.total,
+                  descuento: nuevo.detalles_pedido ? mapeado.descuento : prev[idx].descuento,
                   qr_token: nuevo.qr_token === undefined ? prev[idx].qr_token : mapeado.qr_token,
                   codigo_retiro_diario: nuevo.codigo_retiro_diario === undefined ? prev[idx].codigo_retiro_diario : mapeado.codigo_retiro_diario,
                   detalles: nuevo.detalles_pedido ? mapeado.detalles : prev[idx].detalles,
@@ -379,6 +391,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 return {
                   ...prevSel,
                   ...mapeado,
+                  total: nuevo.total == null ? prevSel.total : mapeado.total,
+                  descuento: nuevo.detalles_pedido ? mapeado.descuento : prevSel.descuento,
                   qr_token: nuevo.qr_token === undefined ? prevSel.qr_token : mapeado.qr_token,
                   codigo_retiro_diario: nuevo.codigo_retiro_diario === undefined ? prevSel.codigo_retiro_diario : mapeado.codigo_retiro_diario,
                   detalles: nuevo.detalles_pedido ? mapeado.detalles : prevSel.detalles,
@@ -595,6 +609,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                       ${pedidoConfirmado.saldo_restante.toLocaleString('es-CL')}
                     </Text>
                   </View>}
+                  {typeof pedidoConfirmado.descuento === 'number' && (
+                    <View style={styles.confirmacionFila}>
+                      <Text style={styles.confirmacionLabel}>Descuento aplicado</Text>
+                      <Text style={styles.confirmacionValor}>${pedidoConfirmado.descuento.toLocaleString('es-CL')}</Text>
+                    </View>
+                  )}
                   {pedidoConfirmado.franja_retiro && (
                     <View style={styles.confirmacionFila}>
                       <Text style={styles.confirmacionLabel}>Franja de retiro</Text>
@@ -675,13 +695,19 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                         {d.cantidad}× {d.nombre}
                       </Text>
                       <Text style={styles.detallePrecio}>
-                        ${(d.subtotal ?? (d.cantidad * d.precio)).toLocaleString('es-CL')}
+                        {d.subtotal == null ? '—' : `$${d.subtotal.toLocaleString('es-CL')}`}
                       </Text>
                     </View>
                   ))}
                   <View style={styles.detalleDivider} />
+                  {selected.descuento != null && (
+                    <View style={styles.detalleRow}>
+                      <Text style={styles.detalleNombre}>Descuento aplicado</Text>
+                      <Text style={styles.detallePrecio}>${selected.descuento.toLocaleString('es-CL')}</Text>
+                    </View>
+                  )}
                   <View style={styles.detalleRow}>
-                    <Text style={styles.detalleTotal}>Total</Text>
+                    <Text style={styles.detalleTotal}>Total cobrado</Text>
                     <Text style={styles.detalleTotal}>${selected.total.toLocaleString('es-CL')}</Text>
                   </View>
                 </View>

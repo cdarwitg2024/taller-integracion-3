@@ -78,6 +78,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [D05 - Recotización al editar el carrito](mobile/validacion/D05-Recotizar-al-editar-carrito.md)
 - [D07 - Clave persistida del intento de compra](mobile/validacion/D07-Clave-intento-compra.md)
 - [D08 - Recuperar una compra con respuesta interrumpida](mobile/validacion/D08-Recuperar-compra-interrumpida.md)
+- [D09 - Total cobrado en historial](mobile/validacion/D09-Total-cobrado-en-historial.md)
 
 ## Backend Node
 
