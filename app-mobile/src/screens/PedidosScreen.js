@@ -163,6 +163,19 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
           style: 'destructive',
           onPress: async () => {
             setCancelando(true);
+            const marcarCancelado = (canceladoEn) => {
+              const actualizado = {
+                ...pedido,
+                estado: 'cancelado',
+                cancelado_en: pedido.cancelado_en ?? canceladoEn,
+              };
+              setSelected(actualizado);
+              setOrders(prev => prev.map(o => String(o.id) === String(pedido.id) ? actualizado : o));
+            };
+            const informarYaCancelado = () => {
+              marcarCancelado();
+              Alert.alert('Pedido ya cancelado', 'Este pedido ya había sido cancelado previamente.');
+            };
             try {
               let resultado = null;
               let exito = false;
@@ -181,7 +194,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 if (apiErr instanceof ApiError && apiErr.status === 409) {
                   const motivo = apiErr.detalle || apiErr.message;
                   if (/ya_cancelado/i.test(motivo)) {
-                    Alert.alert('Pedido ya cancelado', 'Este pedido ya había sido cancelado previamente.');
+                    informarYaCancelado();
                   } else {
                     Alert.alert(
                       'No es posible cancelar',
@@ -215,7 +228,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                     return;
                   }
                   if (rpcRes.motivo === 'ya_cancelado') {
-                    Alert.alert('Pedido ya cancelado', 'Este pedido ya había sido cancelado previamente.');
+                    informarYaCancelado();
                     return;
                   }
                   if (rpcRes.motivo === 'no_autorizado') {
@@ -234,16 +247,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                   onSaldoConfirmado?.({ usuarioId: userId, saldo: nuevoSaldo });
                 }
 
-                const pedidoActualizado = {
-                  ...pedido,
-                  estado: 'cancelado',
-                  cancelado_en: new Date().toISOString(),
-                };
-
-                setSelected(pedidoActualizado);
-                setOrders((prev) =>
-                  prev.map((o) => (String(o.id) === String(pedido.id) ? pedidoActualizado : o))
-                );
+                marcarCancelado(new Date().toISOString());
 
                 Alert.alert(
                   '¡Pedido cancelado!',

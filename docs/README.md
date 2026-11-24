@@ -84,6 +84,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [D08 - Recuperar una compra con respuesta interrumpida](mobile/validacion/D08-Recuperar-compra-interrumpida.md)
 - [D09 - Total cobrado en historial](mobile/validacion/D09-Total-cobrado-en-historial.md)
 - [D10 - Actualizar Wallet al cancelar](mobile/validacion/D10-Wallet-al-cancelar.md)
+- [D12 - Wallet tras cancelar](mobile/validacion/D12-Wallet-tras-cancelar.md)
 - [D13 - Compra sin código o con código retirado](mobile/validacion/D13-Verificar-compra-sin-codigo.md)
 
 ## Backend Node
