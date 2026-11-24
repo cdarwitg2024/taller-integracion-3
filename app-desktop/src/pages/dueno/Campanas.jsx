@@ -2,7 +2,7 @@
 // Navega entre listado, formulario y resumen reutilizando el layout y PageHeader.
 // El contexto de cafetería proviene siempre del perfil autorizado, nunca de la URL.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert, Box, Button, Chip, CircularProgress, Paper, Stack, TextField, Typography,
 } from '@mui/material';
@@ -32,6 +32,27 @@ const porcentaje = (valor) => (valor === '' || valor === null || valor === undef
 const fecha = (iso) => (iso ? new Date(iso).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' }) : 'Sin límite');
 // Texto legible del estado de la campaña.
 const estadoTexto = (campana) => (campana?.estado ? String(campana.estado) : 'sin estado');
+// Acción de estado permitida por la RPC: solo activa/aceptada se pausan y solo pausada se activa.
+function accionEstado(campana) {
+  if (!campana || campana.estado === 'finalizada') return null;
+  // La RPC exige aceptación vigente para reactivar; sin ella la campaña quedaría atrapada en pausada.
+  const version = String(campana.version_confirmada || '').trim();
+  if (!campana.confirmada_por_dueno || !version
+    || version !== String(campana.version_condiciones || '').trim()) return null;
+  const db = String(campana.estado_db || '').toLowerCase();
+  if (db === 'pausada') return 'activar';
+  if (db === 'activa' || db === 'aceptada') return 'pausar';
+  return null;
+}
+
+// Botón de cambio de estado; no se renderiza cuando la campaña no admite la acción.
+function BotonEstado({ campana, onCambiarEstado, size }) {
+  const accion = accionEstado(campana);
+  if (!accion) return null;
+  return <Button size={size} onClick={() => onCambiarEstado(campana, accion)}>
+    {accion === 'pausar' ? 'Pausar' : 'Activar'}
+  </Button>;
+}
 
 // Convierte una fecha ISO al valor local que espera <input type="datetime-local">.
 const paraInput = (iso) => {
@@ -44,19 +65,24 @@ const paraInput = (iso) => {
 // Vista principal: mantiene el listado y resuelve las rutas de listado, formulario y resumen.
 function Campanas({ currentUser }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const cafeteriaId = cafeteriaAutorizada(currentUser);
   // El listado guarda a qué cafetería pertenece. Así el primer render tras un
   // cambio de cafetería no puede mostrar filas, error ni carga de la anterior.
-  const [listado, setListado] = useState({ cafeteriaId: null, campanas: [], loading: true, error: '' });
+  const [listado, setListado] = useState({ cafeteriaId: null, campanas: [], loading: true, error: '', accionError: '' });
   const vigente = listado.cafeteriaId === cafeteriaId;
   const campanas = vigente ? listado.campanas : [];
   const loading = vigente ? listado.loading : true;
   const error = vigente ? listado.error : '';
+  const errorAccion = vigente ? listado.accionError : '';
   const solicitud = useRef(0);
   // Cafetería vigente del render: invalida cargas y guardados que terminan tras
   // un cambio de perfil, aunque su callback se dispare más tarde.
   const cafeteriaActual = useRef(cafeteriaId);
   cafeteriaActual.current = cafeteriaId;
+  // Ruta vigente del render: un guardado que termine después de navegar no debe volver al listado.
+  const rutaActual = useRef(location.pathname);
+  rutaActual.current = location.pathname;
 
   // Carga el listado de la cafetería activa y descarta respuestas atrasadas.
   const cargar = useCallback(async () => {
@@ -66,15 +92,15 @@ function Campanas({ currentUser }) {
     // Al recargar la misma cafetería se conservan sus filas; al cambiar de
     // cafetería nunca se reutilizan las de la anterior.
     setListado(prev => (prev.cafeteriaId === objetivo
-      ? { ...prev, loading: true, error: '' }
-      : { cafeteriaId: objetivo, campanas: [], loading: true, error: '' }));
+      ? { ...prev, loading: true, error: '', accionError: '' }
+      : { cafeteriaId: objetivo, campanas: [], loading: true, error: '', accionError: '' }));
     try {
       const filas = await campanasAfiliados.listar(objetivo);
       if (id !== solicitud.current || objetivo !== cafeteriaActual.current) return;
-      setListado({ cafeteriaId: objetivo, campanas: filas, loading: false, error: '' });
+      setListado({ cafeteriaId: objetivo, campanas: filas, loading: false, error: '', accionError: '' });
     } catch (err) {
       if (id === solicitud.current && objetivo === cafeteriaActual.current) {
-        setListado({ cafeteriaId: objetivo, campanas: [], loading: false, error: err.message || 'No se pudieron cargar las campañas.' });
+        setListado({ cafeteriaId: objetivo, campanas: [], loading: false, error: err.message || 'No se pudieron cargar las campañas.', accionError: '' });
       }
     }
   }, [cafeteriaId]);
@@ -92,12 +118,28 @@ function Campanas({ currentUser }) {
   // Regresa al listado conservando el estado ya cargado.
   const volverAlListado = () => navigate(LISTADO);
 
-  // Recarga y vuelve al listado solo si el guardado sigue perteneciendo a la cafetería activa.
-  const guardarYVolver = async (origen) => {
-    if (origen !== cafeteriaActual.current) return;
+  // Recarga y vuelve al listado solo si el guardado sigue en su cafetería, ruta e instancia.
+  const guardarYVolver = async (origen, rutaGuardada, instancia) => {
+    if (origen !== cafeteriaActual.current || rutaGuardada !== rutaActual.current || !instancia.current) return;
     await cargar();
-    if (origen !== cafeteriaActual.current) return;
+    if (origen !== cafeteriaActual.current || rutaGuardada !== rutaActual.current || !instancia.current) return;
     volverAlListado();
+  };
+
+  // Pausa o reactiva una campaña y recarga el listado de la cafetería activa.
+  const cambiarEstado = async (campana, accion) => {
+    const origen = cafeteriaId;
+    if (origen !== cafeteriaActual.current) return;
+    try {
+      await campanasAfiliados.cambiarEstado(origen, campana.id, accion === 'pausar');
+    } catch (err) {
+      if (origen !== cafeteriaActual.current) return;
+      setListado(prev => (prev.cafeteriaId === origen
+        ? { ...prev, accionError: err.message || 'No se pudo cambiar el estado de la campaña.' }
+        : prev));
+      return;
+    }
+    await cargar();
   };
 
   // Resuelve las rutas que dependen del listado: carga, error con reintento o
@@ -121,8 +163,8 @@ function Campanas({ currentUser }) {
   return (
     <Routes>
       <Route index element={
-        <Listado campanas={campanas} loading={loading} error={error} cafeteriaId={cafeteriaId}
-          onReintentar={cargar} onNueva={() => navigate(`${LISTADO}/nueva`)}
+        <Listado campanas={campanas} loading={loading} error={error} errorAccion={errorAccion} cafeteriaId={cafeteriaId}
+          onReintentar={cargar} onNueva={() => navigate(`${LISTADO}/nueva`)} onCambiarEstado={cambiarEstado}
           onResumen={(c) => navigate(`${LISTADO}/${c.id}`)} onEditar={(c) => navigate(`${LISTADO}/${c.id}/editar`)} />
       } />
       <Route path="nueva" element={
@@ -130,12 +172,12 @@ function Campanas({ currentUser }) {
           onGuardado={guardarYVolver} />
       } />
       <Route path=":id/editar" element={detalle(
-        <Formulario key={cafeteriaId} campanas={campanas} cafeteriaId={cafeteriaId} onVolver={volverAlListado}
+        <FormularioEdicion campanas={campanas} cafeteriaId={cafeteriaId} onVolver={volverAlListado}
           onGuardado={guardarYVolver} />
       )} />
       <Route path=":id" element={detalle(
-        <Resumen campanas={campanas} onVolver={volverAlListado}
-          onEditar={(c) => navigate(`${LISTADO}/${c.id}/editar`)} />
+        <Resumen campanas={campanas} errorAccion={errorAccion} onVolver={volverAlListado} onCambiarEstado={cambiarEstado}
+          onReintentar={cargar} onEditar={(c) => navigate(`${LISTADO}/${c.id}/editar`)} />
       )} />
     </Routes>
   );
@@ -147,7 +189,7 @@ function Cargando() {
 }
 
 // Listado de campañas con estados de carga, error y vacío.
-function Listado({ campanas, loading, error, cafeteriaId, onReintentar, onNueva, onResumen, onEditar }) {
+function Listado({ campanas, loading, error, errorAccion, cafeteriaId, onReintentar, onNueva, onResumen, onEditar, onCambiarEstado }) {
   return (
     <Box>
       <PageHeader
@@ -164,6 +206,11 @@ function Listado({ campanas, loading, error, cafeteriaId, onReintentar, onNueva,
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={onReintentar}>Reintentar</Button>}>
           {error}
+        </Alert>
+      )}
+      {errorAccion && (
+        <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={onReintentar}>Reintentar</Button>}>
+          {errorAccion}
         </Alert>
       )}
       {loading && campanas.length === 0 ? (
@@ -194,6 +241,7 @@ function Listado({ campanas, loading, error, cafeteriaId, onReintentar, onNueva,
               <Stack direction="row" spacing={1} justifyContent="flex-end">
                 <Button size="small" onClick={() => onResumen(c)}>Ver resumen</Button>
                 <Button size="small" onClick={() => onEditar(c)}>Editar</Button>
+                <BotonEstado campana={c} onCambiarEstado={onCambiarEstado} size="small" />
               </Stack>
             </Paper>
           ))}
@@ -203,9 +251,16 @@ function Listado({ campanas, loading, error, cafeteriaId, onReintentar, onNueva,
   );
 }
 
+// Remonta el formulario al cambiar de campaña para no reutilizar los datos de la anterior.
+function FormularioEdicion(props) {
+  const { id } = useParams();
+  return <Formulario key={`${props.cafeteriaId}-${id}`} {...props} />;
+}
+
 // Formulario de creación y edición de una campaña.
 function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
   const { id } = useParams();
+  const location = useLocation();
   const existente = id ? campanas.find(c => String(c.id) === String(id)) : null;
   const [form, setForm] = useState(() => (existente
     ? {
@@ -245,12 +300,13 @@ function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
       return;
     }
     const origen = cafeteriaId;
+    const rutaGuardada = location.pathname;
     setBusy(true);
     setFormError('');
     try {
       if (existente) await campanasAfiliados.actualizar(origen, existente.id, form);
       else await campanasAfiliados.crear(origen, form);
-      await onGuardado(origen);
+      if (montado.current) await onGuardado(origen, rutaGuardada, montado);
     } catch (err) {
       if (montado.current) setFormError(err.message || 'No se pudo guardar la campaña.');
     } finally {
@@ -299,7 +355,7 @@ function Formulario({ campanas, cafeteriaId, onVolver, onGuardado }) {
 }
 
 // Resumen de solo lectura de una campaña del listado.
-function Resumen({ campanas, onVolver, onEditar }) {
+function Resumen({ campanas, errorAccion, onVolver, onEditar, onCambiarEstado, onReintentar }) {
   const { id } = useParams();
   const campana = campanas.find(c => String(c.id) === String(id));
   if (!campana) {
@@ -317,6 +373,11 @@ function Resumen({ campanas, onVolver, onEditar }) {
         subtitle="Resumen de la campaña"
         actions={<Button startIcon={<ArrowBackIcon />} onClick={onVolver}>Volver al listado</Button>}
       />
+      {errorAccion && (
+        <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={onReintentar}>Reintentar</Button>}>
+          {errorAccion}
+        </Alert>
+      )}
       <Paper elevation={0} sx={{ border: '1px solid #E9E1D9', borderRadius: 4, p: 3, maxWidth: 640 }}>
         <Stack spacing={1.5}>
           <Chip label={estadoTexto(campana)} sx={{ alignSelf: 'flex-start' }} />
@@ -325,7 +386,10 @@ function Resumen({ campanas, onVolver, onEditar }) {
           <Typography>Comisión del afiliado: <strong>{porcentaje(campana.comision_pct)}</strong></Typography>
           <Typography>Inicio: {fecha(campana.inicio)}</Typography>
           <Typography>Término: {fecha(campana.fin)}</Typography>
-          <Stack direction="row" justifyContent="flex-end"><Button onClick={() => onEditar(campana)}>Editar campaña</Button></Stack>
+          <Stack direction="row" justifyContent="flex-end">
+            <Button onClick={() => onEditar(campana)}>Editar campaña</Button>
+            <BotonEstado campana={campana} onCambiarEstado={onCambiarEstado} />
+          </Stack>
         </Stack>
       </Paper>
     </Box>

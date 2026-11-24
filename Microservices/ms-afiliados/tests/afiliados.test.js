@@ -14,9 +14,9 @@ const fs = require('fs');
 const path = require('path');
 const request = require('supertest');
 const app = require('../src/app');
-const crearCliente = require('../src/cliente-autenticado');
+const crearCliente = require('@coffeefaster/shared/src/cliente-autenticado');
 
-jest.mock('../src/cliente-autenticado', () => jest.fn());
+jest.mock('@coffeefaster/shared/src/cliente-autenticado', () => jest.fn());
 jest.mock('@coffeefaster/shared', () => {
   const shared = jest.requireActual('@coffeefaster/shared');
   return {
@@ -593,12 +593,12 @@ describe('administración de campañas sobre public.campanas', () => {
     expect(respuesta.body).not.toHaveProperty('id');
   });
 
-  test('los dos gateways exponen /api/afiliados hacia ms-pedidos', () => {
+  test('los dos gateways exponen /api/afiliados hacia ms-afiliados', () => {
     const compose = fs.readFileSync(path.resolve(__dirname, '../../gateway/nginx.conf'), 'utf8');
     const k8s = fs.readFileSync(path.resolve(__dirname, '../../../k8s-next/gateway/nginx.conf'), 'utf8');
     for (const configuracion of [compose, k8s]) {
       expect(configuracion).toMatch(/location\s+\/api\/afiliados\s*\{/);
-      expect(configuracion).toMatch(/ms-pedidos[^;]*:3005/);
+      expect(configuracion).toMatch(/location\s+\/api\/afiliados\s*\{[^}]*ms-afiliados[^;]*:3006/);
     }
   });
 });

@@ -1,0 +1,50 @@
+name: coffeefaster-c07
+
+x-supabase: &supabase
+  SUPABASE_URL: http://supabase-fixture:54321
+  SUPABASE_PUBLISHABLE_KEY: c07-fixture-key
+
+services:
+  gateway:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - ms-pedidos
+      - ms-afiliados
+      - supabase-fixture
+  ms-pedidos:
+    build:
+      context: .
+      dockerfile: ms-pedidos/Dockerfile
+    environment:
+      <<: *supabase
+      PORT: 3005
+      MS_MENUS_URL: http://ms-menus:54321
+      HABILITAR_CONFIRMACION_AFILIADA: "true"
+  ms-afiliados:
+    build:
+      context: .
+      dockerfile: ms-afiliados/Dockerfile
+    environment:
+      <<: *supabase
+      PORT: 3006
+      HABILITAR_CONFIRMACION_AFILIADA: "true"
+  supabase-fixture:
+    image: node:22-alpine
+    command: ["node", "/tests/supabase.cjs"]
+    volumes:
+      - ./tests/c07:/tests:ro
+    networks:
+      default:
+        aliases: [ms-cafeterias, ms-menus]
+  prueba:
+    image: node:22-alpine
+    command: ["node", "/tests/gateway.cjs"]
+    environment:
+      C07_GATEWAY_URL: http://gateway
+      C07_FIXTURE_URL: http://supabase-fixture:54321
+    volumes:
+      - ./tests/c07:/tests:ro
+    depends_on:
+      - gateway

@@ -1,9 +1,14 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { BackHandler, ScrollView, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, BackHandler, ScrollView, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import Header from '../components/Header';
 import Button from '../components/Button';
 import AppIcon from '../components/AppIcon';
 import OportunidadesScreen from './afiliaciones/OportunidadesScreen';
+import EstadoAfiliacion from './afiliaciones/EstadoAfiliacion';
+import ComisionesAfiliado from './afiliaciones/ComisionesAfiliado';
+import RetirosAfiliado from './afiliaciones/RetirosAfiliado';
+import SaldoAfiliado from './afiliaciones/SaldoAfiliado';
+import { consultarAfiliaciones } from '../services/afiliaciones';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -12,31 +17,47 @@ const secciones = [
   { id: 'oportunidades', titulo: 'Oportunidades', icono: 'store', descripcion: 'Conoce las campañas de las cafeterías para promocionarlas.' },
   { id: 'codigos', titulo: 'Mis códigos', icono: 'number', descripcion: 'Encuentra los códigos de tus afiliaciones aprobadas.' },
   { id: 'ganancias', titulo: 'Ganancias', icono: 'card', descripcion: 'Consulta las comisiones de tus pedidos entregados.' },
+  { id: 'historial', titulo: 'Historial', icono: 'receipt', descripcion: 'Consulta comisiones, reversiones y retiros por comprobante.' },
 ];
-
-function Codigos() {
-  return <Vista titulo="Tus códigos de afiliado" descripcion="Cuando una cafetería apruebe tu solicitud, podrás consultar aquí el código asignado para compartirlo." detalle="La consulta de solicitudes y códigos estará disponible próximamente." />;
-}
-
-function Ganancias() {
-  return <Vista titulo="Comisiones por entregas" descripcion="La comisión se genera cuando se entrega un pedido que usó tu código. Las compras con tu propio código no generan comisión." detalle="La consulta de ganancias estará disponible próximamente." />;
-}
-
-function Vista({ titulo, descripcion, detalle }) {
-  return (
-    <View style={styles.panel}>
-      <Text accessibilityRole="header" style={styles.title}>{titulo}</Text>
-      <Text style={styles.description}>{descripcion}</Text>
-      <View style={styles.aviso}>
-        <Text style={styles.description}>{detalle}</Text>
-      </View>
-    </View>
-  );
-}
 
 export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
   const [seccion, setSeccion] = useState('inicio');
-  const actual = secciones.find(item => item.id === seccion);
+  const [perfil, setPerfil] = useState({ estado: 'cargando', solicitudes: [], error: '' });
+  const consulta = useRef(0);
+  const montado = useRef(true);
+  useEffect(() => { montado.current = true; return () => { montado.current = false; consulta.current++; }; }, []);
+  const recargar = useCallback(() => {
+    if (!montado.current) return;
+    const numero = ++consulta.current;
+    setPerfil(prev => ({ ...prev, estado: 'cargando', error: '' }));
+    consultarAfiliaciones().then(solicitudes => {
+      if (montado.current && numero === consulta.current) setPerfil({ estado: 'listo', solicitudes, error: '' });
+    }).catch(error => {
+      if (montado.current && numero === consulta.current) setPerfil(prev => ({
+        estado: error.status === 403 ? 'prohibido' : 'error', solicitudes: [401, 403].includes(error.status) ? [] : prev.solicitudes,
+        error: error.status === 401 ? 'Tu sesión venció. Vuelve a iniciar sesión.'
+          : error.status === 403 ? 'Tu cuenta no tiene permisos para consultar afiliaciones. Contacta al administrador de la cafetería.'
+          : `No pudimos actualizar tus solicitudes. Intenta nuevamente.${prev.solicitudes.length ? ' Se conserva la última consulta.' : ''}`,
+      }));
+    });
+  }, []);
+  useEffect(() => { recargar(); return () => { consulta.current++; }; }, [recargar, seccion]);
+  useEffect(() => {
+    const listener = AppState.addEventListener('change', estado => { if (estado === 'active') recargar(); });
+    return () => listener.remove();
+  }, [recargar]);
+  const aprobadas = perfil.solicitudes.filter(s => s.estado === 'aprobada');
+  const visibles = secciones.filter(s => s.id === 'oportunidades' || aprobadas.length > 0);
+  const actual = visibles.find(item => item.id === seccion);
+  useEffect(() => {
+    if (seccion !== 'inicio' && !actual) setSeccion('inicio');
+  }, [actual, seccion]);
+  const alSolicitar = nueva => {
+    if (!montado.current) return;
+    setPerfil(prev => ({ ...prev, solicitudes: [...prev.solicitudes.filter(s =>
+      s.cafeteria_id !== nueva.cafeteria_id || s.campana_id !== nueva.campana_id), nueva] }));
+    recargar();
+  };
   const volver = useCallback(() => {
     if (seccion === 'inicio') onBack();
     else setSeccion('inicio');
@@ -59,10 +80,16 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
       />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.cuenta}>{nombreUsuario ? `Cuenta activa: ${nombreUsuario}` : 'Tu cuenta de estudiante'}</Text>
+        {perfil.estado === 'cargando' && <View><ActivityIndicator accessibilityLabel="Actualizando solicitudes" />
+          <Text style={styles.description}>Actualizando el estado de tus solicitudes…</Text></View>}
+        {perfil.error ? <Text accessibilityRole="alert" style={styles.error}>{perfil.error}</Text> : null}
+        {perfil.estado !== 'prohibido' && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Actualizar mis solicitudes" onPress={recargar}>
+          <Text style={styles.accesoTitulo}>Actualizar mis solicitudes</Text>
+        </TouchableOpacity>}
         {actual ? (
           <>
             <View accessibilityRole="tablist" style={styles.tabs}>
-              {secciones.map(item => (
+              {visibles.map(item => (
                 <TouchableOpacity key={item.id} accessibilityRole="tab"
                   accessibilityLabel={item.titulo} accessibilityState={{ selected: seccion === item.id }}
                   onPress={() => setSeccion(item.id)}
@@ -71,15 +98,32 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
                 </TouchableOpacity>
               ))}
             </View>
-            {seccion === 'oportunidades' && <OportunidadesScreen />}
-            {seccion === 'codigos' && <Codigos />}
-            {seccion === 'ganancias' && <Ganancias />}
+            {seccion === 'oportunidades' && <OportunidadesScreen solicitudes={perfil.solicitudes}
+              perfilEstado={perfil.estado} onSolicitada={alSolicitar} />}
+            {seccion === 'codigos' && <View style={styles.panel}>
+              <Text accessibilityRole="header" style={styles.title}>Tus solicitudes y códigos de afiliado</Text>
+              {perfil.estado === 'listo' && perfil.solicitudes.length === 0 && <Text style={styles.description}>Todavía no tienes solicitudes de afiliación.</Text>}
+              {perfil.solicitudes.map(s => <EstadoAfiliacion key={s.id} solicitud={s} confirmado={perfil.estado === 'listo'} />)}
+            </View>}
+            {['ganancias', 'historial'].includes(seccion) && <>
+              <SaldoAfiliado revision={perfil.solicitudes} vista={seccion} />
+              {aprobadas.filter(s => !s.codigo_activo).map(s => <Text key={s.id} style={styles.description}>
+                {`El código está desactivado (cafetería #${s.cafeteria_id}, campaña #${s.campana_id}). Sus comisiones e historial siguen disponibles.`}
+              </Text>)}
+              {seccion === 'historial' && <Text accessibilityRole="header" style={styles.title}>Historial de ganancias y retiros</Text>}
+              {seccion === 'historial' && <RetirosAfiliado revision={perfil.solicitudes} />}
+              {seccion === 'historial' && aprobadas.map(s => <ComisionesAfiliado key={s.id} afiliacion={s} historial />)}
+            </>}
           </>
         ) : (
           <>
             <Text accessibilityRole="header" style={styles.title}>Tu espacio de afiliaciones</Text>
             <Text style={styles.description}>Elige qué quieres consultar de tus afiliaciones.</Text>
-            {secciones.map(item => (
+            {perfil.estado === 'listo' && perfil.solicitudes.length === 0 && <Text accessibilityLiveRegion="polite" style={styles.description}>
+              Todavía no tienes solicitudes de afiliación. Explora las oportunidades disponibles.
+            </Text>}
+            {perfil.solicitudes.map(s => <EstadoAfiliacion key={s.id} solicitud={s} confirmado={perfil.estado === 'listo'} />)}
+            {visibles.map(item => (
               <TouchableOpacity key={item.id} accessibilityRole="button" accessibilityLabel={item.titulo}
                 accessibilityHint={`Abre la vista ${item.titulo}`} onPress={() => setSeccion(item.id)}
                 style={styles.acceso}>
@@ -119,4 +163,5 @@ const styles = StyleSheet.create({
   panel: { padding: spacing.lg, gap: spacing.lg, backgroundColor: colors.blanco,
     borderRadius: 16, borderWidth: 1, borderColor: colors.borde },
   aviso: { backgroundColor: colors.crema, padding: spacing.md, borderRadius: 12 },
+  error: { color: colors.rojo, lineHeight: 22 },
 });

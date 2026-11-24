@@ -5,6 +5,7 @@ import OportunidadesScreen from './OportunidadesScreen';
 import { apiGet } from '../../services/backendClient';
 
 jest.mock('../../services/backendClient', () => ({ apiGet: jest.fn() }));
+jest.mock('../../services/afiliaciones', () => ({ solicitarAfiliacion: jest.fn() }));
 const ahora = Date.parse('2026-11-18T12:00:00Z');
 const cafeterias = [{ id: 7, nombre: 'Norte' }, { id: 8, nombre: 'Sur' }];
 const campana = (cambios = {}) => ({
@@ -52,7 +53,7 @@ test('explica aprobación, beneficio único, código propio, cancelación y vige
   await pulsar('Ver condiciones de Campaña Norte');
   expect(texto()).toContain('aprobar tu afiliación y asignarte un código');
   expect(texto()).toContain('Ver esta campaña no significa que ya estés aprobado');
-  expect(texto()).toContain('una sola vez en todo CoffeeFast, aunque ya haya comprado antes');
+  expect(texto()).toContain('Aplica el código en el carrito para comprobar si el descuento está disponible para tu cuenta.');
   expect(texto()).toContain('en esa compra tu comisión es $0');
   expect(texto()).toContain('el comprador recupera su beneficio y la comisión queda en $0');
   expect(texto()).toContain('activa y vigente al confirmar el pago');

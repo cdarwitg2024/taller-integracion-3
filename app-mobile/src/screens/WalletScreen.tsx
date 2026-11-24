@@ -86,9 +86,12 @@ const getTipoLabel = (tipo: string): string => {
 // ─── Componente Principal ────────────────────────────────────────
 interface WalletScreenProps {
   userId: string | null;
+  saldoConfirmado?: number;
+  onSaldoConfirmado?: (dato: { usuarioId: string; saldo: number }) => void;
 }
 
-const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
+const WalletScreen: React.FC<WalletScreenProps> = ({ userId, saldoConfirmado, onSaldoConfirmado }) => {
+  const montada = useRef(false);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [loading, setLoading] = useState(true);
@@ -226,6 +229,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
       }
 
       setWallet(walletData as Wallet | null);
+      if (montada.current && Number.isSafeInteger(walletData?.saldo_actual) && walletData.saldo_actual >= 0) {
+        onSaldoConfirmado?.({ usuarioId: userId, saldo: walletData.saldo_actual });
+      }
 
       // Cargar movimientos pertenecientes de forma estricta a la wallet del usuario
       if (walletData) {
@@ -258,10 +264,12 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [userId, obtenerUsuarioId]);
+  }, [userId, obtenerUsuarioId, onSaldoConfirmado]);
 
   useEffect(() => {
+    montada.current = true;
     cargarSaldo();
+    return () => { montada.current = false; };
   }, [cargarSaldo]);
 
   // S2-T16: el contador del saldo sigue el valor interpolado de la animación.
@@ -462,7 +470,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
   }
 
   // ─── Render: Loading ──────────────────────────────────────────
-  if (loading) {
+  if (loading && saldoConfirmado === undefined) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -485,7 +493,13 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
 
   // El saldo en pantalla es el animado; su valor final sale del estado
   // confirmado (wallet recargada desde la base).
-  const saldo = saldoMostrado;
+  const saldo = wallet ? saldoMostrado : saldoConfirmado ?? 0;
+  const mostrarSinAnimacion = saldoConfirmado !== undefined;
+  const entrada = {
+    opacity: mostrarSinAnimacion ? 1 : fadeAnim,
+    transform: [{ translateY: mostrarSinAnimacion ? 0 : slideAnim }],
+  };
+  const estadisticasPendientes = loading || (errorMovimientos && movimientosVisibles.length === 0);
   const esSaldoCero = saldo === 0;
   const esSaldoBajo = saldo > 0 && saldo < 1000;
 
@@ -517,10 +531,10 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
         <Animated.View
           style={[
             {
-              opacity: fadeAnim,
+              opacity: entrada.opacity,
               transform: [
-                { translateY: slideAnim },
-                { scale: scaleAnim },
+                { translateY: mostrarSinAnimacion ? 0 : slideAnim },
+                { scale: mostrarSinAnimacion ? 1 : scaleAnim },
               ],
             },
           ]}
@@ -535,10 +549,10 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
                 style={[
                   styles.balanceValue,
                   {
-                    opacity: saldoAnim,
+                    opacity: mostrarSinAnimacion ? 1 : saldoAnim,
                     transform: [
                       {
-                        scale: saldoAnim.interpolate({
+                        scale: mostrarSinAnimacion ? 1 : saldoAnim.interpolate({
                           inputRange: [0, 1],
                           outputRange: [0.8, 1],
                         }),
@@ -547,7 +561,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
                   },
                 ]}
               >
-                {`$${saldoMostrado.toLocaleString('es-CL')}`}
+                {`$${saldo.toLocaleString('es-CL')}`}
               </Animated.Text>
               <Text style={styles.balanceHint}>
                 {esSaldoCero
@@ -565,7 +579,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
         <Animated.View
           style={[
             styles.actionsRow,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            entrada,
           ]}
         >
           <TouchableOpacity
@@ -596,22 +610,22 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
         <Animated.View
           style={[
             styles.statsRow,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            entrada,
           ]}
         >
           <Card variant="outlined" padding="none" style={styles.statCard}>
-            <Text style={styles.statValue}>{movimientosVisibles.length}</Text>
+            <Text style={styles.statValue}>{estadisticasPendientes ? '—' : movimientosVisibles.length}</Text>
             <Text style={styles.statLabel}>Movimientos</Text>
           </Card>
           <Card variant="outlined" padding="none" style={styles.statCard}>
             <Text style={styles.statValue}>
-              {movimientosVisibles.filter((m) => m.tipo === 'compra').length}
+              {estadisticasPendientes ? '—' : movimientosVisibles.filter((m) => m.tipo === 'compra').length}
             </Text>
             <Text style={styles.statLabel}>Compras</Text>
           </Card>
           <Card variant="outlined" padding="none" style={styles.statCard}>
             <Text style={styles.statValue}>
-              {movimientosVisibles.filter((m) => m.tipo === 'recarga').length}
+              {estadisticasPendientes ? '—' : movimientosVisibles.filter((m) => m.tipo === 'recarga').length}
             </Text>
             <Text style={styles.statLabel}>Recargas</Text>
           </Card>
@@ -621,12 +635,14 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId }) => {
         <Animated.View
           style={[
             styles.section,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            entrada,
           ]}
         >
           <Text style={styles.sectionTitle}>Últimos movimientos</Text>
 
-          {errorMovimientos ? (
+          {loading ? (
+            <Text style={styles.loadingText}>Cargando movimientos...</Text>
+          ) : errorMovimientos ? (
             <Card variant="outlined" padding="none" style={styles.errorMovimientos}>
               <AppIcon name="warning" style={styles.errorIcon} />
               <Text style={styles.errorTitle}>Error al cargar movimientos</Text>

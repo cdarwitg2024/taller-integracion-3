@@ -6,6 +6,17 @@ import { BASE_BACKEND, request } from './backendApi';
 const ruta = (cafeteriaId, sufijo = '') =>
   `${BASE_BACKEND}/api/afiliados/cafeterias/${Number(cafeteriaId)}/campanas${sufijo}`;
 
+// Códigos del contrato C05 que necesitan una explicación para el dueño.
+const MENSAJES_C05 = {
+  codigo_en_uso: 'Ese código ya está en uso. Elige otro.',
+  sin_acceso_cafeteria: 'No tienes acceso a las solicitudes de esta cafetería.',
+};
+
+// Traduce los errores del contrato C05 antes de mostrarlos en el panel.
+function explicarErrorC05(error) {
+  return new Error(MENSAJES_C05[error.message] || error.message);
+}
+
 // Devuelve los errores por campo del formulario, sin alterar los valores válidos.
 export function validarFormularioCampana(form = {}, esAlta = false) {
   const errores = {};
@@ -25,17 +36,21 @@ export function validarFormularioCampana(form = {}, esAlta = false) {
   const porcentaje = (valor, etiqueta, campo, obligatorio = 'obligatorio') => {
     if (typeof valor === 'boolean' || (typeof valor === 'string' && valor.trim() === '')) {
       errores[campo] = `${etiqueta} es ${obligatorio}.`;
-      return;
+      return undefined;
     }
     if (valor === '' || valor === null || valor === undefined) {
       errores[campo] = `${etiqueta} es ${obligatorio}.`;
-      return;
+      return undefined;
     }
     const n = Number(valor);
+    // Un valor inválido se descarta: la comparación de descuentos no debe sobrescribir su error de rango.
     if (!Number.isFinite(n) || n < 0 || n > 100) {
       errores[campo] = `${etiqueta} debe estar entre 0 y 100.`;
-    } else if (Math.abs(n * 100 - Math.round(n * 100)) > 1e-9) {
+      return undefined;
+    }
+    if (Math.abs(n * 100 - Math.round(n * 100)) > 1e-9) {
       errores[campo] = `${etiqueta} debe tener hasta dos decimales.`;
+      return undefined;
     }
     return n;
   };
@@ -83,7 +98,12 @@ export function prepararCampana(form, esAlta = false) {
 export const campanasAfiliados = {
   // GET /api/afiliados/cafeterias/:id/campanas/administracion (solo dueño)
   async listar(cafeteriaId) {
-    const body = await request(ruta(cafeteriaId, '/administracion'));
+    let body;
+    try {
+      body = await request(ruta(cafeteriaId, '/administracion'));
+    } catch (error) {
+      throw explicarErrorC05(error);
+    }
     return Array.isArray(body?.campanas) ? body.campanas : [];
   },
   // POST /api/afiliados/cafeterias/:id/campanas
@@ -95,6 +115,59 @@ export const campanasAfiliados = {
     return request(ruta(cafeteriaId, `/${Number(campanaId)}`), {
       method: 'PATCH',
       body: JSON.stringify(prepararCampana(form)),
+    });
+  },
+  // GET .../:campanaId/solicitudes; sigue el cursor hasta agotar la paginación.
+  async listarSolicitudes(cafeteriaId, campanaId) {
+    const base = ruta(cafeteriaId, `/${Number(campanaId)}/solicitudes`);
+    const solicitudes = [];
+    let antesDe = null;
+    for (;;) {
+      const url = antesDe === null ? base : `${base}?antes_de=${encodeURIComponent(antesDe)}`;
+      let body;
+      try {
+        body = await request(url);
+      } catch (error) {
+        throw explicarErrorC05(error);
+      }
+      if (!Array.isArray(body?.solicitudes) ||
+          body.solicitudes.some(s => !Number.isSafeInteger(s?.id) || s.id <= 0)) {
+        throw new Error('Respuesta de solicitudes inválida.');
+      }
+      solicitudes.push(...body.solicitudes);
+      const siguiente = body.siguiente_antes_de;
+      if (siguiente === undefined || siguiente === null) return solicitudes;
+      if (!Number.isSafeInteger(siguiente) || siguiente <= 0 || (antesDe !== null && siguiente >= antesDe)) {
+        throw new Error('Paginación de solicitudes inválida.');
+      }
+      antesDe = siguiente;
+    }
+  },
+  // PATCH .../:campanaId/solicitudes/:solicitudId con la decisión del dueño.
+  async resolverSolicitud(cafeteriaId, campanaId, solicitudId, decision, codigo) {
+    if (!['aprobar', 'rechazar', 'desactivar'].includes(decision)) {
+      throw new Error('Decisión no válida.');
+    }
+    const cuerpo = { decision };
+    if (decision === 'aprobar') {
+      // El contrato permite omitirlo: la RPC genera el código cuando no se propone uno.
+      const asignado = String(codigo ?? '').trim();
+      if (asignado) cuerpo.codigo = asignado;
+    }
+    try {
+      return await request(ruta(cafeteriaId, `/${Number(campanaId)}/solicitudes/${Number(solicitudId)}`), {
+        method: 'PATCH',
+        body: JSON.stringify(cuerpo),
+      });
+    } catch (error) {
+      throw explicarErrorC05(error);
+    }
+  },
+  // PATCH del mismo recurso con el cambio de estado aislado de las condiciones.
+  async cambiarEstado(cafeteriaId, campanaId, pausada) {
+    return request(ruta(cafeteriaId, `/${Number(campanaId)}`), {
+      method: 'PATCH',
+      body: JSON.stringify({ pausada: Boolean(pausada) }),
     });
   },
 };

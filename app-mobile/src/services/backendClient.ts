@@ -37,7 +37,8 @@ export class ApiError extends Error {
     mensaje: string,
     status = 0,
     detalle?: string,
-    resultadoIncierto = false
+    resultadoIncierto = false,
+    readonly cobrado?: boolean
   ) {
     super(mensaje);
     this.name = 'ApiError';
@@ -82,7 +83,7 @@ function normalizarRuta(ruta: string): string {
 }
 
 /** JWT de la sesión activa. Sin sesión no hay cabecera Authorization posible. */
-async function tokenActual(): Promise<string> {
+async function tokenActual(usuarioId?: string): Promise<string> {
   const { data, error } = await supabase.auth.getSession();
 
   if (error) {
@@ -90,6 +91,9 @@ async function tokenActual(): Promise<string> {
   }
 
   const token = data?.session?.access_token;
+  if (usuarioId && data?.session?.user?.id !== usuarioId) {
+    throw new ApiError('La sesión no corresponde al intento guardado.');
+  }
   if (!token) {
     throw new ApiError('No hay sesión activa: iniciá sesión para continuar.');
   }
@@ -146,15 +150,16 @@ function textoDe(e: unknown): string {
  * @param ruta  ruta relativa, p. ej. `/api/pedidos`.
  * @param cuerpo objeto serializado con `JSON.stringify` como body.
  * @param opciones configuración opcional; `timeoutMs` define el límite de
- *                 espera (por defecto 6000 ms).
+ *                 espera (por defecto 6000 ms); `claveIdempotencia` identifica el intento.
  */
 export async function apiPost<T>(
   ruta: string,
   cuerpo: unknown,
-  opciones?: { timeoutMs?: number }
+  opciones?: { timeoutMs?: number; claveIdempotencia?: string; antesDeEnviar?: () => Promise<void>; usuarioId?: string }
 ): Promise<T> {
   const url = `${urlBase()}${normalizarRuta(ruta)}`;
-  const token = await tokenActual();
+  const token = await tokenActual(opciones?.usuarioId);
+  await opciones?.antesDeEnviar?.();
 
   // S2-T15: límite de espera explícito. Si se agota DESPUÉS de enviar la
   // solicitud no se sabe si el backend alcanzó a procesarla.
@@ -168,9 +173,10 @@ export async function apiPost<T>(
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
+        ...(opciones?.claveIdempotencia ? { 'Idempotency-Key': opciones.claveIdempotencia } : {}),
       },
       // Sin `no-validate` ni equivalentes: TLS queda tal cual lo resuelve el
-      // sistema. Tampoco se manda ningún header de key del lado del cliente.
+      // sistema. No se envían claves de acceso de servidor desde el cliente.
       body: JSON.stringify(cuerpo ?? {}),
       signal: controller.signal,
     });
@@ -203,7 +209,10 @@ export async function apiPost<T>(
     throw new ApiError(
       mensajeDeError(json) ?? `El backend respondió HTTP ${respuesta.status} en ${ruta}.`,
       respuesta.status,
-      detalleDeError(json)
+      detalleDeError(json),
+      false,
+      typeof (json as { cobrado?: unknown } | null)?.cobrado === 'boolean'
+        ? (json as { cobrado: boolean }).cobrado : undefined
     );
   }
 

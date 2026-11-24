@@ -7,6 +7,7 @@
  * completos para poder limpiar el carrito sin mentirle al usuario.
  */
 export type PagoResult = {
+  descuento?: number;
   ok: boolean;
   motivo?: string;
   mensaje?: string;
@@ -33,7 +34,6 @@ export type ClasificacionPago =
       resultado: PagoResult & {
         pedido_id: number;
         total: number;
-        saldo_restante: number;
       };
     };
 
@@ -77,3 +77,18 @@ export const clasificarResultadoPago = (
     },
   };
 };
+
+export type PagoCotizado = { pedido_id?: number; estado?: string; total_pagado?: number; descuento_afiliado?: number };
+
+export function clasificarPagoCotizado(
+  respuesta: PagoCotizado | null, totalAceptado: number,
+): ClasificacionPago {
+  if (!respuesta || respuesta.estado !== 'pagado' || respuesta.total_pagado !== totalAceptado ||
+      !Number.isSafeInteger(respuesta.pedido_id) || !respuesta.pedido_id || respuesta.pedido_id < 0) {
+    return { tipo: 'incierto' };
+  }
+  return { tipo: 'confirmado', resultado: {
+    ok: true, pedido_id: respuesta.pedido_id, estado: respuesta.estado, total: totalAceptado,
+    descuento: respuesta.descuento_afiliado,
+  } };
+}

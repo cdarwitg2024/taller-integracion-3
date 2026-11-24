@@ -12,7 +12,7 @@
 // historico a la interfaz plana: `shared` exporta `supabase`, `httpClient` y
 // `HttpError` de forma estable (ver shared/src/index.js).
 const { supabase, httpClient, HttpError } = require('@coffeefaster/shared');
-const crearClienteAutenticado = require('../../cliente-autenticado');
+const crearClienteAutenticado = require('@coffeefaster/shared/src/cliente-autenticado');
 const {
   normalizarEstado,
   puedeTransicionar,
@@ -190,7 +190,89 @@ async function cancelarPedido({ accessToken, id }) {
   });
 }
 
-async function crearPedido({ user, accessToken, body }) {
+async function confirmarPago(cliente, cafeteriaId, body, clave) {
+  const { items, codigo = null, total_aceptado, franja_retiro } = body;
+  if (!/^[!-~]{1,128}$/.test(clave ?? '') || clave.includes(',') ||
+      !Number.isSafeInteger(total_aceptado) || total_aceptado < 0 ||
+      (codigo !== null && typeof codigo !== 'string') ||
+      typeof franja_retiro !== 'string' || items.length > 100) {
+    throw new HttpError(400, 'confirmacion_invalida');
+  }
+
+  // V08: la RPC resuelve el reintento y revalida precios dentro de la transacción.
+  const { data, error } = await cliente.rpc('procesar_pago', {
+    p_cafeteria_id: cafeteriaId,
+    p_items: items,
+    p_franja_retiro: franja_retiro,
+    p_codigo: codigo,
+    p_total_aceptado: total_aceptado,
+    p_clave_idempotencia: clave
+  });
+  if (error) {
+    if (error.code === '22023') throw new HttpError(400, 'confirmacion_invalida');
+    if (error.code === '42501') throw new HttpError(403, 'sin_acceso');
+    if (['PGRST301', 'PGRST303', '28000'].includes(error.code)) {
+      throw new HttpError(401, 'sesion_invalida');
+    }
+    throw new HttpError(503, 'No se pudo confirmar el pago');
+  }
+
+  // V08 responde los rechazos de negocio como `{ ok:false, motivo, cobrado }`,
+  // mientras que las variantes anteriores usaban `error`. Se aceptan ambas
+  // formas sin relajar la validacion del pago confirmado.
+  const motivoRechazo = typeof data?.error === 'string'
+    ? data.error
+    : data?.ok === false
+      ? data.motivo
+      : undefined;
+
+  switch (motivoRechazo) {
+    case 'precio_actualizado':
+      if (typeof data.motivo !== 'string' ||
+          !Number.isSafeInteger(data.total_actualizado) || data.total_actualizado < 0 ||
+          !Number.isSafeInteger(data.descuento_afiliado) || data.descuento_afiliado < 0) {
+        break;
+      }
+      return {
+        status: 409,
+        body: {
+          error: motivoRechazo,
+          motivo: data.motivo,
+          total_aceptado,
+          total_actualizado: data.total_actualizado,
+          descuento_afiliado: data.descuento_afiliado,
+          cobrado: false
+        }
+      };
+    case 'clave_reintento_en_conflicto':
+      return { status: 409, body: { error: motivoRechazo } };
+    case 'saldo_insuficiente':
+      return { status: 422, body: { error: motivoRechazo, cobrado: false } };
+    case undefined: {
+      // V08 separa el estado operativo del pedido del estado del pago.
+      const pagoConfirmado = data?.pago_estado === undefined
+        ? data?.estado === 'pagado' && data.ok !== false
+        : data.ok === true && data.pago_estado === 'pagado';
+      if (Number.isSafeInteger(data?.pedido_id) && data.pedido_id > 0 &&
+          pagoConfirmado && data.total_pagado === total_aceptado &&
+          Number.isSafeInteger(data.descuento_afiliado) && data.descuento_afiliado >= 0) {
+        return {
+          status: 201,
+          body: {
+            pedido_id: data.pedido_id,
+            estado: 'pagado',
+            total_pagado: data.total_pagado,
+            descuento_afiliado: data.descuento_afiliado
+          }
+        };
+      }
+      break;
+    }
+  }
+  throw new HttpError(503, 'Respuesta inválida de procesar_pago');
+}
+
+async function crearPedido({ user, accessToken, body, idempotencyKey }) {
   if (!user || !user.authUserId) {
     throw new HttpError(401, 'Usuario no autenticado');
   }
@@ -207,10 +289,14 @@ async function crearPedido({ user, accessToken, body }) {
   }
 
   const cliente = crearClienteAutenticado(accessToken);
+  const confirmaCotizacion = Object.hasOwn(body, 'total_aceptado');
+  if (confirmaCotizacion && process.env.HABILITAR_CONFIRMACION_AFILIADA !== 'true') {
+    return { status: 503, body: { error: 'confirmacion_afiliada_no_disponible' } };
+  }
 
   const { data: usuarioInterno, error: errUsuario } = await cliente
     .from('usuarios')
-    .select('id')
+    .select('id, activo')
     .eq('auth_user_id', user.authUserId)
     .maybeSingle();
 
@@ -220,6 +306,13 @@ async function crearPedido({ user, accessToken, body }) {
   if (!usuarioInterno) {
     throw new HttpError(404, 'Usuario no encontrado');
   }
+  if (confirmaCotizacion && usuarioInterno.activo !== true) {
+    throw new HttpError(403, 'sin_acceso');
+  }
+
+  // V08 recupera el intento original antes de validar el catálogo vigente.
+  // Las confirmaciones nuevas validan los productos dentro de la misma RPC.
+  if (confirmaCotizacion) return confirmarPago(cliente, cafeteriaId, body, idempotencyKey);
 
   let preciosResp;
   try {
@@ -278,7 +371,7 @@ async function crearPedido({ user, accessToken, body }) {
     throw new HttpError(503, 'No se pudo procesar el pago', { causa: e.message });
   }
 
-  return { ok: true, pedido: pedidoResultado };
+  return { status: 201, body: { ok: true, pedido: pedidoResultado } };
 }
 
 /**
@@ -296,7 +389,7 @@ async function listarPedidos({ user, accessToken }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
   const cliente = crearClienteAutenticado(accessToken);
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
-  const rol = Number(usuarioInterno.rol_id);
+  const rol = usuarioInterno.roles?.nombre;
 
   if (rol !== ROL_ESTUDIANTE && rol !== ROL_EMPLEADO) {
     throw new HttpError(403, 'No autorizado para listar pedidos');
@@ -334,7 +427,7 @@ async function obtenerPedido({ user, id }) {
   const pedidoId = validarPedidoId(id);
   const cliente = supabase.obtenerCliente();
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
-  const rol = Number(usuarioInterno.rol_id);
+  const rol = usuarioInterno.roles?.nombre;
 
   if (rol !== ROL_ESTUDIANTE && rol !== ROL_EMPLEADO) {
     throw new HttpError(404, 'Pedido no encontrado');
@@ -375,7 +468,7 @@ async function obtenerPedidosPorCafeteria({ user, cafeteriaId }) {
   const cliente = supabase.obtenerCliente();
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
 
-  if (Number(usuarioInterno.rol_id) !== ROL_EMPLEADO) {
+  if (usuarioInterno.roles?.nombre !== ROL_EMPLEADO) {
     throw new HttpError(403, 'No autorizado para listar pedidos de esta cafeteria');
   }
 
@@ -406,7 +499,7 @@ async function obtenerPedidosPorUsuario({ user, usuarioId }) {
   const cliente = supabase.obtenerCliente();
   const usuarioInterno = await resolverUsuarioInternoObligatorio(cliente, user.authUserId);
 
-  if (Number(usuarioInterno.rol_id) !== ROL_ESTUDIANTE) {
+  if (usuarioInterno.roles?.nombre !== ROL_ESTUDIANTE) {
     throw new HttpError(403, 'No autorizado para listar pedidos de este usuario');
   }
   if (usuarioIdNum !== Number(usuarioInterno.id)) {
@@ -421,13 +514,12 @@ async function obtenerPedidosPorUsuario({ user, usuarioId }) {
   return data || [];
 }
 
-// Roles internos (public.usuarios.rol_id) confirmados contra la BD real:
-// 1 = estudiante, 2 = empleado, 3 = dueño.
-// D.3: SOLO el empleado (2) opera comandas; el dueño (3) NO recibe permisos.
+// Nombres del catalogo public.roles; los IDs dependen del entorno.
+// D.3: SOLO el empleado opera comandas; el dueño NO recibe permisos.
 // D.5-B: lecturas -> estudiante ve lo suyo; empleado ve sus cafeterias; el
 // dueño NO recibe permisos nuevos (403 en colecciones, 404 en individuales).
-const ROL_ESTUDIANTE = 1;
-const ROL_EMPLEADO = 2;
+const ROL_ESTUDIANTE = 'estudiante';
+const ROL_EMPLEADO = 'empleado';
 
 /**
  * Resuelve la fila interna de `public.usuarios` a partir del UUID de auth
@@ -440,7 +532,7 @@ const ROL_EMPLEADO = 2;
 async function resolverUsuarioInterno(cliente, authUserId) {
   const { data, error } = await cliente
     .from('usuarios')
-    .select('id, rol_id')
+    .select('id, activo, roles(nombre)')
     .eq('auth_user_id', authUserId)
     .maybeSingle();
 
@@ -512,7 +604,7 @@ async function perteneceACafeteria(cliente, usuarioId, cafeteriaId, mensajeError
  *
  * Reglas:
  *  - El usuario autenticado debe tener cuenta interna (`usuarios`).
- *  - Debe ser EMPLEADO (rol_id = 2).
+ *  - Debe ser EMPLEADO.
  *  - Debe pertenecer a la cafeteria DEL PEDIDO (`cafeteria_usuarios`); el
  *    `cafeteria_id` autoritativo es `pedido.cafeteria_id`, nunca el del body.
  */
@@ -524,7 +616,7 @@ async function autorizarTransicionKds(cliente, authUserId, pedido) {
     throw new HttpError(404, 'Usuario no encontrado');
   }
 
-  if (Number(usuarioInterno.rol_id) !== ROL_EMPLEADO) {
+  if (usuarioInterno.roles?.nombre !== ROL_EMPLEADO) {
     throw new HttpError(403, 'Solo un empleado puede cambiar el estado del pedido');
   }
 
@@ -633,6 +725,53 @@ async function actualizarEstado({ user, accessToken, id, body }) {
 // Se compara contra el slug canonico (tolera aliases historicos de lectura).
 const ESTADOS_QR_DISPONIBLE = ['pendiente', 'en_preparacion', 'listo'];
 
+// Credenciales de retiro aceptadas por `POST /validar-qr`. El QR y el codigo de
+// contingencia se persisten en columnas distintas, pero ambos son la MISMA
+// operacion de entrega. El formato se restringe para no construir un filtro
+// PostgREST con comas, parentesis ni comodines.
+const CREDENCIAL_ENTREGA_SEGURA = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * Resultado de negocio de una entrega rechazada. Se devuelve con HTTP 200 para
+ * que el KDS muestre la razon; no se modifica ninguna fila.
+ */
+function rechazoEntrega(motivo, razon, pedido = null) {
+  const respuesta = { valido: false, motivo, razon };
+  if (pedido) {
+    respuesta.pedido = {
+      id: pedido.id,
+      estado: normalizarEstado(pedido.estado) || pedido.estado,
+      qr_usado: pedido.qr_usado === true,
+      entregado_en: pedido.entregado_en || null
+    };
+  }
+  return respuesta;
+}
+
+/**
+ * Audita el intento en `logs_validacion_qr` con columnas comunes al DDL
+ * versionado y al esquema local. La entrega ya fue confirmada por el UPDATE
+ * atomico, asi que un fallo de auditoria no revierte la entrega: se registra
+ * en el log del servicio y se continua.
+ */
+async function registrarLogEntrega(cliente, { pedido, usuarioId, credencial, resultado, detalle }) {
+  if (!pedido?.id) return;
+  try {
+    const { error } = await cliente.from('logs_validacion_qr').insert({
+      pedido_id: pedido.id,
+      cafeteria_id: pedido.cafeteria_id,
+      usuario_id: usuarioId,
+      qr_token: credencial,
+      resultado,
+      detalle,
+      validado_en: new Date().toISOString()
+    });
+    if (error) console.warn('[ms-pedidos] No se pudo auditar la validacion QR:', error.message);
+  } catch (err) {
+    console.warn('[ms-pedidos] No se pudo auditar la validacion QR:', err.message);
+  }
+}
+
 /**
  * GET /:id/qr — CREDENCIAL de retiro del pedido.
  *
@@ -652,7 +791,7 @@ async function obtenerQr({ user, id }) {
 
   // Se comprueba el rol ANTES de leer el pedido: asi un empleado/dueño no puede
   // distinguir un pedido existente de uno inexistente (siempre 404).
-  if (Number(usuarioInterno.rol_id) !== ROL_ESTUDIANTE) {
+  if (usuarioInterno.roles?.nombre !== ROL_ESTUDIANTE) {
     throw new HttpError(404, 'Pedido no encontrado');
   }
 
@@ -716,11 +855,199 @@ async function obtenerTokenContingencia({ user, id }) {
   return { token: pedido.codigo_retiro_diario };
 }
 
+/**
+ * POST /validar-qr — UNICA operacion de entrega (`listo -> entregado`).
+ *
+ * Contrato del KDS: `{ qr_token }`. El valor puede ser el `qr_token` o el
+ * `codigo_retiro_diario` persistido del pedido; ambos resuelven la MISMA
+ * operacion. No se aceptan IDs ni codigos legibles.
+ *
+ * Orden de la operacion:
+ *  1. Resolver la identidad desde el JWT y exigir empleado activo. El rol se
+ *     comprueba ANTES de leer el pedido: una sesion sin permiso no debe poder
+ *     inferir nada de un pedido a partir de una credencial.
+ *  2. Resolver el pedido por las credenciales persistidas.
+ *  3. Comprobar que el empleado pertenece a la cafeteria DEL PEDIDO. Si no
+ *     pertenece, el rechazo no incluye id, estado ni fecha de entrega.
+ *  4. Ejecutar UN UPDATE condicionado a `estado = listo` y `qr_usado = false`.
+ *     Postgres bloquea la fila: dos intentos simultaneos no pueden confirmar
+ *     la misma transicion. Solo la peticion que obtiene la fila devuelve
+ *     `valido: true`.
+ *  5. Auditar el intento.
+ *
+ * La comision del piloto queda fuera de esta operacion hasta que exista un
+ * contrato de atribucion del pedido (C08/C09 + V07/V08). No se leen ni se
+ * escriben columnas hipoteticas.
+ *
+ * Si el pedido ya fue entregado se devuelve `motivo: 'ya_entregado'` y
+ * `razon: 'Este pedido ya fue entregado.'`, sin reescribir `entregado_en` ni
+ * `qr_usado`.
+ */
 async function validarQr({ user, body }) {
   if (!user) throw new HttpError(401, 'Usuario no autenticado');
-  const { data, error } = await supabase.obtenerCliente().rpc('log_qr_validation', { p_qr_token: body?.qr_token });
-  if (error) throw new HttpError(503, error.message);
-  return data;
+
+  const credencial = typeof body?.qr_token === 'string' ? body.qr_token.trim() : '';
+  if (!credencial || !CREDENCIAL_ENTREGA_SEGURA.test(credencial)) {
+    return rechazoEntrega(
+      'credencial_invalida',
+      'QR o token de retiro no válido. Verifica el código e intenta nuevamente.'
+    );
+  }
+
+  const cliente = supabase.obtenerCliente();
+
+  // Autorizacion de rol ANTES de tocar el pedido. Un estudiante o un usuario
+  // inactivo no puede distinguir si la credencial existe.
+  const usuarioInterno = await resolverUsuarioInterno(cliente, user.authUserId || user.id);
+  if (!usuarioInterno || usuarioInterno.activo === false) {
+    return rechazoEntrega(
+      'sin_autorizacion',
+      'La sesión no tiene un empleado activo asociado.'
+    );
+  }
+  if (usuarioInterno.roles?.nombre !== ROL_EMPLEADO) {
+    return rechazoEntrega(
+      'sin_autorizacion',
+      'Solo un empleado puede validar la entrega de un pedido.'
+    );
+  }
+
+  let { data: coincidencias, error: errPedido } = await cliente
+    .from('pedidos')
+    .select(CAMPOS_PEDIDO_PUBLICOS)
+    .or(`qr_token.eq.${credencial},codigo_retiro_diario.eq.${credencial}`)
+    .limit(2);
+
+  // Si qr_token es UUID, PostgreSQL rechaza un codigo de contingencia no UUID
+  // antes de evaluar el OR. Con qr_token de texto, el OR conserva los QR legados.
+  if (errPedido?.code === '22P02') {
+    ({ data: coincidencias, error: errPedido } = await cliente
+      .from('pedidos')
+      .select(CAMPOS_PEDIDO_PUBLICOS)
+      .eq('codigo_retiro_diario', credencial)
+      .limit(2));
+  }
+
+  if (errPedido) throw new HttpError(503, errPedido.message);
+  if (!Array.isArray(coincidencias) || coincidencias.length === 0) {
+    return rechazoEntrega(
+      'credencial_invalida',
+      'QR o token de retiro no reconocido. Verifica que corresponda a un pedido de CoffeeFast.'
+    );
+  }
+  if (coincidencias.length > 1) {
+    return rechazoEntrega(
+      'credencial_invalida',
+      'La credencial coincide con más de un pedido. Revisa los datos antes de entregar.'
+    );
+  }
+  const pedido = coincidencias[0];
+
+  const pertenece = await perteneceACafeteria(
+    cliente,
+    usuarioInterno.id,
+    pedido.cafeteria_id,
+    'No se pudo verificar la cafetería del empleado'
+  );
+  if (!pertenece) {
+    await registrarLogEntrega(cliente, {
+      pedido,
+      usuarioId: usuarioInterno.id,
+      credencial,
+      resultado: 'rechazado',
+      detalle: 'El empleado no pertenece a la cafetería del pedido.'
+    });
+    // No se devuelve `pedido`: un empleado de otra cafeteria no debe recibir
+    // id, estado ni fecha de entrega del pedido.
+    return rechazoEntrega(
+      'sin_autorizacion',
+      'El empleado no pertenece a la cafetería del pedido.'
+    );
+  }
+
+  const estadoActual = normalizarEstado(pedido.estado);
+  if (estadoActual === 'entregado' || pedido.qr_usado === true) {
+    await registrarLogEntrega(cliente, {
+      pedido,
+      usuarioId: usuarioInterno.id,
+      credencial,
+      resultado: 'rechazado',
+      detalle: 'Este pedido ya fue entregado.'
+    });
+    return rechazoEntrega('ya_entregado', 'Este pedido ya fue entregado.', pedido);
+  }
+  if (estadoActual !== 'listo') {
+    const razon = `El pedido #${pedido.id} aún no está listo para retiro (estado: ${estadoActual || pedido.estado}).`;
+    await registrarLogEntrega(cliente, {
+      pedido,
+      usuarioId: usuarioInterno.id,
+      credencial,
+      resultado: 'rechazado',
+      detalle: razon
+    });
+    return rechazoEntrega('no_listo', razon, pedido);
+  }
+
+  // La RPC confirma la entrega y habilita la comisión en la misma transacción.
+  const { data: actualizado, error: errUpdate } = await cliente
+    .rpc('confirmar_entrega_pedido', {
+      p_pedido_id: pedido.id,
+      p_cafeteria_id: pedido.cafeteria_id,
+      p_credencial: credencial
+    })
+    .select(CAMPOS_PEDIDO_PUBLICOS)
+    .maybeSingle();
+
+  if (errUpdate) throw new HttpError(503, errUpdate.message);
+
+  if (!actualizado) {
+    // Otra peticion confirmo la transicion entre la lectura y el UPDATE. Se
+    // relee para informar el resultado real sin volver a escribir.
+    const { data: vigente, error: errVigente } = await cliente
+      .from('pedidos')
+      .select('id, cafeteria_id, estado, qr_usado, entregado_en')
+      .eq('id', pedido.id)
+      .eq('cafeteria_id', pedido.cafeteria_id)
+      .maybeSingle();
+    if (errVigente) throw new HttpError(503, errVigente.message);
+
+    if (vigente && (normalizarEstado(vigente.estado) === 'entregado' || vigente.qr_usado === true)) {
+      await registrarLogEntrega(cliente, {
+        pedido,
+        usuarioId: usuarioInterno.id,
+        credencial,
+        resultado: 'rechazado',
+        detalle: 'Este pedido ya fue entregado.'
+      });
+      return rechazoEntrega('ya_entregado', 'Este pedido ya fue entregado.', vigente);
+    }
+
+    const estado = normalizarEstado(vigente?.estado) || vigente?.estado || pedido.estado;
+    const razon = `El pedido #${pedido.id} aún no está listo para retiro (estado: ${estado}).`;
+    await registrarLogEntrega(cliente, {
+      pedido,
+      usuarioId: usuarioInterno.id,
+      credencial,
+      resultado: 'rechazado',
+      detalle: razon
+    });
+    return rechazoEntrega('no_listo', razon, vigente || pedido);
+  }
+
+  await registrarLogEntrega(cliente, {
+    pedido,
+    usuarioId: usuarioInterno.id,
+    credencial,
+    resultado: 'entregado',
+    detalle: `Pedido #${pedido.id} entregado mediante QR/token.`
+  });
+
+  return {
+    valido: true,
+    motivo: 'entregado',
+    mensaje: 'Entrega validada exitosamente. ¡Qué disfrute su pedido!',
+    pedido: actualizado
+  };
 }
 
 module.exports = {

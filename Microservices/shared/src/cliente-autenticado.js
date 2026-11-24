@@ -5,10 +5,10 @@
  *
  * Crea un cliente con el JWT del usuario para que las RPC y las políticas RLS
  * resuelvan `auth.uid()`. No usa `service_role`, porque esa clave perdería la
- * identidad del dueño. Lo comparten los módulos de pedidos y afiliados.
+ * identidad del usuario. Lo comparten ms-pedidos y ms-afiliados.
  */
 
-const { HttpError } = require('@coffeefaster/shared');
+const { HttpError } = require('./auth');
 const { createClient } = require('@supabase/supabase-js');
 
 function crearClienteAutenticado(accessToken) {

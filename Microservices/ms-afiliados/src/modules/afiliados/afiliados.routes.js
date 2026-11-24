@@ -10,7 +10,7 @@
 
 const router = require('express').Router();
 const { auth, HttpError } = require('@coffeefaster/shared');
-const crearClienteAutenticado = require('../../cliente-autenticado');
+const crearClienteAutenticado = require('@coffeefaster/shared/src/cliente-autenticado');
 
 const CAMPOS_PORCENTAJE = ['descuento_normal_pct', 'descuento_oferta_pct', 'comision_pct'];
 const CAMPOS_FECHA = ['inicio', 'fin'];
@@ -292,5 +292,6 @@ router.get('/saldo', auth.exigirAuth, async (req, res, next) => {
 });
 
 router.use(require('./solicitudes.routes')({ validarId, esObjeto }));
+router.use(require('./cotizaciones.routes'));
 
 module.exports = router;

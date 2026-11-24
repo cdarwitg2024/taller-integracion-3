@@ -1,5 +1,5 @@
 export const crearEstadoCarrito = () => ({
-  cart: [], cafeteriaId: null, codigo: '', cotizacion: null, revision: 0, idCarrito: 0,
+  cart: [], cafeteriaId: null, codigo: '', cotizacion: null, requiereCotizacion: false, requiereRecotizar: false, revision: 0, idCarrito: 0,
 });
 
 function cafeteriaDelCarrito(cart) {
@@ -17,10 +17,14 @@ export function actualizarEstadoCarrito(estado, accion) {
       const cambiaCarrito = !cart.length || cafeteriaId !== estado.cafeteriaId;
       return { ...estado, cart, cafeteriaId,
         codigo: cafeteriaId && !cambiaCarrito ? estado.codigo : '',
-        cotizacion: null, revision: estado.revision + 1,
+        cotizacion: null, requiereCotizacion: !cambiaCarrito && estado.requiereCotizacion,
+        requiereRecotizar: Boolean(cafeteriaId && (accion.requiereRecotizar || (!cambiaCarrito && estado.requiereRecotizar))),
+        revision: estado.revision + 1,
         idCarrito: estado.idCarrito + Number(cambiaCarrito),
       };
     }
+    case 'reconfirmar':
+      return { ...estado, requiereRecotizar: accion.valor, cotizacion: null, revision: estado.revision + 1 };
     case 'codigo': {
       const codigo = estado.cafeteriaId ? accion.valor.trim() : '';
       if (codigo === estado.codigo) return estado;
@@ -29,7 +33,7 @@ export function actualizarEstadoCarrito(estado, accion) {
     case 'cotizacion':
       // La revisión se captura al solicitar: las respuestas de otro contexto se descartan.
       return accion.revision === estado.revision && estado.cafeteriaId
-        ? { ...estado, cotizacion: accion.valor } : estado;
+        ? { ...estado, cotizacion: accion.valor, requiereCotizacion: true } : estado;
     default:
       return estado;
   }

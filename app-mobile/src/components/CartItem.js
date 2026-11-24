@@ -13,6 +13,7 @@ const CartItem = ({
   onIncrease,
   onDecrease,
   onRemove,
+  disabled = false,
 }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -57,7 +58,7 @@ const CartItem = ({
                 isMinimumQuantity && styles.quantityButtonDisabled,
               ]}
               onPress={() => onDecrease(item.id)}
-              disabled={isMinimumQuantity}
+              disabled={isMinimumQuantity || disabled}
             >
               <Text
                 style={[
@@ -77,6 +78,7 @@ const CartItem = ({
             <TouchableOpacity
               style={styles.quantityButton}
               onPress={() => onIncrease(item.id)}
+              disabled={disabled}
             >
               <Text style={styles.quantityButtonText}>
                 +
@@ -87,6 +89,7 @@ const CartItem = ({
           <TouchableOpacity
             style={styles.removeButton}
             onPress={() => setShowDeleteModal(true)}
+            disabled={disabled}
           >
             <Text style={styles.removeButtonText}>
               Eliminar

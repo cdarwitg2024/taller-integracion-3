@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
@@ -30,12 +30,15 @@ import { CartProvider, useCart } from './src/context/CartContext';
 import { useCartTotals } from './src/hooks/useCartTotals';
 import { ApiError } from './src/services/backendClient';
 import { crearPedidoDesdeCarrito, RetiroCheckout } from './src/services/crearPedidoDesdeCarrito';
-import {
-  evaluarDisponibilidad,
-  mensajeProblemas,
-} from './src/utils/revalidacionCarrito';
+import { consultarIntentoPendiente, leerCompraCotizadaPendiente } from './src/services/intentoCompra';
+import { recuperarCompraCotizada } from './src/services/recuperarCompraCotizada';
+import { avisarErrorIntentoCompra, ofrecerResolverIntento } from './src/services/avisarErrorIntentoCompra';
+import { useCicloIntentoCompra } from './src/hooks/useCicloIntentoCompra';
+import { verificarDisponibilidadCheckout } from './src/services/verificarDisponibilidadCheckout';
 import {
   clasificarResultadoPago,
+  clasificarPagoCotizado,
+  type PagoCotizado,
   type PagoResult,
 } from './src/utils/resultadoPago';
 import AppIcon from './src/components/AppIcon';
@@ -94,15 +97,17 @@ const TAB_ICONS: Record<AppTab, AppIconName> = {
  * recibía como `data`. Notar que `ok` del envoltorio siempre es `true` en un
  * 201; el resultado real del pago está en `pedido.ok`.
  */
-type RespuestaCrearPedido = {
+type RespuestaCrearPedido = PagoCotizado & {
   ok: boolean;
   pedido?: PagoResult | null;
 };
 
 type PedidoConfirmado = {
+  descuento?: number;
+  usuarioId: string;
   pedido_id: number;
   total: number;
-  saldo_restante: number;
+  saldo_restante?: number;
   franja_retiro?: string;
   estado?: string;
   pago_estado?: string;
@@ -140,7 +145,7 @@ function AppContent() {
 
   const [selectedCafeteria, setSelectedCafeteria] = useState<Cafeteria | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('cafeterias');
-  const { cart, setCart, clearCart, hydrated, codigo, setCodigo, idCarrito } = useCart() as {
+  const { cart, setCart, clearCart: vaciarCarrito, hydrated, codigo, setCodigo, idCarrito, requiereCotizacion, revision, requiereRecotizar, setRequiereRecotizar } = useCart() as {
     cart: CartItem[];
     setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
     clearCart: () => void;
@@ -148,8 +153,39 @@ function AppContent() {
     codigo: string;
     setCodigo: (codigo: string) => void;
     idCarrito: number;
+    requiereCotizacion: boolean;
+    revision: number;
+    requiereRecotizar: boolean;
+    setRequiereRecotizar: (valor: boolean) => Promise<void>;
   };
   const [paying, setPaying] = useState(false);
+  const [saldoWallet, setSaldoWallet] = useState<{ usuarioId: string; saldo: number } | null>(null);
+  const usuarioActual = useRef(session?.user.id);
+  usuarioActual.current = session?.user.id;
+  const revisionActual = useRef(revision);
+  revisionActual.current = revision;
+  const recotizar = () => setCart(actual => [...actual]);
+  const solicitarNuevoTotal = async () => {
+    await setRequiereRecotizar(true);
+    await reiniciar();
+    Alert.alert('Cambió el total', 'No se realizó el cobro. Revisa la nueva cotización antes de confirmar.');
+  };
+  const checkoutEnCurso = useRef(false);
+  const finalizarPago = () => { checkoutEnCurso.current = false; setPaying(false); };
+  const { reiniciar, esperarReinicio } = useCicloIntentoCompra(
+    session?.user.id, hydrated, cart.length === 0,
+    error => avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos')),
+  );
+  const clearCart = async (conservarPendiente = true) => {
+    try {
+      await reiniciar(conservarPendiente);
+      vaciarCarrito();
+      return true;
+    } catch (error) {
+      avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos'));
+      return false;
+    }
+  };
   const [pedidoConfirmado, setPedidoConfirmado] = useState<PedidoConfirmado | null>(null);
 
   useEffect(() => {
@@ -305,8 +341,9 @@ function AppContent() {
           text: 'Salir',
           style: 'destructive',
           onPress: async () => {
+            if (checkoutEnCurso.current) return;
             setSelectedCafeteria(null);
-            clearCart();
+            if (!await clearCart()) return;
             setActiveTab('cafeterias');
             if (isGuest) {
               setIsGuest(false);
@@ -385,7 +422,7 @@ function AppContent() {
   };
 
   const addToCart = (product: Product, cafeteria: Cafeteria) => {
-    if (!product.available) {
+    if (checkoutEnCurso.current || !product.available) {
       return;
     }
 
@@ -407,9 +444,8 @@ function AppContent() {
             style: 'destructive',
             // Se vacía y se agrega en el mismo toque: si solo se vaciaba, el
             // botón prometía algo que no pasaba.
-            onPress: () => {
-              clearCart();
-              agregarProducto(product, cafeteria);
+            onPress: async () => {
+              if (!checkoutEnCurso.current && await clearCart()) agregarProducto(product, cafeteria);
             },
           },
         ]
@@ -421,6 +457,7 @@ function AppContent() {
   };
 
   const increaseQuantity = (id: number) => {
+    if (checkoutEnCurso.current) return;
     setCart((currentCart: CartItem[]) =>
       currentCart.map((item) =>
         item.id === id ? { ...item, quantity: item.quantity + 1 } : item
@@ -429,6 +466,7 @@ function AppContent() {
   };
 
   const decreaseQuantity = (id: number) => {
+    if (checkoutEnCurso.current) return;
     setCart((currentCart: CartItem[]) =>
       currentCart
         .map((item) =>
@@ -439,6 +477,7 @@ function AppContent() {
   };
 
   const removeFromCart = (id: number) => {
+    if (checkoutEnCurso.current) return;
     setCart((currentCart: CartItem[]) =>
       currentCart.filter((item) => item.id !== id)
     );
@@ -452,18 +491,85 @@ function AppContent() {
    * y NO se reintenta la compra automáticamente; se invita a revisar "Pedidos"
    * antes de volver a pagar para evitar un cobro duplicado.
    */
-  const alertarResultadoIncierto = () => {
-    Alert.alert(
+  const alertarResultadoIncierto = async () => {
+    const usuarioId = session?.user.id;
+    let recuperable = false;
+    try {
+      recuperable = Boolean(usuarioId && await leerCompraCotizadaPendiente(usuarioId));
+    } catch (error) {
+      if (avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos'))) return;
+      Alert.alert('No pudimos confirmar tu pago',
+        'No se pudo consultar el intento guardado. Revisa Pedidos antes de volver a pagar.', [
+          { text: 'Cerrar', style: 'cancel' },
+          { text: 'Revisar pedidos', onPress: () => handleTabPress('pedidos') },
+        ]);
+      return;
+    }
+    if (usuarioId && recuperable) {
+      Alert.alert('No pudimos confirmar tu pago',
+        'Si el pedido ya existe, se mostrará el mismo pedido. Si todavía no se procesó, se intentará confirmar con el importe original.', [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Revisar pedidos', onPress: () => handleTabPress('pedidos') },
+          { text: 'Recuperar compra', onPress: () => recuperarCompra(usuarioId) },
+        ]);
+      return;
+    }
+    ofrecerResolverIntento(
       'No pudimos confirmar tu pago',
-      'La conexión se interrumpió o la respuesta tardó demasiado, así que no ' +
-        'podemos saber si el pedido alcanzó a registrarse.\n\n' +
-        'Tu carrito se mantiene. Revisa "Pedidos" antes de volver a pagar para ' +
-        'evitar un cobro duplicado.',
-      [
-        { text: 'Revisar pedidos', onPress: () => handleTabPress('pedidos') },
-        { text: 'Entendido', style: 'cancel' },
-      ]
+      'El pedido pudo registrarse. Revisa Pedidos antes de iniciar otra compra.',
+      reiniciar,
+      () => handleTabPress('pedidos'),
     );
+  };
+
+  const recuperarCompra = async (usuarioId: string) => {
+    if (checkoutEnCurso.current || usuarioActual.current !== usuarioId) return;
+    checkoutEnCurso.current = true;
+    setPaying(true);
+    try {
+      const pago = await recuperarCompraCotizada(usuarioId, TIMEOUT_CREAR_PEDIDO_MS);
+      if (usuarioActual.current !== usuarioId) return;
+      if (!pago) {
+        await alertarResultadoIncierto();
+        return;
+      }
+      if (pago.tipo === 'recotizar' || pago.tipo === 'saldo_insuficiente') {
+        if (usuarioActual.current === usuarioId) {
+          if (pago.tipo === 'recotizar') await solicitarNuevoTotal();
+          else {
+            await reiniciar();
+            Alert.alert('Saldo insuficiente en la Wallet',
+            'No se realizó el cobro. Recarga tu Wallet y confirma el pedido de nuevo.');
+          }
+        }
+        return;
+      }
+      setPedidoConfirmado({ ...pago.resultado, usuarioId });
+      setActiveTab('pedidos');
+      try {
+        await reiniciar();
+      } catch {
+        if (usuarioActual.current === usuarioId) {
+          Alert.alert('Pago confirmado', 'El comprobante está en Pedidos. No se pudo limpiar el intento guardado.');
+        }
+        return;
+      }
+      if (usuarioActual.current !== usuarioId) return;
+      if ((pago.cuerpo.codigo ?? '') === codigo) {
+        setCart(actual => {
+          const items = actual.map(({ id, quantity }) => ({ producto_id: id, cantidad: quantity }));
+          return actual[0]?.cafeteriaId === pago.cuerpo.cafeteria_id &&
+            JSON.stringify(items) === JSON.stringify(pago.cuerpo.items) ? [] : actual;
+        });
+      }
+      setRequiereRecotizar(false);
+    } catch (error) {
+      if (!avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos'))) {
+        Alert.alert('No se pudo recuperar la compra', 'El intento sigue guardado. Revisa Pedidos o intenta recuperarlo más tarde.');
+      }
+    } finally {
+      finalizarPago();
+    }
   };
 
   const handleCheckout = async (franjaRetiro?: RetiroCheckout) => {
@@ -496,59 +602,45 @@ function AppContent() {
       return;
     }
 
-    // Guardia de reentrada: dos toques antes de que resuelva el `POST
-    // /api/pedidos` intentarian cobrar dos veces. El UNIQUE en pagos.pedido_id
-    // es la red real, pero esto evita siquiera intentarlo.
-    if (paying) return;
+    if ((requiereRecotizar || requiereCotizacion) && franjaRetiro.totalAceptado === undefined) return;
+
+    // La referencia bloquea otro toque incluso antes del siguiente render.
+    if (checkoutEnCurso.current) return;
+    checkoutEnCurso.current = true;
     setPaying(true);
 
-    // Revalidación no destructiva del carrito antes de pagar.
-    // Diferencia error de consulta vs producto no disponible/desactivado/sin stock.
-    // No reemplaza la validación transaccional del backend.
     try {
-      const ids = Array.from(new Set(cart.map((item) => item.id)));
-      if (ids.length > 0) {
-        const { data, error } = await supabase
-          .from('productos')
-          .select('id, cafeteria_id, nombre, activo, eliminado_en, stock')
-          .in('id', ids);
-
-        if (error) {
-          console.warn('[Carrito] Error al revalidar disponibilidad:', error);
-          Alert.alert(
-            'No se pudo verificar disponibilidad',
-            'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
-          );
-          setPaying(false);
-          return;
-        }
-
-        const issues = evaluarDisponibilidad(cart, data, cafeteriaId);
-
-        if (issues.length > 0) {
-          Alert.alert('Hay cambios en la disponibilidad', mensajeProblemas(issues));
-          setPaying(false);
-          return;
-        }
+      await esperarReinicio();
+      // Recuperar un pago incierto no es una compra nueva ni depende del stock actual.
+      // El backend aún no deduplica: no se reenvía el POST hasta poder resolverlo.
+      if (await consultarIntentoPendiente(session.user.id)) {
+        await alertarResultadoIncierto();
+        return;
       }
-    } catch (e) {
-      console.warn('[Carrito] Excepción al revalidar disponibilidad:', e);
-      Alert.alert(
-        'No se pudo verificar disponibilidad',
-        'Ocurrió un error al consultar el estado actual de los productos. El carrito no fue modificado. Intenta nuevamente.'
-      );
-      setPaying(false);
-      return;
-    }
 
-    const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
+      if (requiereRecotizar) {
+        const importe = franjaRetiro.totalAceptado!.toLocaleString('es-CL');
+        const aceptado = await new Promise<boolean>(resolver => {
+          Alert.alert('Confirma el nuevo total', `El total actualizado es de $${importe}. ¿Quieres pagar ese importe?`, [
+            { text: 'Rechazar', style: 'cancel', onPress: () => resolver(false) },
+            { text: 'Aceptar y pagar', onPress: () => resolver(true) },
+          ], { cancelable: true, onDismiss: () => resolver(false) });
+        });
+        if (!aceptado || revisionActual.current !== revision || usuarioActual.current !== session.user.id) return;
+      }
 
-    try {
-      // El total NO se manda. ms-pedidos lo cotiza contra ms-menus y la RPC
-      // `procesar_pago` lo recalcula desde productos.precio: si se enviara,
-      // un cliente podria pagar $100 un sándwich de $2.000.
+      const problema = await verificarDisponibilidadCheckout(cart, cafeteriaId);
+      if (problema) {
+        Alert.alert(problema.titulo, problema.mensaje);
+        return;
+      }
+
+      const formatCLP = (valor: number) => `$${Number(valor).toLocaleString('es-CL')}`;
+      if (revisionActual.current !== revision || usuarioActual.current !== session.user.id) return;
+
+      // C07 revalida el total aceptado antes de cobrar. Sin cotización se usa la RPC anterior.
       const respuesta = await crearPedidoDesdeCarrito<RespuestaCrearPedido | null>(
-        cafeteriaId, cart, franjaRetiro, TIMEOUT_CREAR_PEDIDO_MS
+        cafeteriaId, cart, franjaRetiro, TIMEOUT_CREAR_PEDIDO_MS, session.user.id
       );
 
       // El backend responde HTTP 201 con `{ ok: true, pedido: <retorno de
@@ -556,12 +648,14 @@ function AppContent() {
       // `ok: false` (p. ej. saldo insuficiente), así que el chequeo real es
       // `pedido.ok` y no el código HTTP. La clasificación vive en
       // `utils/resultadoPago` para poder probarla sin montar la app entera.
-      const clasificacion = clasificarResultadoPago(respuesta?.pedido ?? null);
+      const clasificacion = franjaRetiro.totalAceptado === undefined
+        ? clasificarResultadoPago(respuesta?.pedido ?? null)
+        : clasificarPagoCotizado(respuesta, franjaRetiro.totalAceptado);
 
       // S2-T15: un 2xx sin `pedido` no confirma ni rechaza el pago; se trata
       // como resultado desconocido (carrito intacto, sin reintento automático).
       if (clasificacion.tipo === 'incierto') {
-        alertarResultadoIncierto();
+        await alertarResultadoIncierto();
         return;
       }
 
@@ -607,10 +701,13 @@ function AppContent() {
       const resultado = clasificacion.resultado;
 
       // Solo un resultado confirmado y completo limpia el carrito:
-      clearCart();
+      if (!await clearCart(false)) return;
+      setRequiereRecotizar(false);
       setPedidoConfirmado({
+        usuarioId: session.user.id,
         pedido_id: resultado.pedido_id,
         total: resultado.total,
+        descuento: resultado.descuento,
         saldo_restante: resultado.saldo_restante,
         franja_retiro: resultado.franja_retiro,
         estado: resultado.estado,
@@ -620,15 +717,35 @@ function AppContent() {
       });
       Alert.alert(
         'Pago aprobado',
-        `Tu pedido fue pagado con Wallet.\n` +
-          `Saldo restante: ${formatCLP(resultado.saldo_restante)}.`
+        resultado.saldo_restante === undefined
+          ? `Total pagado: ${formatCLP(resultado.total)}.`
+          : `Tu pedido fue pagado con Wallet.\nSaldo restante: ${formatCLP(resultado.saldo_restante)}.`
       );
     } catch (e) {
-      // S2-T15: timeout o pérdida de conexión DESPUÉS de enviar la solicitud.
+      if (avisarErrorIntentoCompra(e, reiniciar, () => handleTabPress('pedidos'))) return;
+      if (e instanceof ApiError && e.status === 409 && e.message === 'precio_actualizado') {
+        try {
+          await solicitarNuevoTotal();
+        } catch (error) {
+          if (!avisarErrorIntentoCompra(error, reiniciar, () => handleTabPress('pedidos'))) {
+            Alert.alert('No se pudo guardar el nuevo total', 'El intento sigue guardado. Vuelve a consultar tu compra.');
+          }
+        }
+        return;
+      }
+      if (e instanceof ApiError && e.status === 422 && e.message === 'saldo_insuficiente') {
+        Alert.alert('Saldo insuficiente en la Wallet', 'Recarga tu Wallet para confirmar el pedido.');
+        return;
+      }
+      if (e instanceof ApiError && e.status === 503 && e.message === 'confirmacion_afiliada_no_disponible') {
+        Alert.alert('Confirmación no disponible', 'No se realizó el cobro. Intenta más tarde.');
+        return;
+      }
+      // Un error de transporte o de servidor puede ocurrir después del cobro.
       // El pago pudo procesarse, así que no se presenta como rechazo, no se
       // vacía el carrito y no se reintenta automáticamente.
-      if (e instanceof ApiError && e.resultadoIncierto) {
-        alertarResultadoIncierto();
+      if (e instanceof ApiError && (e.resultadoIncierto || e.status >= 500)) {
+        await alertarResultadoIncierto();
         return;
       }
 
@@ -641,7 +758,7 @@ function AppContent() {
           : 'Ocurrio un error inesperado. Intentalo nuevamente.'
       );
     } finally {
-      setPaying(false);
+      finalizarPago();
     }
   };
 
@@ -735,9 +852,10 @@ function AppContent() {
 
           {activeTab === 'pedidos' && (
             <PedidosScreen
+              onSaldoConfirmado={setSaldoWallet}
               userId={isGuest ? null : session?.user?.id}
               onGoToCafeterias={() => handleTabPress('cafeterias')}
-              pedidoConfirmado={pedidoConfirmado}
+              pedidoConfirmado={pedidoConfirmado?.usuarioId === session?.user.id ? pedidoConfirmado : null}
               onConfirmacionVista={() => setPedidoConfirmado(null)}
             />
           )}
@@ -748,18 +866,23 @@ function AppContent() {
               codigo={codigo}
               onCodigoChange={setCodigo}
               idCarrito={idCarrito}
+              usuarioId={isGuest ? null : session?.user?.id}
               cafeteriaName={cartCafeteria?.nombre}
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
-            onRemove={removeFromCart}
-            onCheckout={handleCheckout}
-            onBack={() => handleTabPress('cafeterias')}
-            paying={paying}
-          />
+              onRemove={removeFromCart}
+              onCheckout={handleCheckout}
+              onBack={() => handleTabPress('cafeterias')}
+              paying={paying}
+              requiereRecotizar={requiereRecotizar || requiereCotizacion}
+              onRecotizar={recotizar}
+            />
           )}
 
 {activeTab === 'wallet' && (
-            <WalletScreen userId={isGuest ? null : session?.user?.id || null} />
+            <WalletScreen key={session?.user?.id} userId={isGuest ? null : session?.user?.id || null}
+              saldoConfirmado={saldoWallet?.usuarioId === session?.user?.id ? saldoWallet?.saldo : undefined}
+              onSaldoConfirmado={setSaldoWallet} />
           )}
 
           {activeTab === 'perfil' && (

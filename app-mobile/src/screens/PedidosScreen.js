@@ -101,6 +101,7 @@ const mapPedido = (p) => ({
   cafeteria_rut: p.cafeterias?.rut || null,
   metodo_pago: p.metodo_pago || null,
   total: Number(p.total) || 0,
+  descuento: descuentoHistorico(p),
   estado: normalizarEstado(p.estado),
   creado_en: p.creado_en,
   // Se usa para el recibo: si el pedido ya fue retirado, el QR deja de tener
@@ -109,9 +110,9 @@ const mapPedido = (p) => ({
   detalles: (p.detalles_pedido || []).map((d) => {
     const cantidad = Number(d.cantidad) || 1;
     // S2-T13: Priorizar el precio histórico persistido al momento de la compra
-    const precio = Number(d.precio_unitario ?? d.productos?.precio ?? 0);
+    const precio = d.precio_unitario == null ? null : Number(d.precio_unitario);
     // S2-T13: Priorizar el subtotal histórico del pedido
-    const subtotal = d.subtotal != null ? Number(d.subtotal) : cantidad * precio;
+    const subtotal = d.subtotal != null ? Number(d.subtotal) : precio == null ? null : cantidad * precio;
     return {
       nombre: d.productos?.nombre || 'Producto',
       cantidad,
@@ -121,7 +122,16 @@ const mapPedido = (p) => ({
   }),
 });
 
-const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista }) => {
+function descuentoHistorico({ total, detalles_pedido = [] }) {
+  const subtotales = detalles_pedido?.map(d => d.subtotal == null ? NaN : Number(d.subtotal));
+  const cobrado = total == null ? NaN : Number(total);
+  if (!subtotales?.length || !subtotales.every(n => Number.isFinite(n) && n >= 0) ||
+      !Number.isFinite(cobrado) || cobrado < 0) return null;
+  const diferencia = subtotales.reduce((suma, monto) => suma + monto, 0) - cobrado;
+  return diferencia >= 0 ? Math.round(diferencia * 100) / 100 : null;
+}
+
+const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista, onSaldoConfirmado }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -153,6 +163,19 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
           style: 'destructive',
           onPress: async () => {
             setCancelando(true);
+            const marcarCancelado = (canceladoEn) => {
+              const actualizado = {
+                ...pedido,
+                estado: 'cancelado',
+                cancelado_en: pedido.cancelado_en ?? canceladoEn,
+              };
+              setSelected(actualizado);
+              setOrders(prev => prev.map(o => String(o.id) === String(pedido.id) ? actualizado : o));
+            };
+            const informarYaCancelado = () => {
+              marcarCancelado();
+              Alert.alert('Pedido ya cancelado', 'Este pedido ya había sido cancelado previamente.');
+            };
             try {
               let resultado = null;
               let exito = false;
@@ -171,7 +194,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 if (apiErr instanceof ApiError && apiErr.status === 409) {
                   const motivo = apiErr.detalle || apiErr.message;
                   if (/ya_cancelado/i.test(motivo)) {
-                    Alert.alert('Pedido ya cancelado', 'Este pedido ya había sido cancelado previamente.');
+                    informarYaCancelado();
                   } else {
                     Alert.alert(
                       'No es posible cancelar',
@@ -205,7 +228,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                     return;
                   }
                   if (rpcRes.motivo === 'ya_cancelado') {
-                    Alert.alert('Pedido ya cancelado', 'Este pedido ya había sido cancelado previamente.');
+                    informarYaCancelado();
                     return;
                   }
                   if (rpcRes.motivo === 'no_autorizado') {
@@ -220,17 +243,11 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
               if (exito) {
                 const monto = resultado?.monto_reembolsado ?? pedido.total;
                 const nuevoSaldo = resultado?.saldo_nuevo;
+                if (userId && Number.isSafeInteger(nuevoSaldo) && nuevoSaldo >= 0) {
+                  onSaldoConfirmado?.({ usuarioId: userId, saldo: nuevoSaldo });
+                }
 
-                const pedidoActualizado = {
-                  ...pedido,
-                  estado: 'cancelado',
-                  cancelado_en: new Date().toISOString(),
-                };
-
-                setSelected(pedidoActualizado);
-                setOrders((prev) =>
-                  prev.map((o) => (String(o.id) === String(pedido.id) ? pedidoActualizado : o))
-                );
+                marcarCancelado(new Date().toISOString());
 
                 Alert.alert(
                   '¡Pedido cancelado!',
@@ -252,7 +269,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
         },
       ]
     );
-  }, []);
+  }, [userId, onSaldoConfirmado]);
 
   // La lista se consulta con la sesión Supabase y el usuario interno del titular.
   // Sus credenciales persistidas se muestran de inmediato, sin una segunda
@@ -296,7 +313,7 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
 
       const { data, error } = await leerConRenovacion(() => supabase
         .from('pedidos')
-        .select('*, cafeterias(nombre, telefono, campus_sedes(direccion)), detalles_pedido(cantidad, precio_unitario, subtotal, productos(nombre, precio))')
+        .select('*, cafeterias(nombre, telefono, campus_sedes(direccion)), detalles_pedido(cantidad, precio_unitario, subtotal, productos(nombre))')
         .eq('usuario_id', usuarioId)
         .order('creado_en', { ascending: false }));
 
@@ -363,6 +380,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 siguiente[idx] = {
                   ...prev[idx],
                   ...mapeado,
+                  total: nuevo.total == null ? prev[idx].total : mapeado.total,
+                  descuento: nuevo.detalles_pedido ? mapeado.descuento : prev[idx].descuento,
                   qr_token: nuevo.qr_token === undefined ? prev[idx].qr_token : mapeado.qr_token,
                   codigo_retiro_diario: nuevo.codigo_retiro_diario === undefined ? prev[idx].codigo_retiro_diario : mapeado.codigo_retiro_diario,
                   detalles: nuevo.detalles_pedido ? mapeado.detalles : prev[idx].detalles,
@@ -379,6 +398,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                 return {
                   ...prevSel,
                   ...mapeado,
+                  total: nuevo.total == null ? prevSel.total : mapeado.total,
+                  descuento: nuevo.detalles_pedido ? mapeado.descuento : prevSel.descuento,
                   qr_token: nuevo.qr_token === undefined ? prevSel.qr_token : mapeado.qr_token,
                   codigo_retiro_diario: nuevo.codigo_retiro_diario === undefined ? prevSel.codigo_retiro_diario : mapeado.codigo_retiro_diario,
                   detalles: nuevo.detalles_pedido ? mapeado.detalles : prevSel.detalles,
@@ -589,12 +610,18 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                       ${pedidoConfirmado.total.toLocaleString('es-CL')}
                     </Text>
                   </View>
-                  <View style={styles.confirmacionFila}>
+                  {typeof pedidoConfirmado.saldo_restante === 'number' && <View style={styles.confirmacionFila}>
                     <Text style={styles.confirmacionLabel}>Saldo restante</Text>
                     <Text style={styles.confirmacionValor}>
                       ${pedidoConfirmado.saldo_restante.toLocaleString('es-CL')}
                     </Text>
-                  </View>
+                  </View>}
+                  {typeof pedidoConfirmado.descuento === 'number' && (
+                    <View style={styles.confirmacionFila}>
+                      <Text style={styles.confirmacionLabel}>Descuento aplicado</Text>
+                      <Text style={styles.confirmacionValor}>${pedidoConfirmado.descuento.toLocaleString('es-CL')}</Text>
+                    </View>
+                  )}
                   {pedidoConfirmado.franja_retiro && (
                     <View style={styles.confirmacionFila}>
                       <Text style={styles.confirmacionLabel}>Franja de retiro</Text>
@@ -675,13 +702,19 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                         {d.cantidad}× {d.nombre}
                       </Text>
                       <Text style={styles.detallePrecio}>
-                        ${(d.subtotal ?? (d.cantidad * d.precio)).toLocaleString('es-CL')}
+                        {d.subtotal == null ? '—' : `$${d.subtotal.toLocaleString('es-CL')}`}
                       </Text>
                     </View>
                   ))}
                   <View style={styles.detalleDivider} />
+                  {selected.descuento != null && (
+                    <View style={styles.detalleRow}>
+                      <Text style={styles.detalleNombre}>Descuento aplicado</Text>
+                      <Text style={styles.detallePrecio}>${selected.descuento.toLocaleString('es-CL')}</Text>
+                    </View>
+                  )}
                   <View style={styles.detalleRow}>
-                    <Text style={styles.detalleTotal}>Total</Text>
+                    <Text style={styles.detalleTotal}>Total cobrado</Text>
                     <Text style={styles.detalleTotal}>${selected.total.toLocaleString('es-CL')}</Text>
                   </View>
                 </View>

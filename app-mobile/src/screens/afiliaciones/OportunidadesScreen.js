@@ -5,6 +5,7 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import CondicionesCampana from './CondicionesCampana';
+import SolicitarAfiliacion from './SolicitarAfiliacion';
 
 function mensajeError(error) {
   if (error?.status === 501) return 'La consulta de oportunidades aún no está disponible. Intenta nuevamente más tarde.';
@@ -30,7 +31,7 @@ function Cargando({ texto }) {
 const tasa = valor => valor === null ? 'No especificado' : `${valor}%`;
 const fecha = valor => new Date(valor).toLocaleString('es-CL');
 
-export default function OportunidadesScreen() {
+export default function OportunidadesScreen({ solicitudes = [], perfilEstado = 'sin-consultar', onSolicitada }) {
   const [catalogo, setCatalogo] = useState({ estado: 'cargando', filas: [], error: '' });
   const [cafeteriaId, setCafeteriaId] = useState(null);
   const [listado, setListado] = useState({ cafeteriaId: null, estado: 'inicial', filas: [], error: '' });
@@ -140,6 +141,9 @@ export default function OportunidadesScreen() {
               onPress={() => setCondicionesId(actual => actual === c.id ? null : c.id)} />
             {condicionesId === c.id && <CondicionesCampana campana={c} />}
           </>}
+          <SolicitarAfiliacion key={`${c.cafeteria_id}:${c.id}`} campana={c}
+            solicitud={solicitudes.find(s => s.cafeteria_id === c.cafeteria_id && s.campana_id === c.id)}
+            perfilEstado={perfilEstado} onSolicitada={onSolicitada} />
         </View>)}
         <Accion titulo="Actualizar campañas" onPress={() => setIntentoCampanas(valor => valor + 1)} />
       </>}

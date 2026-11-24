@@ -7,9 +7,11 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { execFileSync, spawnSync } = require('node:child_process');
+const { pathToFileURL } = require('node:url');
 
 const root = path.resolve(__dirname, '../..');
-const probarC05 = process.argv.includes('--c05');
+const probarA06 = process.argv.includes('--a06');
+const probarC05 = process.argv.includes('--c05') || probarA06;
 const id = `cf-c03-auth-${process.pid}-${Date.now()}`;
 const names = { pg: `${id}-db`, auth: `${id}-auth`, rest: `${id}-rest`, gateway: `${id}-gateway` };
 const secret = crypto.randomBytes(40).toString('hex');
@@ -44,6 +46,33 @@ async function waitFor(name, check) {
 }
 const portOf = (name, port) => docker(['port', name, String(port)]).split(':').pop();
 const quote = value => "'" + String(value).replaceAll("'", "''") + "'";
+
+// Carga los servicios reales de escritorio contra el gateway desechable con el JWT de la sesión.
+async function cargarServicioCampanasEscritorio(destino, base, token) {
+  fs.mkdirSync(destino, { recursive: true });
+  fs.writeFileSync(path.join(destino, 'package.json'), '{"type":"module"}');
+  for (const nombre of ['backendApi.js', 'campanasAfiliados.js']) {
+    const origen = path.join(root, 'app-desktop/src/services', nombre);
+    // La copia conserva el código real; Node ESM necesita las extensiones que Vite resuelve.
+    const importes = nombre === 'backendApi.js'
+      ? [["from './supabase'", "from './supabase.js'"]]
+      : [["from './backendApi'", "from './backendApi.js'"]];
+    let código = fs.readFileSync(origen, 'utf8');
+    for (const [buscado, reemplazo] of importes) {
+      assert.ok(código.includes(buscado), `No se encontró ${buscado} en ${nombre}`);
+      código = código.replace(buscado, reemplazo);
+    }
+    if (nombre === 'backendApi.js') {
+      assert.ok(código.includes("'http://localhost:3000'"), 'No se encontró la base del gateway en backendApi.js');
+      código = código.replace("'http://localhost:3000'", JSON.stringify(base));
+    }
+    fs.writeFileSync(path.join(destino, nombre), código);
+  }
+  const sesión = JSON.stringify({ data: { session: { access_token: token } } });
+  fs.writeFileSync(path.join(destino, 'supabase.js'),
+    `export const supabase = { auth: { getSession: async () => (${sesión}) } };`);
+  return import(pathToFileURL(path.join(destino, 'campanasAfiliados.js')).href);
+}
 
 async function main() {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'cf-c03-auth-'));
@@ -99,6 +128,25 @@ async function main() {
         sql(fs.readFileSync(path.join(migrations, files[0]), 'utf8'));
       }
       sql(fs.readFileSync(path.join(root, 'database/fixes/exponer_solicitudes_afiliacion.sql'), 'utf8'));
+      if (probarA06) {
+        sql(`ALTER TABLE public.cafeterias ADD COLUMN campus_id bigint, ADD COLUMN descripcion text,
+        ADD COLUMN hora_apertura time, ADD COLUMN hora_cierre time, ADD COLUMN telefono text, ADD COLUMN imagen_url text;
+        UPDATE public.cafeterias SET nombre = CASE id WHEN 7 THEN 'Norte A06' ELSE 'Sur A06' END;
+        ALTER TABLE public.cafeterias ENABLE ROW LEVEL SECURITY;
+        GRANT SELECT ON public.cafeterias TO anon, authenticated;
+        CREATE POLICY cafeteria_publica ON public.cafeterias FOR SELECT TO anon, authenticated USING (activa);
+        ALTER TABLE public.pedidos ADD COLUMN estado text NOT NULL DEFAULT 'listo';`);
+        const v12Path = path.join(migrations, '20261118211348_consulta_saldo_afiliado.sql');
+        sql(fs.readFileSync(v12Path, 'utf8'));
+        // Única dependencia de V06 utilizada por V13/V14 en este fixture mínimo.
+        // No se instala la cotización ni se sustituye el cuerpo de las RPC de retiro.
+        sql(`CREATE SCHEMA afiliados_privado;
+          REVOKE ALL ON SCHEMA afiliados_privado FROM PUBLIC, anon, authenticated, service_role;
+          GRANT USAGE ON SCHEMA afiliados_privado TO authenticated;`);
+        for (const file of ['20261123014935_registrar_retiro_simulado.sql', '20261123020643_comprobante_retiro_simulado.sql']) {
+          sql(fs.readFileSync(path.join(migrations, file), 'utf8'));
+        }
+      }
     }
 
     docker(['run', '-d', '--name', names.auth, '--network', id, '-p', '127.0.0.1::9999',
@@ -144,11 +192,18 @@ async function main() {
     process.env.SUPABASE_URL = `http://127.0.0.1:${supabaseProxy.address().port}`;
     process.env.SUPABASE_PUBLISHABLE_KEY = anon;
     delete process.env.SUPABASE_SERVICE_KEY; delete process.env.SUPABASE_KEY; delete process.env.SUPABASE_ANON_KEY;
-    const app = require(path.join(root, 'Microservices/ms-pedidos/src/app'));
+    const afiliadosApp = require(path.join(root, 'Microservices/ms-afiliados/src/app'));
+    const pedidosApp = probarA06 ? require(path.join(root, 'Microservices/ms-pedidos/src/app')) : null;
+    const cafeteriasApp = probarA06 ? require(path.join(root, 'Microservices/ms-cafeterias/src/app')) : null;
+    const app = probarA06 ? http.createServer((req, res) => {
+      if (req.url.startsWith('/api/cafeterias')) return cafeteriasApp(req, res);
+      if (req.url.startsWith('/api/pedidos')) return pedidosApp(req, res);
+      return afiliadosApp(req, res);
+    }) : afiliadosApp;
     server.app = await new Promise(resolve => { const listener = app.listen(0, '0.0.0.0', () => resolve(listener)); });
     // Usa las reglas reales del gateway; solo sustituye los destinos para aislar la prueba.
     let nginx = fs.readFileSync(path.join(root, 'Microservices/gateway/nginx.conf'), 'utf8')
-      .replace(/http:\/\/ms-(pedidos|menus|cafeterias):\d+/g, `http://host.docker.internal:${server.app.address().port}`);
+      .replace(/http:\/\/ms-(afiliados|pedidos|menus|cafeterias):\d+/g, `http://host.docker.internal:${server.app.address().port}`);
     nginx = nginx.replace('  location / {', `  location /auth/v1/ { proxy_pass http://${names.auth}:9999/; }
       location /rest/v1/ { proxy_pass http://${names.rest}:3000/; }
       location / {`);
@@ -158,7 +213,7 @@ async function main() {
       process.env.TEST_GATEWAY_IMAGE || 'nginx:1.27-alpine']);
     const base = `http://127.0.0.1:${portOf(names.gateway, 80)}`;
     await waitFor('Gateway', async () => (await fetch(`${base}/gateway/health`, { signal: AbortSignal.timeout(2000) })).ok);
-    console.log('PREPARADO: gateway nginx y ms-pedidos reales');
+    console.log('PREPARADO: gateway nginx y ms-afiliados reales');
 
     async function call(url, token, method = 'GET', body) {
       const response = await fetch(base + url, { method, headers: {
@@ -184,7 +239,34 @@ async function main() {
     }
     if (probarC05) {
       await require('./test-solicitudes-afiliacion-c05.cjs')({ check, call, sql, tokens });
-      console.log(`${checks} escenarios C05 con Auth, JWT, gateway y PostgreSQL reales aprobados.`);
+      if (probarA06) await require('./test-mobile-afiliacion-a06.cjs')({ call, sql, tokens, base, anon,
+        supabaseUrl: process.env.SUPABASE_URL, dbContainer: names.pg });
+      await check('E08: pausar retira la campaña de oportunidades móviles y activar la devuelve', async () => {
+        // La cafetería 8 evita el tope de dos filas de PostgREST que usa C05.
+        const cafeteriaId = 8;
+        const modulo = await cargarServicioCampanasEscritorio(path.join(temp, 'escritorio-e08'), base, tokens.otro);
+        const servicio = modulo.campanasAfiliados;
+        const oportunidades = async () => {
+          const respuesta = await call('/rest/v1/rpc/listar_oportunidades_campana', tokens.estudiante, 'POST', { p_cafeteria_id: cafeteriaId });
+          assert.equal(respuesta.status, 200, JSON.stringify(respuesta.body));
+          assert.ok(Array.isArray(respuesta.body));
+          return respuesta.body;
+        };
+        const campana = JSON.parse(sql(`INSERT INTO public.campanas(cafeteria_id,nombre,estado,tasa_descuento,tasa_descuento_oferta,tasa_comision,vigencia_desde,vigencia_hasta)
+          VALUES (${cafeteriaId},'Campaña E08 móvil','pendiente_aceptacion',15,5,10,now()-interval '1 hour',now()+interval '1 day')
+          RETURNING json_build_object('id',id,'version',version_condiciones);`).split('\n')[0]);
+        const aceptada = await call('/rest/v1/rpc/confirmar_condiciones_campana', tokens.otro, 'POST', {
+          p_campana_id: campana.id, p_cafeteria_id: cafeteriaId, p_version: campana.version,
+        });
+        assert.equal(aceptada.status, 200, JSON.stringify(aceptada.body));
+        const visible = lista => lista.some(c => Number(c.id) === Number(campana.id));
+        assert.ok(visible(await oportunidades()), 'La campaña aceptada no aparece en oportunidades');
+        assert.equal((await servicio.cambiarEstado(cafeteriaId, campana.id, true)).estado, 'pausada');
+        assert.equal(visible(await oportunidades()), false, 'La campaña pausada sigue en oportunidades');
+        assert.equal((await servicio.cambiarEstado(cafeteriaId, campana.id, false)).estado, 'activa');
+        assert.ok(visible(await oportunidades()), 'La campaña reactivada no volvió a oportunidades');
+      });
+      console.log(`${checks} escenarios C05/E08 con Auth, JWT, gateway y PostgreSQL reales aprobados.`);
       return;
     }
     const resource = '/api/afiliados/cafeterias/7/campanas';
@@ -268,7 +350,60 @@ async function main() {
       assert.equal(r.body.campanas.find(c=>c.id===acceptable.id).estado,'activa');
       assert.equal(r.body.campanas.length,2);
     });
-    console.log(`${checks} escenarios C03 con Auth, JWT, gateway, PostgREST y RLS reales aprobados.`);
+    await check('E06: alta y edición del servicio de escritorio persisten por el gateway con JWT real', async () => {
+      const modulo = await cargarServicioCampanasEscritorio(path.join(temp, 'escritorio'), base, tokens.dueno);
+      const servicio = modulo.campanasAfiliados;
+      const form = {
+        nombre: 'Campaña E06 escritorio',
+        descuento_normal_pct: 15, descuento_oferta_pct: 5, comision_pct: 10,
+        inicio: new Date(Date.now() + 3 * 86400000).toISOString(),
+        fin: new Date(Date.now() + 4 * 86400000).toISOString(),
+      };
+      const creada = await servicio.crear(7, form);
+      assert.ok(Number.isSafeInteger(Number(creada.id)), JSON.stringify(creada));
+      const listadas = await servicio.listar(7);
+      assert.equal(listadas.find(c => c.id === creada.id)?.nombre, form.nombre);
+      const editada = await servicio.actualizar(7, creada.id, { ...form, descuento_normal_pct: 12 });
+      assert.equal(editada.descuento_normal_pct, 12);
+      const sinVigencia = await servicio.actualizar(7, creada.id, { ...form, descuento_normal_pct: 13, inicio: '', fin: '' });
+      assert.equal(sinVigencia.inicio, creada.inicio);
+      assert.equal(sinVigencia.fin, creada.fin);
+    });
+    await check('E07: pausar y activar desde el escritorio persiste el estado que filtra C04', async () => {
+      const modulo = await cargarServicioCampanasEscritorio(path.join(temp, 'escritorio-e07'), base, tokens.dueno);
+      const servicio = modulo.campanasAfiliados;
+      const form = {
+        nombre: 'Campaña E07 escritorio',
+        descuento_normal_pct: 15, descuento_oferta_pct: 5, comision_pct: 10,
+        inicio: new Date(Date.now() + 86400000).toISOString(),
+        fin: new Date(Date.now() + 172800000).toISOString(),
+      };
+      const creada = await servicio.crear(7, form);
+      // La alta exige inicio futuro y la aceptación exige campaña vigente: se
+      // anticipa la vigencia solo en la fixture desechable, antes de aceptar,
+      // con el cambio de versión que exige el disparador de V05.
+      assert.equal(creada.version_condiciones, '1.0');
+      sql(`UPDATE public.campanas SET vigencia_desde = now() - interval '1 hour',
+          version_condiciones = '1.1' WHERE id = ${Number(creada.id)};`);
+      const aceptada = await call('/rest/v1/rpc/confirmar_condiciones_campana', tokens.dueno, 'POST', {
+        p_campana_id: creada.id, p_cafeteria_id: 7, p_version: '1.1',
+      });
+      assert.equal(aceptada.status, 200, JSON.stringify(aceptada.body));
+      assert.equal(aceptada.body.confirmada_por_dueno, true);
+      assert.equal((await servicio.listar(7)).find(c => c.id === creada.id)?.estado, 'activa');
+      const pausada = await servicio.cambiarEstado(7, creada.id, true);
+      assert.equal(pausada.estado, 'pausada');
+      assert.equal(pausada.estado_db, 'pausada');
+      const listado = await servicio.listar(7);
+      assert.equal(listado.find(c => c.id === creada.id)?.estado, 'pausada');
+      const persistida = sql(`SELECT estado FROM public.campanas WHERE id = ${Number(creada.id)};`);
+      assert.equal(persistida, 'pausada');
+      const activada = await servicio.cambiarEstado(7, creada.id, false);
+      assert.equal(activada.estado, 'activa');
+      assert.equal(activada.estado_db, 'activa');
+      assert.equal(await servicio.listar(7).then(c => c.find(x => x.id === creada.id)?.estado), 'activa');
+    });
+    console.log(`${checks} escenarios C03/E06/E07 con Auth, JWT, gateway, PostgREST y RLS reales aprobados.`);
   } finally {
     for (const listener of server ? [server.app, server.proxy].filter(Boolean) : []) {
       listener.closeAllConnections(); await new Promise(resolve=>listener.close(resolve));
@@ -283,4 +418,8 @@ async function main() {
     fs.rmSync(temp,{recursive:true,force:true});
   }
 }
-main().catch(error=>{ console.error(error.message); process.exitCode=1; });
+// Algunas solicitudes fetch no mantienen vivo Node en Windows durante el arranque.
+// El proceso debe esperar a las aserciones y a la limpieza, nunca salir con éxito antes.
+const guardia = setInterval(() => {}, 1000);
+main().catch(error=>{ console.error(error.message); process.exitCode=1; })
+  .finally(() => clearInterval(guardia));

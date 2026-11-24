@@ -17,11 +17,23 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 
 ### Validación
 
+- [C06 / CAM-261 — Regresión de entrega desde el KDS](desktop/validacion/C06-CAM-261-regresion-kds.md)
+
 - [V01 / CAM-223 — Acceso Afiliados del dueño](desktop/validacion/V01-CAM-223-Acceso-Afiliados.md)
 - [E03 / CAM-290 — Vista principal de campañas del dueño](desktop/validacion/E03-CAM-290-Vista-Campanas.md)
-- [E05 / CAM-225 — Listado de campañas por cafetería del dueño](desktop/validacion/E04-CAM-225-Cambio-Cafeteria-Campanas.md)
+- [E04 / CAM-225 — Listado de campañas por cafetería del dueño](desktop/validacion/E04-CAM-225-Cambio-Cafeteria-Campanas.md)
+- [E06 — Conexión de alta y edición de campañas con el gateway](desktop/validacion/E06-Conexion-alta-y-edicion-campanas.md)
+- [E07 — Conexión de activación y pausa de campañas](desktop/validacion/E07-Conexion-activacion-y-pausa-campanas.md)
+- [E08 / CAM-294 — Corregir fallos de guardado y activación de campañas](desktop/validacion/E08-CAM-294-Correccion-guardado-y-activacion.md)
+- [E11 / CAM-233 — Conectar resumen de ventas y comisiones](desktop/validacion/E11-CAM-233-Resumen-ventas-y-comisiones.md)
+- [E12 / CAM-235 — Actualizar resumen tras entregar o cancelar](desktop/validacion/E12-CAM-235-Actualizar-resumen-entrega-y-cancelacion.md)
+- [E13 — Estados de carga, vacío y error de campañas](desktop/validacion/E13-Estados-carga-vacio-y-error-campanas.md)
+- [E14 — Probar tasas y vigencia](desktop/validacion/E14-Probar-tasas-y-vigencia.md)
+- [E15 / CAM-240 — Conciliar el panel con Supabase](desktop/validacion/E15-CAM-240-Conciliar-panel-con-Supabase.md)
+- [E10 / CAM-232 — Aprobar afiliados y gestionar códigos](desktop/validacion/E10-Aprobar-afiliados-y-gestionar-codigos.md)
 - [S2-T15 - Validación flujo integrado y recuperación del KDS](desktop/validacion/S2-T15-Validacion-Flujo-Integrado-KDS.md)
 - [S2-T17 - Validación flujo completo del KDS](desktop/validacion/S2-T17-Validacion-Flujo-Completo-KDS.md)
+- [C08 / CAM-242 — Verificar entrega por QR y token desde KDS](desktop/validacion/C08-CAM-242-entrega-qr-token-kds.md)
 - [S2-T18 — Validación integrada del panel administrativo](desktop/validacion/S2-T18_validacion_panel_administrativo.md)
 
 ## Móvil
@@ -57,8 +69,27 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [A02 — Pantalla Mis afiliaciones: oportunidades, códigos y ganancias](mobile/validacion/A02-Mis-Afiliaciones.md)
 - [A03 — Campañas activas conectadas a C04: filtro, vacío y prueba desechable](mobile/validacion/A03-Campanas-activas.md)
 - [A04 — Condiciones de campaña: beneficio del referido, comisión y elegibilidad](mobile/validacion/A04-Condiciones-campana-carrito.md)
+- [A06 — Solicitud, aprobación, código desactivado y panel de comisiones](mobile/validacion/A06-Solicitudes-aprobacion.md)
+- [A07 — Copiar y compartir el código de una campaña](mobile/validacion/A07-Compartir-codigo-personal.md)
+- [A08 — Carga, vacío, errores y reintentos de afiliación](mobile/validacion/A08-Carga-vacio-error-afiliaciones.md)
+- [A09 — Comisiones pendientes, disponibles y retiradas con V12](mobile/validacion/A09-Comisiones-saldo-disponible.md)
+- [A10 — Historial de ganancias y retiros, búsqueda por comprobante V14](mobile/validacion/A10-Historial-ganancias-y-retiros.md)
+- [A11 — Formulario de monto y destino ficticio para retiro simulado](mobile/validacion/A11-Solicitud-retiro-simulado.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 - [D02 - Estado del código asociado al carrito](mobile/validacion/D02-Estado-codigo-carrito.md)
+- [D03 - Cotización de carrito completo](mobile/validacion/D03-Cotizacion-carrito-completo.md)
+- [D04 - Motivos de código no aplicable](mobile/validacion/D04-Motivos-codigo-no-aplicable.md)
+- [D05 - Recotización al editar el carrito](mobile/validacion/D05-Recotizar-al-editar-carrito.md)
+- [D06 - Confirmar de nuevo cuando cambie el total](mobile/validacion/D06-Reconfirmar-total.md)
+- [D11 - Cotizaciones fuera de orden en el carrito](mobile/validacion/D11-Cotizaciones-fuera-de-orden.md)
+- [D07 - Clave persistida del intento de compra](mobile/validacion/D07-Clave-intento-compra.md)
+- [D08 - Recuperar una compra con respuesta interrumpida](mobile/validacion/D08-Recuperar-compra-interrumpida.md)
+- [D09 - Total cobrado en historial](mobile/validacion/D09-Total-cobrado-en-historial.md)
+- [D14 - Primera compra y compra recurrente](mobile/validacion/D14-Primera-compra-y-recurrente.md)
+- [D15 - Evidencia del checkout](mobile/validacion/D15-Evidencia-del-checkout.md)
+- [D10 - Actualizar Wallet al cancelar](mobile/validacion/D10-Wallet-al-cancelar.md)
+- [D12 - Wallet tras cancelar](mobile/validacion/D12-Wallet-tras-cancelar.md)
+- [D13 - Compra sin código o con código retirado](mobile/validacion/D13-Verificar-compra-sin-codigo.md)
 
 ## Backend Node
 
@@ -87,8 +118,10 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [Prueba del flujo de catálogo — T11](microservicios/validacion/pruebas_flujo_catalogo.md)
 - [S3-T3 — Administración de campañas de afiliados](microservicios/validacion/S3-T3-administracion-campanas-afiliados.md)
 - [S3-T4 / C04 — Consulta de campañas vigentes](microservicios/validacion/S3-T4-consulta-campanas-vigentes.md)
+- [C12 / CAM-262 — Cancelación y reembolso integrados en Cloud](microservicios/validacion/C12-CAM-262-cancelacion-reembolso.md)
 - [C05 — Solicitud y resolución de afiliación](microservicios/validacion/C05-solicitudes-afiliacion.md)
 - [C15 / CAM-265 — Consulta de saldo del afiliado por gateway](microservicios/validacion/C15-CAM-265-saldo-afiliado-gateway.md)
+- [C07 — Cotización y confirmación por el gateway](microservicios/validacion/C07-cotizacion-compra-gateway.md)
 
 ## Bot de Telegram
 
@@ -119,6 +152,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [C02 — Contratos de integración de afiliados](contratos-integracion-afiliados.md)
 - [C01 — Reglas del piloto de afiliados](reglas-piloto-afiliados.md)
 - [D.2.1 — Cancelación de pedido con reembolso a Wallet (traspaso a Base de Datos)](base-datos/D2.1_cancelacion_reembolso.md)
+- [V09 / CAM-177 — Reversión de comisión en cancelación](base-datos/validacion/V09-CAM-177-Reversion-cancelacion.md)
 - [D.4 — Validación QR y entrega de pedido (traspaso a Base de Datos)](base-datos/D4_validacion_qr_entrega.md)
 - [S2-T16 — Dependencias SQL del flujo de pedidos](base-datos/dependencias-sql-ms-pedidos.md)
 - [Promociones y configuración del dueño](base-datos/promociones-configuracion-dueno.md)

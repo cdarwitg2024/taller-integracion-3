@@ -72,6 +72,17 @@ jobs:
         env:
           TEST_POSTGRES_CONTAINER: cf-test-postgres
         run: node .github/scripts/verify-test-sensitivity.cjs
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: Diego24Vas/db_CoffeeFaster
+          ref: d074ed56aaf3e9c3992b8852a052f9f76d86f5cc
+          path: .test-bd
+          persist-credentials: false
+      - name: Migration limitar beneficio por comprador y código over V07, V08 and V09
+        env:
+          TEST_POSTGRES_CONTAINER: cf-test-postgres
+          DB_COFFEEFASTER_DIR: ${{ github.workspace }}/.test-bd
+        run: node database/tests/prueba_limitar_beneficio_por_comprador_y_codigo.cjs
       - name: Remove isolated database container
         if: always()
         run: docker rm -f cf-test-postgres
@@ -117,7 +128,51 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - run: npm ci --prefix Microservices/ms-pedidos
-      - run: ln -s ../ms-pedidos/node_modules Microservices/shared/node_modules
+      - run: npm ci --prefix Microservices/ms-afiliados
+      - run: ln -s ../ms-afiliados/node_modules Microservices/shared/node_modules
       - name: C03 through gateway, real Auth JWTs, PostgREST, RPC and RLS
         run: node .github/scripts/test-afiliados-auth-integration.cjs
+  mobile-afiliaciones:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: Diego24Vas/db_CoffeeFaster
+          ref: 80bbc91ebf7766d849332d2a73b02b0f7265568f
+          path: .test-bd
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Run database migration and regression suites
+        working-directory: .test-bd
+        env:
+          TEST_POSTGRES_CONTAINER: cf-db-suite-pg
+        run: |
+          docker run --rm -d --name "$TEST_POSTGRES_CONTAINER" \
+            -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17
+          trap 'docker stop "$TEST_POSTGRES_CONTAINER" >/dev/null 2>&1 || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if docker exec "$TEST_POSTGRES_CONTAINER" pg_isready -h 127.0.0.1 -U postgres; then
+              npm test
+              exit $?
+            fi
+            sleep 1
+          done
+
+          docker logs "$TEST_POSTGRES_CONTAINER"
+          exit 1
+      - run: npm ci --prefix Microservices/ms-pedidos
+      - run: npm ci --prefix Microservices/ms-cafeterias
+      - run: npm ci --prefix Microservices/ms-afiliados
+      - run: ln -s ../ms-pedidos/node_modules Microservices/shared/node_modules
+      - run: npm ci --prefix app-mobile
+      - name: A06, A10 and C05 through gateway, real Auth JWTs, PostgreSQL and RLS
+        env:
+          COFFEEFAST_DB_MIGRATIONS: ${{ github.workspace }}/.test-bd/supabase/migrations
+          TEST_AUTH_IMAGE: supabase/gotrue:v2.197.0
+          TEST_REST_IMAGE: postgrest/postgrest:v16.3
+        run: node .github/scripts/test-afiliados-auth-integration.cjs --a06

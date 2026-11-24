@@ -1,5 +1,10 @@
 # Revisión de pruebas para CI/CD
 
+## V02 · Aislamiento entre cafeterías
+
+La [matriz de V02](../../desktop/validacion/V02-CAM-237-Aislamiento-entre-cafeterias.md)
+registra las lecturas propias, las lecturas ajenas y la recuperación de cada cuenta.
+
 ## C03: revisión de contrato, alcance y Auth/RLS — 17 de noviembre de 2026
 
 En Windows con Node.js 22.23.5: ms-pedidos 157/157, escritorio 72/72, build PASS

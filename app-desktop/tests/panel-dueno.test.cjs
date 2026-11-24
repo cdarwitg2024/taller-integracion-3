@@ -26,6 +26,7 @@ function cargar(archivo, nombre, dependencias) {
       './usuarios.js': ['usuarios'], './backendApi': ['backendApi', 'CAFETERIA_ID'],
       '../utils/dateUtils': ['parsearFecha', 'formatearHora', 'formatearHoraBucket'],
       './pedidosService': ['pedidosService'],
+      './resumenComisiones': ['resumenComisiones'],
     }[specifier];
     assert.ok(nombres, `Dependencia sin definir: ${specifier}`);
     return Object.fromEntries(nombres.map(k => [k, dependencias[k]]));
@@ -448,6 +449,7 @@ test('Dashboard: cambio de cafetería y desmontaje invalidan cargas pendientes y
   const estadosNotificados = [];
   const crearCargador = cargar('cargadorDashboard.js', 'crearCargadorDashboard', {
     pedidosService: pedidosServiceMock,
+    resumenComisiones: { obtener: async () => ({}) },
   });
 
   const cargador = crearCargador({

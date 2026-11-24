@@ -99,7 +99,7 @@ beforeEach(() => {
  * `cafeteria_usuarios` (pertenencia a la cafeteria del pedido).
  *
  * Devuelve el `updateMock`, que permite comprobar si hubo UPDATE y con que
- * cambios. Por defecto simula un EMPLEADO (rol_id=2) que SI pertenece a la
+ * cambios. Por defecto simula un EMPLEADO que SI pertenece a la
  * cafeteria del pedido.
  */
 function configurarPedido(pedidoInicial, opciones = {}) {
@@ -108,7 +108,7 @@ function configurarPedido(pedidoInicial, opciones = {}) {
   let actual = pedidoInicial;
 
   const usuarioInterno = opciones.usuarioInterno === undefined
-    ? { id: 10, rol_id: 2 }
+    ? { id: 10, roles: { nombre: 'empleado' } }
     : opciones.usuarioInterno;
   const pertenece = opciones.pertenece === undefined ? true : opciones.pertenece;
 
@@ -161,7 +161,7 @@ function configurarPedido(pedidoInicial, opciones = {}) {
  * proyeccion (`select`), filtros (`eq`/`in`) y limite.
  */
 function fijarLecturas({
-  usuario = { id: 10, rol_id: 1 },
+  usuario = { id: 10, roles: { nombre: 'estudiante' } },
   pedidos = { data: [], error: null },
   cafeterias = { data: null, error: null }
 } = {}) {
@@ -224,6 +224,154 @@ describe('ms-pedidos', () => {
     expect(opciones.global.headers.Authorization).toBe('Bearer token123');
     expect(opciones.auth.autoRefreshToken).toBe(false);
     expect(opciones.auth.persistSession).toBe(false);
+  });
+
+  test('POST /api/pedidos conserva el contrato móvil anterior con solo el código', async () => {
+    httpMock.post.mockResolvedValue(respuestaPrecios([producto({ id: 1, cafeteria_id: 1 })]));
+    const res = await request(app).post('/api/pedidos').send(bodyPedido({ codigo: 'DIEGO-PROMO1' }));
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ ok: true, pedido: expect.any(Object) });
+  });
+
+  test('POST /api/pedidos conserva la compra normal de D07 con clave de intento y C07 deshabilitado', async () => {
+    httpMock.post.mockResolvedValue(respuestaPrecios([producto({ id: 1, cafeteria_id: 1 })]));
+    const res = await request(app).post('/api/pedidos')
+      .set('Idempotency-Key', 'd07-compra-normal')
+      .send(bodyPedido());
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ ok: true, pedido: expect.any(Object) });
+    expect(httpMock.post).toHaveBeenCalledTimes(1);
+  });
+
+  test('POST /api/pedidos no confirma cotizaciones con la integración deshabilitada', async () => {
+    const res = await request(app).post('/api/pedidos')
+      .set('Idempotency-Key', 'c07-confirmacion')
+      .send(bodyPedido({ codigo: 'DIEGO-PROMO1', total_aceptado: 8500 }));
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('confirmacion_afiliada_no_disponible');
+    expect(httpMock.post).not.toHaveBeenCalled();
+  });
+
+  test.each([['pagado', 201], ['pendiente', 503]])(
+    'POST /api/pedidos con pedido pendiente y pago %s responde %s', async (pagoEstado, estadoHttp) => {
+      const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+      try {
+        fijarLecturas({ usuario: { id: 10, activo: true } });
+        httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+        mockRpc.mockResolvedValue({ data: {
+          ok: true, pedido_id: 49, estado: 'pendiente', pago_estado: pagoEstado,
+          total_pagado: 6100, descuento_afiliado: 900
+        }, error: null });
+
+        const res = await request(app).post('/api/pedidos')
+          .set('Idempotency-Key', 'c07-estado-pago')
+          .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+        expect(res.status).toBe(estadoHttp);
+        if (estadoHttp === 201) expect(res.body).toEqual({
+          pedido_id: 49, estado: 'pagado', total_pagado: 6100, descuento_afiliado: 900
+        });
+      } finally {
+        if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+        else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+      }
+    }
+  );
+
+  test('POST /api/pedidos rechaza el saldo insuficiente real de V08 con HTTP 422', async () => {
+    const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+      // Respuesta real de V08: no trae `error`, sino `ok:false` y `motivo`.
+      mockRpc.mockResolvedValue({
+        data: { ok: false, motivo: 'saldo_insuficiente', cobrado: false },
+        error: null
+      });
+
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'c12-saldo-insuficiente')
+        .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+      expect(res.status).toBe(422);
+      expect(res.body).toEqual({ error: 'saldo_insuficiente', cobrado: false });
+    } finally {
+      if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+    }
+  });
+
+  test('POST /api/pedidos conserva el rechazo de saldo con la forma anterior', async () => {
+    const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+      mockRpc.mockResolvedValue({
+        data: { error: 'saldo_insuficiente' },
+        error: null
+      });
+
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'c12-saldo-forma-anterior')
+        .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+      expect(res.status).toBe(422);
+      expect(res.body).toEqual({ error: 'saldo_insuficiente', cobrado: false });
+    } finally {
+      if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+    }
+  });
+
+  test('POST /api/pedidos responde 409 al conflicto de clave real de V08', async () => {
+    const habilitado = process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockResolvedValue(respuestaPrecios([producto()]));
+      mockRpc.mockResolvedValue({
+        data: { ok: false, motivo: 'clave_reintento_en_conflicto', cobrado: false },
+        error: null
+      });
+
+      const res = await request(app).post('/api/pedidos')
+        .set('Idempotency-Key', 'c12-clave-conflicto')
+        .send(bodyPedido({ codigo: 'NORTE', total_aceptado: 6100 }));
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: 'clave_reintento_en_conflicto' });
+    } finally {
+      if (habilitado === undefined) delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+      else process.env.HABILITAR_CONFIRMACION_AFILIADA = habilitado;
+    }
+  });
+
+  test('V08 devuelve el mismo pedido pagado con la misma clave aunque el catálogo no responda', async () => {
+    process.env.HABILITAR_CONFIRMACION_AFILIADA = 'true';
+    try {
+      fijarLecturas({ usuario: { id: 10, activo: true } });
+      httpMock.post.mockRejectedValue(new Error('catálogo no disponible'));
+      mockRpc.mockResolvedValue({ error: null, data: {
+        ok: true, pedido_id: 501, estado: 'pendiente', pago_estado: 'pagado',
+        total_pagado: 2500, descuento_afiliado: 0,
+      } });
+      const confirmar = () => request(app).post('/api/pedidos').set('Idempotency-Key', 'v08-intento-original')
+        .send(bodyPedido({ total_aceptado: 2500 }));
+      const primero = await confirmar().expect(201);
+      const segundo = await confirmar().expect(201);
+      expect(primero.body).toEqual({ pedido_id: 501, estado: 'pagado', total_pagado: 2500, descuento_afiliado: 0 });
+      expect(segundo.body).toEqual(primero.body);
+      expect(mockRpc.mock.calls[0]).toEqual(mockRpc.mock.calls[1]);
+      expect(httpMock.post).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.HABILITAR_CONFIRMACION_AFILIADA;
+    }
   });
 
   test('POST /api/pedidos permite varios productos de la misma cafeteria', async () => {
@@ -539,8 +687,8 @@ describe('PATCH /api/pedidos/:id/estado', () => {
 
 describe('PATCH /api/pedidos/:id/estado — autorizacion KDS (D.3)', () => {
   test.each([
-    ['estudiante', { usuarioInterno: { id: 10, rol_id: 1 } }, 403, 'Solo un empleado puede cambiar el estado del pedido'],
-    ['dueño', { usuarioInterno: { id: 10, rol_id: 3 } }, 403, 'Solo un empleado puede cambiar el estado del pedido'],
+    ['estudiante', { usuarioInterno: { id: 10, roles: { nombre: 'estudiante' } } }, 403, 'Solo un empleado puede cambiar el estado del pedido'],
+    ['dueño', { usuarioInterno: { id: 10, roles: { nombre: 'dueño' } } }, 403, 'Solo un empleado puede cambiar el estado del pedido'],
     ['empleado de otra cafeteria', { pertenece: false }, 403, 'El empleado no pertenece a la cafeteria del pedido'],
     ['sin cuenta interna', { usuarioInterno: null }, 404, 'Usuario no encontrado']
   ])('S2-T9: %s no obtiene el pedido por estado identico', async (_actor, opciones, status, error) => {
@@ -597,7 +745,7 @@ describe('PATCH /api/pedidos/:id/estado — autorizacion KDS (D.3)', () => {
   test('estudiante intenta pendiente -> en_preparacion = 403 y NO actualiza', async () => {
     const updateMock = configurarPedido(
       { id: 5, estado: 'pendiente', cafeteria_id: 1 },
-      { usuarioInterno: { id: 10, rol_id: 1 } }
+      { usuarioInterno: { id: 10, roles: { nombre: 'estudiante' } } }
     );
     const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'en_preparacion' });
     expect(res.status).toBe(403);
@@ -607,7 +755,7 @@ describe('PATCH /api/pedidos/:id/estado — autorizacion KDS (D.3)', () => {
   test('dueño intenta pendiente -> en_preparacion = 403 y NO actualiza', async () => {
     const updateMock = configurarPedido(
       { id: 5, estado: 'pendiente', cafeteria_id: 1 },
-      { usuarioInterno: { id: 10, rol_id: 3 } }
+      { usuarioInterno: { id: 10, roles: { nombre: 'dueño' } } }
     );
     const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'en_preparacion' });
     expect(res.status).toBe(403);
@@ -639,7 +787,7 @@ describe('PATCH /api/pedidos/:id/estado — autorizacion KDS (D.3)', () => {
   test('estudiante: listo -> entregado = 403 (autorizacion antes de transicion) y NO actualiza', async () => {
     const updateMock = configurarPedido(
       { id: 5, estado: 'listo', cafeteria_id: 1 },
-      { usuarioInterno: { id: 10, rol_id: 1 } }
+      { usuarioInterno: { id: 10, roles: { nombre: 'estudiante' } } }
     );
     const res = await request(app).patch('/api/pedidos/5/estado').send({ estado: 'entregado' });
     expect(res.status).toBe(403);
@@ -674,7 +822,7 @@ describe('PATCH /api/pedidos/:id/estado — autorizacion KDS (D.3)', () => {
   test('no confia en el rol enviado por el body (estudiante que se declara empleado = 403)', async () => {
     const updateMock = configurarPedido(
       { id: 5, estado: 'pendiente', cafeteria_id: 1 },
-      { usuarioInterno: { id: 10, rol_id: 1 } }
+      { usuarioInterno: { id: 10, roles: { nombre: 'estudiante' } } }
     );
     const res = await request(app)
       .patch('/api/pedidos/5/estado')
@@ -785,22 +933,23 @@ describe('PATCH /api/pedidos/:id/estado -> cancelado (RPC cancelar_pedido)', () 
 });
 
 describe('GET /api/pedidos — lecturas autorizadas (D.5-B)', () => {
-  test('estudiante recibe solo sus pedidos', async () => {
+  test.each([1, 5])('estudiante con rol_id %i recibe solo sus pedidos', async (rolId) => {
     const reg = fijarLecturas({
-      usuario: { id: 10, rol_id: 1 },
+      usuario: { id: 10, rol_id: rolId, roles: { nombre: 'estudiante' } },
       pedidos: { data: [{ id: 1, usuario_id: 10, estado: 'listo' }], error: null }
     });
     const res = await request(app).get('/api/pedidos');
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     // La consulta filtra por el id interno resuelto desde el JWT.
+    expect(camposDe(reg.usuarios.select)).toContain('roles(nombre)');
     expect(reg.pedidos.eq).toContainEqual(['usuario_id', 10]);
     expect(reg.pedidos.limit).toBe(100);
   });
 
-  test('empleado recibe solo pedidos de sus cafeterias', async () => {
+  test.each([2, 4])('empleado con rol_id %i recibe solo pedidos de sus cafeterias', async (rolId) => {
     const reg = fijarLecturas({
-      usuario: { id: 20, rol_id: 2 },
+      usuario: { id: 20, rol_id: rolId, roles: { nombre: 'empleado' } },
       pedidos: { data: [{ id: 2, cafeteria_id: 7, estado: 'pendiente' }], error: null },
       cafeterias: { data: [{ cafeteria_id: 7 }, { cafeteria_id: 8 }], error: null }
     });
@@ -812,7 +961,7 @@ describe('GET /api/pedidos — lecturas autorizadas (D.5-B)', () => {
 
   test('empleado sin cafeterias recibe coleccion vacia (200)', async () => {
     fijarLecturas({
-      usuario: { id: 20, rol_id: 2 },
+      usuario: { id: 20, roles: { nombre: 'empleado' } },
       cafeterias: { data: [], error: null }
     });
     const res = await request(app).get('/api/pedidos');
@@ -821,7 +970,7 @@ describe('GET /api/pedidos — lecturas autorizadas (D.5-B)', () => {
   });
 
   test('dueño recibe 403 (sin coleccion global)', async () => {
-    fijarLecturas({ usuario: { id: 30, rol_id: 3 } });
+    fijarLecturas({ usuario: { id: 30, roles: { nombre: 'dueño' } } });
     const res = await request(app).get('/api/pedidos');
     expect(res.status).toBe(403);
   });
@@ -834,7 +983,7 @@ describe('GET /api/pedidos — lecturas autorizadas (D.5-B)', () => {
 
   test('la respuesta NO filtra credenciales QR (proyeccion explicita)', async () => {
     const reg = fijarLecturas({
-      usuario: { id: 10, rol_id: 1 },
+      usuario: { id: 10, roles: { nombre: 'estudiante' } },
       pedidos: { data: [{ id: 1, usuario_id: 10, estado: 'listo' }], error: null }
     });
     const res = await request(app).get('/api/pedidos');
@@ -849,7 +998,7 @@ describe('GET /api/pedidos — lecturas autorizadas (D.5-B)', () => {
 describe('GET /api/pedidos/:id — lectura individual autorizada (D.5-B)', () => {
   test('estudiante obtiene su propio pedido', async () => {
     const reg = fijarLecturas({
-      usuario: { id: 10, rol_id: 1 },
+      usuario: { id: 10, roles: { nombre: 'estudiante' } },
       pedidos: { data: { id: 5, usuario_id: 10, cafeteria_id: 1, estado: 'listo' }, error: null }
     });
     const res = await request(app).get('/api/pedidos/5');
@@ -860,7 +1009,7 @@ describe('GET /api/pedidos/:id — lectura individual autorizada (D.5-B)', () =>
 
   test('estudiante pide un pedido ajeno -> 404 (no revela existencia)', async () => {
     fijarLecturas({
-      usuario: { id: 10, rol_id: 1 },
+      usuario: { id: 10, roles: { nombre: 'estudiante' } },
       pedidos: { data: { id: 5, usuario_id: 99, cafeteria_id: 1, estado: 'listo' }, error: null }
     });
     const res = await request(app).get('/api/pedidos/5');
@@ -869,7 +1018,7 @@ describe('GET /api/pedidos/:id — lectura individual autorizada (D.5-B)', () =>
 
   test('empleado obtiene un pedido de su cafeteria', async () => {
     const reg = fijarLecturas({
-      usuario: { id: 20, rol_id: 2 },
+      usuario: { id: 20, roles: { nombre: 'empleado' } },
       pedidos: { data: { id: 5, usuario_id: 99, cafeteria_id: 7, estado: 'listo' }, error: null },
       cafeterias: { data: { id: 77 }, error: null }
     });
@@ -882,7 +1031,7 @@ describe('GET /api/pedidos/:id — lectura individual autorizada (D.5-B)', () =>
 
   test('empleado pide un pedido de otra cafeteria -> 404', async () => {
     fijarLecturas({
-      usuario: { id: 20, rol_id: 2 },
+      usuario: { id: 20, roles: { nombre: 'empleado' } },
       pedidos: { data: { id: 5, usuario_id: 99, cafeteria_id: 7, estado: 'listo' }, error: null },
       cafeterias: { data: null, error: null }
     });
@@ -891,20 +1040,20 @@ describe('GET /api/pedidos/:id — lectura individual autorizada (D.5-B)', () =>
   });
 
   test('dueño -> 404 (sin acceso nuevo)', async () => {
-    fijarLecturas({ usuario: { id: 30, rol_id: 3 } });
+    fijarLecturas({ usuario: { id: 30, roles: { nombre: 'dueño' } } });
     const res = await request(app).get('/api/pedidos/5');
     expect(res.status).toBe(404);
   });
 
   test('id invalido -> 400', async () => {
-    fijarLecturas({ usuario: { id: 10, rol_id: 1 } });
+    fijarLecturas({ usuario: { id: 10, roles: { nombre: 'estudiante' } } });
     const res = await request(app).get('/api/pedidos/abc');
     expect(res.status).toBe(400);
   });
 
   test('la respuesta NO filtra credenciales QR (proyeccion explicita)', async () => {
     const reg = fijarLecturas({
-      usuario: { id: 10, rol_id: 1 },
+      usuario: { id: 10, roles: { nombre: 'estudiante' } },
       pedidos: { data: { id: 5, usuario_id: 10, estado: 'listo' }, error: null }
     });
     const res = await request(app).get('/api/pedidos/5');
@@ -918,7 +1067,7 @@ describe('GET /api/pedidos/:id — lectura individual autorizada (D.5-B)', () =>
 describe('GET /api/pedidos/usuario/:usuarioId (D.5-B)', () => {
   test('estudiante consulta su propio historial', async () => {
     const reg = fijarLecturas({
-      usuario: { id: 10, rol_id: 1 },
+      usuario: { id: 10, roles: { nombre: 'estudiante' } },
       pedidos: { data: [{ id: 1, usuario_id: 10 }], error: null }
     });
     const res = await request(app).get('/api/pedidos/usuario/10');
@@ -929,31 +1078,31 @@ describe('GET /api/pedidos/usuario/:usuarioId (D.5-B)', () => {
   });
 
   test('estudiante consulta otro usuario -> 403', async () => {
-    fijarLecturas({ usuario: { id: 10, rol_id: 1 } });
+    fijarLecturas({ usuario: { id: 10, roles: { nombre: 'estudiante' } } });
     const res = await request(app).get('/api/pedidos/usuario/99');
     expect(res.status).toBe(403);
   });
 
   test('empleado -> 403', async () => {
-    fijarLecturas({ usuario: { id: 20, rol_id: 2 } });
+    fijarLecturas({ usuario: { id: 20, roles: { nombre: 'empleado' } } });
     const res = await request(app).get('/api/pedidos/usuario/20');
     expect(res.status).toBe(403);
   });
 
   test('dueño -> 403', async () => {
-    fijarLecturas({ usuario: { id: 30, rol_id: 3 } });
+    fijarLecturas({ usuario: { id: 30, roles: { nombre: 'dueño' } } });
     const res = await request(app).get('/api/pedidos/usuario/30');
     expect(res.status).toBe(403);
   });
 
   test('usuarioId invalido -> 400', async () => {
-    fijarLecturas({ usuario: { id: 10, rol_id: 1 } });
+    fijarLecturas({ usuario: { id: 10, roles: { nombre: 'estudiante' } } });
     const res = await request(app).get('/api/pedidos/usuario/abc');
     expect(res.status).toBe(400);
   });
 
   test('NO devuelve credenciales QR', async () => {
-    const reg = fijarLecturas({ usuario: { id: 10, rol_id: 1 }, pedidos: { data: [], error: null } });
+    const reg = fijarLecturas({ usuario: { id: 10, roles: { nombre: 'estudiante' } }, pedidos: { data: [], error: null } });
     const res = await request(app).get('/api/pedidos/usuario/10');
     const campos = camposDe(reg.pedidos.select);
     expect(campos).not.toContain('qr_token');
@@ -964,14 +1113,14 @@ describe('GET /api/pedidos/usuario/:usuarioId (D.5-B)', () => {
 
 describe('GET /api/pedidos/cafeteria/:cafeteriaId (D.5-B)', () => {
   test('estudiante -> 403', async () => {
-    fijarLecturas({ usuario: { id: 10, rol_id: 1 } });
+    fijarLecturas({ usuario: { id: 10, roles: { nombre: 'estudiante' } } });
     const res = await request(app).get('/api/pedidos/cafeteria/7');
     expect(res.status).toBe(403);
   });
 
   test('empleado asociado -> 200', async () => {
     const reg = fijarLecturas({
-      usuario: { id: 20, rol_id: 2 },
+      usuario: { id: 20, roles: { nombre: 'empleado' } },
       pedidos: { data: [{ id: 1, cafeteria_id: 7 }], error: null },
       cafeterias: { data: { id: 77 }, error: null }
     });
@@ -983,26 +1132,26 @@ describe('GET /api/pedidos/cafeteria/:cafeteriaId (D.5-B)', () => {
   });
 
   test('empleado no asociado -> 403', async () => {
-    fijarLecturas({ usuario: { id: 20, rol_id: 2 }, cafeterias: { data: null, error: null } });
+    fijarLecturas({ usuario: { id: 20, roles: { nombre: 'empleado' } }, cafeterias: { data: null, error: null } });
     const res = await request(app).get('/api/pedidos/cafeteria/7');
     expect(res.status).toBe(403);
   });
 
   test('dueño -> 403', async () => {
-    fijarLecturas({ usuario: { id: 30, rol_id: 3 } });
+    fijarLecturas({ usuario: { id: 30, roles: { nombre: 'dueño' } } });
     const res = await request(app).get('/api/pedidos/cafeteria/7');
     expect(res.status).toBe(403);
   });
 
   test('cafeteriaId invalido -> 400', async () => {
-    fijarLecturas({ usuario: { id: 20, rol_id: 2 } });
+    fijarLecturas({ usuario: { id: 20, roles: { nombre: 'empleado' } } });
     const res = await request(app).get('/api/pedidos/cafeteria/abc');
     expect(res.status).toBe(400);
   });
 
   test('NO devuelve credenciales QR', async () => {
     const reg = fijarLecturas({
-      usuario: { id: 20, rol_id: 2 },
+      usuario: { id: 20, roles: { nombre: 'empleado' } },
       pedidos: { data: [], error: null },
       cafeterias: { data: { id: 77 }, error: null }
     });
@@ -1019,7 +1168,7 @@ describe('GET /api/pedidos/:id/qr — credencial de retiro (D.5-B)', () => {
     'estudiante propietario en estado %s -> 200 con qr_token',
     async (estado) => {
       fijarLecturas({
-        usuario: { id: 10, rol_id: 1 },
+        usuario: { id: 10, roles: { nombre: 'estudiante' } },
         pedidos: { data: { id: 5, usuario_id: 10, estado, qr_token: 'tok-5' }, error: null }
       });
       const res = await request(app).get('/api/pedidos/5/qr');
@@ -1030,7 +1179,7 @@ describe('GET /api/pedidos/:id/qr — credencial de retiro (D.5-B)', () => {
 
   test('estudiante pide el QR de un pedido ajeno -> 404', async () => {
     fijarLecturas({
-      usuario: { id: 10, rol_id: 1 },
+      usuario: { id: 10, roles: { nombre: 'estudiante' } },
       pedidos: { data: { id: 5, usuario_id: 99, estado: 'listo', qr_token: 'tok-5' }, error: null }
     });
     const res = await request(app).get('/api/pedidos/5/qr');
@@ -1038,20 +1187,20 @@ describe('GET /api/pedidos/:id/qr — credencial de retiro (D.5-B)', () => {
   });
 
   test('empleado -> 404 (el QR es del estudiante)', async () => {
-    fijarLecturas({ usuario: { id: 20, rol_id: 2 } });
+    fijarLecturas({ usuario: { id: 20, roles: { nombre: 'empleado' } } });
     const res = await request(app).get('/api/pedidos/5/qr');
     expect(res.status).toBe(404);
   });
 
   test('dueño -> 404', async () => {
-    fijarLecturas({ usuario: { id: 30, rol_id: 3 } });
+    fijarLecturas({ usuario: { id: 30, roles: { nombre: 'dueño' } } });
     const res = await request(app).get('/api/pedidos/5/qr');
     expect(res.status).toBe(404);
   });
 
   test.each(['entregado', 'cancelado'])('estado %s -> 409 (QR no disponible)', async (estado) => {
     fijarLecturas({
-      usuario: { id: 10, rol_id: 1 },
+      usuario: { id: 10, roles: { nombre: 'estudiante' } },
       pedidos: { data: { id: 5, usuario_id: 10, estado, qr_token: 'tok-5' }, error: null }
     });
     const res = await request(app).get('/api/pedidos/5/qr');
@@ -1059,20 +1208,20 @@ describe('GET /api/pedidos/:id/qr — credencial de retiro (D.5-B)', () => {
   });
 
   test('pedido inexistente -> 404', async () => {
-    fijarLecturas({ usuario: { id: 10, rol_id: 1 }, pedidos: { data: null, error: null } });
+    fijarLecturas({ usuario: { id: 10, roles: { nombre: 'estudiante' } }, pedidos: { data: null, error: null } });
     const res = await request(app).get('/api/pedidos/999/qr');
     expect(res.status).toBe(404);
   });
 
   test('id invalido -> 400', async () => {
-    fijarLecturas({ usuario: { id: 10, rol_id: 1 } });
+    fijarLecturas({ usuario: { id: 10, roles: { nombre: 'estudiante' } } });
     const res = await request(app).get('/api/pedidos/abc/qr');
     expect(res.status).toBe(400);
   });
 
   test('no devuelve codigo_retiro_diario ni imagen; si qr_token', async () => {
     const reg = fijarLecturas({
-      usuario: { id: 10, rol_id: 1 },
+      usuario: { id: 10, roles: { nombre: 'estudiante' } },
       pedidos: { data: { id: 5, usuario_id: 10, estado: 'listo', qr_token: 'tok-5' }, error: null }
     });
     const res = await request(app).get('/api/pedidos/5/qr');
@@ -1103,7 +1252,7 @@ describe('S2-T10 contingencia persistida', () => {
   );
 
   test('personal asociado obtiene el codigo del pedido de su cafeteria', async () => {
-    const reg = fijarLecturas({ usuario: { id: 99, rol_id: 2 },
+    const reg = fijarLecturas({ usuario: { id: 99, roles: { nombre: 'empleado' } },
       pedidos: { data: pedido, error: null }, cafeterias: { data: { id: 77 }, error: null } });
     const res = await consultar();
     expect(res.status).toBe(200);
@@ -1111,7 +1260,7 @@ describe('S2-T10 contingencia persistida', () => {
     expect(reg.cafeteria_usuarios.eq).toEqual([['usuario_id', 99], ['cafeteria_id', 1]]);
   });
 
-  test.each([{ id: 99, rol_id: 1 }, { id: 99, rol_id: 2 }, null])(
+  test.each([{ id: 99, roles: { nombre: 'estudiante' } }, { id: 99, roles: { nombre: 'empleado' } }, null])(
     'conocer el ID sin propiedad/asociacion no da acceso (%j)', async (usuario) => {
       fijarLecturas({ usuario, pedidos: { data: pedido, error: null } });
       const res = await consultar();
@@ -1154,7 +1303,7 @@ describe('S2-T10 contingencia persistida', () => {
 describe('regresion D.5-B', () => {
   test('token-contingencia sigue respondiendo { token } al propietario', async () => {
     fijarLecturas({
-      usuario: { id: 10, rol_id: 1 },
+      usuario: { id: 10, roles: { nombre: 'estudiante' } },
       pedidos: { data: { id: 5, usuario_id: 10, cafeteria_id: 1, estado: 'listo', codigo_retiro_diario: 'TEST5678' }, error: null }
     });
     const res = await request(app).get('/api/pedidos/5/token-contingencia');
