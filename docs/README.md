@@ -29,6 +29,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [E12 / CAM-235 — Actualizar resumen tras entregar o cancelar](desktop/validacion/E12-CAM-235-Actualizar-resumen-entrega-y-cancelacion.md)
 - [E13 — Estados de carga, vacío y error de campañas](desktop/validacion/E13-Estados-carga-vacio-y-error-campanas.md)
 - [E14 — Probar tasas y vigencia](desktop/validacion/E14-Probar-tasas-y-vigencia.md)
+- [E15 / CAM-240 — Conciliar el panel con Supabase](desktop/validacion/E15-CAM-240-Conciliar-panel-con-Supabase.md)
 - [E10 / CAM-232 — Aprobar afiliados y gestionar códigos](desktop/validacion/E10-Aprobar-afiliados-y-gestionar-codigos.md)
 - [S2-T15 - Validación flujo integrado y recuperación del KDS](desktop/validacion/S2-T15-Validacion-Flujo-Integrado-KDS.md)
 - [S2-T17 - Validación flujo completo del KDS](desktop/validacion/S2-T17-Validacion-Flujo-Completo-KDS.md)
@@ -86,6 +87,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [D08 - Recuperar una compra con respuesta interrumpida](mobile/validacion/D08-Recuperar-compra-interrumpida.md)
 - [D09 - Total cobrado en historial](mobile/validacion/D09-Total-cobrado-en-historial.md)
 - [D14 - Primera compra y compra recurrente](mobile/validacion/D14-Primera-compra-y-recurrente.md)
+- [D15 - Evidencia del checkout](mobile/validacion/D15-Evidencia-del-checkout.md)
 - [D10 - Actualizar Wallet al cancelar](mobile/validacion/D10-Wallet-al-cancelar.md)
 - [D13 - Compra sin código o con código retirado](mobile/validacion/D13-Verificar-compra-sin-codigo.md)
 

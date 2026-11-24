@@ -129,3 +129,21 @@ imágenes alternativas. En ese mismo intento falló `database` al crear el rol:
 y el siguiente `psql` encontró el servidor apagado antes del arranque final.
 Se fija `-h 127.0.0.1` tanto en la espera como en la conexión inicial para
 detectar el servidor TCP definitivo. La matriz de pruebas de BD se conserva.
+
+## Actualización con develop — 24 de noviembre de 2026
+
+Se incorporó `develop` en `27df7e9`. A10 ya está fusionada por el PR #112
+(merge `11510aa`), por lo que dejó de ser una dependencia pendiente de integración.
+La combinación con esta versión de develop se resolvió automáticamente;
+`docs/estado-actual.md` conserva exactamente una entrada de A10 y otra de A14,
+junto con las actualizaciones de E15 y los enlaces del índice de documentación.
+
+El diff final frente a develop contiene A14 y los ajustes de su entorno de CI;
+los archivos de A10 ya pertenecen a la base. Se actualiza la descripción del
+PR #122 y se comprueba CI nuevamente sobre el commit que incorpora este merge.
+
+Comprobaciones locales de la combinación: **4/4 escenarios A14**, TypeScript,
+**141 enlaces relativos** y `git diff --check` aprobados. El estado funcional
+no contiene marcadores de conflicto ni entradas duplicadas de A10/A14. El
+resultado remoto se comprueba en el nuevo SHA, sin reutilizar los checks de
+`0cbc249` como evidencia del merge actualizado.
