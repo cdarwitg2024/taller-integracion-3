@@ -410,3 +410,64 @@ test('entrega y cancelación actualizan el resumen con el mismo refresco que usa
   assert.equal(trasCancelacion.ventasReferidas, 2);
   assert.equal(trasCancelacion.totalCobrado, 15000);
 });
+
+test('E15: el cotejo del panel con el resumen excluye la venta cancelada sin aumentar la comisión disponible', async () => {
+  const pedidosService = cargar('pedidosService.js', 'pedidosService', {
+    './supabaseClient': { supabase: {}, isSupabaseConfigured: true },
+    './backendApi': { backendApi: {}, CAFETERIA_ID: null },
+    '../utils/dateUtils': {
+      parsearFecha: valor => valor ? new Date(valor) : null,
+      formatearHora: () => '',
+      formatearHoraBucket: () => '',
+    },
+  });
+
+  const entregada = { id: 1, pedido_id: 20, tipo: 'comision', estado: 'disponible', monto_clp: 1000,
+    creado_en: '2026-11-23T10:00:00Z', pedidos: { cafeteria_id: 1, total: 10000 } };
+  const cancelada = { id: 2, pedido_id: 21, tipo: 'comision', estado: 'pendiente', monto_clp: 500,
+    creado_en: '2026-11-23T10:01:00Z', pedidos: { cafeteria_id: 1, total: 5000 } };
+  const reversion = { id: 3, pedido_id: 21, tipo: 'reversion', estado: 'revertida', monto_clp: -500,
+    movimiento_origen_id: 2, creado_en: '2026-11-23T10:05:00Z', pedidos: { cafeteria_id: 1, total: 5000 } };
+  const ajena = { id: 4, pedido_id: 99, tipo: 'comision', estado: 'disponible', monto_clp: 9999,
+    creado_en: '2026-11-23T10:06:00Z', pedidos: { cafeteria_id: 2, total: 99999 } };
+
+  const antes = [entregada, cancelada, ajena];
+  const despues = [entregada, { ...cancelada, estado: 'revertida' }, reversion, ajena];
+  const resumenAntes = await obtenerResumen(1, transporte(antes));
+  const supabaseDespues = transporte(despues);
+  const resumenDespues = await obtenerResumen(1, supabaseDespues);
+
+  assert.deepEqual(supabaseDespues.consultas.find(c => c.metodo === 'select'), {
+    metodo: 'select',
+    campos: 'id, pedido_id, tipo, estado, monto_clp, creado_en, pedidos!inner(cafeteria_id, total)',
+    opciones: { count: 'exact' },
+  });
+  assert.deepEqual(supabaseDespues.consultas.find(c => c.metodo === 'eq'), {
+    metodo: 'eq', columna: 'pedidos.cafeteria_id', valor: '1',
+  });
+  assert.deepEqual(resumenAntes.comisiones, { pendiente: 500, disponible: 1000, revertida: 0 });
+  assert.equal(resumenAntes.reversiones, 0);
+  assert.deepEqual(resumenDespues.comisiones, { pendiente: 0, disponible: 1000, revertida: 500 });
+  assert.equal(resumenDespues.reversiones, -500);
+  assert.deepEqual(resumenDespues.movimientos.map(m => m.id), [3, 2, 1]);
+  assert.equal(resumenDespues.movimientos.find(m => m.pedidoId === 21 && m.tipo === 'comision').estado, 'revertida');
+  assert.ok(!resumenDespues.movimientos.some(m => m.pedidoId === 21 && m.estado === 'disponible'));
+  for (const resumen of [resumenAntes, resumenDespues]) {
+    assert.equal(resumen.ventasReferidas, 2);
+    assert.equal(resumen.totalCobrado, 15000);
+  }
+
+  const pedidosAntes = [
+    { id: 20, total: 10000, estado: 'entregado', pago_estado: 'pagado', creado_en: '2026-11-23T10:00:00Z' },
+    { id: 21, total: 5000, estado: 'pagado', pago_estado: 'pagado', creado_en: '2026-11-23T10:01:00Z' },
+  ];
+  const pedidosDespues = [pedidosAntes[0], { ...pedidosAntes[1], estado: 'cancelado' }];
+  const panelAntes = await pedidosService.getEstadisticas(pedidosAntes);
+  const panelDespues = await pedidosService.getEstadisticas(pedidosDespues);
+  assert.equal(panelAntes.totalVentas, 15000);
+  assert.equal(panelDespues.totalVentas, 10000);
+  assert.equal(panelAntes.totalPedidos, 2);
+  assert.equal(panelDespues.totalPedidos, 2);
+  assert.equal(panelDespues.entregados, 1);
+  assert.equal(panelAntes.totalVentas - panelDespues.totalVentas, 5000);
+});
