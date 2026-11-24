@@ -19,7 +19,7 @@ const ESTADOS_VENTAS = ['entregado', 'listo', 'preparando', 'en_preparacion'];
  * Indica si un pedido forma parte del criterio de ventas: no esta cancelado y
  * tiene un estado de venta. Punto unico de verdad para tarjetas y graficos.
  */
-function esPedidoDeVentas(pedido) {
+export function esPedidoDeVentas(pedido) {
   const estado = String(pedido?.estado || '').toLowerCase();
   if (estado === 'cancelado' || ['rechazado', 'reembolsado'].includes(pedido?.pago_estado)) return false;
   if (estado === 'pendiente' || estado === 'pagado') return pedido?.pago_estado === 'pagado';

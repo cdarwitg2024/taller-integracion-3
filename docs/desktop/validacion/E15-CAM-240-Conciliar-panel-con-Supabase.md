@@ -8,7 +8,7 @@ pedido entregado y otro cancelado de la misma cafetería. Sus dependencias E12
 (CAM-235) y V02 (CAM-237) figuran `Done` en Linear.
 
 No se modificó código de producción. El cotejo usa los servicios reales
-`obtenerResumenComisiones` (`resumenComisiones.js:61-95`) y
+`obtenerResumenComisiones` (`resumenComisiones.js:66-100`) y
 `pedidosService.getEstadisticas` (`pedidosService.js:401-430`). El primero
 ejerce la consulta completa con `count: 'exact'`, `eq('pedidos.cafeteria_id')`,
 `order` y `range`, además del agrupamiento de `construirResumen`; el segundo
@@ -40,9 +40,10 @@ node --test --test-name-pattern='E15: el cotejo' app-desktop/tests/resumen-comis
 
 Referencia: `app-desktop/tests/resumen-comisiones.test.cjs`. El transporte de
 Supabase se sustituye por una implementación en memoria que devuelve filas con
-la forma exacta de la respuesta de PostgREST, incluido el embed
-`pedidos!inner(cafeteria_id, total)`. No se consultó Supabase Cloud ni se aplicó
-SQL.
+la forma exacta de la respuesta de PostgREST. En E15 el embed era
+`pedidos!inner(cafeteria_id, total)`; E09 lo amplió con `estado, pago_estado`,
+así que el aserto actual de la consulta incluye esas columnas. No se consultó
+Supabase Cloud ni se aplicó SQL.
 
 ## Datos de prueba y cotejo
 
@@ -53,7 +54,7 @@ añade una fila de la cafetería 2 con $9.999 para comprobar que el alcance no s
 cruza. Los importes y los estados finales son los que producen V11 y V09; el
 punto de partida usa la comisión del pedido 21 todavía `pendiente`.
 
-| Métrica | Antes de cancelar | Después de cancelar | Observado |
+| Métrica | Antes de cancelar | Después de cancelar | Observado en E15 |
 |---|---|---|---|
 | Panel: ventas (`getEstadisticas`) | $15.000 | $10.000 | $15.000 → $10.000 |
 | Panel: total pedidos | 2 | 2 | 2 → 2 |
@@ -61,14 +62,18 @@ punto de partida usa la comisión del pedido 21 todavía `pendiente`.
 | Resumen: comisión disponible | $1.000 | $1.000 | $1.000 → $1.000 |
 | Resumen: comisión revertida | $0 | $500 | $0 → $500 |
 | Resumen: reversiones | $0 | $-500 | $0 → $-500 |
-| Resumen: ventas referidas / cobrado bruto | 2 / $15.000 | 2 / $15.000 | sin cambio |
+| Resumen: ventas referidas / cobrado bruto | 2 / $15.000 | 2 / $15.000 | sin cambio en E15 |
 
-La comisión disponible sigue siendo exactamente la del pedido entregado: no
-aparece ningún movimiento del pedido 21 en `disponible`, y su comisión queda en
-`revertida` con su compensación negativa. El histórico bruto de comisiones no
-borra el pedido cancelado, mientras que las ventas del panel sí lo descartan y
-`totalPedidos` lo sigue contando. Esa diferencia es conocida: conciliar el
-bruto con `esPedidoDeVentas` corresponde a E09 / CAM-295, no a E15.
+En E15, la comisión disponible seguía siendo exactamente la del pedido
+entregado: no aparecía ningún movimiento del pedido 21 en `disponible`, y su
+comisión quedaba en `revertida` con su compensación negativa. El histórico
+bruto no borraba el pedido cancelado, mientras que las ventas del panel sí lo
+descartaban y `totalPedidos` lo seguía contando. Esa diferencia quedó registrada
+para E09 / CAM-295. E09 la corrigió con el mismo `esPedidoDeVentas` del panel:
+el pedido cancelado ya no cuenta como venta referida ni aporta cobro, y el
+bruto tras cancelar pasó a 1 / $10.000. Por eso el aserto actual de la prueba
+E15 ya no reproduce la última fila de la tabla; ver
+[registro E09](E09-CAM-295-Corregir-diferencias-en-ventas-y-comisiones.md).
 
 | Paso de prueba | Resultado esperado | Resultado observado |
 |---|---|---|
@@ -92,7 +97,8 @@ Las mutaciones no se conservan en este repositorio.
 ## Resultado
 
 - Rama `S3-T15-Elias-Conciliar-panel-con-Supabase`, sobre `develop` en `4ca32ae`.
-- Escritorio: 164/164 pruebas aprobadas (163 de `develop` y 1 nueva de E15).
+- Escritorio: 164/164 pruebas aprobadas en E15 (163 de `develop` y 1 nueva de
+  E15); 165/165 tras la prueba adicional de E09.
 - `node --test --test-name-pattern="E15: el cotejo" ...`: 1 prueba, aprobada.
 - `npm run build --prefix app-desktop`: código de salida 0.
 - `node .github/scripts/verify-unit-sensitivity.cjs desktop`: 5/5 mutaciones
