@@ -69,15 +69,22 @@ test.each([[true, false, false], [false, false, false], [true, true, false], [tr
   saldoVisible(exito ? 10000 : 4900);
   if (pendiente) {
     act(() => jest.advanceTimersByTime(3000));
-    let nodo = tree.root.findAllByType(Text).find(n => n.props.children === `$${(10000).toLocaleString('es-CL')}`);
-    expect(nodo).toBeDefined();
-    const opacidades = [];
-    while (nodo) {
-      const opacidad = StyleSheet.flatten(nodo.props.style as any)?.opacity;
-      if (opacidad !== undefined) opacidades.push(opacidad);
-      nodo = nodo.parent ?? undefined;
+    const textosVisibles = ['$10.000', 'Recargar', 'Actualizar', 'Movimientos', 'Últimos movimientos',
+      'Cargando movimientos...'];
+    for (const texto of textosVisibles) {
+      let nodo = tree.root.findAllByType(Text).find(n => n.props.children === texto);
+      expect(nodo).toBeDefined();
+      while (nodo) {
+        const opacidad = StyleSheet.flatten(nodo.props.style)?.opacity as number | { __getValue(): number } | undefined;
+        if (opacidad !== undefined) {
+          const visible = typeof opacidad === 'number' ? opacidad : opacidad.__getValue();
+          expect({ texto, opacidad: visible }).toEqual({ texto, opacidad: 1 });
+        }
+        nodo = nodo.parent ?? undefined;
+      }
     }
-    expect(opacidades.length).toBeGreaterThanOrEqual(2);
-    expect(opacidades.every(opacidad => opacidad === 1)).toBe(true);
+    const textos = tree.root.findAllByType(Text).map(n => n.props.children);
+    expect(textos.filter(texto => texto === '—')).toHaveLength(3);
+    expect(textos).not.toContain('Sin movimientos todavía');
   }
 });
