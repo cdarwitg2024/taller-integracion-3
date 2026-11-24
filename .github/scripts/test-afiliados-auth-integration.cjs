@@ -138,6 +138,14 @@ async function main() {
         ALTER TABLE public.pedidos ADD COLUMN estado text NOT NULL DEFAULT 'listo';`);
         const v12Path = path.join(migrations, '20261118211348_consulta_saldo_afiliado.sql');
         sql(fs.readFileSync(v12Path, 'utf8'));
+        // Única dependencia de V06 utilizada por V13/V14 en este fixture mínimo.
+        // No se instala la cotización ni se sustituye el cuerpo de las RPC de retiro.
+        sql(`CREATE SCHEMA afiliados_privado;
+          REVOKE ALL ON SCHEMA afiliados_privado FROM PUBLIC, anon, authenticated, service_role;
+          GRANT USAGE ON SCHEMA afiliados_privado TO authenticated;`);
+        for (const file of ['20261123014935_registrar_retiro_simulado.sql', '20261123020643_comprobante_retiro_simulado.sql']) {
+          sql(fs.readFileSync(path.join(migrations, file), 'utf8'));
+        }
       }
     }
 

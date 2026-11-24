@@ -140,7 +140,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: Diego24Vas/db_CoffeeFaster
-          ref: d074ed56aaf3e9c3992b8852a052f9f76d86f5cc
+          ref: 80bbc91ebf7766d849332d2a73b02b0f7265568f
           path: .test-bd
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -170,7 +170,7 @@ jobs:
       - run: npm ci --prefix Microservices/ms-afiliados
       - run: ln -s ../ms-pedidos/node_modules Microservices/shared/node_modules
       - run: npm ci --prefix app-mobile
-      - name: A06 and C05 through gateway, real Auth JWTs, PostgreSQL and RLS
+      - name: A06, A10 and C05 through gateway, real Auth JWTs, PostgreSQL and RLS
         env:
           COFFEEFAST_DB_MIGRATIONS: ${{ github.workspace }}/.test-bd/supabase/migrations
           TEST_AUTH_IMAGE: supabase/gotrue:v2.197.0
