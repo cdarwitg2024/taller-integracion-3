@@ -87,9 +87,12 @@ Las mutaciones no se conservan en este repositorio.
 
 ## Resultado
 
-- Rama `S3-T9-Elias-Corregir-diferencias-en-ventas-y-comisiones`, sobre
-  `develop` en `8031fa8`.
-- Escritorio: 165/165 pruebas aprobadas (164 de `develop` y 1 nueva de E09).
+- Rama `S3-T9-Elias-Corregir-diferencias-en-ventas-y-comisiones`, con
+  `develop` integrado hasta `275d00a`.
+- Escritorio: 167/167 pruebas aprobadas (166 de `develop`, incluida la nueva de
+  V02, y 1 de E09).
+- Al integrar `develop`, la prueba de V02 sobrescribía el pedido embebido sin
+  `estado`; se reutilizó la fixture base para conservar el contrato ampliado.
 - Comando acotado de E09: 1 prueba, aprobada.
 - `npm run build --prefix app-desktop`: código de salida 0.
 - `node .github/scripts/verify-unit-sensitivity.cjs desktop`: 5/5 mutaciones

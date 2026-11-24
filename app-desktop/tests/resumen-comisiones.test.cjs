@@ -179,7 +179,7 @@ test('V02: una respuesta sin comisiones ajenas conserva el resumen propio de cad
   for (const [propia, ajena, id, monto] of [[1, 2, 301, 1000], [2, 1, 302, 500]]) {
     const [fila] = filasGeneradas(1);
     const supabase = transporte([{
-      ...fila, id, monto_clp: monto, pedidos: { cafeteria_id: propia, total: 10000 },
+      ...fila, id, monto_clp: monto, pedidos: { ...fila.pedidos, cafeteria_id: propia, total: 10000 },
     }], { cafeteriaAutorizada: String(propia) });
 
     const antes = await obtenerResumen(propia, supabase);

@@ -98,7 +98,7 @@ Las mutaciones no se conservan en este repositorio.
 
 - Rama `S3-T15-Elias-Conciliar-panel-con-Supabase`, sobre `develop` en `4ca32ae`.
 - Escritorio: 164/164 pruebas aprobadas en E15 (163 de `develop` y 1 nueva de
-  E15); 165/165 tras la prueba adicional de E09.
+  E15); 167/167 tras las pruebas adicionales de E09 y V02.
 - `node --test --test-name-pattern="E15: el cotejo" ...`: 1 prueba, aprobada.
 - `npm run build --prefix app-desktop`: código de salida 0.
 - `node .github/scripts/verify-unit-sensitivity.cjs desktop`: 5/5 mutaciones
