@@ -97,7 +97,10 @@ temporal('v07', async ({ sql, sqlAsync }) => {
   const primera = cotizacion("'CAFE-11'");
   assert.equal(primera.motivo, null);
   assert.equal(primera.total, 850);
-  const compra1 = compra(11, 'c12-previo-sin-codigo', "'CAFE-11'");
+  const saldoComprador = () => Number(sql('SELECT saldo_actual FROM wallets WHERE usuario_id=11'));
+  const saldoInicial = saldoComprador();
+  const confirmarCompra1 = () => compra(11, 'c12-previo-sin-codigo', "'CAFE-11'");
+  const compra1 = confirmarCompra1();
   assert.equal(compra1.ok, true);
   assert.equal(compra1.total_pagado, 850);
   assert.equal(compra1.descuento_afiliado, 150);
@@ -106,6 +109,16 @@ temporal('v07', async ({ sql, sqlAsync }) => {
       WHERE pedido_id=${compra1.pedido_id} AND tipo='compra' AND monto=-850`),
     '1'
   );
+
+  const saldoTrasCompra = saldoComprador();
+  assert.equal(saldoTrasCompra, saldoInicial - 850);
+  const repetirCompra = confirmarCompra1();
+  assert.equal(repetirCompra.ok, true);
+  assert.equal(repetirCompra.pedido_id, compra1.pedido_id);
+  assert.equal(saldoComprador(), saldoTrasCompra);
+  assert.equal(sql(`SELECT count(*) FROM movimientos_wallet
+    WHERE pedido_id=${compra1.pedido_id} AND tipo='compra'`), '1');
+  console.log(`D15 compra y reintento: pedido #${compra1.pedido_id}, debito -850, saldo ${saldoInicial} -> ${saldoTrasCompra}; mismo ID y saldo al repetir.`);
 
   // D14: la segunda compra del mismo usuario y cafetería se confirma a precio completo.
   const compraD14 = compra(10, 'd14-primera', "'CAFE-11'");
@@ -212,11 +225,23 @@ temporal('v07', async ({ sql, sqlAsync }) => {
 
   // 4. Un reembolso completo antes de la entrega vuelve a habilitar el código
   // mientras siga vigente. V09 revierte la comisión y el pedido queda cancelado.
-  const cancelacion = JSON.parse(
+  const saldoAntesDeCancelar = saldoComprador();
+  const cancelarCompra1 = () => JSON.parse(
     sql(sesion(11) + `SELECT public.cancelar_pedido(${compra1.pedido_id});`)
   );
+  const cancelacion = cancelarCompra1();
   assert.equal(cancelacion.ok, true);
   assert.equal(cancelacion.monto_reembolsado, 850);
+  const saldoTrasCancelar = saldoComprador();
+  assert.equal(saldoTrasCancelar, saldoAntesDeCancelar + 850);
+  const repetirCancelacion = cancelarCompra1();
+  assert.equal(repetirCancelacion.ok, false);
+  assert.equal(repetirCancelacion.motivo, 'ya_cancelado');
+  assert.equal(saldoComprador(), saldoTrasCancelar);
+  assert.equal(sql(`SELECT estado FROM pedidos WHERE id=${compra1.pedido_id}`), 'cancelado');
+  assert.equal(sql(`SELECT monto FROM movimientos_wallet
+    WHERE pedido_id=${compra1.pedido_id} AND tipo='reembolso'`), '850');
+  console.log(`D15 cancelacion y reintento: pedido #${compra1.pedido_id} cancelado, reembolso +850, saldo ${saldoAntesDeCancelar} -> ${saldoTrasCancelar}; ya_cancelado y mismo saldo al repetir.`);
   assert.equal(
     sql(`SELECT count(*) FROM movimientos_comision
       WHERE pedido_id=${compra1.pedido_id} AND tipo='comision' AND estado='revertida'`),

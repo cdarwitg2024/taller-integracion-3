@@ -74,6 +74,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [A07 — Copiar y compartir el código de una campaña](mobile/validacion/A07-Compartir-codigo-personal.md)
 - [A08 — Carga, vacío, errores y reintentos de afiliación](mobile/validacion/A08-Carga-vacio-error-afiliaciones.md)
 - [A09 — Comisiones pendientes, disponibles y retiradas con V12](mobile/validacion/A09-Comisiones-saldo-disponible.md)
+- [A10 — Historial de ganancias y retiros, búsqueda por comprobante V14](mobile/validacion/A10-Historial-ganancias-y-retiros.md)
 - [A11 — Formulario de monto y destino ficticio para retiro simulado](mobile/validacion/A11-Solicitud-retiro-simulado.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 - [D02 - Estado del código asociado al carrito](mobile/validacion/D02-Estado-codigo-carrito.md)
@@ -86,7 +87,9 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [D08 - Recuperar una compra con respuesta interrumpida](mobile/validacion/D08-Recuperar-compra-interrumpida.md)
 - [D09 - Total cobrado en historial](mobile/validacion/D09-Total-cobrado-en-historial.md)
 - [D14 - Primera compra y compra recurrente](mobile/validacion/D14-Primera-compra-y-recurrente.md)
+- [D15 - Evidencia del checkout](mobile/validacion/D15-Evidencia-del-checkout.md)
 - [D10 - Actualizar Wallet al cancelar](mobile/validacion/D10-Wallet-al-cancelar.md)
+- [D12 - Wallet tras cancelar](mobile/validacion/D12-Wallet-tras-cancelar.md)
 - [D13 - Compra sin código o con código retirado](mobile/validacion/D13-Verificar-compra-sin-codigo.md)
 
 ## Backend Node
