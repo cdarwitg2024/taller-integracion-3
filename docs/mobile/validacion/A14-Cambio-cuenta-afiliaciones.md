@@ -106,4 +106,19 @@ Windows, Node.js 22.19.0:
 Se usó `--watchman=false --roots src __tests__ tests` en Jest para acotar la
 búsqueda local de archivos. Incluye las carpetas con todos los casos móviles;
 no cambia la configuración de CI ni omite pruebas de esas carpetas. La
-ejecución remota de CI corresponderá al futuro PR de A14.
+ejecución remota corresponde al [PR de A14](https://github.com/cdarwitg2024/taller-integracion-3/pull/122).
+
+## Ajuste del entorno de CI
+
+El control `afiliados-auth` de `aa0f4a9` terminó antes de ejecutar su matriz de
+pruebas: Amazon ECR rechazó la descarga de
+`public.ecr.aws/supabase/gotrue:v2.196.0` con `Data limit exceeded`.
+El job ahora fija `TEST_AUTH_IMAGE=supabase/gotrue:v2.197.0` y
+`TEST_REST_IMAGE=postgrest/postgrest:v16.3`, las mismas imágenes de Docker Hub
+que utiliza el job `mobile-afiliaciones` del PR. Se mantiene el runner C03,
+con Auth/JWT, gateway, PostgREST y RLS reales en contenedores desechables.
+No se desactiva ni omite ninguna prueba y no cambia la configuración de la app.
+
+El intento de repetir el runner localmente no pudo iniciar los contenedores
+porque Docker Desktop estaba apagado. No se presenta ese intento como una
+prueba aprobada: la validación de este ajuste corresponde al nuevo job remoto.

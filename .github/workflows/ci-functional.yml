@@ -131,6 +131,9 @@ jobs:
       - run: npm ci --prefix Microservices/ms-afiliados
       - run: ln -s ../ms-afiliados/node_modules Microservices/shared/node_modules
       - name: C03 through gateway, real Auth JWTs, PostgREST, RPC and RLS
+        env:
+          TEST_AUTH_IMAGE: supabase/gotrue:v2.197.0
+          TEST_REST_IMAGE: postgrest/postgrest:v16.3
         run: node .github/scripts/test-afiliados-auth-integration.cjs
   mobile-afiliaciones:
     runs-on: ubuntu-latest
