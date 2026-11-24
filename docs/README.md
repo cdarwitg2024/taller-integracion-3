@@ -88,6 +88,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [D14 - Primera compra y compra recurrente](mobile/validacion/D14-Primera-compra-y-recurrente.md)
 - [D15 - Evidencia del checkout](mobile/validacion/D15-Evidencia-del-checkout.md)
 - [D10 - Actualizar Wallet al cancelar](mobile/validacion/D10-Wallet-al-cancelar.md)
+- [D12 - Wallet tras cancelar](mobile/validacion/D12-Wallet-tras-cancelar.md)
 - [D13 - Compra sin código o con código retirado](mobile/validacion/D13-Verificar-compra-sin-codigo.md)
 
 ## Backend Node
