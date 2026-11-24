@@ -78,6 +78,21 @@ comprobante: revisar el formulario no envía, reserva o descuenta saldo.
 La validación local deberá complementarse con la revalidación del servidor
 cuando se integre la operación de retiro. [Registro A11](mobile/validacion/A11-Solicitud-retiro-simulado.md).
 
+### Saldo y retiro por el gateway (C15)
+
+| Solicitud del estudiante | Respuesta |
+|---|---|
+| `GET /api/afiliados/saldo` | `200` con `pendiente_clp`, `disponible_clp` y `retirado_clp` de V12. |
+| `POST /api/afiliados/retiros` con `{"monto_clp":1050,"clave_idempotencia":"retiro-c15"}` | `200` con `monto_clp`, `estado: "confirmado"`, `referencia`, `destino` ficticio y `disponible_clp` al confirmar. El mismo cuerpo y la misma sesión recuperan el comprobante original. |
+
+El gateway pasa el JWT a V14, que identifica al estudiante y guarda una sola
+operación por clave y cuenta. Usa un entero positivo seguro de JavaScript como
+monto y una clave de hasta 128 bytes UTF-8. Una clave reutilizada con otro monto
+devuelve `409 conflicto_idempotencia`. El monto o clave inválidos y el saldo
+insuficiente devuelven `422`. La sesión ausente o inválida devuelve `401`, y la
+cuenta sin rol de estudiante activo recibe `403`. Los campos adicionales y los
+parámetros de consulta devuelven `400`.
+
 ## 3. Cotización y compra
 
 Ana envía su sesión desde móvil. La cotización calcula el precio vigente sin cobrar ni consumir el beneficio.

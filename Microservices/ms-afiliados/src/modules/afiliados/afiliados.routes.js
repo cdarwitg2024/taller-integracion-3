@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Rutas del módulo de afiliados de ms-pedidos.
+ * Rutas del módulo de afiliados.
  *
  * Expone la consulta estudiantil, el alta, la edición y los cambios de estado. Valida el
  * cuerpo de la solicitud, delega la autorización por cafetería a la RPC
@@ -286,6 +286,53 @@ router.get('/saldo', auth.exigirAuth, async (req, res, next) => {
     }
 
     return res.status(200).json({ pendiente_clp, disponible_clp, retirado_clp });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/retiros', auth.exigirAuth, async (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    if (Object.keys(req.query).length || !esObjeto(req.body) ||
+        Object.keys(req.body).some(campo => !['monto_clp', 'clave_idempotencia'].includes(campo))) {
+      throw new HttpError(400, 'parametros_no_admitidos');
+    }
+
+    const { monto_clp, clave_idempotencia } = req.body;
+    if (!Number.isSafeInteger(monto_clp) || monto_clp <= 0) {
+      throw new HttpError(422, 'monto_invalido');
+    }
+    if (typeof clave_idempotencia !== 'string' || !clave_idempotencia.trim() ||
+        clave_idempotencia.includes('\0') || Buffer.byteLength(clave_idempotencia) > 128) {
+      throw new HttpError(422, 'clave_idempotencia_invalida');
+    }
+
+    const { data, error, status } = await clienteAutenticado(req).rpc('registrar_retiro_simulado', {
+      p_monto_clp: monto_clp,
+      p_clave_idempotencia: clave_idempotencia,
+    });
+    if (status === 401 || ['PGRST301', 'PGRST303', '28000'].includes(error?.code)) {
+      throw new HttpError(401, 'sesion_invalida');
+    }
+    if (status === 403 || error?.code === '42501') throw new HttpError(403, 'estudiante_requerido');
+    if (error || status >= 400) throw new HttpError(503, 'No se pudo registrar el retiro');
+
+    if (data?.ok === false) {
+      if (data.motivo === 'conflicto_idempotencia') throw new HttpError(409, data.motivo);
+      if (['saldo_insuficiente', 'monto_invalido', 'clave_idempotencia_invalida'].includes(data.motivo)) {
+        throw new HttpError(422, data.motivo);
+      }
+    }
+    if (data?.ok !== true || data.estado !== 'confirmado' || data.monto_clp !== monto_clp ||
+        typeof data.referencia !== 'string' || !data.referencia ||
+        typeof data.destino !== 'string' || !data.destino ||
+        !Number.isFinite(data.disponible_clp) || data.disponible_clp < 0) {
+      throw new HttpError(503, 'Respuesta de retiro inválida');
+    }
+
+    const { estado, referencia, destino, disponible_clp } = data;
+    return res.status(200).json({ monto_clp, estado, referencia, destino, disponible_clp });
   } catch (error) {
     return next(error);
   }

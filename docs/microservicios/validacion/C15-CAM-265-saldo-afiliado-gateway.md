@@ -1,4 +1,4 @@
-# C15 / CAM-265 — Consulta de saldo del afiliado por gateway
+# C15 / CAM-265 — Saldo y retiro simulado por gateway
 
 El 19 de noviembre de 2026 se validó la consulta de saldo con sesiones reales de Supabase Auth en un entorno local desechable. **La consulta pasó.** El retiro simulado con comprobante e idempotencia queda pendiente de V13 y V14. [C15 en Linear](https://linear.app/camilodarwitg/issue/CAM-265/c15-integrar-saldo-y-retiro-por-el-gateway)
 
@@ -28,6 +28,32 @@ El 19 de noviembre de 2026 se validó la consulta de saldo con sesiones reales d
 - `npm test --prefix Microservices/ms-pedidos -- --ci --silent` pasó 191 pruebas en Node.js 24. La suite [saldo-afiliado.test.js](../../../Microservices/ms-pedidos/tests/saldo-afiliado.test.js) usa Supabase simulado.
 - La prueba SQL oficial `tests/saldo_afiliado.cjs` de V12 pasó en PostgreSQL 17.11 desechable. El gateway con Auth y PostgREST se comprobó en la corrida local descrita arriba.
 
-## Pendiente para cerrar C15
+## Prueba de saldo y retiro del 24 de noviembre de 2026
 
-Integrar la operación de retiro simulado por gateway y comprobar que devuelve monto, estado y referencia. Al repetir la misma solicitud con la misma clave, verificar que devuelve la referencia original y que el saldo se descuenta una sola vez. Los $300 de esta corrida eran datos preparados para consultar saldo. [V13](https://linear.app/camilodarwitg/issue/CAM-182/v13-registrar-retiro-simulado-en-supabase) · [V14](https://linear.app/camilodarwitg/issue/CAM-249/v14-guardar-y-recuperar-comprobante-de-retiro)
+En Windows con Node.js 22.23.5, el runner creó un entorno desechable con Nginx,
+`ms-afiliados`, Supabase Auth, PostgREST y PostgreSQL. Aplicó V12, V13 y V14
+desde `db_CoffeeFaster` y usó los datos desechables de A06/A10. La suite de
+`ms-afiliados` pasó sus 51 pruebas. No se hicieron operaciones en Cloud.
+
+Desde la raíz, con Docker activo, dependencias instaladas y las migraciones
+en `../db_CoffeeFaster/supabase/migrations` (o `COFFEEFAST_DB_MIGRATIONS`):
+
+```powershell
+$env:TEST_AUTH_IMAGE = 'supabase/gotrue:v2.197.0'
+$env:TEST_REST_IMAGE = 'postgrest/postgrest:v16.3'
+node .github/scripts/test-afiliados-auth-integration.cjs --a06
+```
+
+| Solicitud al gateway | HTTP | Respuesta observada |
+|---|---:|---|
+| `GET /api/afiliados/saldo` con sesión del estudiante | 200 | `{"pendiente_clp":0,"disponible_clp":1050,"retirado_clp":450}` |
+| `POST /api/afiliados/retiros` con `{"monto_clp":1050,"clave_idempotencia":"retiro-c15"}` | 200 | `{"monto_clp":1050,"estado":"confirmado","referencia":"293da000-f4f1-45fd-bf22-242607882759","destino":"Cuenta de prueba CoffeeFast (destino ficticio)","disponible_clp":0}` |
+| Mismo POST, clave y sesión, con saldo ya agotado | 200 | Cuerpo idéntico al primer POST. |
+| Mismo POST y clave con `monto_clp: 1` | 409 | `conflicto_idempotencia` |
+| Mismo POST con otro estudiante sin saldo | 422 | `saldo_insuficiente` |
+| Mismo POST sin sesión / con sesión de dueño | 401 / 403 | Falta el encabezado de autorización / `estudiante_requerido`. |
+| `GET /api/afiliados/saldo` después del reintento | 200 | `{"pendiente_clp":0,"disponible_clp":0,"retirado_clp":1500}` |
+
+PostgreSQL registró una sola fila para el estudiante de prueba y la clave
+`retiro-c15`. El runner imprime las solicitudes y respuestas sin los JWT.
+[Contrato C15](../../contratos-integracion-afiliados.md#saldo-y-retiro-por-el-gateway-c15).

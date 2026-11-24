@@ -120,7 +120,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [S3-T4 / C04 — Consulta de campañas vigentes](microservicios/validacion/S3-T4-consulta-campanas-vigentes.md)
 - [C12 / CAM-262 — Cancelación y reembolso integrados en Cloud](microservicios/validacion/C12-CAM-262-cancelacion-reembolso.md)
 - [C05 — Solicitud y resolución de afiliación](microservicios/validacion/C05-solicitudes-afiliacion.md)
-- [C15 / CAM-265 — Consulta de saldo del afiliado por gateway](microservicios/validacion/C15-CAM-265-saldo-afiliado-gateway.md)
+- [C15 / CAM-265 — Saldo y retiro simulado por gateway](microservicios/validacion/C15-CAM-265-saldo-afiliado-gateway.md)
 - [C07 — Cotización y confirmación por el gateway](microservicios/validacion/C07-cotizacion-compra-gateway.md)
 
 ## Bot de Telegram
