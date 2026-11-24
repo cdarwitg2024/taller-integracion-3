@@ -1,6 +1,6 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Alert, BackHandler, FlatList, Modal, Text, TouchableOpacity } from 'react-native';
+import { AccessibilityInfo, Alert, BackHandler, FlatList, Modal, Text, TouchableOpacity } from 'react-native';
 import PedidosScreen from './PedidosScreen';
 import Button from '../components/Button';
 import QrCode from '../lib/QrCode';
@@ -230,6 +230,26 @@ test('actualiza por gesto y Realtime; entregado pasa al historial sin credencial
   expect(tree.root.findAllByType(QrCode)).toHaveLength(0);
   expect(textos()).not.toContain('842517');
   expect(textos()).toContain('Pedido entregado');
+});
+
+test('al cerrar tras una entrega por Realtime, devuelve el foco a Activos', async () => {
+  const destinoNativo = jest.fn(vista => vista.props.testID === 'pedidos-tab-activos' ? 1 : 2);
+  jest.spyOn(require('react-native'), 'findNodeHandle', 'get').mockReturnValue(destinoNativo);
+  rows = [{ ...pedido, estado: 'listo' }];
+  await montar();
+  await abrir();
+  expect(tree.root.findByType(QrCode).props.value).toBe(pedido.qr_token);
+  await flush(() => jest.advanceTimersByTime(20));
+  expect(AccessibilityInfo.setAccessibilityFocus).toHaveBeenLastCalledWith(2);
+
+  await flush(() => events.UPDATE({ new: { ...pedido, estado: 'entregado' } }));
+  expect(tree.root.findByType(FlatList).props.data).toHaveLength(0);
+  expect(textos()).toContain('Pedido entregado');
+  const cerrar = tree.root.findAllByType(TouchableOpacity)
+    .find(n => n.props.accessibilityLabel === 'Cerrar detalle del pedido');
+  await flush(() => cerrar.props.onPress());
+  await flush(() => jest.advanceTimersByTime(20));
+  expect(AccessibilityInfo.setAccessibilityFocus).toHaveBeenLastCalledWith(1);
 });
 
 test('historial abre comprobante sin solicitar QR ni contingencia', async () => {

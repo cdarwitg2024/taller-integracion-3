@@ -150,6 +150,7 @@ const PedidosScreen = ({
   const cerrarPedido = useCallback(() => setSelected(null), []);
   const detalleAbierto = Boolean(selected && !pedidoConfirmado);
   const botonCerrar = useRef(null);
+  const pestanaActivos = useRef(null);
   const tarjetas = useRef(new Map());
   const pedidoParaRestaurarFoco = useRef(null);
 
@@ -163,9 +164,11 @@ const PedidosScreen = ({
     if (!detalleAbierto && pedidoParaRestaurarFoco.current === null) return undefined;
     const frame = requestAnimationFrame(() => {
       const destino = detalleAbierto ? botonCerrar.current : tarjetas.current.get(pedidoParaRestaurarFoco.current);
+      const tag = destino == null ? null : findNodeHandle(destino);
       if (!detalleAbierto) pedidoParaRestaurarFoco.current = null;
-      const tag = destino && findNodeHandle(destino);
-      if (tag != null) AccessibilityInfo.setAccessibilityFocus(tag);
+      // Realtime puede mover el pedido fuera de la lista mientras el detalle está abierto.
+      const foco = tag ?? (!detalleAbierto && pestanaActivos.current ? findNodeHandle(pestanaActivos.current) : null);
+      if (foco != null) AccessibilityInfo.setAccessibilityFocus(foco);
     });
     return () => cancelAnimationFrame(frame);
   }, [detalleAbierto]);
@@ -553,6 +556,8 @@ const PedidosScreen = ({
           {/* Conmutador Activos/Inactivos, con contador en cada pestaña */}
           <View style={styles.switcherRow}>
             <TouchableOpacity
+              ref={pestanaActivos}
+              testID="pedidos-tab-activos"
               style={[styles.switcherBoton, tab === 'activos' && styles.switcherBotonActivo]}
               onPress={() => setTab('activos')}
             >
