@@ -1,6 +1,6 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Alert, FlatList, Modal, Text, TouchableOpacity } from 'react-native';
+import { Alert, BackHandler, FlatList, Modal, Text, TouchableOpacity } from 'react-native';
 import PedidosScreen from './PedidosScreen';
 import Button from '../components/Button';
 import QrCode from '../lib/QrCode';
@@ -22,6 +22,11 @@ const pedido = {
 let rows, queryError, tree, events, filters;
 const flush = async (fn = () => {}) => { await act(async () => { await fn(); }); };
 const textos = () => tree.root.findAllByType(Text).map(n => [].concat(n.props.children).join('')).join(' | ');
+const cerrar = async () => {
+  const boton = tree.root.findAllByType(TouchableOpacity)
+    .find(n => n.props.accessibilityLabel === 'Cerrar detalle del pedido');
+  await flush(() => boton.props.onPress());
+};
 const abrir = async () => {
   const card = tree.root.findAllByType(TouchableOpacity).find(n => n.props.accessibilityLabel?.startsWith('Ver pedido '));
   await flush(() => card.props.onPress());
@@ -80,32 +85,51 @@ test('abre inmediatamente QR completo y token persistidos sin consultar otro ser
   expect(textos()).toContain('842517');
 });
 
-test('permite abrir y cerrar repetidamente usando un único modal nativo', async () => {
+test('permite abrir y cerrar repetidamente sin abrir una ventana nativa', async () => {
   await montar();
-  expect(tree.root.findAllByType(Modal)).toHaveLength(1);
   for (let i = 0; i < 5; i++) {
     await abrir();
-    expect(tree.root.findByType(Modal).props.visible).toBe(true);
+    expect(tree.root.findAllByType(Modal)).toHaveLength(0);
     expect(tree.root.findByType(QrCode).props.value).toBe(pedido.qr_token);
     expect(textos()).toContain('842517');
-    await flush(() => tree.root.findByType(Modal).props.onRequestClose());
-    expect(tree.root.findByType(Modal).props.visible).toBe(false);
+    await cerrar();
+    expect(tree.root.findAllByType(QrCode)).toHaveLength(0);
   }
 });
 
-test('cerrar confirmación permite abrir el detalle en el mismo modal', async () => {
+test('cerrar confirmación devuelve el acceso al detalle', async () => {
   const confirmado = { pedido_id: 52, total: 6000, saldo_restante: 4000,
     estado: 'pendiente', qr_token: pedido.qr_token, codigo_retiro: '842517' };
   const cerrarConfirmacion = jest.fn(() => tree.update(<PedidosScreen userId="uuid-auth" />));
   await flush(() => { tree = TestRenderer.create(<PedidosScreen userId="uuid-auth"
     pedidoConfirmado={confirmado} onConfirmacionVista={cerrarConfirmacion} />); });
-  expect(tree.root.findAllByType(Modal)).toHaveLength(1);
   await flush(() => tree.root.findAllByType(Button).find(n => n.props.title === 'Ver mis pedidos').props.onPress());
   expect(cerrarConfirmacion).toHaveBeenCalledTimes(1);
-  expect(tree.root.findByType(Modal).props.visible).toBe(false);
+  expect(tree.root.findAllByType(QrCode)).toHaveLength(0);
   await abrir();
-  expect(tree.root.findByType(Modal).props.visible).toBe(true);
   expect(tree.root.findByType(QrCode).props.value).toBe(pedido.qr_token);
+});
+
+test('después de entregar el primer pedido se puede abrir el QR del segundo y volver con Atrás', async () => {
+  const volver = jest.spyOn(BackHandler, 'addEventListener');
+  const entregado = { ...pedido, estado: 'Entregado' };
+  const segundo = { ...pedido, id: 53, codigo_pedido: 'REAL-53', qr_token: 'qr-segundo-pedido' };
+  await montar();
+  await abrir();
+  await flush(() => events.UPDATE({ new: entregado }));
+  expect(tree.root.findAllByType(QrCode)).toHaveLength(0);
+  await cerrar();
+
+  rows = [entregado, segundo];
+  await flush(() => events.INSERT());
+  expect(tree.root.findByType(FlatList).props.data.map(p => p.id)).toEqual(['53']);
+  await abrir();
+  expect(tree.root.findByType(QrCode).props.value).toBe(segundo.qr_token);
+  const [, pulsarAtras] = volver.mock.calls.at(-1);
+  await flush(() => expect(pulsarAtras()).toBe(true));
+  expect(tree.root.findAllByType(QrCode)).toHaveLength(0);
+  await abrir();
+  expect(tree.root.findByType(QrCode).props.value).toBe(segundo.qr_token);
 });
 
 test('muestra contingencia aunque el QR no esté disponible', async () => {

@@ -6,7 +6,8 @@ Revisado el 11 de noviembre de 2026 contra los manifiestos del repositorio.
 - ConfigMap: gateway-nginx-config, en student-cdarwitg.
 - Deployment/Service: gateway, HTTP interno 80.
 - Ingress en [`k8s-next/ingress-api.yaml`](../../../k8s-next/ingress-api.yaml), host `api-cdarwitg.dev.censei.cl`.
-- Rutas públicas: /api/cafeterias, /api/menus, /api/pedidos. /api/menus/precios responde 404 en el gateway por ser interno.
+- El gateway enruta `/api/cafeterias`, `/api/menus`, `/api/pedidos` y `/api/afiliados`. La ruta `/api/menus/precios` responde 404 en el gateway porque es interna.
+- El contenedor `ms-afiliados` comparte pod con Nginx y recibe tráfico por `127.0.0.1:3006`. Ambos comparten ciclo de despliegue y escala. Esta topología usa los cuatro Services existentes.
 - Resolver actual 10.43.40.162 y nombres FQDN del namespace son específicos del clúster.
 - La configuración local de Compose está en Microservices/gateway/nginx.conf: formato y resolución Docker distintos; no intercambiar ambos archivos.
 

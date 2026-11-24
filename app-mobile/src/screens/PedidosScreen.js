@@ -6,7 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Modal,
+  BackHandler,
   ScrollView,
   AppState,
   Alert,
@@ -142,6 +142,17 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
   const [tab, setTab] = useState('activos');
   const [cancelando, setCancelando] = useState(false);
   const cerrarPedido = useCallback(() => setSelected(null), []);
+  const detalleVisible = Boolean(pedidoConfirmado || selected);
+  const cerrarDetalle = pedidoConfirmado ? onConfirmacionVista : cerrarPedido;
+
+  useEffect(() => {
+    if (!detalleVisible || !cerrarDetalle) return undefined;
+    const listener = BackHandler.addEventListener('hardwareBackPress', () => {
+      cerrarDetalle();
+      return true;
+    });
+    return () => listener.remove();
+  }, [detalleVisible, cerrarDetalle]);
 
   // S2-T17: Cancelación autónoma de pedidos con reembolso automático a Wallet
   const solicitarCancelacion = useCallback((pedido) => {
@@ -482,6 +493,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
 
   return (
     <View style={styles.container}>
+      <View
+        style={styles.contenidoLista}
+        pointerEvents={detalleVisible ? 'none' : 'auto'}
+        accessibilityElementsHidden={detalleVisible}
+        importantForAccessibility={detalleVisible ? 'no-hide-descendants' : 'auto'}
+      >
       <Header
         title="Mis Pedidos"
         rightElement={
@@ -567,13 +584,9 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
         </>
       )}
 
-      {/* Un solo modal nativo para confirmación y detalle del pedido. */}
-      <Modal
-        visible={Boolean(pedidoConfirmado || selected)}
-        animationType="slide"
-        transparent
-        onRequestClose={pedidoConfirmado ? onConfirmacionVista : cerrarPedido}
-      >
+      </View>
+      {detalleVisible && (
+      <View style={styles.detalle} accessibilityViewIsModal>
         {pedidoConfirmado ? (
         <View style={styles.modalBackdrop}>
           <Card variant="elevated" padding="lg" style={styles.modalCard}>
@@ -587,6 +600,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                   <Text style={styles.confirmacionTitulo}>¡Pedido Confirmado!</Text>
                   <TouchableOpacity
                     style={styles.modalClose}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cerrar confirmación"
                     onPress={onConfirmacionVista}
                   >
                     <AppIcon name="close" style={styles.modalCloseText} />
@@ -685,6 +700,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                   </View>
                   <TouchableOpacity
                     style={styles.modalClose}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cerrar detalle del pedido"
                     onPress={cerrarPedido}
                   >
                     <AppIcon name="close" style={styles.modalCloseText} />
@@ -851,13 +868,16 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
           </Card>
         </View>
         )}
-      </Modal>
+      </View>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.fondo },
+  contenidoLista: { flex: 1 },
+  detalle: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
   cardWrapper: { marginBottom: spacing.md },
   headerIcon: {
     width: 35,

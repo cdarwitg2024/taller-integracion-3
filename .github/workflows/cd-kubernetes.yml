@@ -91,28 +91,33 @@ jobs:
       - name: Preflight and record previous images
         run: |
           set -euo pipefail
-          # El primer corte requiere aprovisionar afiliados y recargar el gateway.
-          kubectl -n "$NAMESPACE" rollout status deployment/ms-afiliados --timeout=60s
-          kubectl -n "$NAMESPACE" exec deployment/gateway -- nginx -T 2>&1 |
-            grep -F 'ms-afiliados.student-cdarwitg.svc.cluster.local:3006' >/dev/null
+          kubectl -n "$NAMESPACE" rollout status deployment/gateway --timeout=60s
+          kubectl -n "$NAMESPACE" exec deployment/gateway -c gateway -- nginx -T 2>&1 |
+            grep -F 'proxy_pass http://127.0.0.1:3006;' >/dev/null
           for service in ms-cafeterias ms-menus ms-afiliados ms-pedidos; do
-            kubectl -n "$NAMESPACE" get deployment "$service" -o "jsonpath={.spec.template.spec.containers[?(@.name=='$service')].image}" > "$RUNNER_TEMP/$service.previous"
+            deployment=$service
+            if [[ "$service" == ms-afiliados ]]; then deployment=gateway; fi
+            kubectl -n "$NAMESPACE" get deployment "$deployment" -o "jsonpath={.spec.template.spec.containers[?(@.name=='$service')].image}" > "$RUNNER_TEMP/$service.previous"
             test -s "$RUNNER_TEMP/$service.previous"
             image=$(node -p "require('./release/release.json').images['$service']")
-            kubectl -n "$NAMESPACE" set image "deployment/$service" "$service=$image" --dry-run=server -o name
+            kubectl -n "$NAMESPACE" set image "deployment/$deployment" "$service=$image" --dry-run=server -o name
             printf '%s previous: %s\n' "$service" "$(cat "$RUNNER_TEMP/$service.previous")" >> "$GITHUB_STEP_SUMMARY"
           done
       - name: Update images and await rollouts
         run: |
           set -euo pipefail
           for service in ms-cafeterias ms-menus ms-afiliados ms-pedidos; do
+            deployment=$service
+            if [[ "$service" == ms-afiliados ]]; then deployment=gateway; fi
             image=$(node -p "require('./release/release.json').images['$service']")
-            kubectl -n "$NAMESPACE" set image "deployment/$service" "$service=$image"
+            kubectl -n "$NAMESPACE" set image "deployment/$deployment" "$service=$image"
           done
           for service in ms-cafeterias ms-menus ms-afiliados ms-pedidos; do
-            kubectl -n "$NAMESPACE" rollout status "deployment/$service" --timeout=180s
+            deployment=$service
+            if [[ "$service" == ms-afiliados ]]; then deployment=gateway; fi
+            kubectl -n "$NAMESPACE" rollout status "deployment/$deployment" --timeout=180s
             image=$(node -p "require('./release/release.json').images['$service']")
-            actual=$(kubectl -n "$NAMESPACE" get deployment "$service" -o "jsonpath={.spec.template.spec.containers[?(@.name=='$service')].image}")
+            actual=$(kubectl -n "$NAMESPACE" get deployment "$deployment" -o "jsonpath={.spec.template.spec.containers[?(@.name=='$service')].image}")
             test "$actual" = "$image"
             printf '%s commit=%s image=%s\n' "$service" "$GITHUB_SHA" "$actual" >> "$GITHUB_STEP_SUMMARY"
           done
@@ -120,8 +125,8 @@ jobs:
         if: always()
         run: |
           if test -s "$KUBECONFIG" && command -v kubectl >/dev/null; then
-            kubectl -n "$NAMESPACE" get deployments ms-cafeterias ms-menus ms-afiliados ms-pedidos -o wide
-            kubectl -n "$NAMESPACE" get pods -l 'app in (ms-cafeterias,ms-menus,ms-afiliados,ms-pedidos)' -o wide
+            kubectl -n "$NAMESPACE" get deployments gateway ms-cafeterias ms-menus ms-pedidos -o wide
+            kubectl -n "$NAMESPACE" get pods -l 'app in (gateway,ms-cafeterias,ms-menus,ms-pedidos)' -o wide
             kubectl -n "$NAMESPACE" get events --field-selector type=Warning --sort-by=.lastTimestamp
           fi
       - name: Remove cluster credentials

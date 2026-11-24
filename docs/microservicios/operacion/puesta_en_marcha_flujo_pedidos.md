@@ -41,6 +41,13 @@ Un health 200 confirma disponibilidad del proceso, no que todas las RPC, permiso
 
 ## Compra, retiro y cancelación
 
+Para probar el checkout cotizado desde Expo, incluso sin código, configura
+`HABILITAR_CONFIRMACION_AFILIADA=true` en `Microservices/.env` después de comprobar
+que el Supabase de destino tenga `cotizar_carrito_afiliado` y `procesar_pago` V08.
+Compose usa el mismo valor para `ms-afiliados` y `ms-pedidos`. Desde
+`Microservices/`, ejecuta `docker compose up -d ms-afiliados ms-pedidos` para
+que los contenedores tomen el cambio.
+
 Mobile → POST /api/pedidos autenticado → gateway → ms-pedidos → precios reales de ms-menus → RPC procesar_pago.
 
 El KDS recibe pedidos por Realtime y tiene respaldo de consulta cada 10 s. El QR codifica qr_token completo; codigo_retiro_diario es la contingencia persistida. GET /api/pedidos/:id/qr valida propietario y estado. No crear códigos locales si faltan credenciales.

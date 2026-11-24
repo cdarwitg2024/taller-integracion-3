@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Text, TextInput, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { solicitarAfiliacion } from '../../services/afiliaciones';
+import AppIcon from '../../components/AppIcon';
 import EstadoAfiliacion from './EstadoAfiliacion';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
@@ -47,15 +48,23 @@ export default function SolicitarAfiliacion({ campana, solicitud, perfilEstado, 
   if (perfilEstado !== 'listo') return <Text style={styles.texto}>Actualiza tus solicitudes para poder solicitar afiliación.</Text>;
   return <View style={styles.container}>
     <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Solicitar afiliación a ${campana.nombre}`}
-      accessibilityState={{ expanded: abierto }} disabled={busy} onPress={() => setAbierto(valor => !valor)} style={styles.boton}>
-      <Text style={styles.botonTexto}>Solicitar afiliación</Text>
+      accessibilityState={{ expanded: abierto, disabled: busy }} disabled={busy} onPress={() => setAbierto(valor => !valor)} style={styles.abrir}>
+      <AppIcon name="edit" style={styles.icono} />
+      <Text style={styles.abrirTexto}>Solicitar afiliación</Text>
+      <AppIcon name={abierto ? 'chevronUp' : 'chevronDown'} style={styles.icono} />
     </TouchableOpacity>
-    {abierto && <>
+    {abierto && <View style={styles.formulario}>
       <Text style={styles.texto}>Cuéntale a la cafetería cómo promocionarás esta campaña.</Text>
-      <TextInput accessibilityLabel="Plan de promoción" multiline value={plan} editable={!busy}
-        onChangeText={setPlan} style={styles.input} placeholder="Cómo promocionarás la campaña" />
-      <TextInput accessibilityLabel="Enlace público opcional" value={enlace} editable={!busy} autoCapitalize="none"
-        keyboardType="url" onChangeText={setEnlace} style={styles.input} placeholder="https://… (opcional)" />
+      <View style={styles.campo}>
+        <Text style={styles.etiqueta}>Plan de promoción</Text>
+        <TextInput accessibilityLabel="Plan de promoción" multiline value={plan} editable={!busy}
+          onChangeText={setPlan} style={[styles.input, styles.plan]} placeholder="Cómo promocionarás la campaña" />
+      </View>
+      <View style={styles.campo}>
+        <Text style={styles.etiqueta}>Enlace público <Text style={styles.texto}>(opcional)</Text></Text>
+        <TextInput accessibilityLabel="Enlace público opcional" value={enlace} editable={!busy} autoCapitalize="none"
+          keyboardType="url" onChangeText={setEnlace} style={styles.input} placeholder="https://…" />
+      </View>
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       {busy && <ActivityIndicator accessibilityLabel="Enviando solicitud de afiliación" color={colors.cafeOscuro} />}
       <TouchableOpacity accessibilityRole="button" accessibilityLabel={reintento ? 'Reintentar solicitud de afiliación' : 'Enviar solicitud de afiliación'}
@@ -63,13 +72,24 @@ export default function SolicitarAfiliacion({ campana, solicitud, perfilEstado, 
         <Text accessibilityLiveRegion="polite" style={styles.botonTexto}>{busy ? 'Enviando solicitud…'
           : reintento ? 'Reintentar solicitud de afiliación' : 'Enviar solicitud de afiliación'}</Text>
       </TouchableOpacity>
-    </>}
+    </View>}
   </View>;
 }
 const styles = StyleSheet.create({
   container: { gap: spacing.sm }, texto: { color: colors.textoSecundario, lineHeight: 22 },
-  boton: { padding: spacing.md, borderRadius: 12, backgroundColor: colors.cafeOscuro, minHeight: 48 },
+  abrir: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48, padding: spacing.md,
+    borderRadius: 12, backgroundColor: colors.crema },
+  abrirTexto: { flex: 1, color: colors.cafeOscuro, fontWeight: '700' },
+  icono: { color: colors.cafeOscuro, fontSize: 14 },
+  formulario: { gap: spacing.md, padding: spacing.md, backgroundColor: colors.fondo, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.borde },
+  campo: { gap: spacing.xs },
+  etiqueta: { color: colors.cafeOscuro, fontWeight: '700' },
+  boton: { alignItems: 'center', justifyContent: 'center', padding: spacing.md, borderRadius: 12,
+    backgroundColor: colors.cafeOscuro, minHeight: 48 },
   botonTexto: { color: colors.blanco, fontWeight: '700' },
-  input: { borderWidth: 1, borderColor: colors.borde, borderRadius: 10, padding: spacing.md, color: colors.cafeOscuro },
+  input: { borderWidth: 1, borderColor: colors.bordeOscuro, borderRadius: 10, padding: spacing.md,
+    backgroundColor: colors.blanco, color: colors.cafeOscuro },
+  plan: { minHeight: 100, textAlignVertical: 'top' },
   error: { color: colors.rojo },
 });

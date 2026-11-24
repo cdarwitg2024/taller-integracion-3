@@ -596,9 +596,7 @@ describe('administración de campañas sobre public.campanas', () => {
   test('los dos gateways exponen /api/afiliados hacia ms-afiliados', () => {
     const compose = fs.readFileSync(path.resolve(__dirname, '../../gateway/nginx.conf'), 'utf8');
     const k8s = fs.readFileSync(path.resolve(__dirname, '../../../k8s-next/gateway/nginx.conf'), 'utf8');
-    for (const configuracion of [compose, k8s]) {
-      expect(configuracion).toMatch(/location\s+\/api\/afiliados\s*\{/);
-      expect(configuracion).toMatch(/location\s+\/api\/afiliados\s*\{[^}]*ms-afiliados[^;]*:3006/);
-    }
+    expect(compose).toMatch(/location\s+\/api\/afiliados\s*\{[^}]*ms-afiliados[^;]*:3006/);
+    expect(k8s).toMatch(/location\s+\/api\/afiliados\s*\{[^}]*proxy_pass\s+http:\/\/127\.0\.0\.1:3006;/);
   });
 });

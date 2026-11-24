@@ -21,6 +21,26 @@ const estadoTexto = (estado) => ({
   pendiente: 'Pendiente', aprobada: 'Aprobada', rechazada: 'Rechazada',
 }[estado] || estado || 'sin estado');
 
+const estadoColor = { pendiente: 'warning', aprobada: 'success', rechazada: 'error' };
+const selectorSx = {
+  display: 'grid',
+  gap: 0.75,
+  color: 'text.secondary',
+  fontSize: '0.875rem',
+  fontWeight: 600,
+  '& select': {
+    p: 1.25,
+    minWidth: 0,
+    border: '1px solid',
+    borderColor: 'divider',
+    borderRadius: 2,
+    bgcolor: 'background.paper',
+    color: 'text.primary',
+    font: 'inherit',
+    '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
+  },
+};
+
 export default function Afiliados({ currentUser }) {
   const navigate = useNavigate();
   const cafeteriaId = cafeteriaAutorizada(currentUser);
@@ -137,21 +157,26 @@ export default function Afiliados({ currentUser }) {
     .filter(s => filtro === 'todas' || s.estado === filtro);
 
   return (
-    <Stack spacing={2}>
-      <Paper component="section" aria-label="Contexto de afiliados" variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
-        <Stack spacing={2} alignItems="flex-start">
-          <Typography variant="h6">Afiliados de tu cafetería</Typography>
-          <Chip label={`Cafetería #${cafeteriaId}`} variant="outlined" />
-          <Typography variant="body2" color="text.secondary">
-            Revisa las solicitudes de tus campañas de carrito completo, asigna códigos y desactívalos cuando lo necesites.
-          </Typography>
-          <Button variant="contained" onClick={() => navigate('/dueno/afiliados/campanas')}>
+    <Stack spacing={3}>
+      <Paper component="section" aria-label="Contexto de afiliados" variant="outlined" sx={{
+        p: { xs: 2, md: 3 }, borderRadius: 4,
+      }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { xs: 'flex-start', md: 'center' }, justifyContent: 'space-between' }}>
+          <Stack spacing={1}>
+            <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <Typography variant="h6">Afiliados de tu cafetería</Typography>
+              <Chip label={`Cafetería #${cafeteriaId}`} size="small" variant="outlined" />
+            </Stack>
+            <Typography variant="body2" color="text.secondary">Revisa las postulaciones y administra los códigos de tus campañas.</Typography>
+          </Stack>
+          <Button variant="outlined" sx={{ flexShrink: 0 }}
+            onClick={() => navigate('/dueno/afiliados/campanas')}>
             Administrar campañas
           </Button>
         </Stack>
       </Paper>
 
-      <Paper component="section" aria-label="Solicitudes de afiliación" variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
+      <Paper component="section" aria-label="Solicitudes de afiliación" variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 4 }}>
         <Stack spacing={2}>
           <Typography variant="h6">Solicitudes de afiliación</Typography>
           {errorCampanas && (
@@ -165,22 +190,27 @@ export default function Afiliados({ currentUser }) {
           )}
           {!cargandoCampanas && !errorCampanas && listaCampanas.length > 0 && (
             <>
-              <Box component="label">
-                Campaña
-                <select aria-label="Campaña" value={campanaId ?? ''} onChange={e => setCampanaId(e.target.value ? Number(e.target.value) : null)}>
-                  <option value="">Selecciona una campaña</option>
-                  {listaCampanas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
-              </Box>
-              <Typography>Comisión vigente: {porcentaje(campana?.comision_pct)}</Typography>
-              <Box component="label">
-                Estado
-                <select aria-label="Estado" value={filtro} onChange={e => setFiltro(e.target.value)}>
-                  <option value="todas">Todas</option>
-                  {['pendiente', 'aprobada', 'rechazada'].map(estado => (
-                    <option key={estado} value={estado}>{estadoTexto(estado)}</option>
-                  ))}
-                </select>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 2fr) minmax(0, 1fr)' }, gap: 2,
+                bgcolor: 'background.default', border: '1px solid', borderColor: 'divider', borderRadius: 3, p: 2 }}>
+                <Box component="label" sx={selectorSx}>
+                  Campaña
+                  <select aria-label="Campaña" value={campanaId ?? ''} onChange={e => setCampanaId(e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">Selecciona una campaña</option>
+                    {listaCampanas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                </Box>
+                <Box component="label" sx={selectorSx}>
+                  Estado
+                  <select aria-label="Estado" value={filtro} onChange={e => setFiltro(e.target.value)}>
+                    <option value="todas">Todas</option>
+                    {['pendiente', 'aprobada', 'rechazada'].map(estado => (
+                      <option key={estado} value={estado}>{estadoTexto(estado)}</option>
+                    ))}
+                  </select>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ gridColumn: '1 / -1' }}>
+                  Comisión vigente: <strong>{porcentaje(campana?.comision_pct)}</strong>
+                </Typography>
               </Box>
 
               {solicitudesVigentes && solicitudes.error && (
@@ -192,28 +222,42 @@ export default function Afiliados({ currentUser }) {
               {!cargandoSolicitudes && !solicitudes.error && (
                 <>
                   {filas.length === 0 ? (
-                    <Typography>No hay solicitudes con este estado.</Typography>
+                    <Typography color="text.secondary" sx={{ p: 3, textAlign: 'center', border: '1px dashed', borderColor: 'divider', borderRadius: 3 }}>
+                      No hay solicitudes con este estado.
+                    </Typography>
                   ) : filas.map(s => (
-                    <Box key={s.id} component="article" aria-label={`Solicitud ${s.id}`}>
-                      <Typography>{s.solicitante} · {estadoTexto(s.estado)}</Typography>
-                      <Typography>{s.plan_promocion}</Typography>
-                      {s.enlace_publico && <Typography>{s.enlace_publico}</Typography>}
+                    <Box key={s.id} component="article" aria-label={`Solicitud ${s.id}`} sx={{
+                      display: 'flex', flexDirection: 'column', gap: 1.5,
+                      p: 2.5, border: '1px solid', borderColor: 'divider', borderRadius: 3,
+                      borderLeft: '4px solid', borderLeftColor: estadoColor[s.estado] ? `${estadoColor[s.estado]}.main` : 'divider',
+                    }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                        <Typography variant="subtitle1" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{s.solicitante}</Typography>
+                        <Chip label={estadoTexto(s.estado)} color={estadoColor[s.estado] || 'default'} variant="outlined" size="small" />
+                      </Stack>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" fontWeight={700}>Plan de promoción</Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{s.plan_promocion}</Typography>
+                        {s.enlace_publico && <Typography variant="body2" color="primary.main" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>{s.enlace_publico}</Typography>}
+                      </Box>
                       {s.codigo && (
-                        <Typography>Código: {s.codigo} ({s.codigo_activo ? 'activo' : 'desactivado'})</Typography>
+                        <Chip variant="outlined" size="small" color={s.codigo_activo ? 'success' : 'default'}
+                          label={`Código: ${s.codigo} (${s.codigo_activo ? 'activo' : 'desactivado'})`}
+                          sx={{ alignSelf: 'flex-start', maxWidth: '100%', fontFamily: 'monospace' }} />
                       )}
                       <Stack direction="row" spacing={1}>
                         {s.estado === 'pendiente' && (
-                          <Button disabled={guardando} onClick={() => { setAccion({ solicitud: s, decision: 'aprobar' }); setCodigo(''); setErrorAccion(''); }}>
+                          <Button variant="contained" size="small" disabled={guardando} onClick={() => { setAccion({ solicitud: s, decision: 'aprobar' }); setCodigo(''); setErrorAccion(''); }}>
                             Aprobar
                           </Button>
                         )}
                         {s.estado === 'pendiente' && (
-                          <Button disabled={guardando} onClick={() => { setAccion({ solicitud: s, decision: 'rechazar' }); setErrorAccion(''); }}>
+                          <Button variant="outlined" size="small" color="error" disabled={guardando} onClick={() => { setAccion({ solicitud: s, decision: 'rechazar' }); setErrorAccion(''); }}>
                             Rechazar
                           </Button>
                         )}
                         {s.estado === 'aprobada' && s.codigo_activo && (
-                          <Button disabled={guardando} onClick={() => { setAccion({ solicitud: s, decision: 'desactivar' }); setErrorAccion(''); }}>
+                          <Button variant="outlined" size="small" disabled={guardando} onClick={() => { setAccion({ solicitud: s, decision: 'desactivar' }); setErrorAccion(''); }}>
                             Desactivar
                           </Button>
                         )}
@@ -224,8 +268,8 @@ export default function Afiliados({ currentUser }) {
               )}
 
               {accion && (
-                <Stack spacing={1}>
-                  <Typography>
+                <Stack spacing={1.5} sx={{ p: 2.5, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider', borderRadius: 3 }}>
+                  <Typography fontWeight={700}>
                     {accion.decision === 'aprobar'
                       ? `Asignar código a ${accion.solicitud.solicitante}`
                       : `${accion.decision === 'rechazar' ? 'Rechazar' : 'Desactivar'} solicitud ${accion.solicitud.id}`}
@@ -239,7 +283,8 @@ export default function Afiliados({ currentUser }) {
                   )}
                   {errorAccion && <Alert severity="error">{errorAccion}</Alert>}
                   <Stack direction="row" spacing={1}>
-                    <Button onClick={() => resolver(accion.decision, accion.solicitud)} disabled={guardando}>
+                    <Button variant="contained" color={accion.decision === 'aprobar' ? 'primary' : 'error'}
+                      onClick={() => resolver(accion.decision, accion.solicitud)} disabled={guardando}>
                       Confirmar
                     </Button>
                     <Button onClick={() => { setAccion(null); setCodigo(''); setErrorAccion(''); }}>

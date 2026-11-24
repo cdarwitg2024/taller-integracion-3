@@ -36,24 +36,18 @@ kubectl -n student-cdarwitg rollout status deployment/ms-pedidos
 
 Si Services/HPA ya existen, comparar primero y aplicar solo los archivos que corresponda actualizar. Gateway depende de su Service, ConfigMap y Deployment; un cambio del ConfigMap no demuestra que los procesos Nginx hayan recargado la configuración. Revisar y realizar el rollout correspondiente cuando esté autorizado. Ingress se define en ingress-api.yaml.
 
-El [HPA de ms-afiliados](../../../k8s-next/ms-afiliados/hpa.yaml) replica la política de `ms-menus`. Define entre 1 y 3 réplicas, un objetivo de CPU del 70 % sobre el request de 50m por Pod y una ventana de estabilización de 300 s al reducir réplicas. Para el primer despliegue, verificar la Metrics API y la cuota del namespace, aprovisionar el Deployment con el digest de publicación y comprobar sus Pods antes de aplicar el HPA y habilitar el tráfico por el gateway.
+### Afiliados en el pod del gateway
 
-### Primer corte de ms-afiliados
-
-Ejecutar este aprovisionamiento autorizado entre CD Docker y CD Kubernetes. Desde la raíz, cargar `$imagenAfiliados` con `images.ms-afiliados` del `release.json` del SHA a desplegar. El preflight de CD Kubernetes requiere que el Deployment esté listo y que Nginx tenga cargada la ruta a `ms-afiliados`.
+El gateway ejecuta Nginx y `ms-afiliados` en el mismo pod para respetar la cuota compartida de Services del clúster de estudiantes. Usa el Service `gateway` existente. CD Kubernetes actualiza la imagen del contenedor `ms-afiliados` en `deployment/gateway` con el digest de la publicación. Los manifiestos de `k8s-next/ms-afiliados/` describen el despliegue independiente alternativo, que requiere un cupo adicional de Service.
 
 ~~~powershell
-kubectl apply -f k8s-next/ms-afiliados/service.yaml
-kubectl set image --local -f k8s-next/ms-afiliados/deployment.yaml "ms-afiliados=$imagenAfiliados" -o yaml | kubectl apply -f -
-kubectl -n student-cdarwitg rollout status deployment/ms-afiliados
-kubectl apply -f k8s-next/ms-afiliados/hpa.yaml
 kubectl apply -f k8s-next/gateway/configmap.yaml
-kubectl -n student-cdarwitg rollout restart deployment/gateway
+kubectl set image --local -f k8s-next/gateway/deployment.yaml "ms-afiliados=$imagenAfiliados" -o yaml | kubectl apply -f -
 kubectl -n student-cdarwitg rollout status deployment/gateway
-kubectl -n student-cdarwitg exec deployment/gateway -- nginx -T
+kubectl -n student-cdarwitg exec deployment/gateway -c gateway -- nginx -T
 ~~~
 
-Verificar que la configuración cargada apunte a `ms-afiliados.student-cdarwitg.svc.cluster.local:3006` y que una consulta autenticada de afiliados funcione por el gateway. Ejecutar después CD Kubernetes con el release publicado.
+Asignar a `$imagenAfiliados` el digest `images.ms-afiliados` del `release.json` autorizado. Verificar que Nginx enrute afiliados a `127.0.0.1:3006` y que una consulta autenticada funcione por el gateway. Si solo cambia el ConfigMap, reiniciar el Deployment para recargar el archivo montado.
 
 Nunca usar apply recursivo sobre todo el árbol ni aplicar ejemplos de Secrets. No se necesita crear un Pod curl para una inspección rutinaria; las consultas de estado son de solo lectura.
 

@@ -74,6 +74,55 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ['ALL']
+        - name: ms-afiliados
+          image: cdarwitg2024/ms-afiliados@sha256:d8e28320c2928ef4b235703bf1e6cbeeab3bdd8a463ee0e62172b658a70c2bae
+          ports:
+            - name: afiliados
+              containerPort: 3006
+          env:
+            - name: PORT
+              value: '3006'
+            - name: NODE_ENV
+              value: 'production'
+            - name: HABILITAR_CONFIRMACION_AFILIADA
+              value: 'true'
+            - name: SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: coffeesecret-supabase
+                  key: SUPABASE_URL
+            - name: SUPABASE_PUBLISHABLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: coffeesecret-supabase
+                  key: SUPABASE_PUBLISHABLE_KEY
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 150m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: afiliados
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: afiliados
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          securityContext:
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ['ALL']
+          volumeMounts:
+            - name: afiliados-tmp
+              mountPath: /tmp
       volumes:
         - name: config
           configMap:
@@ -81,4 +130,6 @@ spec:
         - name: nginx-cache
           emptyDir: {}
         - name: nginx-run
+          emptyDir: {}
+        - name: afiliados-tmp
           emptyDir: {}
