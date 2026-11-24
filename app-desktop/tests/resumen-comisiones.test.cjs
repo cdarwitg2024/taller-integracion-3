@@ -282,18 +282,43 @@ test('el reintento visible limpia el aviso anterior antes de volver a consultar'
 });
 
 test('un cambio de cafetería descarta el resumen tardío de la anterior', async () => {
-  const viejo = diferida();
-  const { cargador, solicitudes } = prepararCargador(caf => caf === '1' ? viejo.promise : Promise.resolve({ ventasReferidas: 7 }));
+  const tardio = diferida();
+  const terceraLlamada = diferida();
+  let cargasCafeteriaUno = 0;
+  const obtener = cafeteria => {
+    if (cafeteria === '2') return Promise.resolve({ ventasReferidas: 7 });
+    cargasCafeteriaUno++;
+    if (cargasCafeteriaUno === 1) return Promise.resolve({ ventasReferidas: 5 });
+    if (cargasCafeteriaUno === 2) return Promise.reject(new Error('Sin comisiones'));
+    terceraLlamada.resolve();
+    return tardio.promise;
+  };
+  const { cargador, solicitudes } = prepararCargador(obtener);
+
   const inicial = cargador.cambiarCafeteria(1);
   solicitudes[0].resolve([{ id: 10, total: 100 }]);
-  await Promise.resolve();
+  await inicial;
+  assert.equal(cargador.obtenerEstado().resumenComisiones.ventasReferidas, 5);
+
+  const conError = cargador.refrescar(false);
+  solicitudes[1].resolve([{ id: 11, total: 100 }]);
+  await conError;
+  assert.equal(cargador.obtenerEstado().resumenComisiones.ventasReferidas, 5);
+  assert.equal(cargador.obtenerEstado().comisionesError, 'Sin comisiones');
+
+  const refrescado = cargador.refrescar(false);
+  solicitudes[2].resolve([{ id: 12, total: 100 }]);
+  await terceraLlamada.promise;
+  assert.equal(cargasCafeteriaUno, 3);
   const nueva = cargador.cambiarCafeteria(2);
-  solicitudes[1].resolve([{ id: 20, total: 200 }]);
+  assert.equal(cargador.obtenerEstado().resumenComisiones, null);
+  assert.equal(cargador.obtenerEstado().comisionesError, null);
+  solicitudes[3].resolve([{ id: 20, total: 200 }]);
   await nueva;
   const vigente = cargador.obtenerEstado();
   assert.deepEqual(vigente.resumenComisiones, { ventasReferidas: 7 });
-  viejo.resolve({ ventasReferidas: 999 });
-  await inicial;
+  tardio.resolve({ ventasReferidas: 999 });
+  await refrescado;
   assert.deepEqual(cargador.obtenerEstado(), vigente);
 });
 
@@ -325,4 +350,63 @@ test('los refrescos silenciosos no invalidan una carga más lenta que el respald
   solicitudes[1].resolve([{ id: 10, total: 900 }]);
   await siguiente;
   assert.equal(cargador.obtenerEstado().loading, false);
+});
+
+test('entrega y cancelación actualizan el resumen con el mismo refresco que usa Realtime', async () => {
+  // V11 solo mueve comisiones pendientes a disponible y V09 solo revierte pendientes: son pedidos distintos.
+  const comisionEntregada = { id: 1, pedido_id: 20, tipo: 'comision', monto_clp: 1000, creado_en: '2026-11-23T10:00:00Z', pedidos: { cafeteria_id: 1, total: 10000 } };
+  const comisionCancelada = { id: 2, pedido_id: 21, tipo: 'comision', monto_clp: 500, creado_en: '2026-11-23T10:01:00Z', pedidos: { cafeteria_id: 1, total: 5000 } };
+  const reversion = { id: 3, pedido_id: 21, tipo: 'reversion', estado: 'revertida', monto_clp: -500, creado_en: '2026-11-23T10:05:00Z', pedidos: { cafeteria_id: 1, total: 5000 } };
+  const pendiente = [
+    { ...comisionEntregada, estado: 'pendiente' },
+    { ...comisionCancelada, estado: 'pendiente' },
+  ];
+  const entregado = [
+    { ...comisionEntregada, estado: 'disponible' },
+    pendiente[1],
+  ];
+  const cancelado = [
+    entregado[0],
+    { ...comisionCancelada, estado: 'revertida' },
+    reversion,
+  ];
+  const instantaneas = [pendiente, entregado, cancelado].map(filas => construirResumen(filas, 1));
+  let llamada = 0;
+  const { cargador, solicitudes } = prepararCargador(() => Promise.resolve(instantaneas[llamada++]));
+
+  const inicial = cargador.cambiarCafeteria(1);
+  solicitudes[0].resolve([
+    { id: 20, total: 10000, estado: 'listo' },
+    { id: 21, total: 5000, estado: 'pagado' },
+  ]);
+  await inicial;
+  assert.deepEqual(cargador.obtenerEstado().resumenComisiones, instantaneas[0]);
+  assert.equal(cargador.obtenerEstado().resumenComisiones.comisiones.pendiente, 1500);
+
+  const entrega = cargador.refrescar(false);
+  solicitudes[1].resolve([
+    { id: 20, total: 10000, estado: 'entregado' },
+    { id: 21, total: 5000, estado: 'pagado' },
+  ]);
+  await entrega;
+  const trasEntrega = cargador.obtenerEstado().resumenComisiones;
+  assert.deepEqual(trasEntrega, instantaneas[1]);
+  assert.equal(trasEntrega.comisiones.pendiente, 500);
+  assert.equal(trasEntrega.comisiones.disponible, 1000);
+  assert.equal(trasEntrega.comisiones.revertida, 0);
+
+  const cancelacion = cargador.refrescar(false);
+  solicitudes[2].resolve([
+    { id: 20, total: 10000, estado: 'entregado' },
+    { id: 21, total: 5000, estado: 'cancelado' },
+  ]);
+  await cancelacion;
+  const trasCancelacion = cargador.obtenerEstado().resumenComisiones;
+  assert.deepEqual(trasCancelacion, instantaneas[2]);
+  assert.equal(trasCancelacion.comisiones.pendiente, 0);
+  assert.equal(trasCancelacion.comisiones.disponible, 1000);
+  assert.equal(trasCancelacion.comisiones.revertida, 500);
+  assert.equal(trasCancelacion.reversiones, -500);
+  assert.equal(trasCancelacion.ventasReferidas, 2);
+  assert.equal(trasCancelacion.totalCobrado, 15000);
 });

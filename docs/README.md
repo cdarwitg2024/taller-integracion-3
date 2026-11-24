@@ -26,6 +26,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [E07 — Conexión de activación y pausa de campañas](desktop/validacion/E07-Conexion-activacion-y-pausa-campanas.md)
 - [E08 / CAM-294 — Corregir fallos de guardado y activación de campañas](desktop/validacion/E08-CAM-294-Correccion-guardado-y-activacion.md)
 - [E11 / CAM-233 — Conectar resumen de ventas y comisiones](desktop/validacion/E11-CAM-233-Resumen-ventas-y-comisiones.md)
+- [E12 / CAM-235 — Actualizar resumen tras entregar o cancelar](desktop/validacion/E12-CAM-235-Actualizar-resumen-entrega-y-cancelacion.md)
 - [E13 — Estados de carga, vacío y error de campañas](desktop/validacion/E13-Estados-carga-vacio-y-error-campanas.md)
 - [E14 — Probar tasas y vigencia](desktop/validacion/E14-Probar-tasas-y-vigencia.md)
 - [E10 / CAM-232 — Aprobar afiliados y gestionar códigos](desktop/validacion/E10-Aprobar-afiliados-y-gestionar-codigos.md)
@@ -79,9 +80,13 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [D04 - Motivos de código no aplicable](mobile/validacion/D04-Motivos-codigo-no-aplicable.md)
 - [D05 - Recotización al editar el carrito](mobile/validacion/D05-Recotizar-al-editar-carrito.md)
 - [D06 - Confirmar de nuevo cuando cambie el total](mobile/validacion/D06-Reconfirmar-total.md)
+- [D11 - Cotizaciones fuera de orden en el carrito](mobile/validacion/D11-Cotizaciones-fuera-de-orden.md)
 - [D07 - Clave persistida del intento de compra](mobile/validacion/D07-Clave-intento-compra.md)
 - [D08 - Recuperar una compra con respuesta interrumpida](mobile/validacion/D08-Recuperar-compra-interrumpida.md)
 - [D09 - Total cobrado en historial](mobile/validacion/D09-Total-cobrado-en-historial.md)
+- [D14 - Primera compra y compra recurrente](mobile/validacion/D14-Primera-compra-y-recurrente.md)
+- [D10 - Actualizar Wallet al cancelar](mobile/validacion/D10-Wallet-al-cancelar.md)
+- [D13 - Compra sin código o con código retirado](mobile/validacion/D13-Verificar-compra-sin-codigo.md)
 
 ## Backend Node
 
