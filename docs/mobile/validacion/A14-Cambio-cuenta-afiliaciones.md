@@ -122,3 +122,10 @@ No se desactiva ni omite ninguna prueba y no cambia la configuración de la app.
 El intento de repetir el runner localmente no pudo iniciar los contenedores
 porque Docker Desktop estaba apagado. No se presenta ese intento como una
 prueba aprobada: la validación de este ajuste corresponde al nuevo job remoto.
+
+La ejecución remota de `6c5cc2d` confirmó que `afiliados-auth` pasa con las
+imágenes alternativas. En ese mismo intento falló `database` al crear el rol:
+`pg_isready` había aceptado el socket del servidor temporal de inicialización
+y el siguiente `psql` encontró el servidor apagado antes del arranque final.
+Se fija `-h 127.0.0.1` tanto en la espera como en la conexión inicial para
+detectar el servidor TCP definitivo. La matriz de pruebas de BD se conserva.
