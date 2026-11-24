@@ -161,7 +161,7 @@ temporal('v07', async ({ sql, sqlAsync }) => {
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  assert.ok(segundaEsperando, 'La segunda compra debe esperar el bloqueo del comprador');
+  assert.ok(segundaEsperando, 'La segunda sesión debe esperar a la primera transacción');
 
   const [resultadoA, resultadoB] = await Promise.all([finPrimera, finSegunda]);
   if (resultadoA.error) throw resultadoA.error;
