@@ -887,6 +887,7 @@ function AppContent() {
 
           {activeTab === 'perfil' && (
             <PerfilScreen
+              key={isGuest ? 'invitado' : session?.user?.id}
               session={session}
               isGuest={isGuest}
               onLogout={handleLogout}
