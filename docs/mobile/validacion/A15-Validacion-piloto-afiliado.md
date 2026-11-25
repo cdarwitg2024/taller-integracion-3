@@ -6,8 +6,11 @@ basada en A05 `fbfe3b7` ([PR #127](https://github.com/cdarwitg2024/taller-integr
 La validación reutiliza [A07](A07-Compartir-codigo-personal.md),
 [A13](A13-Comprobante-y-actualizacion-saldo.md), [A14](A14-Cambio-cuenta-afiliaciones.md)
 y el contrato de aprobación de [E10](../../desktop/validacion/E10-Aprobar-afiliados-y-gestionar-codigos.md).
-A12 (#125), A13 (#126) y A05 (#127) seguían abiertas al preparar esta rama;
-conservar ese orden de integración antes de comparar A15 contra `develop`.
+A12 (#125), A13 (#126) y A05 (#127) seguían abiertas al preparar esta rama.
+El 25 de noviembre ya están integradas: A12 en `7202239`, A13 en `9870764` y
+A05 en `4a91e31`. Esta rama incorpora `develop` `4a91e31` mediante `6406692`,
+incluidas las correcciones de revisión de A13 y A05; el diff frente a esa base
+contiene únicamente los siete archivos propios de A15.
 
 ## Alcance
 
@@ -180,3 +183,25 @@ corrida local (solicitud 13) y esta corrida de CI (solicitud 10) tienen valores
 diferentes. Las aserciones cotejan cada código y comprobante con la respuesta y
 la fila SQL de **su propia corrida**; no fijan estos valores como constantes para
 futuras ejecuciones. El apéndice conserva evidencia inmutable del run citado.
+
+## Actualización con las dependencias integradas — 25 de noviembre de 2026
+
+Se incorporó `origin/develop` en `4a91e31` sin conflictos. No se modificó el
+escenario A15 ni código de aplicación durante esta actualización. Se conserva
+la distinción entre las corridas históricas locales y de CI documentadas arriba.
+
+Sobre la combinación, con Node.js 22.19.0 en Windows:
+
+- **423 pruebas aprobadas en 42 suites**, cuatro integraciones opt-in omitidas
+  en la suite normal. El escenario A15 se ejecuta por separado en el job
+  `mobile-afiliaciones`.
+- TypeScript y sintaxis de `.github/scripts/test-mobile-afiliacion-a06.cjs`
+  correctos.
+- El diff frente a `develop` incluye únicamente la prueba A15, su enganche al
+  runner/workflow y los cuatro documentos de A15; siete archivos en total.
+
+No se repitieron Docker local, Cloud ni APK en esta actualización. Los checks y
+el recorrido integrado del nuevo SHA se consultan en
+[el PR #128](https://github.com/cdarwitg2024/taller-integracion-3/pull/128);
+la descripción identifica su nueva ejecución y resultado. Los valores del run
+`45537079299` siguen siendo evidencia exclusiva de aquella corrida.
