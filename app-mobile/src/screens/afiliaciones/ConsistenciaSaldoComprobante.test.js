@@ -78,3 +78,38 @@ test('Actualizar saldo sincroniza también los movimientos tras entregar sin sal
   expect(texto()).toContain('$500 · disponible'); expect(texto()).not.toContain('$500 · pendiente');
   expect(global.fetch).not.toHaveBeenCalled();
 });
+
+test('el regreso a primer plano actualiza saldo, comisiones y retiros aunque solicitudes devuelva 503', async () => {
+  const listener = jest.spyOn(AppState, 'addEventListener');
+  await montar(); await pulsar('Historial');
+  expect(texto()).toContain('Saldo disponible para retirar: $700');
+  expect(texto()).toContain('$500 · pendiente');
+  expect(texto()).toContain('Todavía no tienes retiros registrados');
+  entregar();
+  filas.push({ id: 2, monto_clp: 300, referencia, creado_en: '2026-11-25T12:00:00Z' });
+  consultarAfiliaciones.mockRejectedValueOnce(Object.assign(new Error('Servicio temporalmente no disponible'), { status: 503 }));
+  const alVolver = listener.mock.calls.find(([evento]) => evento === 'change')[1];
+  await act(async () => alVolver('active'));
+  expect(texto()).toContain('No pudimos actualizar tus solicitudes');
+  expect(texto()).toContain('Saldo disponible para retirar: $1.200');
+  expect(texto()).toContain('$500 · disponible');
+  expect(texto()).not.toContain('$500 · pendiente');
+  expect(texto()).toContain(`Comprobante: ${referencia}`);
+  expect(texto()).not.toContain('Todavía no tienes retiros registrados');
+  expect(global.fetch).not.toHaveBeenCalled();
+});
+
+test.each([401, 403])('el refresco independiente no conserva el panel si solicitudes rechaza el acceso con %s', async status => {
+  const listener = jest.spyOn(AppState, 'addEventListener');
+  await montar(); await pulsar('Historial');
+  expect(texto()).toContain('Saldo disponible para retirar: $700');
+  consultarAfiliaciones.mockRejectedValue(Object.assign(new Error('Acceso rechazado'), { status }));
+  const alVolver = listener.mock.calls.find(([evento]) => evento === 'change')[1];
+  await act(async () => alVolver('active'));
+  expect(texto()).toContain(status === 401 ? 'Tu sesión venció' : 'Tu cuenta no tiene permisos');
+  expect(texto()).not.toContain('Saldo disponible para retirar:');
+  expect(texto()).not.toContain('$500 · pendiente');
+  expect(boton('Ganancias')).toBeUndefined();
+  expect(boton('Historial')).toBeUndefined();
+  expect(global.fetch).not.toHaveBeenCalled();
+});
