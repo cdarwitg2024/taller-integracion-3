@@ -100,6 +100,13 @@ aunque el saldo ya esté agotado. Durante el envío no se permite editar ni conf
 de nuevo. El comprobante usa la referencia del servidor y se actualiza el saldo
 con V12 sin restarlo localmente. [Prueba reproducible A12](mobile/validacion/A12-Confirmar-retiro-reintento-seguro.md).
 
+**Comprobante e historial A13.** Confirmar o recuperar un retiro refresca V12 y,
+si está abierto, el historial A10. «Ver retiro en historial» busca la referencia
+que devolvió V14; reabrir solo consulta el movimiento persistido. El comprobante
+conserva el saldo al confirmar; el resumen actual se obtiene del servidor y no
+vuelve a restar el monto. Si esa lectura falla tras confirmar, el saldo anterior
+no se presenta como actual. [Registro A13](mobile/validacion/A13-Comprobante-y-actualizacion-saldo.md).
+
 ## 3. Cotización y compra
 
 Ana envía su sesión desde móvil. La cotización calcula el precio vigente sin cobrar ni consumir el beneficio.

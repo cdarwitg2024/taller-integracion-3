@@ -4,10 +4,11 @@ import { consultarRetirosAfiliado } from '../../services/retirosAfiliado';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 
-export default function RetirosAfiliado({ revision }) {
-  const [busqueda, setBusqueda] = useState('');
+export default function RetirosAfiliado({ revision, retiroRevision, seleccion }) {
+  const [busqueda, setBusqueda] = useState(seleccion?.referencia || '');
   const [intento, setIntento] = useState(0);
   const [datos, setDatos] = useState({ estado: 'cargando', filas: null, error: '', restringido: false });
+  useEffect(() => { if (seleccion) setBusqueda(seleccion.referencia); }, [seleccion]);
   useEffect(() => {
     let vigente = true;
     setDatos(prev => ({ ...prev, estado: 'cargando', error: '' }));
@@ -21,7 +22,7 @@ export default function RetirosAfiliado({ revision }) {
       }));
     });
     return () => { vigente = false; };
-  }, [revision, intento]);
+  }, [revision, intento, retiroRevision]);
   const referencia = busqueda.trim().toLowerCase();
   const visibles = datos.filas?.filter(fila => !referencia || fila.referencia?.toLowerCase().includes(referencia))
     .slice().sort((a, b) => Date.parse(b.creado_en) - Date.parse(a.creado_en) || b.id - a.id);

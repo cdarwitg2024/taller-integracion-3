@@ -5,7 +5,7 @@ import { confirmarRetiroSimulado, consultarIntentoRetiro, prepararOtroRetiro } f
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 
-export default function SolicitudRetiroSimulado({ disponible, confirmado, usuarioId, onConfirmado, onAccesoDenegado }) {
+export default function SolicitudRetiroSimulado({ disponible, confirmado, usuarioId, onConfirmado, onAccesoDenegado, onVerHistorial }) {
   const [monto, setMonto] = useState('');
   const [resultado, setResultado] = useState(null);
   const [intento, setIntento] = useState(null);
@@ -40,7 +40,7 @@ export default function SolicitudRetiroSimulado({ disponible, confirmado, usuari
       if (vigente.current) {
         setIntento({ monto: recibo.monto_clp, comprobante: recibo });
         setResultado(null);
-        onConfirmado?.();
+        onConfirmado?.(recibo);
       }
     } catch (e) {
       if (!vigente.current) return;
@@ -106,6 +106,10 @@ export default function SolicitudRetiroSimulado({ disponible, confirmado, usuari
       <Text selectable style={styles.texto}>{`Referencia del comprobante: ${comprobante.referencia}`}</Text>
       <Text style={styles.texto}>{`Destino: ${comprobante.destino}`}</Text>
       <Text style={styles.texto}>{`Saldo disponible al confirmar: $${comprobante.disponible_clp.toLocaleString('es-CL')}`}</Text>
+      {onVerHistorial && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Ver retiro en historial"
+        onPress={() => onVerHistorial(comprobante.referencia)} style={styles.boton}>
+        <Text style={styles.botonTexto}>Ver retiro en historial</Text>
+      </TouchableOpacity>}
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="Preparar otro retiro simulado" disabled={ocupado}
         accessibilityState={{ disabled: ocupado }} onPress={otro} style={styles.boton}>
         <Text style={styles.botonTexto}>Preparar otro retiro simulado</Text>

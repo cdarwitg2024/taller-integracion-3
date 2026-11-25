@@ -6,8 +6,9 @@ import { spacing } from '../../theme/spacing';
 import SolicitudRetiroSimulado from './SolicitudRetiroSimulado';
 const pesos = valor => `${valor < 0 ? '-' : ''}$${Math.abs(valor).toLocaleString('es-CL')}`;
 
-export default function SaldoAfiliado({ revision, vista, usuarioId }) {
+export default function SaldoAfiliado({ revision, vista, usuarioId, onRetiroConfirmado, onVerHistorial }) {
   const [intento, setIntento] = useState(0);
+  const [conRetiro, setConRetiro] = useState(false);
   const [datos, setDatos] = useState({ estado: 'cargando', saldo: null, error: '', prohibido: false });
   useEffect(() => {
     let vigente = true;
@@ -15,11 +16,14 @@ export default function SaldoAfiliado({ revision, vista, usuarioId }) {
     consultarSaldoAfiliado().then(saldo => {
       if (vigente) setDatos({ estado: 'listo', saldo, error: '', prohibido: false });
     }).catch(error => {
-      if (vigente) setDatos(prev => ({ estado: 'error',
-        saldo: [401, 403].includes(error.status) ? null : prev.saldo,
-        error: error.message || 'No pudimos consultar el saldo. Intenta nuevamente.',
-        prohibido: error.status === 403,
-      }));
+      if (vigente) {
+        if ([401, 403].includes(error.status)) setConRetiro(false);
+        setDatos(prev => ({ estado: 'error',
+          saldo: [401, 403].includes(error.status) ? null : prev.saldo,
+          error: error.message || 'No pudimos consultar el saldo. Intenta nuevamente.',
+          prohibido: error.status === 403,
+        }));
+      }
     });
     return () => { vigente = false; };
   }, [revision, vista, intento]);
@@ -36,10 +40,24 @@ export default function SaldoAfiliado({ revision, vista, usuarioId }) {
       <Text style={styles.texto}>{`Comisiones retiradas: ${pesos(datos.saldo.retirado_clp)}`}</Text>
     </View>}
     <Text style={styles.texto}>Las comisiones pendientes no están disponibles para retiro. El disponible ya descuenta los retiros confirmados.</Text>
-    {datos.saldo && <SolicitudRetiroSimulado key={usuarioId} usuarioId={usuarioId} disponible={datos.saldo.disponible_clp}
-      confirmado={datos.estado === 'listo'} onConfirmado={() => setIntento(valor => valor + 1)}
-      onAccesoDenegado={status => setDatos({ estado: 'error', saldo: null, prohibido: status === 403,
-        error: status === 403 ? 'Tu cuenta no tiene permisos para retirar.' : 'Tu sesión venció. Vuelve a iniciar sesión.' })} />}
+    {conRetiro && !datos.saldo && <Text accessibilityLiveRegion="polite" style={styles.texto}>
+      El retiro está confirmado. Actualiza el saldo para consultar el disponible actual; el comprobante conserva el saldo al confirmar.
+    </Text>}
+    {(datos.saldo || conRetiro) && <SolicitudRetiroSimulado key={usuarioId} usuarioId={usuarioId} disponible={datos.saldo?.disponible_clp}
+      confirmado={datos.estado === 'listo'} onVerHistorial={onVerHistorial}
+      onConfirmado={comprobante => {
+        setConRetiro(true);
+        // La lectura anterior precede al retiro: no presentarla como saldo actual.
+        setDatos({ estado: 'cargando', saldo: null, error: '', prohibido: false });
+        setIntento(valor => valor + 1);
+        onRetiroConfirmado?.(comprobante);
+      }}
+      onAccesoDenegado={status => {
+        setConRetiro(false);
+        setDatos({ estado: 'error', saldo: null, prohibido: status === 403,
+          error: status === 403 ? 'Tu cuenta no tiene permisos para retirar.' : 'Tu sesión venció. Vuelve a iniciar sesión.' });
+      }} />}
+
     {!datos.prohibido && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Actualizar saldo de comisiones"
       disabled={datos.estado === 'cargando'} accessibilityState={{ disabled: datos.estado === 'cargando', busy: datos.estado === 'cargando' }}
       onPress={() => setIntento(valor => valor + 1)} style={styles.boton}>
