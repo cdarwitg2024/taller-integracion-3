@@ -59,11 +59,13 @@ jobs:
       - name: Start isolated PostgreSQL
         run: |
           docker run -d --name cf-test-postgres -e POSTGRES_HOST_AUTH_METHOD=trust postgres:15
+          # El servidor temporal de inicialización solo escucha por socket.
+          # Esperar TCP evita continuar antes de que arranque el servidor final.
           for attempt in $(seq 1 30); do
-            if docker exec cf-test-postgres pg_isready -U postgres; then break; fi
+            if docker exec cf-test-postgres pg_isready -h 127.0.0.1 -U postgres; then break; fi
             sleep 1
           done
-          docker exec cf-test-postgres psql -U postgres -v ON_ERROR_STOP=1 -c 'CREATE ROLE authenticated NOLOGIN;'
+          docker exec cf-test-postgres psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 -c 'CREATE ROLE authenticated NOLOGIN;'
       - name: Real payment, rollback, stock and concurrent cancellation
         env:
           TEST_POSTGRES_CONTAINER: cf-test-postgres
