@@ -23,6 +23,7 @@ function cargar(archivo, nombre, dependencias) {
       './supabase.js': ['supabase', 'isSupabaseConfigured'],
       './supabaseClient': ['supabase', 'isSupabaseConfigured'],
       './usuarios': ['usuarios'],
+      './productos': ['productos'],
       './usuarios.js': ['usuarios'], './backendApi': ['backendApi', 'CAFETERIA_ID'],
       '../utils/dateUtils': ['parsearFecha', 'formatearHora', 'formatearHoraBucket'],
       './pedidosService': ['pedidosService'],
@@ -103,26 +104,48 @@ function transporte(filas) {
   };
 }
 
-for (const estado of ['aprobado', 'rechazado']) {
-  test('resolver pendiente como ' + estado + ' persiste y no permite segunda resolución', async () => {
-    const filas = [{ id: 7, cafeteria_id: 2, estado: 'pendiente' }];
-    const supabase = transporte(filas);
-    const servicio = cargar('solicitudes_stock.js', 'solicitudesStock', { supabase });
-    await servicio.resolverSolicitud({ id: 7, cafeteriaId: 2, usuarioId: 9, estado });
-    assert.equal(filas[0].estado, estado);
-    assert.equal(filas[0].usuario_responde_id, 9);
-    assert.ok(filas[0].fecha_respuesta);
-    await assert.rejects(() => servicio.resolverSolicitud({ id: 7, cafeteriaId: 2, usuarioId: 9, estado }));
+function prepararReposicion() {
+  const solicitud = { id: 7, cafeteria_id: 2, producto_id: 5, cantidad_solicitada: 5, estado: 'pendiente' };
+  const producto = { id: 5, cafeteria_id: 2, stock: 10 };
+  const inventario = productos([producto]);
+  const servicio = cargar('solicitudes_stock.js', 'solicitudesStock', {
+    supabase: transporte([solicitud]), productos: inventario.servicio,
   });
+  return { solicitud, producto, inventario, servicio,
+    params: { id: 7, cafeteriaId: 2, usuarioId: 9, estado: 'aprobado' } };
 }
-test('error Supabase y cafetería ajena no producen resolución exitosa', async () => {
-  const filas = [{ id: 7, cafeteria_id: 2, estado: 'pendiente' }];
-  const supabase = transporte(filas);
-  const servicio = cargar('solicitudes_stock.js', 'solicitudesStock', { supabase });
-  await assert.rejects(() => servicio.resolverSolicitud({ id: 7, cafeteriaId: 3, usuarioId: 9, estado: 'aprobado' }));
-  supabase.fallar(new Error('Permiso denegado'));
-  await assert.rejects(() => servicio.resolverSolicitud({ id: 7, cafeteriaId: 2, usuarioId: 9, estado: 'aprobado' }));
-  assert.equal(filas[0].estado, 'pendiente');
+
+test('dos aprobaciones concurrentes suman la cantidad solicitada una sola vez', async () => {
+  const { solicitud, producto, servicio, params } = prepararReposicion();
+  const resultados = await Promise.allSettled([
+    servicio.resolverSolicitud(params), servicio.resolverSolicitud(params),
+  ]);
+  assert.equal(resultados.filter(r => r.status === 'fulfilled').length, 1);
+  assert.equal(solicitud.estado, 'aprobado');
+  assert.equal(solicitud.usuario_responde_id, 9);
+  assert.equal(producto.stock, 15);
+});
+
+test('se rechaza el acceso a otra cafetería y rechazar conserva el stock', async () => {
+  const { solicitud, producto, servicio, params } = prepararReposicion();
+  await assert.rejects(() => servicio.resolverSolicitud({ ...params, cafeteriaId: 3 }));
+  assert.equal(solicitud.estado, 'pendiente');
+  await servicio.resolverSolicitud({ ...params, estado: 'rechazado' });
+  assert.equal(solicitud.estado, 'rechazado');
+  assert.equal(producto.stock, 10);
+});
+
+test('un cambio concurrente de stock conserva el valor nuevo e informa aprobación parcial', async () => {
+  const { solicitud, producto, inventario, servicio, params } = prepararReposicion();
+  const actualizar = inventario.servicio.updateStock.bind(inventario.servicio);
+  inventario.servicio.updateStock = (...args) => {
+    producto.stock = 9;
+    return actualizar(...args);
+  };
+  await assert.rejects(() => servicio.resolverSolicitud(params), /quedó aprobada/);
+  assert.equal(solicitud.estado, 'aprobado');
+  await assert.rejects(() => servicio.resolverSolicitud(params), /ya fue resuelta/);
+  assert.equal(producto.stock, 9);
 });
 function productos(filas, cafeteriaId = 2) {
   const supabase = transporte(filas);

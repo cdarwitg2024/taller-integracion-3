@@ -92,6 +92,7 @@ function SolicitudesReposicion({ currentUser }) {
         usuarioId: currentUser?.id, estado });
       await cargarSolicitudes();
     } catch (err) {
+      await cargarSolicitudes();
       setError(err.message || 'No se pudo resolver la solicitud.');
     } finally {
       resolviendoRef.current = false;
@@ -150,7 +151,7 @@ function SolicitudesReposicion({ currentUser }) {
   return (
     <Box>
       <Alert severity="info" sx={{ mb: 2 }}>
-        Aceptar una solicitud autoriza la reposición; no agrega unidades al stock.
+        Al aceptar una solicitud, la cantidad solicitada se suma al stock disponible.
         Cuando recibas los productos, registra las existencias desde Productos y Stock.
       </Alert>
       <Stack

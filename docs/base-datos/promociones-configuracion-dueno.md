@@ -35,7 +35,9 @@ Se conservan las políticas previas de cafeterías y se agregan las del dueño a
 
 ## Solicitudes de reposición
 
-Aceptar una solicitud registra la autorización administrativa, fecha y responsable. **No aumenta stock.** Cuando se recibe mercadería se registra desde Productos y Stock. No cambiar esta semántica mediante dos UPDATE separados desde el navegador: si se incorpora recepción automática en el futuro, requiere una operación PostgreSQL atómica e idempotente.
+Al aceptar una solicitud, Escritorio confirma la transición de pendiente a aprobada y luego suma la cantidad al stock. La escritura de stock exige que siga vigente el valor leído. Solo el cliente que confirma la aprobación intenta sumar. Un rechazo conserva el stock.
+
+El flujo usa las operaciones vigentes de Supabase. Si la segunda escritura falla o su respuesta se pierde, la app conserva la aprobación y pide verificar el inventario antes de ajustar manualmente. Queda pendiente el recorrido manual KDS → Dueño en el entorno de la demo.
 
 ## Validación local
 
