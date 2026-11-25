@@ -149,6 +149,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 ## Base de datos
 
 - [V06 / CAM-288 — Cotización del carrito completo](base-datos/validacion/V06-CAM-288-Cotizacion-carrito.md)
+- [C11 — Compras concurrentes con claves distintas](base-datos/validacion/C11-Compras-concurrentes.md)
 - [S3-T6 / CAM-228 — Grupos equivalentes](base-datos/grupos-equivalentes.md)
 
 - [C02 — Contratos de integración de afiliados](contratos-integracion-afiliados.md)
