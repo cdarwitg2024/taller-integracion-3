@@ -50,4 +50,36 @@ module.exports = async ({ call, sql, tokens, base, anon, supabaseUrl, dbContaine
     child.on('exit', code => code === 0 ? resolve() : reject(new Error(`Integración A06: salida ${code}`)));
   });
   console.log('PASS A06: pendiente, rechazada, solicitud, aprobación y código desactivado con saldo/historial persistidos');
+
+  const saldo = '/api/afiliados/saldo';
+  const retiros = '/api/afiliados/retiros';
+  const solicitud = { monto_clp: 1050, clave_idempotencia: 'retiro-c15' };
+  async function comprobar(url, sesion, status, body) {
+    const method = body ? 'POST' : 'GET';
+    const respuesta = await call(url, sesion, method, body);
+    console.log('C15', JSON.stringify({ method, url, body, respuesta }));
+    assert.equal(respuesta.status, status);
+    return respuesta.body;
+  }
+  assert.deepEqual(await comprobar(saldo, token, 200), {
+    pendiente_clp: 0, disponible_clp: 1050, retirado_clp: 450,
+  });
+  const comprobante = await comprobar(retiros, token, 200, solicitud);
+  assert.match(comprobante.referencia, /^[0-9a-f-]{36}$/i);
+  assert.deepEqual(comprobante, {
+    monto_clp: 1050, estado: 'confirmado', referencia: comprobante.referencia,
+    destino: 'Cuenta de prueba CoffeeFast (destino ficticio)', disponible_clp: 0,
+  });
+  assert.deepEqual(await comprobar(retiros, token, 200, solicitud), comprobante);
+  const conflicto = await comprobar(retiros, token, 409, { ...solicitud, monto_clp: 1 });
+  assert.equal(conflicto.error, 'conflicto_idempotencia');
+  const ajeno = await comprobar(retiros, tokens.estudiante, 422, solicitud);
+  assert.equal(ajeno.error, 'saldo_insuficiente');
+  await comprobar(retiros, null, 401, solicitud);
+  await comprobar(retiros, tokens.dueno, 403, solicitud);
+  assert.deepEqual(await comprobar(saldo, token, 200), {
+    pendiente_clp: 0, disponible_clp: 0, retirado_clp: 1500,
+  });
+  assert.equal(sql("SELECT count(*) FROM public.retiros_afiliado WHERE estudiante_id = 901 AND clave_idempotencia = 'retiro-c15'"), '1');
+  console.log('PASS C15: comprobante idéntico y una sola fila de retiro');
 };
