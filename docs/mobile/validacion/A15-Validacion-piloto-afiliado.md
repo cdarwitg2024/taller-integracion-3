@@ -1,6 +1,7 @@
 # A15 · Validar solicitud, aprobación y ganancias en móvil
 
-24 de noviembre de 2026. Rama `S3-T15-Ariel-Diaz-Validar-solicitud-aprobacion-y-ganancias-en-movil`,
+Registro local del 24 de noviembre de 2026; verificación de CI del 25 de noviembre de 2026.
+Rama `S3-T15-Ariel-Diaz-Validar-solicitud-aprobacion-y-ganancias-en-movil`,
 basada en A05 `fbfe3b7` ([PR #127](https://github.com/cdarwitg2024/taller-integracion-3/pull/127)).
 La validación reutiliza [A07](A07-Compartir-codigo-personal.md),
 [A13](A13-Comprobante-y-actualizacion-saldo.md), [A14](A14-Cambio-cuenta-afiliaciones.md)
@@ -82,10 +83,20 @@ importes y referencia; no se imprimen JWT ni contraseñas.
 
 La prueba está conectada al job existente `mobile-afiliaciones`. Sin las variables
 efímeras del runner es opt-in y se omite en la suite normal. El contenedor y las
-cuentas del entorno desechable se eliminan al finalizar. Las migraciones oficiales
-V05/V12/V13/V14 se leen de una copia aislada de `db_CoffeeFaster` `8b80271`, sin
-copiarlas ni aplicarlas a Cloud. Se usan `postgres:15`, Auth
-`supabase/gotrue:v2.197.0` y PostgREST `postgrest/postgrest:v16.3`.
+cuentas del entorno desechable se eliminan al finalizar. La fuente de migraciones
+se distingue por corrida:
+
+- **Local (24/11):** copia aislada de `db_CoffeeFaster`
+  [`8b80271a30fcf1940edc531cf7bbc0c910327de1`](https://github.com/Diego24Vas/db_CoffeeFaster/tree/8b80271a30fcf1940edc531cf7bbc0c910327de1),
+  mediante `COFFEEFAST_DB_MIGRATIONS`.
+- **CI (25/11, run 45537079299):** checkout de
+  [`80bbc91ebf7766d849332d2a73b02b0f7265568f`](https://github.com/Diego24Vas/db_CoffeeFaster/tree/80bbc91ebf7766d849332d2a73b02b0f7265568f)
+  en `.test-bd`, fijado en el [workflow del SHA revisado](https://github.com/cdarwitg2024/taller-integracion-3/blob/432134aa8a9bba3b0a6c33c824a776d3e8889424/.github/workflows/ci-functional.yml).
+
+El escenario aplica V05/V12/V13/V14 en el entorno desechable, sin copiarlas ni
+aplicarlas a Cloud. El runner usa `postgres:15`, Auth `supabase/gotrue:v2.197.0`
+y PostgREST `postgrest/postgrest:v16.3`. La etapa separada de suites SQL del job CI
+usa `postgres:17`; no es el PostgreSQL del recorrido móvil.
 
 ## Preparación del escenario y límites
 
@@ -98,8 +109,9 @@ como una corrección de producto ni como validación de un catálogo grande.
 No se encontraron defectos adicionales de aplicación en los recorridos ejecutados.
 No se modificaron cuentas reales, Cloud, datos bancarios ni datos existentes.
 El alcance es la validación funcional de componentes móviles y servicios reales,
-no una captura visual de un APK instalado. La CI de la rama se comprueba cuando
-se publique el nuevo commit.
+no una captura visual de un APK instalado. La CI de `432134a` ya se verificó en el
+run enlazado en el apéndice. Esa evidencia corresponde a ese SHA y no se atribuye
+a otros commits ni ejecuciones posteriores.
 
 ## Archivos
 
@@ -108,7 +120,15 @@ se publique el nuevo commit.
 - [Job funcional](../../../.github/workflows/ci-functional.yml).
 - Índice, contrato y estado funcional.
 
-## Resultado de la ejecución final
+## Resultado de la corrida local — 24 de noviembre de 2026
+
+Windows, Node.js 22.19.0. La corrida finalizó a las **23:56, America/Santiago**,
+antes del commit: se ejecutó sobre el árbol de trabajo de A15 basado en
+`fbfe3b7d879e961e3031b1083b23098769599111`, después publicado como
+[`432134aa8a9bba3b0a6c33c824a776d3e8889424`](https://github.com/cdarwitg2024/taller-integracion-3/commit/432134aa8a9bba3b0a6c33c824a776d3e8889424).
+Comando: `node .github/scripts/test-afiliados-auth-integration.cjs --a06`, con
+`COFFEEFAST_DB_MIGRATIONS` apuntando a la copia local `8b80271` y las imágenes Auth
+/ PostgREST indicadas arriba. Los valores siguientes **son locales, no de CI**.
 
 - **A15 PASS** con el estudiante ficticio 902, solicitud 13. El código asignado
   `CF-986F9162D5F24DDC962D24465CCA4AA3` fue el mismo visible, copiado y enviado a compartir.
@@ -124,3 +144,39 @@ se publique el nuevo commit.
 - TypeScript, sintaxis del runner, 174 enlaces relativos y `git diff --check` aprobados.
 - Los contenedores creados por el runner se eliminaron. Docker volvió al estado
   apagado inicial. No se modificaron código de aplicación, datos existentes ni Cloud.
+
+## Apéndice: CI verificada de `432134a` — 25 de noviembre de 2026
+
+- [Run 45537079299](https://github.com/cdarwitg2024/taller-integracion-3/actions/runs/45537079299),
+  evento `pull_request`, SHA de origen
+  `432134aa8a9bba3b0a6c33c824a776d3e8889424`.
+- [Job mobile-afiliaciones 138946191133 y su log](https://github.com/cdarwitg2024/taller-integracion-3/actions/runs/45537079299/job/138946191133):
+  **success**, de **00:01:51 a 00:04:09, America/Santiago (UTC−03)**,
+  equivalentes a `2026-11-25T03:01:51Z`–`03:04:09Z`.
+- El checkout de aplicación fue la combinación de prueba `f80fa62` de `432134a`
+  con `develop` `0ed178418e89439729103bfea4600f830f61c0db`.
+  El checkout de BD fue **`80bbc91ebf7766d849332d2a73b02b0f7265568f`**.
+- Comando del escenario: `node .github/scripts/test-afiliados-auth-integration.cjs --a06`.
+- Los **13 checks** de `432134a` terminaron aprobados. Esto verifica ese commit,
+  no el estado de checks de una modificación documental posterior.
+
+Los cuatro `PASS A15` del log de ese job registran:
+
+| Etapa | Resultado de CI |
+|---|---|
+| Pendiente | Estudiante 902, solicitud **10**, `codigo_visible: false`, `panel_habilitado: false` |
+| Aprobada | Código **`CF-8C7A7D0D2E00476CBA4DD4436CAF437D`**, el mismo para copiar/compartir y con el contexto correcto |
+| Retiro | Monto **$500**, referencia **`b5cbf70d-3e38-4dd4-a86d-e894bf5dde4c`**, una fila, disponible **$1.200 → $700**, pendiente **$300**, retirado **$500** |
+| Desactivada | `codigo_activo: false`, saldo **300/700/500** conservado, misma referencia, atribución nueva rechazada por SQL y reapertura sin otro retiro |
+
+Para volver a consultar el registro original, con acceso al repositorio:
+
+```powershell
+gh run view 45537079299 --repo cdarwitg2024/taller-integracion-3 --job 138946191133 --log | Select-String 'PASS A15'
+```
+
+La solicitud, el código y la referencia se generan en cada entorno. Por eso la
+corrida local (solicitud 13) y esta corrida de CI (solicitud 10) tienen valores
+diferentes. Las aserciones cotejan cada código y comprobante con la respuesta y
+la fila SQL de **su propia corrida**; no fijan estos valores como constantes para
+futuras ejecuciones. El apéndice conserva evidencia inmutable del run citado.
