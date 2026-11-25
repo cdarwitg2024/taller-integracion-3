@@ -9,12 +9,12 @@ const pesos = valor => `${valor < 0 ? '-' : ''}$${Math.abs(valor).toLocaleString
 export default function SaldoAfiliado({ revision, vista, usuarioId, onRetiroConfirmado, onVerHistorial, onActualizarMovimientos }) {
   const [intento, setIntento] = useState(0);
   const [conRetiro, setConRetiro] = useState(false);
-  const [datos, setDatos] = useState({ estado: 'cargando', saldo: null, error: '', prohibido: false });
+  const [datos, setDatos] = useState({ estado: 'cargando', saldo: null, error: '', prohibido: false, restringido: false });
   useEffect(() => {
     let vigente = true;
     setDatos(prev => ({ ...prev, estado: 'cargando', error: '' }));
     consultarSaldoAfiliado().then(saldo => {
-      if (vigente) setDatos({ estado: 'listo', saldo, error: '', prohibido: false });
+      if (vigente) setDatos({ estado: 'listo', saldo, error: '', prohibido: false, restringido: false });
     }).catch(error => {
       if (vigente) {
         if ([401, 403].includes(error.status)) setConRetiro(false);
@@ -22,6 +22,7 @@ export default function SaldoAfiliado({ revision, vista, usuarioId, onRetiroConf
           saldo: [401, 403].includes(error.status) ? null : prev.saldo,
           error: error.message || 'No pudimos consultar el saldo. Intenta nuevamente.',
           prohibido: error.status === 403,
+          restringido: [401, 403].includes(error.status),
         }));
       }
     });
@@ -43,18 +44,20 @@ export default function SaldoAfiliado({ revision, vista, usuarioId, onRetiroConf
     {conRetiro && !datos.saldo && <Text accessibilityLiveRegion="polite" style={styles.texto}>
       El retiro está confirmado. Actualiza el saldo para consultar el disponible actual; el comprobante conserva el saldo al confirmar.
     </Text>}
-    {(datos.saldo || conRetiro) && <SolicitudRetiroSimulado key={usuarioId} usuarioId={usuarioId} disponible={datos.saldo?.disponible_clp}
+    {/* Un fallo transitorio de saldo no impide leer el comprobante local de esta cuenta. */}
+    {!datos.restringido && (datos.saldo || conRetiro || datos.estado === 'error') && <SolicitudRetiroSimulado key={usuarioId} usuarioId={usuarioId} disponible={datos.saldo?.disponible_clp}
+      soloComprobante={!datos.saldo && !conRetiro}
       confirmado={datos.estado === 'listo'} onVerHistorial={onVerHistorial}
       onConfirmado={comprobante => {
         setConRetiro(true);
         // La lectura anterior precede al retiro: no presentarla como saldo actual.
-        setDatos({ estado: 'cargando', saldo: null, error: '', prohibido: false });
+        setDatos({ estado: 'cargando', saldo: null, error: '', prohibido: false, restringido: false });
         setIntento(valor => valor + 1);
         onRetiroConfirmado?.(comprobante);
       }}
       onAccesoDenegado={status => {
         setConRetiro(false);
-        setDatos({ estado: 'error', saldo: null, prohibido: status === 403,
+        setDatos({ estado: 'error', saldo: null, prohibido: status === 403, restringido: true,
           error: status === 403 ? 'Tu cuenta no tiene permisos para retirar.' : 'Tu sesión venció. Vuelve a iniciar sesión.' });
       }} />}
 
