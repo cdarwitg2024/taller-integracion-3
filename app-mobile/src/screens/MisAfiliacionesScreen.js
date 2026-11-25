@@ -22,15 +22,18 @@ const secciones = [
 
 export default function MisAfiliacionesScreen({ onBack, nombreUsuario, usuarioId }) {
   const [seccion, setSeccion] = useState('inicio');
-  const [revisionRetiros, setRevisionRetiros] = useState(0);
+  const [revisionMovimientos, setRevisionMovimientos] = useState(0);
+  const [revisionConsultas, setRevisionConsultas] = useState(0);
   const [retiroSeleccionado, setRetiroSeleccionado] = useState(null);
   const [perfil, setPerfil] = useState({ estado: 'cargando', solicitudes: [], error: '' });
   const consulta = useRef(0);
   const montado = useRef(true);
   useEffect(() => { montado.current = true; return () => { montado.current = false; consulta.current++; }; }, []);
-  const recargar = useCallback(() => {
+  const recargar = useCallback((actualizarFinanzas = true) => {
     if (!montado.current) return;
     const numero = ++consulta.current;
+    // Saldo e historial se actualizan aunque solicitudes falle de forma transitoria.
+    if (actualizarFinanzas) setRevisionConsultas(valor => valor + 1);
     setPerfil(prev => ({ ...prev, estado: 'cargando', error: '' }));
     consultarAfiliaciones().then(solicitudes => {
       if (montado.current && numero === consulta.current) setPerfil({ estado: 'listo', solicitudes, error: '' });
@@ -43,7 +46,8 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario, usuarioId
       }));
     });
   }, []);
-  useEffect(() => { recargar(); return () => { consulta.current++; }; }, [recargar, seccion]);
+  // Al navegar, cada vista inicia su lectura al montarse o cambiar de sección.
+  useEffect(() => { recargar(false); return () => { consulta.current++; }; }, [recargar, seccion]);
   useEffect(() => {
     const listener = AppState.addEventListener('change', estado => { if (estado === 'active') recargar(); });
     return () => listener.remove();
@@ -108,15 +112,16 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario, usuarioId
               {perfil.solicitudes.map(s => <EstadoAfiliacion key={s.id} solicitud={s} confirmado={perfil.estado === 'listo'} />)}
             </View>}
             {['ganancias', 'historial'].includes(seccion) && <>
-              <SaldoAfiliado usuarioId={usuarioId} revision={perfil.solicitudes} vista={seccion}
-                onRetiroConfirmado={() => setRevisionRetiros(valor => valor + 1)}
+              <SaldoAfiliado usuarioId={usuarioId} revision={revisionConsultas} vista={seccion}
+                onRetiroConfirmado={() => setRevisionMovimientos(valor => valor + 1)}
+                onActualizarMovimientos={() => setRevisionMovimientos(valor => valor + 1)}
                 onVerHistorial={referencia => { setRetiroSeleccionado({ referencia }); setSeccion('historial'); }} />
               {aprobadas.filter(s => !s.codigo_activo).map(s => <Text key={s.id} style={styles.description}>
                 {`El código está desactivado (cafetería #${s.cafeteria_id}, campaña #${s.campana_id}). Sus comisiones e historial siguen disponibles.`}
               </Text>)}
               {seccion === 'historial' && <Text accessibilityRole="header" style={styles.title}>Historial de ganancias y retiros</Text>}
-              {seccion === 'historial' && <RetirosAfiliado revision={perfil.solicitudes} retiroRevision={revisionRetiros} seleccion={retiroSeleccionado} />}
-              {seccion === 'historial' && aprobadas.map(s => <ComisionesAfiliado key={s.id} afiliacion={s} historial />)}
+              {seccion === 'historial' && <RetirosAfiliado revision={revisionConsultas} retiroRevision={revisionMovimientos} seleccion={retiroSeleccionado} />}
+              {seccion === 'historial' && aprobadas.map(s => <ComisionesAfiliado key={s.id} afiliacion={s} historial revision={revisionConsultas} revisionMovimientos={revisionMovimientos} />)}
             </>}
           </>
         ) : (

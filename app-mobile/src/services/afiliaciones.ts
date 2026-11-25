@@ -85,10 +85,17 @@ export async function consultarMovimientosComision(afiliacionId: number): Promis
   const vistos = new Set<number>();
   let total: number | undefined;
   for (let pagina = 0; pagina < 50; pagina++) {
-    const { data, count, error } = await leerConRenovacion(() => supabase.from('movimientos_comision')
+    const { data, count, error, status: estadoHttp } = await leerConRenovacion(() => supabase.from('movimientos_comision')
       .select('id,afiliacion_id,pedido_id,tipo,estado,monto_clp,creado_en', { count: 'exact' })
       .eq('afiliacion_id', afiliacion).order('id', { ascending: true }).range(filas.length, filas.length + 199));
-    if (error) throw new Error('No se pudieron consultar las comisiones. Intenta nuevamente.');
+    if (error || estadoHttp >= 400) {
+      const status = estadoHttp === 401 || estadoHttp === 403 ? estadoHttp
+        : error?.code === '42501' ? 403
+          : ['PGRST301', 'PGRST303', '28000'].includes(error?.code) ? 401 : 503;
+      throw Object.assign(new Error(status === 403 ? 'Tu cuenta no tiene permisos para consultar comisiones.'
+        : status === 401 ? 'Tu sesión venció. Vuelve a iniciar sesión.'
+          : 'No se pudieron consultar las comisiones. Intenta nuevamente.'), { status });
+    }
     if (!Array.isArray(data) || typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0 ||
         (total !== undefined && count !== total) || filas.length + data.length > count ||
         (!data.length && filas.length < count)) throw new Error('No se pudo confirmar el historial completo de comisiones. Actualiza la consulta.');

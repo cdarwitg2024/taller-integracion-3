@@ -134,7 +134,10 @@ test.each(['cerrar sesión', 'reemplazar sesión'])('A14: %s borra códigos, gan
   await acceso('Actualizar saldo de comisiones');
   await acceso('Actualizar historial de retiros');
   await acceso(`Actualizar comisiones de afiliación ${a.afiliacion}`);
-  expect(tardias.map(r => r.fuente).sort()).toEqual(['comisiones', 'perfil', 'retiros', 'saldo']);
+  // Actualizar solicitudes inicia las lecturas financieras sin esperar al perfil.
+  // Actualizar saldo inicia también lecturas de comisiones y retiros.
+  // Se resuelven todas las respuestas retenidas, incluidas las de los botones individuales.
+  expect(tardias.map(r => r.fuente).sort()).toEqual(['comisiones', 'comisiones', 'comisiones', 'perfil', 'retiros', 'retiros', 'retiros', 'saldo', 'saldo']);
   if (modo === 'cerrar sesión') {
     await pulsar('Volver a Mis afiliaciones'); await pulsar('Volver al perfil'); await pulsar('Cerrar sesión');
     await act(async () => Alert.alert.mock.calls.at(-1)[2].find(opcion => opcion.text === 'Cerrar sesión').onPress());

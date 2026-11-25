@@ -175,7 +175,7 @@ jobs:
       - run: npm ci --prefix Microservices/ms-afiliados
       - run: ln -s ../ms-pedidos/node_modules Microservices/shared/node_modules
       - run: npm ci --prefix app-mobile
-      - name: A06, A10, A12, A13, C05 and C15 through gateway, real Auth JWTs, PostgreSQL and RLS
+      - name: A05, A06, A10, A12, A13, C05 and C15 through gateway, real Auth JWTs, PostgreSQL and RLS
         env:
           COFFEEFAST_DB_MIGRATIONS: ${{ github.workspace }}/.test-bd/supabase/migrations
           TEST_AUTH_IMAGE: supabase/gotrue:v2.197.0

@@ -5,7 +5,7 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 const pesos = valor => `${valor < 0 ? '-' : ''}$${Math.abs(valor).toLocaleString('es-CL')}`;
 
-export default function ComisionesAfiliado({ afiliacion, historial }) {
+export default function ComisionesAfiliado({ afiliacion, historial, revision, revisionMovimientos }) {
   const [intento, setIntento] = useState(0);
   const [datos, setDatos] = useState({ id: null, estado: 'cargando', filas: null, resumen: null, error: '' });
   useEffect(() => {
@@ -15,11 +15,15 @@ export default function ComisionesAfiliado({ afiliacion, historial }) {
     consultarMovimientosComision(afiliacion.id).then(filas => {
       const resumen = resumirComisiones(filas);
       if (vigente) setDatos({ id: afiliacion.id, estado: 'listo', filas, resumen, error: '' });
-    }).catch(() => {
-      if (vigente) setDatos(prev => ({ ...prev, estado: 'error', error: 'No pudimos actualizar las comisiones. Intenta nuevamente.' }));
+    }).catch(error => {
+      const restringido = [401, 403].includes(error.status);
+      if (vigente) setDatos(prev => ({ ...prev, estado: 'error', restringido,
+        filas: restringido ? null : prev.filas, resumen: restringido ? null : prev.resumen,
+        error: restringido ? error.message : 'No pudimos actualizar las comisiones. Intenta nuevamente.',
+      }));
     });
     return () => { vigente = false; };
-  }, [afiliacion.id, afiliacion.codigo_activo, historial, intento]);
+  }, [afiliacion.id, afiliacion.codigo_activo, historial, intento, revision, revisionMovimientos]);
   const actual = datos.id === afiliacion.id ? datos : { estado: 'cargando', filas: null };
   return <View style={styles.container}>
     <Text accessibilityRole="header" style={styles.titulo}>{`Cafetería #${afiliacion.cafeteria_id} · Campaña #${afiliacion.campana_id}`}</Text>
@@ -35,10 +39,10 @@ export default function ComisionesAfiliado({ afiliacion, historial }) {
         <Text style={styles.texto}>{new Date(m.creado_en).toLocaleString('es-CL')}</Text>
       </View>)}
     </>}
-    <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Actualizar comisiones de afiliación ${afiliacion.id}`}
+    {!actual.restringido && <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Actualizar comisiones de afiliación ${afiliacion.id}`}
       onPress={() => setIntento(valor => valor + 1)} style={styles.boton}>
       <Text style={styles.botonTexto}>Actualizar comisiones</Text>
-    </TouchableOpacity>
+    </TouchableOpacity>}
   </View>;
 }
 const styles = StyleSheet.create({
