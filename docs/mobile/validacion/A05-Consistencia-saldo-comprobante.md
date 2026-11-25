@@ -5,9 +5,10 @@ basada en A13 `f080c34` ([PR #126](https://github.com/cdarwitg2024/taller-integr
 A13 y A12 seguían abiertas al comenzar esta tarea; integrar primero
 [A12 #125](https://github.com/cdarwitg2024/taller-integracion-3/pull/125) y después A13
 antes de comparar A05 contra `develop`. Actualización del 25 de noviembre: A12 ya
-está integrada y esta rama incorpora `origin/develop` en `7202239`. A13 sigue abierta
-y tiene pendiente su corrección del comprobante al reabrir con fallo de saldo;
-integrarla y actualizar A05 antes del merge. A14 ya forma parte de la base (se comprobó
+está integrada y esta rama incorpora `origin/develop` en `7202239`. A13 sigue abierta;
+su corrección `36d75b0` recupera el comprobante al reabrir con fallo de saldo y ya
+está incorporada a esta rama. Integrar A13 en `develop` y volver a comprobar el
+diff de A05 antes del merge. A14 ya forma parte de la base (se comprobó
 que `786b65b` es antecesor de la rama). A12 y A13 tienen 13 controles remotos aprobados.
 
 Dependencias: [A13](A13-Comprobante-y-actualizacion-saldo.md) y
@@ -177,4 +178,19 @@ integraciones opt-in omitidas; TypeScript, los 11 enlaces relativos de este
 registro y `git diff --check` pasaron. Las verificaciones de esta revisión usan servicios simulados; no se
 repitieron Docker, Supabase Cloud, la entrega desde KDS ni el APK. Los resultados
 de la integración inicial arriba conservan su alcance y fecha. La CI del nuevo
-commit se verifica por separado. A13 sigue siendo una dependencia pendiente.
+commit se verifica por separado. A13 sigue siendo una dependencia pendiente de merge.
+
+## Composición con el ajuste de A13
+
+El mismo 25 de noviembre se incorporó `36d75b0` desde la rama de A13 sin conflictos.
+La combinación conserva el refresco financiero independiente de solicitudes y
+recupera el comprobante de la cuenta activa si falla temporalmente el saldo al
+reabrir Ganancias. El comprobante muestra su saldo histórico como «al confirmar»;
+sin saldo vigente no ofrece formulario ni preparar otro retiro. HTTP 401/403
+siguen retirando el comprobante. Ver la reproducción y los límites en
+[el registro A13](A13-Comprobante-y-actualizacion-saldo.md#ajuste-tras-revisión-recuperar-el-comprobante-al-reabrir-sin-saldo).
+
+Sobre la combinación: **423 pruebas aprobadas en 42 suites**, tres integraciones
+opt-in omitidas; TypeScript, enlaces relativos de A05/A13 y `git diff --check`
+correctos con Node.js 22.19.0. Son pruebas con servicios simulados; la CI del nuevo
+SHA se verifica por separado y A13 sigue pendiente de aprobación y merge.
