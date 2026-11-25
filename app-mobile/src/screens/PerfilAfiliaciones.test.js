@@ -76,6 +76,7 @@ test('A01: perfil de estudiante → Mis afiliaciones → perfil conserva la sesi
   await abrir();
   expect(titulo()).toBe('Mis afiliaciones');
   expect(tree.root.findAllByType(MisAfiliacionesScreen)).toHaveLength(1);
+  expect(tree.root.findByType(MisAfiliacionesScreen).props.usuarioId).toBe(session.user.id);
   const consultasAntesDeVolver = supabase.from.mock.calls.length;
   await act(async () => tree.root.findAllByType(Button)
     .find(nodo => nodo.props.title === 'Volver al perfil').props.onPress());

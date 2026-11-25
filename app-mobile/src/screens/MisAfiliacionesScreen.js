@@ -20,7 +20,7 @@ const secciones = [
   { id: 'historial', titulo: 'Historial', icono: 'receipt', descripcion: 'Consulta comisiones, reversiones y retiros por comprobante.' },
 ];
 
-export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
+export default function MisAfiliacionesScreen({ onBack, nombreUsuario, usuarioId }) {
   const [seccion, setSeccion] = useState('inicio');
   const [perfil, setPerfil] = useState({ estado: 'cargando', solicitudes: [], error: '' });
   const consulta = useRef(0);
@@ -106,7 +106,7 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
               {perfil.solicitudes.map(s => <EstadoAfiliacion key={s.id} solicitud={s} confirmado={perfil.estado === 'listo'} />)}
             </View>}
             {['ganancias', 'historial'].includes(seccion) && <>
-              <SaldoAfiliado revision={perfil.solicitudes} vista={seccion} />
+              <SaldoAfiliado usuarioId={usuarioId} revision={perfil.solicitudes} vista={seccion} />
               {aprobadas.filter(s => !s.codigo_activo).map(s => <Text key={s.id} style={styles.description}>
                 {`El código está desactivado (cafetería #${s.cafeteria_id}, campaña #${s.campana_id}). Sus comisiones e historial siguen disponibles.`}
               </Text>)}

@@ -93,6 +93,13 @@ insuficiente devuelven `422`. La sesión ausente o inválida devuelve `401`, y l
 cuenta sin rol de estudiante activo recibe `403`. Los campos adicionales y los
 parámetros de consulta devuelven `400`.
 
+**Confirmación móvil A12.** Tras revisar el monto de A11, la confirmación persiste
+monto y clave por UUID Auth antes del POST a C15. Una respuesta perdida conserva
+esa solicitud y habilita «Recuperar retiro»; el reintento no genera otra clave,
+aunque el saldo ya esté agotado. Durante el envío no se permite editar ni confirmar
+de nuevo. El comprobante usa la referencia del servidor y se actualiza el saldo
+con V12 sin restarlo localmente. [Prueba reproducible A12](mobile/validacion/A12-Confirmar-retiro-reintento-seguro.md).
+
 ## 3. Cotización y compra
 
 Ana envía su sesión desde móvil. La cotización calcula el precio vigente sin cobrar ni consumir el beneficio.

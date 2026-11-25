@@ -97,3 +97,9 @@ sintéticas. Desde `app-mobile`: `node node_modules/expo/bin/cli export
 Este registro aporta el paso y el estado resultante; no se tomó una nueva
 captura en emulador ni se construyó un APK. No se modificaron datos de Cloud,
 SQL de negocio, credenciales, archivos `.env` ni la Wallet.
+
+## Continuación A12
+
+El registro anterior conserva el alcance de A11. A12 añade una confirmación
+explícita por C15: revisar no envía, pero confirmar registra el retiro simulado
+y descuenta el disponible. Ver [confirmación y reintento seguro](A12-Confirmar-retiro-reintento-seguro.md).

@@ -77,6 +77,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [A09 — Comisiones pendientes, disponibles y retiradas con V12](mobile/validacion/A09-Comisiones-saldo-disponible.md)
 - [A10 — Historial de ganancias y retiros, búsqueda por comprobante V14](mobile/validacion/A10-Historial-ganancias-y-retiros.md)
 - [A11 — Formulario de monto y destino ficticio para retiro simulado](mobile/validacion/A11-Solicitud-retiro-simulado.md)
+- [A12 — Confirmación de retiro y recuperación con la misma clave](mobile/validacion/A12-Confirmar-retiro-reintento-seguro.md)
 - [A14 — Cambio de cuenta, cierre de sesión y respuestas tardías de afiliaciones](mobile/validacion/A14-Cambio-cuenta-afiliaciones.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 - [D02 - Estado del código asociado al carrito](mobile/validacion/D02-Estado-codigo-carrito.md)

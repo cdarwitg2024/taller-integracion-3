@@ -82,4 +82,33 @@ module.exports = async ({ call, sql, tokens, base, anon, supabaseUrl, dbContaine
   });
   assert.equal(sql("SELECT count(*) FROM public.retiros_afiliado WHERE estudiante_id = 901 AND clave_idempotencia = 'retiro-c15'"), '1');
   console.log('PASS C15: comprobante idéntico y una sola fila de retiro');
+
+  // A12 usa otra campaña/afiliación activa; no reactiva el código desactivado de A06.
+  const campanaA12 = Number(sql(`INSERT INTO public.campanas
+    (cafeteria_id,nombre,estado,tasa_descuento,tasa_comision,vigencia_desde,vigencia_hasta,
+     confirmada_por_dueno,fecha_confirmacion,usuario_confirma_id,version_confirmada)
+    VALUES (7,'Retiro A12','activa',15,10,now()-interval '1 hour',now()+interval '1 day',
+      true,now(),1,'1.0') RETURNING id;`).split(/\r?\n/)[0]);
+  const recursoA12 = `/api/afiliados/cafeterias/7/campanas/${campanaA12}/solicitudes`;
+  const solicitudA12 = await call(recursoA12, token, 'POST', { plan_promocion: 'Fixture de retiro A12' });
+  assert.equal(solicitudA12.status, 201);
+  const aprobacionA12 = await call(`${recursoA12}/${solicitudA12.body.id}`, tokens.dueno, 'PATCH', { decision: 'aprobar' });
+  assert.equal(aprobacionA12.status, 200);
+  sql(`INSERT INTO public.pedidos(id,cafeteria_id,estado) VALUES (1005,7,'entregado');
+    INSERT INTO public.movimientos_comision(afiliacion_id,pedido_id,tipo,base_calculo_clp,tasa_comision,monto_clp)
+    VALUES (${solicitudA12.body.id},1005,'comision',6000,10,600);
+    UPDATE public.movimientos_comision SET estado='disponible' WHERE pedido_id=1005;`);
+  await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [path.join(root, 'app-mobile/node_modules/jest/bin/jest.js'),
+      '--config', path.join(root, 'app-mobile/jest.config.js'), '--ci', '--runInBand', '--testTimeout=30000',
+      '--runTestsByPath', path.join(root, 'app-mobile/src/screens/afiliaciones/ConfirmarRetiroIntegracion.test.js')], {
+      cwd: path.join(root, 'app-mobile'), stdio: 'inherit', env: { ...process.env,
+        EXPO_PUBLIC_API_URL: base, A12_INTEGRATION_URL: base, A12_STUDENT_TOKEN: token,
+        A12_STUDENT_ID: login.body.user.id, A12_SUPABASE_URL: supabaseUrl, A12_ANON_KEY: anon,
+        A12_DB_CONTAINER: dbContainer,
+      },
+    });
+    child.on('error', reject);
+    child.on('exit', code => code === 0 ? resolve() : reject(new Error(`Integración A12: salida ${code}`)));
+  });
 };
