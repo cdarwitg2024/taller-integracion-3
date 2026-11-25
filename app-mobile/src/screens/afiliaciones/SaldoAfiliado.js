@@ -6,7 +6,7 @@ import { spacing } from '../../theme/spacing';
 import SolicitudRetiroSimulado from './SolicitudRetiroSimulado';
 const pesos = valor => `${valor < 0 ? '-' : ''}$${Math.abs(valor).toLocaleString('es-CL')}`;
 
-export default function SaldoAfiliado({ revision, vista }) {
+export default function SaldoAfiliado({ revision, vista, usuarioId }) {
   const [intento, setIntento] = useState(0);
   const [datos, setDatos] = useState({ estado: 'cargando', saldo: null, error: '', prohibido: false });
   useEffect(() => {
@@ -36,7 +36,10 @@ export default function SaldoAfiliado({ revision, vista }) {
       <Text style={styles.texto}>{`Comisiones retiradas: ${pesos(datos.saldo.retirado_clp)}`}</Text>
     </View>}
     <Text style={styles.texto}>Las comisiones pendientes no están disponibles para retiro. El disponible ya descuenta los retiros confirmados.</Text>
-    {datos.saldo && <SolicitudRetiroSimulado disponible={datos.saldo.disponible_clp} confirmado={datos.estado === 'listo'} />}
+    {datos.saldo && <SolicitudRetiroSimulado key={usuarioId} usuarioId={usuarioId} disponible={datos.saldo.disponible_clp}
+      confirmado={datos.estado === 'listo'} onConfirmado={() => setIntento(valor => valor + 1)}
+      onAccesoDenegado={status => setDatos({ estado: 'error', saldo: null, prohibido: status === 403,
+        error: status === 403 ? 'Tu cuenta no tiene permisos para retirar.' : 'Tu sesión venció. Vuelve a iniciar sesión.' })} />}
     {!datos.prohibido && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Actualizar saldo de comisiones"
       disabled={datos.estado === 'cargando'} accessibilityState={{ disabled: datos.estado === 'cargando', busy: datos.estado === 'cargando' }}
       onPress={() => setIntento(valor => valor + 1)} style={styles.boton}>
