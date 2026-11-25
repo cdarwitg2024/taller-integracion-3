@@ -1,5 +1,6 @@
 // Resumen de ventas referidas y comisiones del dueño, leído con RLS desde Supabase.
 import { supabase as supabaseOriginal } from './supabaseClient';
+import { esPedidoDeVentas } from './pedidosService';
 
 const TAMANO_PAGINA = 200;
 const MAXIMO_PAGINAS = 50;
@@ -29,6 +30,9 @@ export function construirResumen(filas = [], cafeteriaId = null) {
     if (!pedido || String(pedido.cafeteria_id) !== cafeteria) continue;
     const monto = Number(fila.monto_clp);
     if (!Number.isFinite(monto)) continue;
+    if (typeof pedido.estado !== 'string' || !pedido.estado.trim()) {
+      throw new Error('El historial de comisiones no permite clasificar una venta.');
+    }
 
     resumen.movimientos.push({
       id: fila.id,
@@ -48,6 +52,7 @@ export function construirResumen(filas = [], cafeteriaId = null) {
     resumen.comisiones[fila.estado] += monto;
     if (pedidosVistos.has(fila.pedido_id)) continue;
     pedidosVistos.add(fila.pedido_id);
+    if (!esPedidoDeVentas(pedido)) continue;
     resumen.ventasReferidas += 1;
     const total = Number(pedido.total);
     if (Number.isFinite(total)) resumen.totalCobrado += total;
@@ -70,7 +75,7 @@ export async function obtenerResumenComisiones(cafeteriaId, supabase = supabaseO
   for (let pagina = 0; pagina < MAXIMO_PAGINAS; pagina++) {
     const { data, count, error } = await supabase
       .from('movimientos_comision')
-      .select('id, pedido_id, tipo, estado, monto_clp, creado_en, pedidos!inner(cafeteria_id, total)', { count: 'exact' })
+      .select('id, pedido_id, tipo, estado, monto_clp, creado_en, pedidos!inner(cafeteria_id, total, estado, pago_estado)', { count: 'exact' })
       .eq('pedidos.cafeteria_id', cafeteria)
       .order('id', { ascending: true })
       .range(filas.length, filas.length + TAMANO_PAGINA - 1);

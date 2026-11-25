@@ -101,9 +101,13 @@ movimientos en el entorno desplegado; Diego confirma que su SQL ya está en
 Cloud, pero este trabajo no lo verificó directamente. No se aplicó SQL ni se
 modificaron despliegues.
 
-`ventasReferidas` y `totalCobrado` son el histórico bruto de pedidos con comisión
-registrada: un pedido cancelado con comisión revertida sigue contando como venta
-referida y aporta su total histórico. Las comisiones por estado sí reflejan la
-reversión. La conciliación de ese bruto con el criterio de ventas del panel
-(excluir cancelados/reembolsados, `esPedidoDeVentas` en `pedidosService.js`)
-corresponde a E09 / CAM-295, no a E11.
+En E11, `ventasReferidas` y `totalCobrado` eran el histórico bruto de pedidos
+con comisión registrada: un pedido cancelado con comisión revertida seguía
+contando como venta referida y aportaba su total histórico. Las comisiones por
+estado sí reflejaban la reversión. La conciliación de ese bruto con el criterio
+de ventas del panel (excluir cancelados/reembolsados, `esPedidoDeVentas` en
+`pedidosService.js`) correspondía a E09 / CAM-295, no a E11. E09 ejecutó esa
+conciliación:
+`construirResumen` aplica `esPedidoDeVentas` al pedido embebido y el cancelado
+ya no aporta ventas referidas ni cobro; las comisiones y las reversiones se
+mantienen. Ver [registro E09](E09-CAM-295-Corregir-diferencias-en-ventas-y-comisiones.md).

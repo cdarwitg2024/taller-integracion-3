@@ -1,6 +1,6 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { Alert, FlatList, Modal, Text, TouchableOpacity } from 'react-native';
+import { AccessibilityInfo, Alert, BackHandler, FlatList, Modal, Text, TouchableOpacity } from 'react-native';
 import PedidosScreen from './PedidosScreen';
 import Button from '../components/Button';
 import QrCode from '../lib/QrCode';
@@ -80,20 +80,29 @@ test('abre inmediatamente QR completo y token persistidos sin consultar otro ser
   expect(textos()).toContain('842517');
 });
 
-test('permite abrir y cerrar repetidamente usando un único modal nativo', async () => {
+test('abre y cierra repetidamente el detalle de un pedido listo sin activar el modal nativo', async () => {
+  rows = [{ ...pedido, estado: 'listo' }];
   await montar();
   expect(tree.root.findAllByType(Modal)).toHaveLength(1);
+  const lista = () => tree.root.findByProps({ testID: 'lista-pedidos' });
+  expect(lista().props.importantForAccessibility).toBe('auto');
   for (let i = 0; i < 5; i++) {
     await abrir();
-    expect(tree.root.findByType(Modal).props.visible).toBe(true);
+    expect(tree.root.findByType(Modal).props.visible).toBe(false);
+    expect(lista().props.importantForAccessibility).toBe('no-hide-descendants');
+    expect(lista().props.accessibilityElementsHidden).toBe(true);
     expect(tree.root.findByType(QrCode).props.value).toBe(pedido.qr_token);
     expect(textos()).toContain('842517');
-    await flush(() => tree.root.findByType(Modal).props.onRequestClose());
-    expect(tree.root.findByType(Modal).props.visible).toBe(false);
+    const cerrar = tree.root.findAllByType(TouchableOpacity)
+      .find(n => n.props.accessibilityLabel === 'Cerrar detalle del pedido');
+    await flush(() => cerrar.props.onPress());
+    expect(tree.root.findAllByType(QrCode)).toHaveLength(0);
+    expect(lista().props.importantForAccessibility).toBe('auto');
+    expect(lista().props.accessibilityElementsHidden).toBe(false);
   }
 });
 
-test('cerrar confirmación permite abrir el detalle en el mismo modal', async () => {
+test('cerrar confirmación permite abrir el detalle sin reactivar el modal nativo', async () => {
   const confirmado = { pedido_id: 52, total: 6000, saldo_restante: 4000,
     estado: 'pendiente', qr_token: pedido.qr_token, codigo_retiro: '842517' };
   const cerrarConfirmacion = jest.fn(() => tree.update(<PedidosScreen userId="uuid-auth" />));
@@ -104,8 +113,25 @@ test('cerrar confirmación permite abrir el detalle en el mismo modal', async ()
   expect(cerrarConfirmacion).toHaveBeenCalledTimes(1);
   expect(tree.root.findByType(Modal).props.visible).toBe(false);
   await abrir();
-  expect(tree.root.findByType(Modal).props.visible).toBe(true);
+  expect(tree.root.findByType(Modal).props.visible).toBe(false);
   expect(tree.root.findByType(QrCode).props.value).toBe(pedido.qr_token);
+});
+
+test('Atrás cierra el detalle, desbloquea la navegación y elimina su suscripción', async () => {
+  const remove = jest.fn();
+  const registro = jest.spyOn(BackHandler, 'addEventListener').mockReturnValue({ remove });
+  const cambiarBloqueo = jest.fn();
+  await flush(() => {
+    tree = TestRenderer.create(<PedidosScreen userId="uuid-auth" onDetalleAbiertoChange={cambiarBloqueo} />);
+  });
+  await abrir();
+  expect(cambiarBloqueo).toHaveBeenLastCalledWith(true);
+  const [evento, atras] = registro.mock.calls[0];
+  expect(evento).toBe('hardwareBackPress');
+  await flush(() => expect(atras()).toBe(true));
+  expect(tree.root.findAllByType(QrCode)).toHaveLength(0);
+  expect(cambiarBloqueo.mock.calls).toEqual([[true], [false]]);
+  expect(remove).toHaveBeenCalledTimes(1);
 });
 
 test('muestra contingencia aunque el QR no esté disponible', async () => {
@@ -204,6 +230,26 @@ test('actualiza por gesto y Realtime; entregado pasa al historial sin credencial
   expect(tree.root.findAllByType(QrCode)).toHaveLength(0);
   expect(textos()).not.toContain('842517');
   expect(textos()).toContain('Pedido entregado');
+});
+
+test('al cerrar tras una entrega por Realtime, devuelve el foco a Activos', async () => {
+  const destinoNativo = jest.fn(vista => vista.props.testID === 'pedidos-tab-activos' ? 1 : 2);
+  jest.spyOn(require('react-native'), 'findNodeHandle', 'get').mockReturnValue(destinoNativo);
+  rows = [{ ...pedido, estado: 'listo' }];
+  await montar();
+  await abrir();
+  expect(tree.root.findByType(QrCode).props.value).toBe(pedido.qr_token);
+  await flush(() => jest.advanceTimersByTime(20));
+  expect(AccessibilityInfo.setAccessibilityFocus).toHaveBeenLastCalledWith(2);
+
+  await flush(() => events.UPDATE({ new: { ...pedido, estado: 'entregado' } }));
+  expect(tree.root.findByType(FlatList).props.data).toHaveLength(0);
+  expect(textos()).toContain('Pedido entregado');
+  const cerrar = tree.root.findAllByType(TouchableOpacity)
+    .find(n => n.props.accessibilityLabel === 'Cerrar detalle del pedido');
+  await flush(() => cerrar.props.onPress());
+  await flush(() => jest.advanceTimersByTime(20));
+  expect(AccessibilityInfo.setAccessibilityFocus).toHaveBeenLastCalledWith(1);
 });
 
 test('historial abre comprobante sin solicitar QR ni contingencia', async () => {

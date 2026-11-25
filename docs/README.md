@@ -25,14 +25,17 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [E06 — Conexión de alta y edición de campañas con el gateway](desktop/validacion/E06-Conexion-alta-y-edicion-campanas.md)
 - [E07 — Conexión de activación y pausa de campañas](desktop/validacion/E07-Conexion-activacion-y-pausa-campanas.md)
 - [E08 / CAM-294 — Corregir fallos de guardado y activación de campañas](desktop/validacion/E08-CAM-294-Correccion-guardado-y-activacion.md)
+- [E09 / CAM-295 — Corregir diferencias en ventas y comisiones](desktop/validacion/E09-CAM-295-Corregir-diferencias-en-ventas-y-comisiones.md)
 - [E11 / CAM-233 — Conectar resumen de ventas y comisiones](desktop/validacion/E11-CAM-233-Resumen-ventas-y-comisiones.md)
 - [E12 / CAM-235 — Actualizar resumen tras entregar o cancelar](desktop/validacion/E12-CAM-235-Actualizar-resumen-entrega-y-cancelacion.md)
 - [E13 — Estados de carga, vacío y error de campañas](desktop/validacion/E13-Estados-carga-vacio-y-error-campanas.md)
 - [E14 — Probar tasas y vigencia](desktop/validacion/E14-Probar-tasas-y-vigencia.md)
+- [E15 / CAM-240 — Conciliar el panel con Supabase](desktop/validacion/E15-CAM-240-Conciliar-panel-con-Supabase.md)
 - [E10 / CAM-232 — Aprobar afiliados y gestionar códigos](desktop/validacion/E10-Aprobar-afiliados-y-gestionar-codigos.md)
 - [S2-T15 - Validación flujo integrado y recuperación del KDS](desktop/validacion/S2-T15-Validacion-Flujo-Integrado-KDS.md)
 - [S2-T17 - Validación flujo completo del KDS](desktop/validacion/S2-T17-Validacion-Flujo-Completo-KDS.md)
 - [C08 / CAM-242 — Verificar entrega por QR y token desde KDS](desktop/validacion/C08-CAM-242-entrega-qr-token-kds.md)
+- [C09 / CAM-255 — Segunda validación de retiro afiliado](desktop/validacion/C09-CAM-255-segunda-validacion-retiro.md)
 - [S2-T18 — Validación integrada del panel administrativo](desktop/validacion/S2-T18_validacion_panel_administrativo.md)
 
 ## Móvil
@@ -72,7 +75,9 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [A07 — Copiar y compartir el código de una campaña](mobile/validacion/A07-Compartir-codigo-personal.md)
 - [A08 — Carga, vacío, errores y reintentos de afiliación](mobile/validacion/A08-Carga-vacio-error-afiliaciones.md)
 - [A09 — Comisiones pendientes, disponibles y retiradas con V12](mobile/validacion/A09-Comisiones-saldo-disponible.md)
+- [A10 — Historial de ganancias y retiros, búsqueda por comprobante V14](mobile/validacion/A10-Historial-ganancias-y-retiros.md)
 - [A11 — Formulario de monto y destino ficticio para retiro simulado](mobile/validacion/A11-Solicitud-retiro-simulado.md)
+- [A14 — Cambio de cuenta, cierre de sesión y respuestas tardías de afiliaciones](mobile/validacion/A14-Cambio-cuenta-afiliaciones.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 - [D02 - Estado del código asociado al carrito](mobile/validacion/D02-Estado-codigo-carrito.md)
 - [D03 - Cotización de carrito completo](mobile/validacion/D03-Cotizacion-carrito-completo.md)
@@ -83,7 +88,10 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [D07 - Clave persistida del intento de compra](mobile/validacion/D07-Clave-intento-compra.md)
 - [D08 - Recuperar una compra con respuesta interrumpida](mobile/validacion/D08-Recuperar-compra-interrumpida.md)
 - [D09 - Total cobrado en historial](mobile/validacion/D09-Total-cobrado-en-historial.md)
+- [D14 - Primera compra y compra recurrente](mobile/validacion/D14-Primera-compra-y-recurrente.md)
+- [D15 - Evidencia del checkout](mobile/validacion/D15-Evidencia-del-checkout.md)
 - [D10 - Actualizar Wallet al cancelar](mobile/validacion/D10-Wallet-al-cancelar.md)
+- [D12 - Wallet tras cancelar](mobile/validacion/D12-Wallet-tras-cancelar.md)
 - [D13 - Compra sin código o con código retirado](mobile/validacion/D13-Verificar-compra-sin-codigo.md)
 
 ## Backend Node

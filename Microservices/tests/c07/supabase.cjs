@@ -72,28 +72,37 @@ const server = createServer(async (req, res) => {
   }
 
   const clave = args.p_clave_idempotencia;
-  if (clave === 'c07-saldo-insuficiente') return json(200, { error: 'saldo_insuficiente' });
+  if (clave === 'c07-saldo-insuficiente') return json(200, { ok: false, motivo: 'saldo_insuficiente', cobrado: false });
+  if (clave === 'c07-stock-insuficiente') return json(200, { ok: false, motivo: 'stock_insuficiente', cobrado: false });
+  if (clave === 'c07-sin-wallet') return json(200, { ok: false, motivo: 'sin_wallet', cobrado: false });
   if (clave === 'c07-rpc-malformada') return json(200, { pedido_id: 0 });
   const huella = JSON.stringify(args);
   if (clave && Object.hasOwn(estado.intentos, clave)) {
     const intento = estado.intentos[clave];
     return json(200, intento.huella === huella
-      ? intento.pedido : { error: 'clave_reintento_en_conflicto' });
+      ? intento.pedido : { ok: false, motivo: 'clave_reintento_en_conflicto', cobrado: false });
   }
   if (clave && cotizacion.total !== args.p_total_aceptado) {
     return json(200, {
+      ok: false,
       error: 'precio_actualizado',
       motivo: cotizacion.motivo || 'precio_cambiado',
       total_actualizado: cotizacion.total,
-      descuento_afiliado: cotizacion.descuento_afiliado
+      descuento_afiliado: cotizacion.descuento_afiliado,
+      cobrado: false
     });
   }
-  if (estado.saldo < cotizacion.total) return json(200, { error: 'saldo_insuficiente' });
+  if (clave && Object.hasOwn(args.p_items[0], 'precio_esperado') && args.p_items[0].precio_esperado !== 10000) {
+    return json(200, { ok: false, motivo: 'precio_actualizado', total_actualizado: cotizacion.total, cobrado: false });
+  }
+  if (estado.saldo < cotizacion.total) return json(200, { ok: false, motivo: 'saldo_insuficiente', cobrado: false });
 
   const borrador = structuredClone(estado);
   const pedido = {
+    ok: true,
     pedido_id: 501 + borrador.pedidos.length,
-    estado: 'pagado',
+    estado: 'pendiente',
+    pago_estado: 'pagado',
     total_pagado: cotizacion.total,
     descuento_afiliado: cotizacion.descuento_afiliado
   };

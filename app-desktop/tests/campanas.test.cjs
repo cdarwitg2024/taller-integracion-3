@@ -1023,6 +1023,38 @@ test('el servicio de escritorio conserva las columnas de public.campanas', async
   }
 });
 
+test('V02: cada dueño conserva su listado después de una consulta ajena rechazada', async () => {
+  for (const [propia, ajena] of [[1, 2], [2, 1]]) {
+    const consultas = [];
+    const filas = [{ id: propia, cafeteria_id: propia }];
+    const { campanasService } = cargarCond('services/campanasService.js', {
+      './usuarios': {
+        usuarios: {
+          getPerfilSesion: async () => ({ success: true, rol: 'dueño', user: { cafeteria_id: propia } }),
+        },
+      },
+      './supabase': {
+        supabase: {
+          from(tabla) {
+            assert.equal(tabla, 'campanas');
+            return { select: () => ({
+              eq(columna, valor) {
+                assert.equal(columna, 'cafeteria_id');
+                consultas.push(valor);
+                return { order: async () => ({ data: filas, error: null }) };
+              },
+            }) };
+          },
+        },
+      },
+    });
+    assert.deepEqual(await campanasService.listar(propia), filas);
+    await assert.rejects(() => campanasService.listar(ajena), /No estás autorizado/);
+    assert.deepEqual(await campanasService.listar(propia), filas);
+    assert.deepEqual(consultas, [propia, propia]);
+  }
+});
+
 test('muestra descuento normal, oferta y comisión; NULL no se convierte en cero', async t => {
   const h = await montarCond(t);
   assert.match(h.texto(), /Descuento Normal/);

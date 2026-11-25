@@ -6,6 +6,7 @@ import AppIcon from '../components/AppIcon';
 import OportunidadesScreen from './afiliaciones/OportunidadesScreen';
 import EstadoAfiliacion from './afiliaciones/EstadoAfiliacion';
 import ComisionesAfiliado from './afiliaciones/ComisionesAfiliado';
+import RetirosAfiliado from './afiliaciones/RetirosAfiliado';
 import SaldoAfiliado from './afiliaciones/SaldoAfiliado';
 import { consultarAfiliaciones } from '../services/afiliaciones';
 import { colors } from '../theme/colors';
@@ -16,7 +17,7 @@ const secciones = [
   { id: 'oportunidades', titulo: 'Oportunidades', icono: 'store', descripcion: 'Conoce las campañas de las cafeterías para promocionarlas.' },
   { id: 'codigos', titulo: 'Mis códigos', icono: 'number', descripcion: 'Encuentra los códigos de tus afiliaciones aprobadas.' },
   { id: 'ganancias', titulo: 'Ganancias', icono: 'card', descripcion: 'Consulta las comisiones de tus pedidos entregados.' },
-  { id: 'historial', titulo: 'Historial', icono: 'receipt', descripcion: 'Revisa tus movimientos de comisión registrados.' },
+  { id: 'historial', titulo: 'Historial', icono: 'receipt', descripcion: 'Consulta comisiones, reversiones y retiros por comprobante.' },
 ];
 
 export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
@@ -109,7 +110,8 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario }) {
               {aprobadas.filter(s => !s.codigo_activo).map(s => <Text key={s.id} style={styles.description}>
                 {`El código está desactivado (cafetería #${s.cafeteria_id}, campaña #${s.campana_id}). Sus comisiones e historial siguen disponibles.`}
               </Text>)}
-              {seccion === 'historial' && <Text accessibilityRole="header" style={styles.title}>Historial de comisiones</Text>}
+              {seccion === 'historial' && <Text accessibilityRole="header" style={styles.title}>Historial de ganancias y retiros</Text>}
+              {seccion === 'historial' && <RetirosAfiliado revision={perfil.solicitudes} />}
               {seccion === 'historial' && aprobadas.map(s => <ComisionesAfiliado key={s.id} afiliacion={s} historial />)}
             </>}
           </>

@@ -107,7 +107,11 @@ Idempotency-Key: 9853fd16-92e4-4ab6-994a-477832a4a502
 | Compra confirmada | `201 {"pedido_id":501,"estado":"pagado","descuento_afiliado":1500,"total_pagado":8500}` | Cobro, pedido y consumo del beneficio se confirman juntos. Dos compras simultáneas con distintas claves respetan el límite de un beneficio por usuario. |
 | Total actualizado | `409 {"error":"precio_actualizado","motivo":"campana_pausada","total_aceptado":8500,"total_actualizado":10000,"descuento_afiliado":0,"cobrado":false}` | Móvil explica el motivo y ofrece «Continuar y pagar $10.000» o «Volver al carrito». Si Ana acepta, envía $10.000 con una clave nueva y omite el código. Su beneficio sigue disponible. El mismo flujo aplica con `campana_finalizada` o con un cambio de precio que exige otra confirmación. |
 | Pago rechazado | `422 {"error":"saldo_insuficiente","cobrado":false}` | Ana conserva el beneficio. El código puede usarse mientras la campaña siga vigente y activa. |
+| Stock insuficiente | `409 {"error":"stock_insuficiente","cobrado":false}` | Móvil conserva el carrito y permite ajustar las cantidades antes de iniciar otro intento. |
+| Wallet inexistente | `422 {"error":"sin_wallet","cobrado":false}` | Móvil conserva el carrito e informa que se necesita una Wallet activa para pagar. |
 | Respuesta perdida | Repetir la solicitud original con la misma clave devuelve el mismo resultado registrado. | El servidor asocia la clave al usuario y a los datos del intento. Si la misma clave llega con datos distintos, devuelve `409 {"error":"clave_reintento_en_conflicto"}`. El código de afiliado es independiente de la clave interna. |
+
+Si V08 rechaza el `precio_esperado` de una línea, la respuesta `409 precio_actualizado` incluye `total_actualizado` y `cobrado: false`. En esa variante, `descuento_afiliado` se omite y móvil obtiene el desglose al recotizar.
 
 **Total actualizado en escritorio.** Si Ana confirma $10.000, el pedido pagado se puede consultar desde escritorio con sesión del dueño de la Cafetería A, por ejemplo `GET /api/pedidos/502` → `200 {"id":502,"cafeteria_id":7,"estado":"pagado","total_pagado":10000}`. Si Ana vuelve al carrito tras el `409`, ese intento no crea un pedido para el panel. Una consulta fuera del alcance de la cafetería devuelve `403`.
 

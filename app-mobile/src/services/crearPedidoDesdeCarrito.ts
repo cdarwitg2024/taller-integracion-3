@@ -1,5 +1,6 @@
 import { ApiError, apiPost } from './backendClient';
 import { obtenerIntentoCompra, marcarIntentoEnviado, reiniciarIntentoCompra } from './intentoCompra';
+import { clasificarRechazoPagoCotizado } from '../utils/resultadoPago';
 
 export type RetiroCheckout = { franja: string; codigo?: string; totalAceptado?: number };
 type ProductoCarrito = { id: number; quantity: number; price: number };
@@ -49,6 +50,8 @@ export async function crearPedidoDesdeCarrito<T>(
 }
 
 function esRechazoCotizacion(error: ApiError) {
-  return (error.status === 422 && error.message === 'saldo_insuficiente') ||
+  const rechazo = clasificarRechazoPagoCotizado(error);
+  // La recotización guarda primero su estado para poder retomarla si se interrumpe.
+  return (rechazo !== null && rechazo !== 'recotizar') ||
     (error.status === 503 && error.message === 'confirmacion_afiliada_no_disponible');
 }

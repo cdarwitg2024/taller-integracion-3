@@ -6,6 +6,43 @@ import * as intentos from '../src/services/intentoCompra';
 
 const respuesta = (body: object) => ({ ok: true, status: 201, text: async () => JSON.stringify(body) });
 
+test.each([
+  ['stock_insuficiente', 409, 'Stock insuficiente', false],
+  ['stock_insuficiente', 409, 'Stock insuficiente', true],
+  ['sin_wallet', 422, 'Wallet no disponible', false],
+  ['sin_wallet', 422, 'Wallet no disponible', true],
+])('un %s (%s, %s) conserva el carrito y cierra el intento (recuperación: %s)',
+  async (error, status, titulo, recuperar) => {
+    cotizar.mockResolvedValue(respuesta({ subtotal: 2500, descuento_afiliado: 0, total: 2500 }));
+    await pestaña('Cafeterías');
+    await pestaña('Carrito');
+    if (recuperar) transporte.mockRejectedValueOnce(new Error('respuesta perdida'));
+    transporte.mockResolvedValueOnce({
+      ok: false, status, text: async () => JSON.stringify({ error, cobrado: false }),
+    });
+
+    await pagarDesdePantalla();
+    const claveOriginal = transporte.mock.calls[0][1].headers['Idempotency-Key'];
+    if (recuperar) {
+      const accion = (Alert.alert as jest.Mock).mock.calls.at(-1)[2]
+        .find((opcion: { text: string }) => opcion.text === 'Recuperar compra');
+      await act(async () => { await accion.onPress(); });
+      expect(transporte.mock.calls[1][1]).toEqual(expect.objectContaining({
+        body: transporte.mock.calls[0][1].body,
+        headers: expect.objectContaining({ 'Idempotency-Key': claveOriginal }),
+      }));
+    }
+
+    const registro = await AsyncStorage.getItem('@coffeefast/intento-compra/comprador-app');
+    expect(JSON.parse(registro!).invalidado).toBe(true);
+    expect(Alert.alert).toHaveBeenCalledWith(titulo, expect.stringContaining('No se realizó el cobro'));
+    await pagarDesdePantalla();
+    const [, nuevoPost] = transporte.mock.calls.at(-1)!;
+    expect(nuevoPost.body).toBe(transporte.mock.calls[0][1].body);
+    expect(nuevoPost.headers['Idempotency-Key']).not.toBe(claveOriginal);
+  },
+);
+
 test.each([false, true])('Pedidos muestra el ID recuperado incluso si falla la limpieza (%s)', async fallaLimpieza => {
   cotizar.mockResolvedValueOnce(respuesta({ subtotal: 2500, descuento_afiliado: 0, total: 2500 }));
   await pestaña('Cafeterías');

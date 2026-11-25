@@ -57,12 +57,13 @@ que la entrega y la cancelación recaen en pedidos distintos.
 | Entrega del pedido 20 (V11) | `entregado` + `refrescar(false)` | Su comisión pasa a `disponible`; la del 21 sigue `pendiente` | Pendiente $500, disponible $1.000, revertida $0, reversiones $0 |
 | Cancelación del pedido 21 (V09) | `cancelado` + `refrescar(false)` | Su comisión pasa a `revertida` y se inserta una `reversion` de $-500 | Pendiente $0, disponible $1.000, revertida $500, reversiones $-500 |
 
-En los tres pasos el histórico bruto sigue siendo 2 ventas referidas y $15.000
-cobrados; la cancelación no borra ese histórico ni modifica `creado_en` de las
-comisiones existentes. La conciliación con el criterio de ventas del panel
-(`esPedidoDeVentas`) corresponde a E09 / CAM-295. La verificación real contra
-Supabase depende de E15 / CAM-240, que sigue `Todo` y depende de E12 y de V02
-(CAM-237); aquí no se acredita.
+En el momento de E12 el histórico bruto seguía siendo 2 ventas referidas y
+$15.000 cobrados; la cancelación no borraba ese histórico ni modificaba
+`creado_en` de las comisiones existentes. E09 / CAM-295 concilió ese bruto con
+`esPedidoDeVentas`: tras cancelar, es 1 venta y $10.000. La verificación real
+contra Supabase depende de E15 / CAM-240, que estaba `Todo` en ese momento y
+dependía de E12 y de V02 (CAM-237); E15 ya está cerrada y su registro recoge el
+cotejo. Ver [registro E09](E09-CAM-295-Corregir-diferencias-en-ventas-y-comisiones.md).
 
 Evidencia del comando acotado de E12:
 

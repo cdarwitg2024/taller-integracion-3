@@ -59,11 +59,13 @@ jobs:
       - name: Start isolated PostgreSQL
         run: |
           docker run -d --name cf-test-postgres -e POSTGRES_HOST_AUTH_METHOD=trust postgres:15
+          # El servidor temporal de inicialización solo escucha por socket.
+          # Esperar TCP evita continuar antes de que arranque el servidor final.
           for attempt in $(seq 1 30); do
-            if docker exec cf-test-postgres pg_isready -U postgres; then break; fi
+            if docker exec cf-test-postgres pg_isready -h 127.0.0.1 -U postgres; then break; fi
             sleep 1
           done
-          docker exec cf-test-postgres psql -U postgres -v ON_ERROR_STOP=1 -c 'CREATE ROLE authenticated NOLOGIN;'
+          docker exec cf-test-postgres psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 -c 'CREATE ROLE authenticated NOLOGIN;'
       - name: Real payment, rollback, stock and concurrent cancellation
         env:
           TEST_POSTGRES_CONTAINER: cf-test-postgres
@@ -132,8 +134,8 @@ jobs:
       - run: ln -s ../ms-afiliados/node_modules Microservices/shared/node_modules
       - name: C03 through gateway, real Auth JWTs, PostgREST, RPC and RLS
         env:
-          TEST_AUTH_IMAGE: supabase/gotrue:v2.196.0
-          TEST_REST_IMAGE: postgrest/postgrest:v16.2
+          TEST_AUTH_IMAGE: supabase/gotrue:v2.197.0
+          TEST_REST_IMAGE: postgrest/postgrest:v16.3
         run: node .github/scripts/test-afiliados-auth-integration.cjs
   mobile-afiliaciones:
     runs-on: ubuntu-latest
@@ -143,13 +145,13 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: Diego24Vas/db_CoffeeFaster
-          ref: d074ed56aaf3e9c3992b8852a052f9f76d86f5cc
+          ref: 80bbc91ebf7766d849332d2a73b02b0f7265568f
           path: .test-bd
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - name: Run database migration and regression suites
+      - name: Run database migration and regression suites, including C09
         working-directory: .test-bd
         env:
           TEST_POSTGRES_CONTAINER: cf-db-suite-pg
@@ -160,7 +162,7 @@ jobs:
 
           for attempt in $(seq 1 30); do
             if docker exec "$TEST_POSTGRES_CONTAINER" pg_isready -h 127.0.0.1 -U postgres; then
-              npm test
+              npm test && COFFEEFAST_DB_REPO="$PWD" node ../.github/scripts/test-segunda-validacion-retiro-c09.cjs
               exit $?
             fi
             sleep 1
@@ -173,7 +175,7 @@ jobs:
       - run: npm ci --prefix Microservices/ms-afiliados
       - run: ln -s ../ms-pedidos/node_modules Microservices/shared/node_modules
       - run: npm ci --prefix app-mobile
-      - name: A06 and C05 through gateway, real Auth JWTs, PostgreSQL and RLS
+      - name: A06, A10 and C05 through gateway, real Auth JWTs, PostgreSQL and RLS
         env:
           COFFEEFAST_DB_MIGRATIONS: ${{ github.workspace }}/.test-bd/supabase/migrations
           TEST_AUTH_IMAGE: supabase/gotrue:v2.197.0

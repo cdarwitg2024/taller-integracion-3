@@ -167,6 +167,19 @@ integracion('A06: solicitud y aprobación reales; desactivar conserva código re
     expect(texto()).toContain('Comisiones pendientes: $0');
     expect(texto()).toContain('Comisiones retiradas: $300');
     console.log('PASS A09 después de entrega controlada: pendiente $0, disponible $1.200, retirado $300; RPC oficial V12');
+    // Atribuir antes de desactivar; la reversión conserva ambas filas históricas.
+    execFileSync('docker', ['exec', '-i', db, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], {
+      input: `BEGIN;
+        INSERT INTO public.pedidos(id,cafeteria_id,estado) VALUES (1004,7,'cancelado');
+        INSERT INTO public.movimientos_comision(afiliacion_id,pedido_id,tipo,base_calculo_clp,tasa_comision,monto_clp)
+          VALUES (${solicitud.id},1004,'comision',2000,10,200);
+        UPDATE public.movimientos_comision SET estado='revertida' WHERE pedido_id=1004;
+        INSERT INTO public.movimientos_comision(afiliacion_id,pedido_id,tipo,estado,base_calculo_clp,tasa_comision,monto_clp,movimiento_origen_id)
+          SELECT afiliacion_id,pedido_id,'reversion','revertida',base_calculo_clp,tasa_comision,-monto_clp,id
+          FROM public.movimientos_comision WHERE pedido_id=1004 AND tipo='comision';
+        COMMIT;`,
+      encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
+    });
     await api(recurso, process.env.A06_OWNER_TOKEN, 'PATCH', { decision: 'desactivar' });
     await pulsar('Actualizar mis solicitudes');
     await esperar(() => texto().includes('El código está desactivado'));
@@ -181,7 +194,7 @@ integracion('A06: solicitud y aprobación reales; desactivar conserva código re
     expect(texto()).toContain('Comisión · Pedido #1002');
     expect(texto()).toContain('Comisión · Pedido #1003');
     expect(texto()).toContain('Saldo disponible para retirar: $1.200');
-    console.log('PASS A06/A09: tres movimientos con límite de dos filas; código desactivado conserva saldo neto $1.200 e historial por RLS real');
+    console.log('PASS A06/A09: movimientos con límite de dos filas; código desactivado conserva saldo neto $1.200 e historial por RLS real');
     act(() => tree.unmount()); tree = null;
     await montar();
     await esperar(() => texto().includes('Código desactivado: ya no se puede usar'));
@@ -192,6 +205,35 @@ integracion('A06: solicitud y aprobación reales; desactivar conserva código re
     expect(texto()).toContain('Saldo disponible para retirar: $1.200');
     if (process.env.A06_FOREIGN_CODE) expect(texto()).not.toContain(process.env.A06_FOREIGN_CODE);
     console.log('PASS A06: reabrir consulta estado, saldo e historial persistidos sin recuperar código activo');
+
+    // A10: únicamente datos desechables. La app solo lee; el fixture registra
+    // dos retiros por la RPC oficial V14; la pareja de reversión V04 ya está persistida.
+    const comprobante = await api('/rest/v1/rpc/registrar_retiro_simulado', process.env.A06_STUDENT_TOKEN,
+      'POST', { p_monto_clp: 100, p_clave_idempotencia: 'a10-retiro-100' });
+    const otroComprobante = await api('/rest/v1/rpc/registrar_retiro_simulado', process.env.A06_STUDENT_TOKEN,
+      'POST', { p_monto_clp: 50, p_clave_idempotencia: 'a10-retiro-50' });
+    expect(comprobante.ok).toBe(true); expect(otroComprobante.ok).toBe(true);
+    expect(comprobante.referencia).not.toBe(otroComprobante.referencia);
+    await pulsar('Ganancias');
+    await esperar(() => texto().includes('Saldo disponible para retirar: $1.050'));
+    await pulsar('Historial');
+    await esperar(() => texto().includes(comprobante.referencia) && texto().includes('Reversión · Pedido #1004'));
+    expect(texto()).toContain('Comisión · Pedido #1004');
+    expect(texto()).toContain('$200 · revertida'); expect(texto()).toContain('-$200 · revertida');
+    expect(texto()).toContain('-$100 · confirmado'); expect(texto()).toContain('-$50 · confirmado');
+    expect(texto()).toContain('Sin comprobante: retiro histórico');
+    const buscarComprobante = async valor => act(async () => tree.root.findAllByType(TextInput)
+      .find(n => n.props.accessibilityLabel === 'Buscar retiro por referencia de comprobante').props.onChangeText(valor));
+    await buscarComprobante(comprobante.referencia);
+    expect(texto()).toContain('-$100 · confirmado'); expect(texto()).not.toContain('-$50 · confirmado');
+    await buscarComprobante('no-existe'); expect(texto()).toContain('No hay retiros con esa referencia');
+    await pulsar('Limpiar búsqueda de comprobante'); expect(texto()).toContain('-$50 · confirmado');
+    const ajenos = await api('/rest/v1/retiros_afiliado?select=id,referencia', process.env.A09_OTHER_STUDENT_TOKEN);
+    expect(ajenos).toEqual([]);
+    const despuesDeLeer = execFileSync('docker', ['exec', db, 'psql', '-U', 'postgres', '-At', '-c',
+      'SELECT count(*), sum(monto_clp) FROM public.retiros_afiliado WHERE estudiante_id=901'], { encoding: 'utf8' });
+    expect(despuesDeLeer.trim()).toBe('3|450');
+    console.log('PASS A10: comisión y reversión $200; tres retiros paginados con límite 2; comprobante V14 localizable, RLS ajena vacía; lectura sin nuevos débitos');
   } finally {
     if (tree) act(() => tree.unmount()); global.fetch = fetchAnterior;
   }

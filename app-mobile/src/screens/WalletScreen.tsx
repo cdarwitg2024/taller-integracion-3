@@ -494,6 +494,12 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId, saldoConfirmado, on
   // El saldo en pantalla es el animado; su valor final sale del estado
   // confirmado (wallet recargada desde la base).
   const saldo = wallet ? saldoMostrado : saldoConfirmado ?? 0;
+  const mostrarSinAnimacion = saldoConfirmado !== undefined;
+  const entrada = {
+    opacity: mostrarSinAnimacion ? 1 : fadeAnim,
+    transform: [{ translateY: mostrarSinAnimacion ? 0 : slideAnim }],
+  };
+  const estadisticasPendientes = loading || (errorMovimientos && movimientosVisibles.length === 0);
   const esSaldoCero = saldo === 0;
   const esSaldoBajo = saldo > 0 && saldo < 1000;
 
@@ -525,10 +531,10 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId, saldoConfirmado, on
         <Animated.View
           style={[
             {
-              opacity: saldoConfirmado === undefined ? fadeAnim : 1,
+              opacity: entrada.opacity,
               transform: [
-                { translateY: slideAnim },
-                { scale: scaleAnim },
+                { translateY: mostrarSinAnimacion ? 0 : slideAnim },
+                { scale: mostrarSinAnimacion ? 1 : scaleAnim },
               ],
             },
           ]}
@@ -543,10 +549,10 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId, saldoConfirmado, on
                 style={[
                   styles.balanceValue,
                   {
-                    opacity: saldoConfirmado === undefined ? saldoAnim : 1,
+                    opacity: mostrarSinAnimacion ? 1 : saldoAnim,
                     transform: [
                       {
-                        scale: saldoAnim.interpolate({
+                        scale: mostrarSinAnimacion ? 1 : saldoAnim.interpolate({
                           inputRange: [0, 1],
                           outputRange: [0.8, 1],
                         }),
@@ -573,7 +579,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId, saldoConfirmado, on
         <Animated.View
           style={[
             styles.actionsRow,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            entrada,
           ]}
         >
           <TouchableOpacity
@@ -604,22 +610,22 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId, saldoConfirmado, on
         <Animated.View
           style={[
             styles.statsRow,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            entrada,
           ]}
         >
           <Card variant="outlined" padding="none" style={styles.statCard}>
-            <Text style={styles.statValue}>{movimientosVisibles.length}</Text>
+            <Text style={styles.statValue}>{estadisticasPendientes ? '—' : movimientosVisibles.length}</Text>
             <Text style={styles.statLabel}>Movimientos</Text>
           </Card>
           <Card variant="outlined" padding="none" style={styles.statCard}>
             <Text style={styles.statValue}>
-              {movimientosVisibles.filter((m) => m.tipo === 'compra').length}
+              {estadisticasPendientes ? '—' : movimientosVisibles.filter((m) => m.tipo === 'compra').length}
             </Text>
             <Text style={styles.statLabel}>Compras</Text>
           </Card>
           <Card variant="outlined" padding="none" style={styles.statCard}>
             <Text style={styles.statValue}>
-              {movimientosVisibles.filter((m) => m.tipo === 'recarga').length}
+              {estadisticasPendientes ? '—' : movimientosVisibles.filter((m) => m.tipo === 'recarga').length}
             </Text>
             <Text style={styles.statLabel}>Recargas</Text>
           </Card>
@@ -629,12 +635,14 @@ const WalletScreen: React.FC<WalletScreenProps> = ({ userId, saldoConfirmado, on
         <Animated.View
           style={[
             styles.section,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            entrada,
           ]}
         >
           <Text style={styles.sectionTitle}>Últimos movimientos</Text>
 
-          {errorMovimientos ? (
+          {loading ? (
+            <Text style={styles.loadingText}>Cargando movimientos...</Text>
+          ) : errorMovimientos ? (
             <Card variant="outlined" padding="none" style={styles.errorMovimientos}>
               <AppIcon name="warning" style={styles.errorIcon} />
               <Text style={styles.errorTitle}>Error al cargar movimientos</Text>

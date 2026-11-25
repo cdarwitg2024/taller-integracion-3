@@ -1,6 +1,6 @@
 import { ApiError, apiPost } from './backendClient';
 import { leerCompraCotizadaPendiente } from './intentoCompra';
-import { clasificarPagoCotizado, type PagoCotizado } from '../utils/resultadoPago';
+import { clasificarPagoCotizado, clasificarRechazoPagoCotizado, type PagoCotizado } from '../utils/resultadoPago';
 
 export async function recuperarCompraCotizada(usuarioId: string, timeoutMs: number) {
   const intento = await leerCompraCotizadaPendiente(usuarioId);
@@ -13,10 +13,8 @@ export async function recuperarCompraCotizada(usuarioId: string, timeoutMs: numb
     return pago.tipo === 'confirmado'
       ? { tipo: 'confirmado' as const, resultado: pago.resultado, cuerpo: intento.cuerpo } : null;
   } catch (error) {
-    if (error instanceof ApiError && error.status === 409 && error.message === 'precio_actualizado' &&
-        error.cobrado === false && !error.resultadoIncierto) return { tipo: 'recotizar' as const };
-    if (error instanceof ApiError && error.status === 422 && error.message === 'saldo_insuficiente' &&
-        error.cobrado === false && !error.resultadoIncierto) return { tipo: 'saldo_insuficiente' as const };
+    const rechazo = error instanceof ApiError ? clasificarRechazoPagoCotizado(error) : null;
+    if (rechazo) return { tipo: rechazo } as const;
     throw error;
   }
 }

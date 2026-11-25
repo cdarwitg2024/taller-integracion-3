@@ -225,12 +225,18 @@ async function confirmarPago(cliente, cafeteriaId, body, clave) {
     : data?.ok === false
       ? data.motivo
       : undefined;
+  const rechazoSinCobro = data?.ok === false && data.cobrado === false;
+  const rechazoAnterior = typeof data?.error === 'string' && data.ok === undefined &&
+    (data.cobrado === undefined || data.cobrado === false);
 
   switch (motivoRechazo) {
-    case 'precio_actualizado':
-      if (typeof data.motivo !== 'string' ||
+    case 'precio_actualizado': {
+      // V08 omite el descuento al rechazar un precio esperado por línea.
+      const precioPorLinea = rechazoSinCobro &&
+        data.error === undefined && data.descuento_afiliado === undefined;
+      if ((!rechazoSinCobro && !rechazoAnterior) || typeof data.motivo !== 'string' ||
           !Number.isSafeInteger(data.total_actualizado) || data.total_actualizado < 0 ||
-          !Number.isSafeInteger(data.descuento_afiliado) || data.descuento_afiliado < 0) {
+          (!precioPorLinea && (!Number.isSafeInteger(data.descuento_afiliado) || data.descuento_afiliado < 0))) {
         break;
       }
       return {
@@ -240,13 +246,22 @@ async function confirmarPago(cliente, cafeteriaId, body, clave) {
           motivo: data.motivo,
           total_aceptado,
           total_actualizado: data.total_actualizado,
-          descuento_afiliado: data.descuento_afiliado,
+          ...(!precioPorLinea && { descuento_afiliado: data.descuento_afiliado }),
           cobrado: false
         }
+      };
+    }
+    case 'stock_insuficiente':
+    case 'sin_wallet':
+      if (!rechazoSinCobro) break;
+      return {
+        status: motivoRechazo === 'stock_insuficiente' ? 409 : 422,
+        body: { error: motivoRechazo, cobrado: false }
       };
     case 'clave_reintento_en_conflicto':
       return { status: 409, body: { error: motivoRechazo } };
     case 'saldo_insuficiente':
+      if (!rechazoSinCobro && !rechazoAnterior) break;
       return { status: 422, body: { error: motivoRechazo, cobrado: false } };
     case undefined: {
       // V08 separa el estado operativo del pedido del estado del pago.
