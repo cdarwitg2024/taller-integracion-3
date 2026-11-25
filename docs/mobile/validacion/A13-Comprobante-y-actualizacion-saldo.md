@@ -2,9 +2,9 @@
 
 24 de noviembre de 2026. Rama `S3-T13-Ariel-Diaz-Mostrar-comprobante-y-actualizar-saldo`,
 basada en A12 (`2ef7006`, [PR #125](https://github.com/cdarwitg2024/taller-integracion-3/pull/125)).
-A12 tiene 13 controles remotos aprobados y sigue abierta al comenzar A13. Esta
-rama conserva A12 como dependencia. Integrar A12 antes de revisar A13 contra
-`develop` evita repetir sus cambios en ambos PR.
+A12 tenía 13 controles remotos aprobados y seguía abierta al comenzar A13.
+El 25 de noviembre esta rama incorpora `origin/develop` en `7202239`, que ya
+incluye A12; la comparación contra esa base corresponde a los cambios de A13.
 
 Dependencias: [A10](A10-Historial-ganancias-y-retiros.md) y
 [A12](A12-Confirmar-retiro-reintento-seguro.md).
@@ -121,3 +121,40 @@ La CI remota del commit de A13 se verifica cuando se publique su rama.
   imagen `postgres:15`, Auth `supabase/gotrue:v2.197.0` y PostgREST `postgrest/postgrest:v16.3`.
 - El runner eliminó sus contenedores. Docker volvió al estado apagado inicial.
   No se modificaron los datos del Supabase existente ni Cloud.
+
+## Ajuste tras revisión: recuperar el comprobante al reabrir sin saldo
+
+25 de noviembre de 2026, Node.js 22.19.0 en Windows. Se reprodujo el P2 con una
+regresión nueva antes de corregir: confirmar $500 con disponible inicial $700,
+cerrar la pantalla y reabrir Ganancias rechazando la lectura de saldo con HTTP
+503. AsyncStorage conservaba el comprobante, pero la pantalla solo mostraba el
+error porque el formulario encargado de recuperarlo no se montaba.
+
+Ahora un error transitorio del saldo permite montar ese componente y consultar
+el intento guardado **por la cuenta activa**. El comprobante conserva su importe,
+referencia y estado; sin saldo confirmado no ofrece formulario ni preparar otro retiro.
+Los rechazos 401/403 se distinguen del error transitorio y siguen retirando el
+comprobante. No se invoca la confirmación del retiro al recuperar el estado local.
+
+| Paso que produce el estado | Resultado observado |
+|---|---|
+| Confirmar $500 y cerrar la pantalla | Un POST; comprobante guardado con disponible al confirmar $200 |
+| Reabrir Ganancias y fallar solo saldo con 503 | Mismo comprobante por $500, estado confirmado y referencia; error visible; no hay disponible actual ni otro POST |
+| Cambiar el saldo del servidor a $100 y pulsar Actualizar saldo | Disponible actual $100; el comprobante conserva su instantánea de $200; sigue un solo POST |
+| Reabrir con saldo rechazado por 401 o 403 | No se muestran el comprobante ni los importes anteriores |
+| Reabrir con otra cuenta y fallo temporal de saldo | No se lee el comprobante anterior ni se habilita preparar un retiro sin saldo |
+
+Estas cuatro regresiones amplían
+[ComprobanteRetiro.test.js](../../../app-mobile/src/screens/afiliaciones/ComprobanteRetiro.test.js).
+El caso 503 falló contra el código anterior; los dos controles de autorización
+ya pasaban. El ajuste queda en
+[SaldoAfiliado.js](../../../app-mobile/src/screens/afiliaciones/SaldoAfiliado.js).
+La verificación usa almacenamiento real del servicio sobre el mock oficial de
+AsyncStorage, las pantallas reales y transporte simulado; no repite operaciones
+en Cloud, Docker ni APK. La evidencia de integración del 24 de noviembre arriba
+conserva su fecha y alcance. La CI del nuevo commit se verifica por separado.
+
+Resultado de esta revisión: **412 pruebas aprobadas en 40 suites**, tres
+integraciones opt-in omitidas. Las cinco suites enfocadas aprobaron 36 pruebas.
+TypeScript, los 10 enlaces relativos de este registro y `git diff --check`
+pasaron. No se repitió la exportación Android en este ajuste.
