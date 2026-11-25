@@ -268,14 +268,12 @@ router.get('/saldo', auth.exigirAuth, async (req, res, next) => {
       throw new HttpError(400, 'parametros_no_admitidos');
     }
 
-    const { data, error } = await clienteAutenticado(req).rpc('consultar_saldo_afiliado');
-    if (error) {
-      if (error.code === '42501') throw new HttpError(403, 'estudiante_requerido');
-      if (['PGRST301', 'PGRST303', '28000'].includes(error.code)) {
-        throw new HttpError(401, 'sesion_invalida');
-      }
-      throw new HttpError(503, 'No se pudo consultar el saldo');
+    const { data, error, status } = await clienteAutenticado(req).rpc('consultar_saldo_afiliado');
+    if (status === 401 || ['PGRST301', 'PGRST303', '28000'].includes(error?.code)) {
+      throw new HttpError(401, 'sesion_invalida');
     }
+    if (status === 403 || error?.code === '42501') throw new HttpError(403, 'estudiante_requerido');
+    if (error || status >= 400) throw new HttpError(503, 'No se pudo consultar el saldo');
 
     const saldo = Array.isArray(data) && data.length === 1 ? data[0] : null;
     if (!esObjeto(saldo)) throw new HttpError(503, 'Respuesta de saldo inválida');

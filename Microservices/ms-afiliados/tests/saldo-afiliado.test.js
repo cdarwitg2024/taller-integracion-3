@@ -44,6 +44,14 @@ test.each([
 });
 
 test.each([
+  [401, 'sesion_invalida'], [403, 'estudiante_requerido'],
+])('conserva el HTTP %i de Supabase sin código PostgREST', async (status, error) => {
+  rpc.mockResolvedValue({ status, data: null, error: { message: 'detalle privado' } });
+  await hacerConsulta().expect('Cache-Control', 'no-store')
+    .expect(status, { error, servicio: 'ms-afiliados' });
+});
+
+test.each([
   { data: null }, { data: [] }, { data: [{}, {}] }, { data: [{ pendiente_clp: null }] },
 ])('rechaza una respuesta de saldo inválida (%j)', async respuesta => {
   rpc.mockResolvedValue(respuesta);
