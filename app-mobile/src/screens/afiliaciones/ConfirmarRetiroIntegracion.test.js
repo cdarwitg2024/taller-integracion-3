@@ -4,7 +4,7 @@ import http from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { ActivityIndicator, Text, TextInput, TouchableOpacity } from 'react-native';
 import { act, create } from 'react-test-renderer';
-import SaldoAfiliado from './SaldoAfiliado';
+import MisAfiliacionesScreen from '../MisAfiliacionesScreen';
 
 jest.mock('../../lib/supabase', () => {
   const { createClient } = require('@supabase/supabase-js');
@@ -18,10 +18,11 @@ jest.mock('../../lib/supabase', () => {
       access_token: token, user: { id: process.env.A12_STUDENT_ID },
     } }, error: null }) },
     rpc: (...args) => client.rpc(...args),
+    from: (...args) => client.from(...args),
   } };
 });
 const integracion = process.env.A12_INTEGRATION_URL ? test : test.skip;
-integracion('A12: pérdida de respuesta después de V14; mismo comprobante y un solo retiro por gateway', async () => {
+integracion('A12/A13: mismo comprobante en Supabase, saldo actualizado e historial al reabrir', async () => {
   const fetchAnterior = global.fetch;
   let tree, perder = true, original;
   const envios = [];
@@ -60,9 +61,11 @@ integracion('A12: pérdida de respuesta después de V14; mismo comprobante y un 
     throw new Error(`Estado A12 no observado: ${texto()}`);
   };
   try {
-    await act(async () => { tree = create(<SaldoAfiliado usuarioId={process.env.A12_STUDENT_ID} />); });
+    await act(async () => { tree = create(<MisAfiliacionesScreen usuarioId={process.env.A12_STUDENT_ID} onBack={() => {}} />); });
+    await esperar(() => Boolean(boton('Ganancias')));
+    await pulsar('Ganancias');
     await esperar(() => texto().includes('Saldo disponible para retirar: $600'));
-    act(() => tree.root.findByType(TextInput).props.onChangeText('500'));
+    act(() => tree.root.findAllByType(TextInput).find(n => n.props.accessibilityLabel === 'Monto del retiro simulado en pesos chilenos').props.onChangeText('500'));
     await pulsar('Revisar solicitud de retiro simulado');
     await pulsar('Confirmar retiro simulado');
     await esperar(() => Boolean(boton('Recuperar retiro simulado')));
@@ -74,6 +77,21 @@ integracion('A12: pérdida de respuesta después de V14; mismo comprobante y un 
     const resultado = execFileSync('docker', ['exec', process.env.A12_DB_CONTAINER, 'psql', '-U', 'postgres', '-At', '-c',
       `SELECT count(*),sum(monto_clp) FROM public.retiros_afiliado WHERE estudiante_id=901 AND clave_idempotencia='${envios[0].clave_idempotencia}'`], { encoding: 'utf8' });
     expect(resultado.trim()).toBe('1|500');
+    const persistido = JSON.parse(execFileSync('docker', ['exec', process.env.A12_DB_CONTAINER, 'psql', '-U', 'postgres', '-At', '-c',
+      `SELECT json_build_object('referencia',referencia,'monto_clp',monto_clp) FROM public.retiros_afiliado WHERE estudiante_id=901 AND clave_idempotencia='${envios[0].clave_idempotencia}'`], { encoding: 'utf8' }));
+    expect(persistido).toEqual({ referencia: original.referencia, monto_clp: original.monto_clp });
+    await pulsar('Ver retiro en historial');
+    await esperar(() => texto().includes(`Comprobante: ${original.referencia}`));
+    expect(texto()).toContain('-$500 · confirmado');
+    const campoBusqueda = () => tree.root.findAllByType(TextInput).find(n => n.props.accessibilityLabel === 'Buscar retiro por referencia de comprobante');
+    expect(campoBusqueda().props.value).toBe(original.referencia);
+    act(() => tree.unmount()); tree = null;
+    await act(async () => { tree = create(<MisAfiliacionesScreen usuarioId={process.env.A12_STUDENT_ID} onBack={() => {}} />); });
+    await esperar(() => Boolean(boton('Historial')));
+    await pulsar('Historial');
+    await esperar(() => texto().includes(`Comprobante: ${original.referencia}`) && texto().includes('Saldo disponible para retirar: $100'));
+    expect(texto()).toContain('-$500 · confirmado'); expect(envios).toHaveLength(2);
+    console.log('PASS A13:', JSON.stringify({ persistido, historial: 'mismo importe/referencia al reabrir', disponible_final_clp: 100, retiros_creados: 1 }));
     console.log('PASS A12:', JSON.stringify({ solicitudes: envios, comprobante: original, filas: 1, disponible_final_clp: 100 }));
   } finally {
     if (tree) act(() => tree.unmount()); global.fetch = fetchAnterior;
