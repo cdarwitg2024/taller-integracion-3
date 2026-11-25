@@ -69,6 +69,19 @@ async function main() {
   assert.deepEqual(await post(pedidos, compra, 422, 'c07-saldo-insuficiente'), {
     error: 'saldo_insuficiente', cobrado: false
   });
+  assert.deepEqual(await post(pedidos, compra, 409, 'c07-stock-insuficiente'), {
+    error: 'stock_insuficiente', cobrado: false
+  });
+  assert.deepEqual(await post(pedidos, compra, 422, 'c07-sin-wallet'), {
+    error: 'sin_wallet', cobrado: false
+  });
+  const compraConPrecioPorLinea = {
+    ...compra, items: [{ ...compra.items[0], precio_esperado: 9000 }]
+  };
+  assert.deepEqual(await post(pedidos, compraConPrecioPorLinea, 409, 'c07-precio-linea'), {
+    error: 'precio_actualizado', motivo: 'precio_actualizado', total_aceptado: 8500,
+    total_actualizado: 8500, cobrado: false
+  });
   await post(pedidos, compra, 503, 'c07-rpc-malformada');
   assert.deepEqual(await leerFixture('/estado'), inicial);
   await leerFixture('/pausar', 'POST');
@@ -94,7 +107,8 @@ async function main() {
   assert.deepEqual(await post(pedidos, compra, 201, 'c07-afiliada'), pagada);
   const trasAfiliada = await leerFixture('/estado');
   assert.equal(trasAfiliada.saldo, 41500);
-  assert.deepEqual(trasAfiliada.pedidos, [pagada]);
+  const pedidoPagado = { ...pagada, ok: true, estado: 'pendiente', pago_estado: 'pagado' };
+  assert.deepEqual(trasAfiliada.pedidos, [pedidoPagado]);
   assert.deepEqual(trasAfiliada.comisiones, [{ pedido_id: pagada.pedido_id, monto: 850 }]);
 
   const normal = { ...carrito, franja_retiro: compra.franja_retiro, total_aceptado: 10000 };
@@ -106,7 +120,10 @@ async function main() {
   });
   const trasNormal = await leerFixture('/estado');
   assert.equal(trasNormal.saldo, 31500);
-  assert.deepEqual(trasNormal.pedidos, [pagada, original]);
+  assert.deepEqual(trasNormal.pedidos, [
+    pedidoPagado,
+    { ...original, ok: true, estado: 'pendiente', pago_estado: 'pagado' }
+  ]);
   assert.deepEqual(trasNormal.comisiones, trasAfiliada.comisiones);
 
   // La cotización afiliada se obtuvo antes de consumir el beneficio en C07.
@@ -119,7 +136,10 @@ async function main() {
   assert.notEqual(quitado.pedido_id, original.pedido_id);
   const trasQuitar = await leerFixture('/estado');
   assert.equal(trasQuitar.saldo, trasNormal.saldo - sinCodigo.total);
-  assert.deepEqual(trasQuitar.pedidos, [...trasNormal.pedidos, quitado]);
+  assert.deepEqual(trasQuitar.pedidos, [
+    ...trasNormal.pedidos,
+    { ...quitado, ok: true, estado: 'pendiente', pago_estado: 'pagado' }
+  ]);
   assert.deepEqual(trasQuitar.comisiones, trasNormal.comisiones);
   console.log(`D13 OK: pedidos ${original.pedido_id} y ${quitado.pedido_id} sin comisión, total ${sinCodigo.total} cada uno.`);
 

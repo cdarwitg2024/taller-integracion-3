@@ -25,9 +25,40 @@ El escenario usa Node 22 y el Nginx del repositorio. Las solicitudes entran por 
 
 - La cotización de $10.000 aplica $1.500 de descuento y el pedido cobra $8.500.
 - Al pausar la campaña entre la cotización y la confirmación, el gateway devuelve `409` con $10.000 para reconfirmar. El escenario compara saldo, pedidos y comisiones antes y después.
+- El escenario verifica los rechazos sin cobro por falta de stock (`409`), Wallet inexistente (`422`) y precio por línea desactualizado (`409`). Este último conserva el total informado por V08 y omite el descuento si la RPC no lo entrega.
 - El fallo de V15 se simula después de preparar el pedido y el débito. El gateway devuelve `503` y el estado del doble conserva su saldo de $50.000 y sus colecciones vacías. Al quitar la falla, el siguiente intento registra el pedido y una comisión de $850.
 - Los reintentos afiliado y sin código devuelven cada uno su pedido original. Reutilizar una clave con un total distinto devuelve `409`. El escenario también comprueba que la compra legacy sigue llegando a la RPC de tres parámetros.
 
 El 20 de noviembre de 2026, Docker Compose 5.1.1 en Windows ejecutó el escenario con código de salida 0. Los reintentos devolvieron los IDs ficticios 501 y 502, respectivamente. El saldo quedó en $50.000 tras el `409` y el `503`, en $41.500 tras la compra afiliada y en $31.500 tras la compra sin código con clave. Con Node 22.23.5 en Windows también pasaron 131 pruebas de `ms-pedidos` y 49 de `ms-afiliados`.
 
 Tras integrar `develop` en la rama del PR #90, el escenario de Compose volvió a terminar con código 0. La cobertura incluyó la petición móvil vigente con solo el código, la campaña futura, la cuenta inactiva, el producto de otra cafetería, el saldo insuficiente, los permisos de cotización y las respuestas RPC malformadas. Con Node 22.23.5 pasaron 133 pruebas de `ms-pedidos` y 49 de `ms-afiliados`. La confirmación y la reversión en PostgreSQL con la RPC definitiva de V08/V15 siguen pendientes.
+
+## Verificación de V10 con la RPC de V08
+
+El 22 de noviembre de 2026 se probó el flujo con Node 22.23.1, PostgREST 16.6
+y PostgreSQL 17.12. Se llamaron las rutas HTTP de `ms-afiliados` y
+`ms-pedidos` con JWT de prueba. PostgREST ejecutó las RPC de V06 y V08
+sobre una base desechable. Se usaron dobles de Auth y del catálogo de
+`ms-menus`. La CLI de Supabase no pudo iniciar el stack por un error del
+espacio de usuarios de Podman.
+
+Con el adaptador anterior, una cotización de 3.206 CLP con descuento de
+361 CLP terminó en HTTP 503 pese a persistir el cobro de 2.845 CLP y una
+comisión pendiente de 285 CLP. V08 devolvió `estado: "pendiente"` para
+el pedido y `pago_estado: "pagado"` para el pago. El adaptador corregido
+devolvió HTTP 201 al repetir la misma clave y recuperó el mismo pedido.
+Una nueva compra afiliada devolvió HTTP 201 y persistió los mismos importes.
+La compra sin código cobró 3.206 CLP y quedó sin movimiento de comisión.
+También se verificaron los HTTP 409 por total actualizado o clave en
+conflicto y el HTTP 422 por saldo insuficiente.
+
+La prueba SQL permanente se ejecuta desde `db_CoffeeFaster` con
+`npm run test:pago-afiliado`. La regresión HTTP del adaptador está en
+[`pedidos.test.js`](../../../Microservices/ms-pedidos/tests/pedidos.test.js).
+
+El 23 de noviembre, tras integrar `develop` en V10, pasaron C07 con su
+fixture y las doce suites SQL de `db_CoffeeFaster` en PostgreSQL 17.12.
+Un ensayo local de `ms-pedidos` con Auth simulado, PostgREST 12.2.3 y
+la RPC real comprobó que los tres rechazos preservan saldo, stock,
+pedidos, pagos y movimientos. Repetir un pago confirmado con la misma
+clave devolvió el mismo pedido y conservó el débito original.

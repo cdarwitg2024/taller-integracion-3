@@ -38,14 +38,25 @@ import { verificarDisponibilidadCheckout } from './src/services/verificarDisponi
 import {
   clasificarResultadoPago,
   clasificarPagoCotizado,
+  clasificarRechazoPagoCotizado,
   type PagoCotizado,
   type PagoResult,
+  type RechazoPagoCotizado,
 } from './src/utils/resultadoPago';
 import AppIcon from './src/components/AppIcon';
 import type { AppIconName } from './src/components/AppIcon';
 import { colors } from './src/theme/colors';
 
 const logo = require('./assets/icon.png');
+
+const avisosRechazoPago = {
+  saldo_insuficiente: ['Saldo insuficiente en la Wallet',
+    'No se realizó el cobro. Recarga tu Wallet y confirma el pedido de nuevo.'],
+  stock_insuficiente: ['Stock insuficiente',
+    'No se realizó el cobro. Revisa la disponibilidad y ajusta las cantidades del carrito.'],
+  sin_wallet: ['Wallet no disponible',
+    'No se realizó el cobro. Necesitas una Wallet activa para confirmar el pedido.'],
+} satisfies Record<Exclude<RechazoPagoCotizado, 'recotizar'>, [string, string]>;
 
 type Product = {
   id: number;
@@ -534,14 +545,11 @@ function AppContent() {
         await alertarResultadoIncierto();
         return;
       }
-      if (pago.tipo === 'recotizar' || pago.tipo === 'saldo_insuficiente') {
-        if (usuarioActual.current === usuarioId) {
-          if (pago.tipo === 'recotizar') await solicitarNuevoTotal();
-          else {
-            await reiniciar();
-            Alert.alert('Saldo insuficiente en la Wallet',
-            'No se realizó el cobro. Recarga tu Wallet y confirma el pedido de nuevo.');
-          }
+      if (pago.tipo !== 'confirmado') {
+        if (pago.tipo === 'recotizar') await solicitarNuevoTotal();
+        else {
+          await reiniciar();
+          if (usuarioActual.current === usuarioId) Alert.alert(...avisosRechazoPago[pago.tipo]);
         }
         return;
       }
@@ -724,7 +732,9 @@ function AppContent() {
       );
     } catch (e) {
       if (avisarErrorIntentoCompra(e, reiniciar, () => handleTabPress('pedidos'))) return;
-      if (e instanceof ApiError && e.status === 409 && e.message === 'precio_actualizado') {
+      const rechazo = franjaRetiro?.totalAceptado !== undefined && e instanceof ApiError
+        ? clasificarRechazoPagoCotizado(e) : null;
+      if (rechazo === 'recotizar') {
         try {
           await solicitarNuevoTotal();
         } catch (error) {
@@ -734,8 +744,8 @@ function AppContent() {
         }
         return;
       }
-      if (e instanceof ApiError && e.status === 422 && e.message === 'saldo_insuficiente') {
-        Alert.alert('Saldo insuficiente en la Wallet', 'Recarga tu Wallet para confirmar el pedido.');
+      if (rechazo) {
+        Alert.alert(...avisosRechazoPago[rechazo]);
         return;
       }
       if (e instanceof ApiError && e.status === 503 && e.message === 'confirmacion_afiliada_no_disponible') {
