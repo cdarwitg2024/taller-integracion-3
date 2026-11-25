@@ -5,7 +5,7 @@ import { confirmarRetiroSimulado, consultarIntentoRetiro, prepararOtroRetiro } f
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 
-export default function SolicitudRetiroSimulado({ disponible, confirmado, usuarioId, onConfirmado, onAccesoDenegado, onVerHistorial }) {
+export default function SolicitudRetiroSimulado({ disponible, confirmado, usuarioId, onConfirmado, onAccesoDenegado, onVerHistorial, soloComprobante = false }) {
   const [monto, setMonto] = useState('');
   const [resultado, setResultado] = useState(null);
   const [intento, setIntento] = useState(null);
@@ -70,6 +70,8 @@ export default function SolicitudRetiroSimulado({ disponible, confirmado, usuari
   };
   const deshabilitado = !confirmado || ocupado || Boolean(intento) || bloqueado;
   return <View style={styles.container}>
+    {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+    {!soloComprobante && <>
     <Text accessibilityRole="header" style={styles.titulo}>Preparar retiro simulado</Text>
     <Text style={styles.texto}>Esta operación es simulada: no realiza una transferencia bancaria. Confirmar registra un retiro y descuenta tu saldo disponible de comisiones.</Text>
     <Text style={styles.texto}>{`Destino ficticio: ${DESTINO_RETIRO_SIMULADO}`}</Text>
@@ -79,7 +81,6 @@ export default function SolicitudRetiroSimulado({ disponible, confirmado, usuari
       value={monto} onChangeText={valor => { if (!deshabilitado) { setMonto(valor); setResultado(null); setError(''); } }}
       editable={!deshabilitado} keyboardType="number-pad" placeholder="Monto en CLP, sin puntos ni comas" style={styles.input} />
     {actual?.error ? <Text accessibilityRole="alert" style={styles.error}>{actual.error}</Text> : null}
-    {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     {ocupado && <ActivityIndicator accessibilityLabel="Procesando retiro simulado" />}
     {!intento && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Revisar solicitud de retiro simulado"
       accessibilityState={{ disabled: deshabilitado }} disabled={deshabilitado} onPress={revisar} style={styles.boton}>
@@ -99,6 +100,7 @@ export default function SolicitudRetiroSimulado({ disponible, confirmado, usuari
         <Text style={styles.botonTexto}>{pendiente ? 'Recuperar retiro' : 'Confirmar retiro simulado'}</Text>
       </TouchableOpacity>
     </>}
+    </>}
     {comprobante && <View accessibilityLiveRegion="polite" style={styles.resumen}>
       <Text accessibilityRole="header" style={styles.titulo}>Retiro simulado confirmado</Text>
       <Text style={styles.texto}>{`Monto: $${comprobante.monto_clp.toLocaleString('es-CL')}`}</Text>
@@ -110,10 +112,10 @@ export default function SolicitudRetiroSimulado({ disponible, confirmado, usuari
         onPress={() => onVerHistorial(comprobante.referencia)} style={styles.boton}>
         <Text style={styles.botonTexto}>Ver retiro en historial</Text>
       </TouchableOpacity>}
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Preparar otro retiro simulado" disabled={ocupado}
+      {!soloComprobante && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Preparar otro retiro simulado" disabled={ocupado}
         accessibilityState={{ disabled: ocupado }} onPress={otro} style={styles.boton}>
         <Text style={styles.botonTexto}>Preparar otro retiro simulado</Text>
-      </TouchableOpacity>
+      </TouchableOpacity>}
     </View>}
   </View>;
 }
