@@ -107,6 +107,14 @@ conserva el saldo al confirmar; el resumen actual se obtiene del servidor y no
 vuelve a restar el monto. Si esa lectura falla tras confirmar, el saldo anterior
 no se presenta como actual. [Registro A13](mobile/validacion/A13-Comprobante-y-actualizacion-saldo.md).
 
+**Consistencia móvil A05.** Al volver a la app o actualizar saldo, se renuevan
+saldo y movimientos de la misma cuenta; una comisión entregada no conserva el
+rótulo pendiente de una consulta anterior. Los lectores de saldo y comisiones
+preservan HTTP 401/403 aunque el SDK omita `error.code`, retirando los datos previos.
+Un 503 mantiene la última lectura con aviso. Reintentar un retiro conserva la clave
+de A12 y reabrir solo consulta el comprobante persistido. [Fallos reproducidos y
+verificación A05](mobile/validacion/A05-Consistencia-saldo-comprobante.md).
+
 ## 3. Cotización y compra
 
 Ana envía su sesión desde móvil. La cotización calcula el precio vigente sin cobrar ni consumir el beneficio.

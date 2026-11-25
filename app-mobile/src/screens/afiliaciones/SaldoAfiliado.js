@@ -6,7 +6,7 @@ import { spacing } from '../../theme/spacing';
 import SolicitudRetiroSimulado from './SolicitudRetiroSimulado';
 const pesos = valor => `${valor < 0 ? '-' : ''}$${Math.abs(valor).toLocaleString('es-CL')}`;
 
-export default function SaldoAfiliado({ revision, vista, usuarioId, onRetiroConfirmado, onVerHistorial }) {
+export default function SaldoAfiliado({ revision, vista, usuarioId, onRetiroConfirmado, onVerHistorial, onActualizarMovimientos }) {
   const [intento, setIntento] = useState(0);
   const [conRetiro, setConRetiro] = useState(false);
   const [datos, setDatos] = useState({ estado: 'cargando', saldo: null, error: '', prohibido: false });
@@ -60,7 +60,7 @@ export default function SaldoAfiliado({ revision, vista, usuarioId, onRetiroConf
 
     {!datos.prohibido && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Actualizar saldo de comisiones"
       disabled={datos.estado === 'cargando'} accessibilityState={{ disabled: datos.estado === 'cargando', busy: datos.estado === 'cargando' }}
-      onPress={() => setIntento(valor => valor + 1)} style={styles.boton}>
+      onPress={() => { setIntento(valor => valor + 1); onActualizarMovimientos?.(); }} style={styles.boton}>
       <Text style={styles.botonTexto}>Actualizar saldo</Text>
     </TouchableOpacity>}
   </View>;

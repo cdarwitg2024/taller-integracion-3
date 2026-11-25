@@ -22,7 +22,7 @@ const secciones = [
 
 export default function MisAfiliacionesScreen({ onBack, nombreUsuario, usuarioId }) {
   const [seccion, setSeccion] = useState('inicio');
-  const [revisionRetiros, setRevisionRetiros] = useState(0);
+  const [revisionMovimientos, setRevisionMovimientos] = useState(0);
   const [retiroSeleccionado, setRetiroSeleccionado] = useState(null);
   const [perfil, setPerfil] = useState({ estado: 'cargando', solicitudes: [], error: '' });
   const consulta = useRef(0);
@@ -109,14 +109,15 @@ export default function MisAfiliacionesScreen({ onBack, nombreUsuario, usuarioId
             </View>}
             {['ganancias', 'historial'].includes(seccion) && <>
               <SaldoAfiliado usuarioId={usuarioId} revision={perfil.solicitudes} vista={seccion}
-                onRetiroConfirmado={() => setRevisionRetiros(valor => valor + 1)}
+                onRetiroConfirmado={() => setRevisionMovimientos(valor => valor + 1)}
+                onActualizarMovimientos={() => setRevisionMovimientos(valor => valor + 1)}
                 onVerHistorial={referencia => { setRetiroSeleccionado({ referencia }); setSeccion('historial'); }} />
               {aprobadas.filter(s => !s.codigo_activo).map(s => <Text key={s.id} style={styles.description}>
                 {`El código está desactivado (cafetería #${s.cafeteria_id}, campaña #${s.campana_id}). Sus comisiones e historial siguen disponibles.`}
               </Text>)}
               {seccion === 'historial' && <Text accessibilityRole="header" style={styles.title}>Historial de ganancias y retiros</Text>}
-              {seccion === 'historial' && <RetirosAfiliado revision={perfil.solicitudes} retiroRevision={revisionRetiros} seleccion={retiroSeleccionado} />}
-              {seccion === 'historial' && aprobadas.map(s => <ComisionesAfiliado key={s.id} afiliacion={s} historial />)}
+              {seccion === 'historial' && <RetirosAfiliado revision={perfil.solicitudes} retiroRevision={revisionMovimientos} seleccion={retiroSeleccionado} />}
+              {seccion === 'historial' && aprobadas.map(s => <ComisionesAfiliado key={s.id} afiliacion={s} historial revision={perfil.solicitudes} revisionMovimientos={revisionMovimientos} />)}
             </>}
           </>
         ) : (
