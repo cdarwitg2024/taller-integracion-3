@@ -131,6 +131,9 @@ jobs:
       - run: npm ci --prefix Microservices/ms-afiliados
       - run: ln -s ../ms-afiliados/node_modules Microservices/shared/node_modules
       - name: C03 through gateway, real Auth JWTs, PostgREST, RPC and RLS
+        env:
+          TEST_AUTH_IMAGE: supabase/gotrue:v2.197.0
+          TEST_REST_IMAGE: postgrest/postgrest:v16.3
         run: node .github/scripts/test-afiliados-auth-integration.cjs
   mobile-afiliaciones:
     runs-on: ubuntu-latest
@@ -146,7 +149,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - name: Run database migration and regression suites
+      - name: Run database migration and regression suites, including C09
         working-directory: .test-bd
         env:
           TEST_POSTGRES_CONTAINER: cf-db-suite-pg
@@ -157,7 +160,7 @@ jobs:
 
           for attempt in $(seq 1 30); do
             if docker exec "$TEST_POSTGRES_CONTAINER" pg_isready -h 127.0.0.1 -U postgres; then
-              npm test
+              npm test && COFFEEFAST_DB_REPO="$PWD" node ../.github/scripts/test-segunda-validacion-retiro-c09.cjs
               exit $?
             fi
             sleep 1

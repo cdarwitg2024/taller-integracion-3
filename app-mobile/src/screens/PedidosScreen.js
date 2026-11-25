@@ -1,10 +1,13 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
   TouchableOpacity,
+  BackHandler,
+  AccessibilityInfo,
+  findNodeHandle,
   ActivityIndicator,
   Modal,
   ScrollView,
@@ -131,7 +134,10 @@ function descuentoHistorico({ total, detalles_pedido = [] }) {
   return diferencia >= 0 ? Math.round(diferencia * 100) / 100 : null;
 }
 
-const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista, onSaldoConfirmado }) => {
+const PedidosScreen = ({
+  userId, onGoToCafeterias, pedidoConfirmado, onConfirmacionVista,
+  onDetalleAbiertoChange, onSaldoConfirmado,
+}) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -142,6 +148,39 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
   const [tab, setTab] = useState('activos');
   const [cancelando, setCancelando] = useState(false);
   const cerrarPedido = useCallback(() => setSelected(null), []);
+  const detalleAbierto = Boolean(selected && !pedidoConfirmado);
+  const botonCerrar = useRef(null);
+  const pestanaActivos = useRef(null);
+  const tarjetas = useRef(new Map());
+  const pedidoParaRestaurarFoco = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!detalleAbierto) return undefined;
+    onDetalleAbiertoChange?.(true);
+    return () => onDetalleAbiertoChange?.(false);
+  }, [detalleAbierto, onDetalleAbiertoChange]);
+
+  useEffect(() => {
+    if (!detalleAbierto && pedidoParaRestaurarFoco.current === null) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const destino = detalleAbierto ? botonCerrar.current : tarjetas.current.get(pedidoParaRestaurarFoco.current);
+      const tag = destino == null ? null : findNodeHandle(destino);
+      if (!detalleAbierto) pedidoParaRestaurarFoco.current = null;
+      // Realtime puede mover el pedido fuera de la lista mientras el detalle está abierto.
+      const foco = tag ?? (!detalleAbierto && pestanaActivos.current ? findNodeHandle(pestanaActivos.current) : null);
+      if (foco != null) AccessibilityInfo.setAccessibilityFocus(foco);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [detalleAbierto]);
+
+  useEffect(() => {
+    if (!detalleAbierto) return undefined;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      cerrarPedido();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [detalleAbierto, cerrarPedido]);
 
   // S2-T17: Cancelación autónoma de pedidos con reembolso automático a Wallet
   const solicitarCancelacion = useCallback((pedido) => {
@@ -274,7 +313,10 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
   // La lista se consulta con la sesión Supabase y el usuario interno del titular.
   // Sus credenciales persistidas se muestran de inmediato, sin una segunda
   // autorización del backend que pueda ocultar un pedido ya accesible al titular.
-  const abrirPedido = useCallback((item) => setSelected(item), []);
+  const abrirPedido = useCallback((item) => {
+    pedidoParaRestaurarFoco.current = item.id;
+    setSelected(item);
+  }, []);
 
   const aplicarOrden = useCallback((nuevos) => {
     setOrders(nuevos.sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en)));
@@ -444,6 +486,10 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
     const detalles = item.detalles || [];
     return (
       <TouchableOpacity
+        ref={(tarjeta) => {
+          if (tarjeta) tarjetas.current.set(item.id, tarjeta);
+          else tarjetas.current.delete(item.id);
+        }}
         activeOpacity={0.85}
         style={styles.cardWrapper}
         accessibilityRole="button"
@@ -486,6 +532,12 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
 
   return (
     <View style={styles.container}>
+      <View
+        testID="lista-pedidos"
+        style={styles.contenido}
+        importantForAccessibility={detalleAbierto ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={detalleAbierto}
+      >
       <Header
         title="Mis Pedidos"
         rightElement={
@@ -508,6 +560,8 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
           {/* Conmutador Activos/Inactivos, con contador en cada pestaña */}
           <View style={styles.switcherRow}>
             <TouchableOpacity
+              ref={pestanaActivos}
+              testID="pedidos-tab-activos"
               style={[styles.switcherBoton, tab === 'activos' && styles.switcherBotonActivo]}
               onPress={() => setTab('activos')}
             >
@@ -571,14 +625,11 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
         </>
       )}
 
-      {/* Un solo modal nativo para confirmación y detalle del pedido. */}
-      <Modal
-        visible={Boolean(pedidoConfirmado || selected)}
-        animationType="slide"
-        transparent
-        onRequestClose={pedidoConfirmado ? onConfirmacionVista : cerrarPedido}
-      >
-        {pedidoConfirmado ? (
+      </View>
+
+      <Modal visible={Boolean(pedidoConfirmado)} animationType="slide" transparent
+        onRequestClose={onConfirmacionVista}>
+        {pedidoConfirmado && (
         <View style={styles.modalBackdrop}>
           <Card variant="elevated" padding="lg" style={styles.modalCard}>
             <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
@@ -669,8 +720,10 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
             </ScrollView>
           </Card>
         </View>
-        ) : (
-        <View style={styles.modalBackdrop}>
+        )}
+      </Modal>
+      {detalleAbierto && (
+        <View testID="detalle-pedido" accessibilityViewIsModal style={[styles.modalBackdrop, styles.detalleOverlay]}>
           <Card variant="elevated" padding="lg" style={styles.modalCard}>
             <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
             {selected && (
@@ -689,6 +742,9 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
                   </View>
                   <TouchableOpacity
                     style={styles.modalClose}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cerrar detalle del pedido"
+                    ref={botonCerrar}
                     onPress={cerrarPedido}
                   >
                     <AppIcon name="close" style={styles.modalCloseText} />
@@ -854,14 +910,14 @@ const PedidosScreen = ({ userId, onGoToCafeterias, pedidoConfirmado, onConfirmac
             </ScrollView>
           </Card>
         </View>
-        )}
-      </Modal>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.fondo },
+  contenido: { flex: 1 },
   cardWrapper: { marginBottom: spacing.md },
   headerIcon: {
     width: 35,
@@ -956,6 +1012,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     padding: spacing.xl,
+  },
+  detalleOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
   },
   modalCard: {
     maxHeight: '90%',

@@ -34,6 +34,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [S2-T15 - Validación flujo integrado y recuperación del KDS](desktop/validacion/S2-T15-Validacion-Flujo-Integrado-KDS.md)
 - [S2-T17 - Validación flujo completo del KDS](desktop/validacion/S2-T17-Validacion-Flujo-Completo-KDS.md)
 - [C08 / CAM-242 — Verificar entrega por QR y token desde KDS](desktop/validacion/C08-CAM-242-entrega-qr-token-kds.md)
+- [C09 / CAM-255 — Segunda validación de retiro afiliado](desktop/validacion/C09-CAM-255-segunda-validacion-retiro.md)
 - [S2-T18 — Validación integrada del panel administrativo](desktop/validacion/S2-T18_validacion_panel_administrativo.md)
 
 ## Móvil
