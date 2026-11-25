@@ -111,4 +111,34 @@ module.exports = async ({ call, sql, tokens, base, anon, supabaseUrl, dbContaine
     child.on('error', reject);
     child.on('exit', code => code === 0 ? resolve() : reject(new Error(`Integración A12: salida ${code}`)));
   });
+
+  // A15 comienza con otro estudiante, sin solicitudes ni saldo heredados.
+  const credencialesA15 = { email: `a15-${crypto.randomUUID()}@example.test`, password: crypto.randomBytes(24).toString('hex') };
+  const altaA15 = await call('/auth/v1/signup', null, 'POST', credencialesA15);
+  assert.equal(altaA15.status, 200);
+  const loginA15 = await call('/auth/v1/token?grant_type=password', null, 'POST', credencialesA15);
+  assert.equal(loginA15.status, 200); assert.ok(loginA15.body.access_token && loginA15.body.user.id);
+  sql(`INSERT INTO public.usuarios(id,rol_id,activo,auth_user_id,nombre)
+    VALUES (902,4,true,'${loginA15.body.user.id}','Estudiante ficticio A15');`);
+  const campanaA15 = Number(sql(`INSERT INTO public.campanas
+    (cafeteria_id,nombre,estado,tasa_descuento,tasa_comision,vigencia_desde,vigencia_hasta,
+     confirmada_por_dueno,fecha_confirmacion,usuario_confirma_id,version_confirmada)
+    VALUES (7,'Piloto A15','activa',15,10,now()-interval '1 hour',now()+interval '1 day',
+      true,now(),1,'1.0') RETURNING id;`).split(/\r?\n/)[0]);
+  // El límite de dos filas se conserva para C05; A15 aísla su campaña visible.
+  sql(`UPDATE public.campanas SET estado='pausada' WHERE cafeteria_id=7 AND id<>${campanaA15};`);
+  await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [path.join(root, 'app-mobile/node_modules/jest/bin/jest.js'),
+      '--config', path.join(root, 'app-mobile/jest.config.js'), '--ci', '--runInBand', '--testTimeout=30000',
+      '--runTestsByPath', path.join(root, 'app-mobile/src/screens/afiliaciones/PilotoAfiliadoIntegracion.test.js')], {
+      cwd: path.join(root, 'app-mobile'), stdio: 'inherit', env: { ...process.env,
+        EXPO_PUBLIC_API_URL: base, A15_INTEGRATION_URL: base, A15_STUDENT_TOKEN: loginA15.body.access_token,
+        A15_STUDENT_ID: loginA15.body.user.id, A15_OWNER_TOKEN: tokens.dueno,
+        A15_SUPABASE_URL: supabaseUrl, A15_ANON_KEY: anon, A15_DB_CONTAINER: dbContainer,
+        A15_CAMPAIGN_ID: String(campanaA15),
+      },
+    });
+    child.on('error', reject);
+    child.on('exit', code => code === 0 ? resolve() : reject(new Error(`Integración A15: salida ${code}`)));
+  });
 };

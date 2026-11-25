@@ -81,6 +81,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [A13 — Comprobante, saldo actualizado e historial por referencia](mobile/validacion/A13-Comprobante-y-actualizacion-saldo.md)
 - [A05 — Corrección de consistencia entre saldo, comisiones y comprobante](mobile/validacion/A05-Consistencia-saldo-comprobante.md)
 - [A14 — Cambio de cuenta, cierre de sesión y respuestas tardías de afiliaciones](mobile/validacion/A14-Cambio-cuenta-afiliaciones.md)
+- [A15 — Solicitud, aprobación, código, ganancias y retiro del piloto](mobile/validacion/A15-Validacion-piloto-afiliado.md)
 - [D01 - Campo de código en carrito y registro de prueba](mobile/validacion/D01-Codigo-en-carrito.md)
 - [D02 - Estado del código asociado al carrito](mobile/validacion/D02-Estado-codigo-carrito.md)
 - [D03 - Cotización de carrito completo](mobile/validacion/D03-Cotizacion-carrito-completo.md)
