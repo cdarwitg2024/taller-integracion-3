@@ -115,6 +115,13 @@ Un 503 mantiene la última lectura con aviso. Reintentar un retiro conserva la c
 de A12 y reabrir solo consulta el comprobante persistido. [Fallos reproducidos y
 verificación A05](mobile/validacion/A05-Consistencia-saldo-comprobante.md).
 
+**Validación integral A15.** Una cuenta ficticia recorre solicitud pendiente sin
+código/panel, aprobación por C05, acciones de código y retiro con comprobante V14.
+Tras desactivar la afiliación conserva saldo e historial, y deja de ofrecer acciones
+para copiar/compartir. La validación coteja el saldo y la referencia persistidos y
+el rechazo SQL de atribuciones nuevas; no ejecuta un checkout con código desactivado.
+[Pasos y límites de A15](mobile/validacion/A15-Validacion-piloto-afiliado.md).
+
 ## 3. Cotización y compra
 
 Ana envía su sesión desde móvil. La cotización calcula el precio vigente sin cobrar ni consumir el beneficio.
