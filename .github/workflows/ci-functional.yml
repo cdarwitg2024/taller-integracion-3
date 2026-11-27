@@ -181,3 +181,9 @@ jobs:
           TEST_AUTH_IMAGE: supabase/gotrue:v2.197.0
           TEST_REST_IMAGE: postgrest/postgrest:v16.3
         run: node .github/scripts/test-afiliados-auth-integration.cjs --a06
+      - name: C13 pickup credentials and affiliate balance isolation
+        env:
+          COFFEEFAST_DB_MIGRATIONS: ${{ github.workspace }}/.test-bd/supabase/migrations
+          TEST_AUTH_IMAGE: supabase/gotrue:v2.197.0
+          TEST_REST_IMAGE: postgrest/postgrest:v16.3
+        run: node .github/scripts/test-afiliados-auth-integration.cjs --c13

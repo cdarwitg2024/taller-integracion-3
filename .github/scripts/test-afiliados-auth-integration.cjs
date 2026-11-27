@@ -11,15 +11,19 @@ const { pathToFileURL } = require('node:url');
 
 const root = path.resolve(__dirname, '../..');
 const probarA06 = process.argv.includes('--a06');
-const probarC05 = process.argv.includes('--c05') || probarA06;
+const probarC13 = process.argv.includes('--c13');
+const probarC05 = process.argv.includes('--c05') || probarA06 || probarC13;
 const id = `cf-c03-auth-${process.pid}-${Date.now()}`;
 const names = { pg: `${id}-db`, auth: `${id}-auth`, rest: `${id}-rest`, gateway: `${id}-gateway` };
 const secret = crypto.randomBytes(40).toString('hex');
 const password = crypto.randomBytes(24).toString('hex');
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
-// Solo la API key anónima es generada aquí. Cada JWT de usuario lo emite Auth.
-const payload = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ role: 'anon', exp: Math.floor(Date.now() / 1000) + 3600 })}`;
-const anon = `${payload}.${crypto.createHmac('sha256', secret).update(payload).digest('base64url')}`;
+// Las claves del entorno son efímeras. Cada JWT de usuario lo emite Auth.
+function claveApi(role) {
+  const payload = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ role, exp: Math.floor(Date.now() / 1000) + 3600 })}`;
+  return `${payload}.${crypto.createHmac('sha256', secret).update(payload).digest('base64url')}`;
+}
+const anon = claveApi('anon');
 function docker(args, input) {
   try {
     return execFileSync('docker', args, { input, encoding: 'utf8', timeout: 180000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
@@ -134,8 +138,10 @@ async function main() {
         UPDATE public.cafeterias SET nombre = CASE id WHEN 7 THEN 'Norte A06' ELSE 'Sur A06' END;
         ALTER TABLE public.cafeterias ENABLE ROW LEVEL SECURITY;
         GRANT SELECT ON public.cafeterias TO anon, authenticated;
-        CREATE POLICY cafeteria_publica ON public.cafeterias FOR SELECT TO anon, authenticated USING (activa);
-        ALTER TABLE public.pedidos ADD COLUMN estado text NOT NULL DEFAULT 'listo';`);
+        CREATE POLICY cafeteria_publica ON public.cafeterias FOR SELECT TO anon, authenticated USING (activa);`);
+      }
+      if (probarA06 || probarC13) {
+        sql("ALTER TABLE public.pedidos ADD COLUMN estado text NOT NULL DEFAULT 'listo';");
         const v12Path = path.join(migrations, '20261118211348_consulta_saldo_afiliado.sql');
         sql(fs.readFileSync(v12Path, 'utf8'));
         // Única dependencia de V06 utilizada por V13/V14 en este fixture mínimo.
@@ -146,6 +152,13 @@ async function main() {
         for (const file of ['20261123014935_registrar_retiro_simulado.sql', '20261123020643_comprobante_retiro_simulado.sql']) {
           sql(fs.readFileSync(path.join(migrations, file), 'utf8'));
         }
+      }
+      if (probarC13) {
+        sql(`ALTER TABLE public.usuarios ADD FOREIGN KEY (rol_id) REFERENCES public.roles(id);
+          ALTER TABLE public.cafeteria_usuarios ADD COLUMN id bigint GENERATED ALWAYS AS IDENTITY;
+          ALTER TABLE public.pedidos ADD COLUMN usuario_id bigint REFERENCES public.usuarios(id),
+            ADD COLUMN qr_token text, ADD COLUMN codigo_retiro_diario text;
+          GRANT SELECT ON public.usuarios, public.roles, public.pedidos, public.cafeteria_usuarios TO service_role;`);
       }
     }
 
@@ -177,7 +190,7 @@ async function main() {
     const restUrl = `http://127.0.0.1:${portOf(names.rest, 3000)}`;
     await waitFor('PostgREST', async () => (await fetch(`${restUrl}/`, { signal: AbortSignal.timeout(2000) })).ok);
 
-    // La app real corre con la publishable/anon key: nunca service_role.
+    // Afiliados usa la clave pública y los JWT de sus usuarios.
     const http = require('node:http');
     const supabaseProxy = http.createServer((req, res) => {
       const isAuth = req.url.startsWith('/auth/v1/');
@@ -193,10 +206,11 @@ async function main() {
     process.env.SUPABASE_PUBLISHABLE_KEY = anon;
     delete process.env.SUPABASE_SERVICE_KEY; delete process.env.SUPABASE_KEY; delete process.env.SUPABASE_ANON_KEY;
     const afiliadosApp = require(path.join(root, 'Microservices/ms-afiliados/src/app'));
-    const pedidosApp = probarA06 ? require(path.join(root, 'Microservices/ms-pedidos/src/app')) : null;
+    if (probarC13) process.env.SUPABASE_SERVICE_KEY = claveApi('service_role');
+    const pedidosApp = probarA06 || probarC13 ? require(path.join(root, 'Microservices/ms-pedidos/src/app')) : null;
     const cafeteriasApp = probarA06 ? require(path.join(root, 'Microservices/ms-cafeterias/src/app')) : null;
-    const app = probarA06 ? http.createServer((req, res) => {
-      if (req.url.startsWith('/api/cafeterias')) return cafeteriasApp(req, res);
+    const app = pedidosApp ? http.createServer((req, res) => {
+      if (cafeteriasApp && req.url.startsWith('/api/cafeterias')) return cafeteriasApp(req, res);
       if (req.url.startsWith('/api/pedidos')) return pedidosApp(req, res);
       return afiliadosApp(req, res);
     }) : afiliadosApp;
@@ -226,6 +240,7 @@ async function main() {
     const tokens = {};
     const identities = [['dueno',1,1,true,7], ['otro',2,1,true,8], ['empleado',3,2,true,7],
       ['inactivo',4,1,false,7], ['rol_inactivo',5,3,true,7], ['estudiante',6,4,true,7]];
+    if (probarC13) identities.push(['estudianteAjeno',7,4,true,8]);
     for (const [name, userId, rolId, active, cafe] of identities) {
       const credentials = { email: `${name}-${id}@example.test`, password };
       const signup = await call('/auth/v1/signup', null, 'POST', credentials);
@@ -235,7 +250,11 @@ async function main() {
       assert.ok(login.body.access_token && login.body.user.id, `JWT real ${name}`);
       tokens[name] = login.body.access_token;
       sql(`INSERT INTO public.usuarios VALUES (${userId},${rolId},${active},${quote(login.body.user.id)});
-        INSERT INTO public.cafeteria_usuarios VALUES (${userId},${cafe});`);
+        INSERT INTO public.cafeteria_usuarios(usuario_id, cafeteria_id) VALUES (${userId},${cafe});`);
+    }
+    if (probarC13) {
+      await require('./test-aislamiento-credenciales-c13.cjs')({ call, sql, tokens, check });
+      return;
     }
     if (probarC05) {
       await require('./test-solicitudes-afiliacion-c05.cjs')({ check, call, sql, tokens });
