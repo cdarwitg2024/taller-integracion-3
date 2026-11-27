@@ -128,6 +128,7 @@ Las guías de operación, investigaciones y evidencias de validación se agrupan
 - [C12 / CAM-262 — Cancelación y reembolso integrados en Cloud](microservicios/validacion/C12-CAM-262-cancelacion-reembolso.md)
 - [C05 — Solicitud y resolución de afiliación](microservicios/validacion/C05-solicitudes-afiliacion.md)
 - [C15 / CAM-265 — Saldo y retiro simulado por gateway](microservicios/validacion/C15-CAM-265-saldo-afiliado-gateway.md)
+- [C10 — Retiros concurrentes sobre el mismo saldo](microservicios/validacion/C10-Retiros-concurrentes.md)
 - [C13 / CAM-180 — Aislamiento de credenciales, saldos y retiros](microservicios/validacion/C13-Aislamiento-credenciales-saldos-retiros.md)
 - [C07 — Cotización y confirmación por el gateway](microservicios/validacion/C07-cotizacion-compra-gateway.md)
 

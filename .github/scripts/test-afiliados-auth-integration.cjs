@@ -11,8 +11,9 @@ const { pathToFileURL } = require('node:url');
 
 const root = path.resolve(__dirname, '../..');
 const probarA06 = process.argv.includes('--a06');
+const probarC10 = process.argv.includes('--c10');
 const probarC13 = process.argv.includes('--c13');
-const probarC05 = process.argv.includes('--c05') || probarA06 || probarC13;
+const probarC05 = process.argv.includes('--c05') || probarA06 || probarC10 || probarC13;
 const id = `cf-c03-auth-${process.pid}-${Date.now()}`;
 const names = { pg: `${id}-db`, auth: `${id}-auth`, rest: `${id}-rest`, gateway: `${id}-gateway` };
 const secret = crypto.randomBytes(40).toString('hex');
@@ -140,7 +141,7 @@ async function main() {
         GRANT SELECT ON public.cafeterias TO anon, authenticated;
         CREATE POLICY cafeteria_publica ON public.cafeterias FOR SELECT TO anon, authenticated USING (activa);`);
       }
-      if (probarA06 || probarC13) {
+      if (probarA06 || probarC10 || probarC13) {
         sql("ALTER TABLE public.pedidos ADD COLUMN estado text NOT NULL DEFAULT 'listo';");
         const v12Path = path.join(migrations, '20261118211348_consulta_saldo_afiliado.sql');
         sql(fs.readFileSync(v12Path, 'utf8'));
@@ -251,6 +252,11 @@ async function main() {
       tokens[name] = login.body.access_token;
       sql(`INSERT INTO public.usuarios VALUES (${userId},${rolId},${active},${quote(login.body.user.id)});
         INSERT INTO public.cafeteria_usuarios(usuario_id, cafeteria_id) VALUES (${userId},${cafe});`);
+    }
+    if (probarC10) {
+      await check('C10: retiros concurrentes con saldo compartido', () =>
+        require('./test-retiros-concurrentes-c10.cjs')({ call, sql, tokens }));
+      return;
     }
     if (probarC13) {
       await require('./test-aislamiento-credenciales-c13.cjs')({ call, sql, tokens, check });
